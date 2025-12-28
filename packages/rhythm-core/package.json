@@ -1,0 +1,28 @@
+{
+  "name": "@mlt/rhythm-core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic timing engine for rhythm-game-style applications",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@mlt/handoff": "workspace:*",
+    "@mlt/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

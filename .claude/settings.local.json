@@ -1,0 +1,28 @@
+{
+  "tools": {
+    "allowedTools": [
+      "Task",
+      "Bash",
+      "Bash(git log:*)",
+      "Glob",
+      "Grep",
+      "LS",
+      "Read",
+      "Edit",
+      "MultiEdit",
+      "Write",
+      "WebFetch",
+      "WebSearch"
+    ]
+  },
+
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(dir \"c:\\\\Users\\\\Owner\\\\Documents\\\\Quinn''s stuff\\\\music-learning-tools\\\\apps\\\\student-notation\\\\dist\")",
+      "Bash(dir \"c:\\\\Users\\\\Owner\\\\Documents\\\\Quinn''s stuff\\\\music-learning-tools\\\\apps\\\\amateur-singing-trainer\\\\dist\")"
+    ]
+  }
+}

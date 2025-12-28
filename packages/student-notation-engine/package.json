@@ -1,0 +1,46 @@
+{
+  "name": "@mlt/student-notation-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-agnostic engine for Student Notation (canvas rendering, audio, state management)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./state": {
+      "types": "./src/state/index.ts",
+      "import": "./src/state/index.ts"
+    },
+    "./audio": {
+      "types": "./src/audio/index.ts",
+      "import": "./src/audio/index.ts"
+    },
+    "./canvas": {
+      "types": "./src/canvas/index.ts",
+      "import": "./src/canvas/index.ts"
+    }
+  },
+  "files": ["src"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@mlt/pitch-data": "workspace:*",
+    "@mlt/types": "workspace:*",
+    "tone": "^15.0.4",
+    "tonal": "^6.4.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.1.1"
+  },
+  "peerDependencies": {
+    "tone": "^15.0.4"
+  }
+}

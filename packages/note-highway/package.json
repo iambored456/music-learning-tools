@@ -1,0 +1,29 @@
+{
+  "name": "@mlt/note-highway",
+  "version": "0.1.0",
+  "description": "Note highway renderer for rhythm-game-style visualization",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@mlt/rhythm-core": "workspace:*",
+    "@mlt/pitch-data": "workspace:*",
+    "@mlt/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

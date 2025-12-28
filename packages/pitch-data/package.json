@@ -1,0 +1,22 @@
+{
+  "name": "@mlt/pitch-data",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Full pitch gamut data for Music Learning Tools - 88-key piano range with colors, frequencies, and enharmonic spellings",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": ["src"],
+  "dependencies": {
+    "@mlt/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

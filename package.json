@@ -1,0 +1,27 @@
+{
+  "name": "music-learning-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A monorepo of music learning tools including Student Notation and Amateur Music Theory",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter hub run dev",
+    "dev:hub": "pnpm --filter hub run dev",
+    "dev:all": "echo \"Deprecated: use pnpm dev\"",
+    "build": "pnpm -r --if-present run build",
+    "build:hub": "pnpm --filter hub run build",
+    "build:sn": "echo \"Deprecated: student-notation is now routed through hub\"",
+    "build:pages": "pnpm build && node scripts/assemble-pages.js",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "clean": "pnpm -r exec rm -rf dist node_modules/.vite"
+  },
+  "keywords": ["music", "education", "notation", "svelte"],
+  "author": "Quinn Fleming",
+  "license": "MIT",
+  "packageManager": "pnpm@10.26.2",
+  "engines": {
+    "node": ">=18"
+  }
+}
