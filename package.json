@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "A monorepo of music learning tools including Student Notation and Amateur Music Theory",
+  "homepage": "https://iambored456.github.io/music-learning-tools/",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter hub run dev",
@@ -11,7 +12,7 @@
     "build": "pnpm -r --if-present run build",
     "build:hub": "pnpm --filter hub run build",
     "build:sn": "echo \"Deprecated: student-notation is now routed through hub\"",
-    "build:pages": "pnpm build && node scripts/assemble-pages.js",
+    "build:pages": "node scripts/build-pages.js",
     "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "pnpm -r --if-present run lint",
     "test": "pnpm -r --if-present run test",
