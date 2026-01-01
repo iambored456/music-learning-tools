@@ -30,7 +30,7 @@ export interface PitchState {
   stablePitch: StablePitch;
 }
 
-const MAX_HISTORY_LENGTH = 500; // Enough for 4+ seconds at 120fps
+const MAX_HISTORY_LENGTH = 200; // Cap history to bound trail render cost
 
 const DEFAULT_STATE: PitchState = {
   currentPitch: null,
@@ -51,11 +51,10 @@ function createPitchState() {
     },
 
     addHistoryPoint(point: PitchHistoryPoint) {
-      const newHistory = [...state.history, point];
-      if (newHistory.length > MAX_HISTORY_LENGTH) {
-        newHistory.shift();
+      state.history.push(point);
+      if (state.history.length > MAX_HISTORY_LENGTH) {
+        state.history.shift();
       }
-      state.history = newHistory;
     },
 
     setStablePitch(stable: StablePitch) {

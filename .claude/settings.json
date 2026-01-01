@@ -1,7 +1,7 @@
 ﻿{
   "permissions": {
     "allow": [
-      "Bash(*)"
+      "Bash"
     ]
   }
 }

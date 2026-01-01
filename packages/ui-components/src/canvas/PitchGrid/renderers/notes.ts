@@ -560,8 +560,9 @@ function getMidiY(
   const baseY = coords.getRowY(rowIndex);
 
   // Offset by the fraction (negative because higher MIDI = lower row index = higher on screen)
-  // Each semitone step moves by cellHeight
-  return baseY - fraction * cellHeight;
+  // Each semitone step moves by half a cell (row spacing)
+  const rowStep = cellHeight / 2;
+  return baseY - fraction * rowStep;
 }
 
 /**

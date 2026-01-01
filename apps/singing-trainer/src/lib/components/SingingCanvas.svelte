@@ -5,15 +5,21 @@
    * Wraps the shared PitchGrid component for singing/highway visualization modes.
    */
 
-  import { PitchGrid, calculateViewportWindow } from '@mlt/ui-components/canvas';
+  import { onDestroy } from 'svelte';
+  import {
+    PitchGrid,
+    calculateViewportWindow,
+    createTimeCoordinates,
+    drawUserPitchTrace,
+  } from '@mlt/ui-components/canvas';
   import type {
     PitchGridMode,
     PitchGridViewport,
     SingingModeConfig,
     HighwayModeConfig,
-    PitchHistoryPoint as SharedPitchHistoryPoint,
     TargetNote as SharedTargetNote,
     PitchTrailConfig,
+    UserPitchRenderConfig,
     ViewportWindow,
   } from '@mlt/ui-components/canvas';
   import { generateRowDataForMidiRange, getTonicPitchClass, type PitchRowData } from '@mlt/pitch-data';
@@ -25,6 +31,35 @@
   let container: HTMLDivElement | undefined = $state(undefined);
   let containerWidth = $state(800);
   let containerHeight = $state(400);
+
+  // Trail canvas overlay
+  let trailCanvas: HTMLCanvasElement | undefined = $state(undefined);
+  let trailCtx: CanvasRenderingContext2D | null = $state(null);
+  let trailAnimationId: number | null = $state(null);
+
+  let lastTrailLogAt = 0;
+  let trailFrameSamples = 0;
+  let trailFrameTimeTotal = 0;
+
+  const cellWidth = 20;
+  const showOctaveLabels = true;
+  const showFrequencyLabels = false;
+
+  // Keep legend sizing in sync with PitchGrid
+  const LEGEND_COLUMN_WIDTH_UNITS = 3;
+  const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
+  const legendCanvasWidth = $derived(legendColumnWidth * 2);
+  const legendTotalWidth = $derived((showOctaveLabels || showFrequencyLabels) ? legendCanvasWidth * 2 : 0);
+  const gridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
+  const gridOffsetX = $derived((showOctaveLabels || showFrequencyLabels) ? legendCanvasWidth : 0);
+  const getDebugTrailFlag = (): boolean => {
+    try {
+      const win = globalThis as typeof globalThis & { __ST_DEBUG_TRAIL?: boolean };
+      return Boolean(win.__ST_DEBUG_TRAIL);
+    } catch {
+      return false;
+    }
+  };
 
   // Generate row data for the pitch grid based on y-axis range
   // Uses the shared pitch data package which includes proper colors, frequencies, and enharmonic spellings
@@ -46,16 +81,6 @@
   const mode = $derived<PitchGridMode>(
     appState.state.visualizationMode === 'highway' ? 'highway' : 'singing'
   );
-
-  // Convert local pitch history to shared format
-  function convertPitchHistory(): SharedPitchHistoryPoint[] {
-    return pitchState.state.history.map((p) => ({
-      frequency: p.frequency,
-      midi: p.midi,
-      time: p.time,
-      clarity: p.clarity,
-    }));
-  }
 
   // Convert local target notes to shared format
   function convertTargetNotes(): SharedTargetNote[] {
@@ -94,7 +119,7 @@
                 pitchClass: pitchState.state.currentPitch.pitchClass,
               }
             : null,
-          pitchHistory: convertPitchHistory(),
+          pitchHistory: [],
           targetNotes: [],
           pixelsPerSecond: 200,
           timeWindowMs: 4000,
@@ -115,7 +140,7 @@
                 pitchClass: pitchState.state.currentPitch.pitchClass,
               }
             : null,
-          pitchHistory: convertPitchHistory(),
+          pitchHistory: [],
           targetNotes: convertTargetNotes(),
           nowLineX: highwayState.state.nowLineX,
           pixelsPerSecond: highwayState.state.pixelsPerSecond,
@@ -135,6 +160,108 @@
     containerHeight,
   });
 
+  function setupTrailCanvas(): void {
+    if (!trailCanvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    trailCanvas.width = gridWidth * dpr;
+    trailCanvas.height = containerHeight * dpr;
+    trailCanvas.style.width = `${gridWidth}px`;
+    trailCanvas.style.height = `${containerHeight}px`;
+    trailCanvas.style.left = `${gridOffsetX}px`;
+
+    const ctx = trailCanvas.getContext('2d');
+    if (!ctx) {
+      trailCtx = null;
+      return;
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    trailCtx = ctx;
+  }
+
+  function renderTrail(): void {
+    if (!trailCtx || gridWidth <= 0) return;
+
+    trailCtx.clearRect(0, 0, gridWidth, containerHeight);
+
+    const trailHistory = pitchState.state.history;
+    if (trailHistory.length === 0) return;
+
+    if (mode !== 'singing' || !singingConfig) {
+      return;
+    }
+
+    const debugTrail = getDebugTrailFlag();
+    const frameStart = debugTrail ? performance.now() : 0;
+
+    const coords = createTimeCoordinates({
+      cellWidth,
+      cellHeight: viewportWindow.cellHeight,
+      viewport,
+      pixelsPerSecond: singingConfig.pixelsPerSecond ?? 200,
+      nowLineX: 100,
+      currentTimeMs: 0,
+    });
+
+    const userPitchConfig: UserPitchRenderConfig = {
+      cellHeight: viewportWindow.cellHeight,
+      viewportWidth: gridWidth,
+      nowLineX: 100,
+      pixelsPerSecond: singingConfig.pixelsPerSecond ?? 200,
+      timeWindowMs: singingConfig.timeWindowMs ?? 4000,
+      colorMode: 'color',
+      trailConfig,
+    };
+
+    const currentTime = performance.now();
+
+    drawUserPitchTrace(
+      trailCtx,
+      coords,
+      trailHistory,
+      currentTime,
+      userPitchConfig,
+      fullRowData
+    );
+
+    if (debugTrail) {
+      const now = performance.now();
+      trailFrameSamples += 1;
+      trailFrameTimeTotal += (now - frameStart);
+      if (now - lastTrailLogAt >= 1000) {
+        const avgMs = trailFrameSamples > 0 ? (trailFrameTimeTotal / trailFrameSamples) : 0;
+        console.log(
+          `[SingingTrail] points=${trailHistory.length} avgMs=${avgMs.toFixed(2)} gridWidth=${gridWidth}`
+        );
+        lastTrailLogAt = now;
+        trailFrameSamples = 0;
+        trailFrameTimeTotal = 0;
+      }
+    }
+  }
+
+  function startTrailLoop(): void {
+    if (trailAnimationId) return;
+
+    const loop = () => {
+      renderTrail();
+      trailAnimationId = requestAnimationFrame(loop);
+    };
+
+    trailAnimationId = requestAnimationFrame(loop);
+  }
+
+  function stopTrailLoop(): void {
+    if (trailAnimationId) {
+      cancelAnimationFrame(trailAnimationId);
+      trailAnimationId = null;
+    }
+    if (trailCtx && gridWidth > 0) {
+      trailCtx.clearRect(0, 0, gridWidth, containerHeight);
+    }
+  }
+
   // Handle container resize
   $effect(() => {
     if (!container) return;
@@ -152,6 +279,28 @@
       resizeObserver.disconnect();
     };
   });
+
+  $effect(() => {
+    void gridWidth;
+    void containerHeight;
+    void gridOffsetX;
+    void trailCanvas;
+    setupTrailCanvas();
+  });
+
+  $effect(() => {
+    void mode;
+    void trailCtx;
+    if (mode === 'singing') {
+      startTrailLoop();
+    } else {
+      stopTrailLoop();
+    }
+  });
+
+  onDestroy(() => {
+    stopTrailLoop();
+  });
 </script>
 
 <div class="singing-canvas-container" bind:this={container}>
@@ -159,14 +308,18 @@
     {mode}
     {fullRowData}
     {viewport}
-    cellWidth={20}
+    cellWidth={cellWidth}
     cellHeight={viewportWindow.cellHeight}
     colorMode="color"
-    showOctaveLabels={true}
-    showFrequencyLabels={false}
+    {showOctaveLabels}
+    {showFrequencyLabels}
     {singingConfig}
     {highwayConfig}
   />
+  <canvas
+    bind:this={trailCanvas}
+    class="pitch-trail-canvas"
+  ></canvas>
 </div>
 
 <style>
@@ -174,10 +327,18 @@
     flex: 1;
     width: 100%;
     min-height: 300px;
+    position: relative;
     background-color: var(--color-bg-light);
     /* Subtle white overlay to make grid bounds more visible */
     background-image: linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02));
     border-radius: var(--radius-md);
     overflow: hidden;
+  }
+
+  .pitch-trail-canvas {
+    position: absolute;
+    top: 0;
+    pointer-events: none;
+    z-index: 2;
   }
 </style>

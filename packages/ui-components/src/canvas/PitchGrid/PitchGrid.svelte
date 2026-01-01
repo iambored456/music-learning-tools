@@ -129,8 +129,12 @@
   let rightCtx: CanvasRenderingContext2D | null = $state(null);
   let animationFrameId: number | null = $state(null);
 
-  // Legend width constant
-  const LEGEND_COLUMN_WIDTH = 30; // Width per column (A and B)
+  // Legend column width in cell units (matches Student Notation sizing)
+  const LEGEND_COLUMN_WIDTH_UNITS = 3;
+  const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
+  const legendCanvasWidth = $derived(legendColumnWidth * 2);
+  const legendTotalWidth = $derived((showOctaveLabels || showFrequencyLabels) ? legendCanvasWidth * 2 : 0);
+  const gridWidth = $derived(Math.max(0, viewport.containerWidth - legendTotalWidth));
 
   // ============================================================================
   // Derived State
@@ -178,14 +182,14 @@
     const { paddedStartRow, paddedEndRow } = getVisibleRowRangeWithPadding(viewport, fullRowData);
 
     // Clear canvas
-    ctx.clearRect(0, 0, viewport.containerWidth, viewport.containerHeight);
+    ctx.clearRect(0, 0, gridWidth, viewport.containerHeight);
 
     // Draw horizontal grid lines
     const horizontalConfig: HorizontalLinesConfig = {
       fullRowData,
       cellHeight,
       viewportHeight: viewport.containerHeight,
-      viewportWidth: viewport.containerWidth,
+      viewportWidth: gridWidth,
       colorMode,
     };
     drawHorizontalLines(ctx, horizontalConfig, coords, paddedStartRow, paddedEndRow);
@@ -270,7 +274,7 @@
 
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight,
-      viewportWidth: viewport.containerWidth,
+      viewportWidth: gridWidth,
       pixelsPerSecond: singingConfig.pixelsPerSecond ?? 200,
       timeWindowMs: singingConfig.timeWindowMs ?? 4000,
       colorMode,
@@ -307,7 +311,7 @@
         coords,
         singingConfig.userPitch.midi,
         singingConfig.userPitch.clarity,
-        viewport.containerWidth - 20,
+        gridWidth - 20,
         userPitchConfig,
         fullRowData
       );
@@ -330,11 +334,11 @@
     // Draw time-based vertical lines
     const visibleTimeRange = {
       startMs: highwayConfig.currentTimeMs - 1000,
-      endMs: highwayConfig.currentTimeMs + (viewport.containerWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
+      endMs: highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
     };
 
     const verticalConfig: TimeBasedVerticalLinesConfig = {
-      viewportWidth: viewport.containerWidth,
+      viewportWidth: gridWidth,
       viewportHeight: viewport.containerHeight,
       beatIntervalMs,
       visibleTimeRange,
@@ -372,7 +376,7 @@
       fullRowData,
       cellWidth,
       cellHeight,
-      legendColumnWidth: LEGEND_COLUMN_WIDTH,
+      legendColumnWidth,
       colorMode,
       showFrequencyLabels,
       showOctaveLabels,
@@ -440,21 +444,19 @@
 
     // Set canvas size
     const dpr = window.devicePixelRatio || 1;
-    mainCanvas.width = viewport.containerWidth * dpr;
+    mainCanvas.width = gridWidth * dpr;
     mainCanvas.height = viewport.containerHeight * dpr;
-    mainCanvas.style.width = `${viewport.containerWidth}px`;
+    mainCanvas.style.width = `${gridWidth}px`;
     mainCanvas.style.height = `${viewport.containerHeight}px`;
     ctx.scale(dpr, dpr);
 
     // Set up legend canvases if they exist
-    const legendWidth = LEGEND_COLUMN_WIDTH * 2; // Two columns (A and B)
-
     if (legendLeftCanvas) {
       leftCtx = legendLeftCanvas.getContext('2d');
       if (leftCtx) {
-        legendLeftCanvas.width = legendWidth * dpr;
+        legendLeftCanvas.width = legendCanvasWidth * dpr;
         legendLeftCanvas.height = viewport.containerHeight * dpr;
-        legendLeftCanvas.style.width = `${legendWidth}px`;
+        legendLeftCanvas.style.width = `${legendCanvasWidth}px`;
         legendLeftCanvas.style.height = `${viewport.containerHeight}px`;
         leftCtx.scale(dpr, dpr);
       }
@@ -463,9 +465,9 @@
     if (legendRightCanvas) {
       rightCtx = legendRightCanvas.getContext('2d');
       if (rightCtx) {
-        legendRightCanvas.width = legendWidth * dpr;
+        legendRightCanvas.width = legendCanvasWidth * dpr;
         legendRightCanvas.height = viewport.containerHeight * dpr;
-        legendRightCanvas.style.width = `${legendWidth}px`;
+        legendRightCanvas.style.width = `${legendCanvasWidth}px`;
         legendRightCanvas.style.height = `${viewport.containerHeight}px`;
         rightCtx.scale(dpr, dpr);
       }

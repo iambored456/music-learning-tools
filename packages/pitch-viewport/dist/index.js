@@ -236,10 +236,17 @@ export function calculateViewportWindow(config) {
     }
     const normalizedMinCellHeight = Math.max(1, minCellHeight);
     const normalizedPreferredCellHeight = Math.max(normalizedMinCellHeight, preferredCellHeight);
-    const maxVisibleRowsAtPreferred = Math.floor(containerHeight / normalizedPreferredCellHeight);
-    const maxVisibleRowsAtMinimum = Math.floor(containerHeight / normalizedMinCellHeight);
+    const maxVisibleRowsForCellHeight = (height) => {
+        if (containerHeight <= 0 || height <= 0) {
+            return 0;
+        }
+        const halfUnit = height / 2;
+        return Math.max(0, Math.floor(containerHeight / halfUnit) - 1);
+    };
+    const maxVisibleRowsAtPreferred = maxVisibleRowsForCellHeight(normalizedPreferredCellHeight);
+    const maxVisibleRowsAtMinimum = maxVisibleRowsForCellHeight(normalizedMinCellHeight);
     if (totalRows <= maxVisibleRowsAtPreferred && maxVisibleRowsAtPreferred > 0) {
-        const cellHeight = containerHeight / totalRows;
+        const cellHeight = (2 * containerHeight) / (totalRows + 1);
         return {
             startRow: 0,
             endRow: totalRows - 1,
@@ -248,7 +255,7 @@ export function calculateViewportWindow(config) {
         };
     }
     if (totalRows <= maxVisibleRowsAtMinimum && maxVisibleRowsAtMinimum > 0) {
-        const cellHeight = containerHeight / totalRows;
+        const cellHeight = (2 * containerHeight) / (totalRows + 1);
         return {
             startRow: 0,
             endRow: totalRows - 1,
@@ -272,7 +279,7 @@ export function calculateViewportWindow(config) {
             }
         }
     }
-    const cellHeight = containerHeight / visibleRows;
+    const cellHeight = (2 * containerHeight) / (visibleRows + 1);
     return {
         startRow,
         endRow,

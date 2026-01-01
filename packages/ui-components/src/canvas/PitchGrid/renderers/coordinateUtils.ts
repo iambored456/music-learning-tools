@@ -51,6 +51,7 @@ export interface TimeBasedCoordinateConfig {
  */
 export function createColumnCoordinates(config: CoordinateConfig): CoordinateUtils {
   const { cellHeight, columnWidths, viewport } = config;
+  const halfUnit = cellHeight / 2;
 
   // Build cumulative column positions for fast lookup
   const columnPositions = buildColumnPositions(columnWidths, config.cellWidth);
@@ -58,12 +59,12 @@ export function createColumnCoordinates(config: CoordinateConfig): CoordinateUti
   return {
     getRowY(rowIndex: number): number {
       const relativeRowIndex = rowIndex - viewport.startRow;
-      // Row centers are at cellHeight intervals, offset by half a cell
-      return relativeRowIndex * cellHeight + cellHeight / 2;
+      // Row centers are at half-cell intervals, offset by half a cell
+      return (relativeRowIndex + 1) * halfUnit;
     },
 
     getRowFromY(canvasY: number): number {
-      const relativeRowIndex = (canvasY - cellHeight / 2) / cellHeight;
+      const relativeRowIndex = (canvasY / halfUnit) - 1;
       return Math.round(relativeRowIndex) + viewport.startRow;
     },
 
@@ -99,16 +100,17 @@ export function createColumnCoordinates(config: CoordinateConfig): CoordinateUti
  */
 export function createTimeCoordinates(config: TimeBasedCoordinateConfig): CoordinateUtils {
   const { cellHeight, viewport, pixelsPerSecond, nowLineX = 100, currentTimeMs = 0 } = config;
+  const halfUnit = cellHeight / 2;
 
   return {
     getRowY(rowIndex: number): number {
       const relativeRowIndex = rowIndex - viewport.startRow;
-      // Row centers are at cellHeight intervals, offset by half a cell
-      return relativeRowIndex * cellHeight + cellHeight / 2;
+      // Row centers are at half-cell intervals, offset by half a cell
+      return (relativeRowIndex + 1) * halfUnit;
     },
 
     getRowFromY(canvasY: number): number {
-      const relativeRowIndex = (canvasY - cellHeight / 2) / cellHeight;
+      const relativeRowIndex = (canvasY / halfUnit) - 1;
       return Math.round(relativeRowIndex) + viewport.startRow;
     },
 
