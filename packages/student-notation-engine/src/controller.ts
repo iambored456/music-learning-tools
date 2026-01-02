@@ -21,7 +21,15 @@ import type {
   PlayheadMode,
   LongNoteStyle,
   CanvasSpaceColumn,
+  ModulationRatio,
+  SixteenthStampPlacement,
+  TripletStampPlacement,
 } from '@mlt/types';
+
+import { createStore, type StoreInstance, type StorageAdapter } from './state/store.js';
+import { createColumnMapService, visualToTime, timeToVisual, getTimeBoundaryAfterMacrobeat } from './services/columnMapService.js';
+import { renderPitchGrid, renderDrumGrid } from './canvas/index.js';
+import type { PitchGridRenderOptions, DrumGridRenderOptions } from './canvas/index.js';
 
 /**
  * Configuration for engine initialization
@@ -43,6 +51,10 @@ export interface EngineConfig {
   initialState?: Partial<AppState>;
   /** Storage key for localStorage persistence */
   storageKey?: string;
+  /** Storage adapter (defaults to localStorage if available) */
+  storage?: StorageAdapter;
+  /** Enable debug logging */
+  debug?: boolean;
 }
 
 /**
@@ -280,6 +292,16 @@ export interface EngineController {
    */
   toggleAnacrusis(): void;
 
+  /**
+   * Add a modulation marker
+   */
+  addModulationMarker(measureIndex: number, ratio: ModulationRatio): string | null;
+
+  /**
+   * Remove a modulation marker
+   */
+  removeModulationMarker(markerId: string): void;
+
   // ============================================================================
   // VIEW
   // ============================================================================
@@ -341,6 +363,16 @@ export interface EngineController {
    * Get a note at a specific position
    */
   getNoteAt(row: number, column: number): PlacedNote | null;
+
+  /**
+   * Get all sixteenth stamp placements
+   */
+  getSixteenthStamps(): readonly SixteenthStampPlacement[];
+
+  /**
+   * Get all triplet stamp placements
+   */
+  getTripletStamps(): readonly TripletStampPlacement[];
 
   // ============================================================================
   // IMPORT/EXPORT
@@ -473,14 +505,614 @@ export type ActionHandler = (event: ActionEvent) => boolean | void | Promise<boo
  * Create a new engine controller instance
  */
 export function createEngineController(): EngineController {
-  // This will be implemented when we extract the actual state/audio/canvas modules
-  throw new Error('Not yet implemented - engine modules need to be extracted first');
+  let initialized = false;
+  let store: StoreInstance | null = null;
+  let columnMapService: ReturnType<typeof createColumnMapService> | null = null;
+
+  // Canvas contexts
+  let pitchGridContext: CanvasRenderingContext2D | null = null;
+  let drumGridContext: CanvasRenderingContext2D | null = null;
+
+  // Debug flag
+  let debugMode = false;
+
+  // Logger function
+  const log = (level: 'debug' | 'info' | 'warn' | 'error', context: string, message: string, data?: unknown, category?: string) => {
+    if (!debugMode && level === 'debug') return;
+    const prefix = `[${category || 'engine'}:${context}]`;
+    console[level](prefix, message, data || '');
+  };
+
+  // Wrapper for callback-compatible log (level, message, data) format
+  const callbackLog = (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => {
+    log(level, 'controller', message, data);
+  };
+
+  const controller: EngineController = {
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+
+    init(config: EngineConfig): void {
+      if (initialized) {
+        log('warn', 'controller', 'Engine already initialized');
+        return;
+      }
+
+      debugMode = config.debug || false;
+      log('info', 'controller', 'Initializing engine');
+
+      // Store canvas contexts
+      pitchGridContext = config.pitchGridContext || null;
+      drumGridContext = config.drumGridContext || null;
+
+      // Create column map service
+      columnMapService = createColumnMapService({
+        getPlacedTonicSigns: (state) => {
+          if (!store) return [];
+          const signs = [];
+          for (const group of Object.values(state.tonicSignGroups || {})) {
+            signs.push(...group);
+          }
+          return signs;
+        }
+      });
+
+      // Get storage adapter (use localStorage if available and no custom adapter provided)
+      let storage: StorageAdapter | undefined = config.storage;
+      if (!storage && typeof window !== 'undefined' && window.localStorage) {
+        storage = window.localStorage;
+      }
+
+      // Create store with all callbacks
+      store = createStore({
+        storageKey: config.storageKey || 'studentNotationState',
+        storage,
+        initialState: config.initialState,
+        noteActionCallbacks: {
+          log: callbackLog
+        },
+        rhythmActionCallbacks: {
+          getColumnMap: (state) => columnMapService!.getColumnMap(state),
+          visualToTimeIndex: (state, visualIndex, groupings) =>
+            visualToTime(visualIndex, columnMapService!.getColumnMap(state)),
+          timeIndexToVisualColumn: (state, timeIndex, groupings) =>
+            timeToVisual(timeIndex, columnMapService!.getColumnMap(state)),
+          getTimeBoundaryAfterMacrobeat: (state, index, groupings) =>
+            getTimeBoundaryAfterMacrobeat(index, groupings),
+          log: callbackLog
+        },
+        sixteenthStampActionCallbacks: {
+          log: callbackLog
+        },
+        tripletStampActionCallbacks: {
+          canvasToTime: (canvasIndex, map) => {
+            return map.canvasToTime.get(canvasIndex) ?? null;
+          },
+          timeToCanvas: (timeIndex, map) => {
+            return map.timeToCanvas.get(timeIndex) ?? 0;
+          },
+          getColumnMap: (state) => columnMapService!.getColumnMap(state),
+          log: callbackLog
+        }
+      });
+
+      // Subscribe to state changes to invalidate column map cache
+      store.on('rhythmStructureChanged', () => {
+        columnMapService?.invalidate();
+      });
+
+      store.on('notesChanged', () => {
+        this.renderPitchGrid();
+      });
+
+      store.on('sixteenthStampPlacementsChanged', () => {
+        this.renderDrumGrid();
+      });
+
+      store.on('tripletStampPlacementsChanged', () => {
+        this.renderDrumGrid();
+      });
+
+      initialized = true;
+      log('info', 'controller', 'Engine initialized successfully');
+
+      // Initial render if canvases provided
+      if (pitchGridContext || drumGridContext) {
+        this.render();
+      }
+    },
+
+    dispose(): void {
+      if (!initialized) return;
+
+      log('info', 'controller', 'Disposing engine');
+
+      if (store) {
+        store.dispose();
+        store = null;
+      }
+
+      columnMapService = null;
+      pitchGridContext = null;
+      drumGridContext = null;
+      initialized = false;
+    },
+
+    isInitialized(): boolean {
+      return initialized;
+    },
+
+    // ============================================================================
+    // TOOL SELECTION
+    // ============================================================================
+
+    setTool(tool: string): void {
+      if (!store) return;
+      store.setSelectedTool(tool);
+    },
+
+    getTool(): string {
+      return store?.state.selectedTool || 'note';
+    },
+
+    setNoteShape(shape: NoteShape): void {
+      if (!store) return;
+      const currentColor = store.state.selectedNote.color;
+      store.setSelectedNote(shape, currentColor);
+    },
+
+    setNoteColor(color: string): void {
+      if (!store) return;
+      const currentShape = store.state.selectedNote.shape as NoteShape;
+      store.setSelectedNote(currentShape, color);
+    },
+
+    // ============================================================================
+    // NOTE MANIPULATION
+    // ============================================================================
+
+    insertNote(row: number, startColumn: number, endColumn?: number): PlacedNote | null {
+      if (!store) return null;
+
+      const note: Partial<PlacedNote> = {
+        row,
+        startColumnIndex: startColumn as CanvasSpaceColumn,
+        endColumnIndex: (endColumn ?? startColumn) as CanvasSpaceColumn,
+        shape: store.state.selectedNote.shape as NoteShape,
+        color: store.state.selectedNote.color
+      };
+
+      return store.addNote(note);
+    },
+
+    deleteNote(noteId: string): boolean {
+      if (!store) return false;
+
+      const note = store.state.placedNotes.find(n => n.uuid === noteId);
+      if (!note) return false;
+
+      store.removeNote(note);
+      return true;
+    },
+
+    deleteSelection(): void {
+      if (!store) return;
+
+      const selection = store.state.lassoSelection;
+      if (!selection.isActive || selection.selectedItems.length === 0) return;
+
+      const notesToDelete = selection.selectedItems
+        .filter(item => item.type === 'note')
+        .map(item => store!.state.placedNotes.find(n => n.uuid === item.id))
+        .filter(n => n !== undefined) as PlacedNote[];
+
+      if (notesToDelete.length > 0) {
+        store.removeMultipleNotes(notesToDelete);
+      }
+
+      // Clear selection after delete
+      this.clearSelection();
+    },
+
+    moveNote(noteId: string, toRow: number, toColumn: number): void {
+      if (!store) return;
+
+      const note = store.state.placedNotes.find(n => n.uuid === noteId);
+      if (!note) return;
+
+      store.updateNoteRow(note, toRow);
+      store.updateNotePosition(note, toColumn as CanvasSpaceColumn);
+    },
+
+    setNoteTail(noteId: string, endColumn: number): void {
+      if (!store) return;
+
+      const note = store.state.placedNotes.find(n => n.uuid === noteId);
+      if (!note) return;
+
+      store.updateNoteTail(note, endColumn as CanvasSpaceColumn);
+    },
+
+    clearAllNotes(): void {
+      if (!store) return;
+      store.clearAllNotes();
+    },
+
+    // ============================================================================
+    // SELECTION
+    // ============================================================================
+
+    setSelection(items: SelectionItem[]): void {
+      if (!store) return;
+
+      // Convert to LassoSelection format - need to include full data
+      const selectedItems: LassoSelection['selectedItems'] = items
+        .map(item => {
+          if (item.type === 'note') {
+            const note = store!.state.placedNotes.find(n => n.uuid === item.id);
+            if (!note) return null;
+            return { type: 'note' as const, id: item.id, data: note };
+          } else if (item.type === 'sixteenthStamp') {
+            const stamp = store!.state.sixteenthStampPlacements.find(s => s.id === item.id);
+            if (!stamp) return null;
+            return { type: 'sixteenthStamp' as const, id: item.id, data: stamp };
+          } else if (item.type === 'tripletStamp') {
+            const stamp = store!.state.tripletStampPlacements.find(s => s.id === item.id);
+            if (!stamp) return null;
+            return { type: 'tripletStamp' as const, id: item.id, data: stamp };
+          }
+          return null;
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
+
+      store.state.lassoSelection = {
+        isActive: selectedItems.length > 0,
+        selectedItems,
+        convexHull: [] // Would need to calculate from note positions
+      };
+
+      store.emit('selectionChanged', store.state.lassoSelection);
+    },
+
+    clearSelection(): void {
+      if (!store) return;
+
+      store.state.lassoSelection = {
+        isActive: false,
+        selectedItems: [],
+        convexHull: []
+      };
+
+      store.emit('selectionChanged', store.state.lassoSelection);
+    },
+
+    selectAll(): void {
+      if (!store) return;
+
+      const items: LassoSelection['selectedItems'] = store.state.placedNotes.map(note => ({
+        type: 'note' as const,
+        id: note.uuid,
+        data: note
+      }));
+
+      store.state.lassoSelection = {
+        isActive: items.length > 0,
+        selectedItems: items,
+        convexHull: []
+      };
+
+      store.emit('selectionChanged', store.state.lassoSelection);
+    },
+
+    getSelection(): LassoSelection {
+      return store?.state.lassoSelection || { isActive: false, selectedItems: [], convexHull: [] };
+    },
+
+    hasSelection(): boolean {
+      return store?.state.lassoSelection.isActive && store.state.lassoSelection.selectedItems.length > 0 || false;
+    },
+
+    // ============================================================================
+    // PLAYBACK
+    // ============================================================================
+
+    play(): void {
+      if (!store) return;
+      store.setPlaybackState(true, false);
+      log('info', 'playback', 'Play started');
+    },
+
+    pause(): void {
+      if (!store) return;
+      store.setPlaybackState(true, true);
+      log('info', 'playback', 'Paused');
+    },
+
+    resume(): void {
+      if (!store) return;
+      store.setPlaybackState(true, false);
+      log('info', 'playback', 'Resumed');
+    },
+
+    stop(): void {
+      if (!store) return;
+      store.setPlaybackState(false, false);
+      log('info', 'playback', 'Stopped');
+    },
+
+    isPlaying(): boolean {
+      return store?.state.isPlaying || false;
+    },
+
+    isPaused(): boolean {
+      return store?.state.isPaused || false;
+    },
+
+    setTempo(bpm: number): void {
+      if (!store) return;
+      store.setTempo(bpm);
+    },
+
+    getTempo(): number {
+      return store?.state.tempo || 120;
+    },
+
+    setLooping(enabled: boolean): void {
+      if (!store) return;
+      store.setLooping(enabled);
+    },
+
+    isLooping(): boolean {
+      return store?.state.isLooping || false;
+    },
+
+    setPlayheadMode(mode: PlayheadMode): void {
+      if (!store) return;
+      store.setPlayheadMode(mode);
+    },
+
+    // ============================================================================
+    // HISTORY
+    // ============================================================================
+
+    undo(): void {
+      if (!store) return;
+      store.undo();
+    },
+
+    redo(): void {
+      if (!store) return;
+      store.redo();
+    },
+
+    canUndo(): boolean {
+      return (store?.state.historyIndex || 0) > 0;
+    },
+
+    canRedo(): boolean {
+      return (store?.state.historyIndex || 0) < (store?.state.history.length || 0) - 1;
+    },
+
+    recordState(): void {
+      if (!store) return;
+      store.recordState();
+    },
+
+    // ============================================================================
+    // RHYTHM STRUCTURE
+    // ============================================================================
+
+    addMacrobeat(): void {
+      if (!store) return;
+      store.increaseMacrobeatCount();
+    },
+
+    removeMacrobeat(): void {
+      if (!store) return;
+      store.decreaseMacrobeatCount();
+    },
+
+    setMacrobeatGrouping(index: number, grouping: 2 | 3): void {
+      if (!store) return;
+
+      const current = store.state.macrobeatGroupings[index];
+      if (current !== grouping) {
+        store.toggleMacrobeatGrouping(index);
+      }
+    },
+
+    toggleAnacrusis(): void {
+      if (!store) return;
+      store.setAnacrusis(!store.state.hasAnacrusis);
+    },
+
+    addModulationMarker(measureIndex: number, ratio: ModulationRatio): string | null {
+      if (!store) return null;
+      return store.addModulationMarker(measureIndex, ratio);
+    },
+
+    removeModulationMarker(markerId: string): void {
+      if (!store) return;
+      store.removeModulationMarker(markerId);
+    },
+
+    // ============================================================================
+    // VIEW
+    // ============================================================================
+
+    setPitchRange(topIndex: number, bottomIndex: number): void {
+      if (!store) return;
+      store.setPitchRange({ topIndex, bottomIndex });
+    },
+
+    getPitchRange(): PitchRange {
+      return store?.state.pitchRange || { topIndex: 0, bottomIndex: 87 };
+    },
+
+    setDegreeDisplayMode(mode: DegreeDisplayMode): void {
+      if (!store) return;
+      store.setDegreeDisplayMode(mode);
+    },
+
+    setLongNoteStyle(style: LongNoteStyle): void {
+      if (!store) return;
+      store.setLongNoteStyle(style);
+    },
+
+    // ============================================================================
+    // TIMBRE
+    // ============================================================================
+
+    setTimbreADSR(color: string, adsr: Partial<ADSREnvelope>): void {
+      if (!store) return;
+      store.setADSR(color, adsr);
+    },
+
+    setTimbreHarmonics(color: string, coeffs: number[]): void {
+      if (!store) return;
+      store.setHarmonicCoefficients(color, new Float32Array(coeffs));
+    },
+
+    setTimbreFilter(color: string, settings: Partial<FilterSettings>): void {
+      if (!store) return;
+      store.setFilterSettings(color, settings);
+    },
+
+    // ============================================================================
+    // STATE ACCESS
+    // ============================================================================
+
+    getState(): Readonly<AppState> {
+      if (!store) {
+        throw new Error('Engine not initialized');
+      }
+      return store.state;
+    },
+
+    getNotes(): readonly PlacedNote[] {
+      return store?.state.placedNotes || [];
+    },
+
+    getNoteAt(row: number, column: number): PlacedNote | null {
+      if (!store) return null;
+
+      return store.state.placedNotes.find(
+        note => note.row === row &&
+                note.startColumnIndex <= column &&
+                note.endColumnIndex >= column
+      ) || null;
+    },
+
+    getSixteenthStamps(): readonly SixteenthStampPlacement[] {
+      return store?.state.sixteenthStampPlacements || [];
+    },
+
+    getTripletStamps(): readonly TripletStampPlacement[] {
+      return store?.state.tripletStampPlacements || [];
+    },
+
+    // ============================================================================
+    // IMPORT/EXPORT
+    // ============================================================================
+
+    exportCSV(): string {
+      if (!store) return '';
+
+      const header = 'uuid,row,startColumn,endColumn,color,shape';
+      const rows = store.state.placedNotes.map(n =>
+        `${n.uuid},${n.row},${n.startColumnIndex},${n.endColumnIndex},${n.color},${n.shape}`
+      );
+      return [header, ...rows].join('\n');
+    },
+
+    importCSV(csv: string): void {
+      if (!store) return;
+
+      const lines = csv.split('\n').filter(line => line.trim());
+      if (lines.length === 0) return;
+
+      // Skip header
+      const dataLines = lines.slice(1);
+
+      const notes: Partial<PlacedNote>[] = dataLines.map(line => {
+        const [uuid, row, startColumn, endColumn, color, shape] = line.split(',');
+        return {
+          uuid,
+          row: parseInt(row || '0', 10),
+          startColumnIndex: parseInt(startColumn || '0', 10) as CanvasSpaceColumn,
+          endColumnIndex: parseInt(endColumn || '0', 10) as CanvasSpaceColumn,
+          color: color || 'blue',
+          shape: (shape || 'circle') as NoteShape
+        };
+      });
+
+      store.loadNotes(notes);
+    },
+
+    exportState(): string {
+      if (!store) return '{}';
+      return JSON.stringify(store.state, null, 2);
+    },
+
+    importState(json: string): void {
+      if (!store) return;
+
+      try {
+        const state = JSON.parse(json);
+        Object.assign(store.state, state);
+        store.emit('stateImported', state);
+        this.render();
+      } catch (error) {
+        log('error', 'import', 'Failed to import state', error);
+      }
+    },
+
+    // ============================================================================
+    // EVENTS
+    // ============================================================================
+
+    on(event: string, callback: EventCallback): void {
+      if (!store) return;
+      store.on(event, callback);
+    },
+
+    off(event: string, callback: EventCallback): void {
+      if (!store) return;
+      store.off(event, callback);
+    },
+
+    // ============================================================================
+    // RENDERING
+    // ============================================================================
+
+    render(): void {
+      this.renderPitchGrid();
+      this.renderDrumGrid();
+    },
+
+    renderPitchGrid(): void {
+      if (!pitchGridContext || !store || !columnMapService) return;
+      // TODO: Canvas rendering requires more complex setup with viewport info and coordinate utilities
+      // For now, this is a placeholder - apps should use the app's existing renderers
+      log('debug', 'controller', 'renderPitchGrid called - canvas rendering not yet wired');
+    },
+
+    renderDrumGrid(): void {
+      if (!drumGridContext || !store || !columnMapService) return;
+      // TODO: Canvas rendering requires more complex setup with coordinate utilities
+      // For now, this is a placeholder - apps should use the app's existing renderers
+      log('debug', 'controller', 'renderDrumGrid called - canvas rendering not yet wired');
+    }
+  };
+
+  return controller;
 }
 
 /**
  * Create a lesson mode API wrapper around an engine controller
  */
-export function createLessonMode(engine: EngineController): LessonModeAPI {
-  // This will be implemented in the tutorial-runtime package
+export function createLessonMode(_engine: EngineController): LessonModeAPI {
+  // This will be implemented in Phase 6 - Tutorial App
   throw new Error('Not yet implemented - will be in @mlt/tutorial-runtime package');
 }

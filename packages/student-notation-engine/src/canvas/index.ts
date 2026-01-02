@@ -1,19 +1,41 @@
 /**
  * Canvas Module
  *
- * This module will contain canvas rendering functions for:
- * - Pitch grid
+ * Framework-agnostic canvas rendering functions for:
+ * - Pitch grid (notes, grid lines, legends)
  * - Drum grid
- * - Legends
- * - Playhead
- * - Hover indicators
+ * - Playhead visualization
  *
- * Currently a placeholder - will be populated in Phase 2.
+ * All renderers use dependency injection for state access and services.
  */
 
-// These will be extracted from:
-// - apps/student-notation/src/components/canvas/PitchGrid/renderers/*
-// - apps/student-notation/src/components/canvas/drumGrid/drumGridRenderer.ts
+// Coordinate utilities
+export {
+  createCoordinateUtils,
+  type CoordinateUtils,
+  type CoordinateOptions,
+  type CoordinateCallbacks,
+  type ViewportInfo
+} from './coordinateUtils.js';
 
+// Note rendering
+export {
+  createNoteRenderer,
+  type NoteRenderer,
+  type NoteRenderOptions,
+  type NoteRenderCallbacks,
+  type AnimationEffectsManager
+} from './notes.js';
+
+// Grid line rendering
+export {
+  createGridLineRenderer,
+  type GridLineRenderer,
+  type GridLineRenderOptions,
+  type GridLineRenderCallbacks,
+  type MacrobeatInfo
+} from './gridLines.js';
+
+// Main renderers (orchestrators)
 export { renderPitchGrid, type PitchGridRenderOptions } from './pitchGridRenderer.js';
 export { renderDrumGrid, type DrumGridRenderOptions } from './drumGridRenderer.js';

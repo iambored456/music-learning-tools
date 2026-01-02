@@ -22,11 +22,28 @@ const DEFAULT_ADSR = {
  * Default filter settings
  */
 const DEFAULT_FILTER = {
-  type: 'lowpass' as const,
-  frequency: 2000,
-  Q: 1,
-  gain: 0,
-  enabled: false
+  enabled: false,
+  blend: 0.5,
+  cutoff: 0.5,
+  resonance: 0,
+  type: 'lowpass',
+  mix: 1.0
+};
+
+/**
+ * Default vibrato settings
+ */
+const DEFAULT_VIBRATO = {
+  speed: 5,
+  span: 0
+};
+
+/**
+ * Default tremolo settings
+ */
+const DEFAULT_TREMOLO = {
+  speed: 5,
+  span: 0
 };
 
 /**
@@ -55,11 +72,15 @@ function createDefaultTimbres(): TimbresMap {
     const phases = new Float32Array(32);
 
     timbres[color] = {
+      name: 'Sine',
       adsr: { ...DEFAULT_ADSR },
       coeffs,
       phases,
       filter: { ...DEFAULT_FILTER },
-      activePresetName: 'sine'
+      activePresetName: 'sine',
+      gain: 1.0,
+      vibrato: { ...DEFAULT_VIBRATO },
+      tremelo: { ...DEFAULT_TREMOLO }
     };
   });
 

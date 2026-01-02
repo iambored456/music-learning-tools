@@ -265,11 +265,15 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       }
 
       // Update stored settings on synth for future voices
+      // @ts-expect-error - Custom runtime properties added to synth
       synth._currentVibrato = timbre.vibrato;
+      // @ts-expect-error - Custom runtime properties added to synth
       synth._currentTremolo = timbre.tremelo;
+      // @ts-expect-error - Custom runtime properties added to synth
       synth._currentFilter = timbre.filter;
 
       // Try setting parameters on existing voices
+      // @ts-expect-error - Accessing private Tone.js property
       const activeVoices = synth._activeVoices;
 
       if (activeVoices && activeVoices.size > 0) {
@@ -290,7 +294,9 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
             voice._setPresetGain(presetGain);
           }
         });
+        // @ts-expect-error - Accessing private Tone.js property
       } else if (synth._voices && Array.isArray(synth._voices)) {
+        // @ts-expect-error - Accessing private Tone.js property
         synth._voices.forEach((voice: any) => {
           if (voice?._setVibrato) {
             voice._setVibrato(timbre.vibrato);
@@ -394,7 +400,9 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       let originalRelease: number | undefined;
       try {
         const currentConfig = typeof synth.get === 'function' ? synth.get() : null;
-        originalRelease = currentConfig?.envelope?.release;
+        // Tone.js Time can be string or number - we only need number here
+        const release = currentConfig?.envelope?.release;
+        originalRelease = typeof release === 'number' ? release : undefined;
 
         // Use a tiny but non-zero release to avoid audible clicks
         synth.set({ envelope: { release: 0.01 } });

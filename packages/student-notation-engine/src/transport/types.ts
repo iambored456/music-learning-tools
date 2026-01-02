@@ -103,8 +103,8 @@ export type UpdatePlayheadModelCallback = (config: TimeMapConfig) => void;
 
 /** Drum player configuration */
 export interface DrumConfig {
-  /** URLs for drum samples */
-  samples: Record<DrumTrackId, string>;
+  /** URLs for drum samples (uses defaults if not provided) */
+  samples?: Record<DrumTrackId, string>;
   /** Synth engine instance for audio routing */
   synthEngine?: {
     getMainVolumeNode(): Tone.Volume | null;

@@ -164,30 +164,179 @@ export interface SynthEngineConfig {
 }
 
 /**
+ * Placed note for scheduling
+ */
+export interface SchedulableNote {
+  uuid: string;
+  startColumnIndex: number;
+  endColumnIndex: number;
+  globalRow?: number;
+  row: number;
+  shape: 'circle' | 'oval' | string;
+  color: string;
+  isDrum?: boolean;
+  drumTrack?: number | null;
+}
+
+/**
+ * Stamp playback data for scheduling
+ */
+export interface SchedulableStamp {
+  sixteenthStampId: string;
+  column: number;
+  row: number;
+  color: string;
+  placement?: {
+    shapeOffsets?: Record<string, number>;
+  };
+}
+
+/**
+ * Triplet playback data for scheduling
+ */
+export interface SchedulableTriplet {
+  tripletStampId: string;
+  startTimeIndex: number;
+  row: number;
+  color: string;
+  placement?: {
+    shapeOffsets?: Record<string, number>;
+  };
+}
+
+/**
+ * Schedule event for stamps/triplets
+ */
+export interface StampScheduleEvent {
+  offset: string;
+  duration: string;
+  rowOffset: number;
+  slot?: number;
+}
+
+/**
+ * State subset needed by transport service
+ */
+export interface TransportState {
+  tempo: number;
+  columnWidths: number[];
+  hasAnacrusis: boolean;
+  macrobeatBoundaryStyles: string[];
+  modulationMarkers?: Array<{
+    measureIndex: number;
+    ratio: number;
+    active: boolean;
+    xPosition?: number | null;
+  }>;
+  isLooping: boolean;
+  isPaused: boolean;
+  cellWidth: number;
+  placedNotes: SchedulableNote[];
+  timbres: TimbresMap;
+  fullRowData: Array<{ toneNote: string; hex?: string }>;
+  playheadMode: 'line' | 'microbeat' | 'macrobeat';
+}
+
+/**
+ * Callbacks for transport visual updates (decouples from DOM)
+ */
+export interface TransportVisualCallbacks {
+  /** Clear playhead canvas */
+  clearPlayheadCanvas?: () => void;
+  /** Clear drum playhead canvas */
+  clearDrumPlayheadCanvas?: () => void;
+  /** Draw playhead line at position */
+  drawPlayheadLine?: (x: number, canvasHeight: number) => void;
+  /** Draw pulsing column highlight */
+  drawPlayheadHighlight?: (x: number, width: number, canvasHeight: number, timestamp: number) => void;
+  /** Draw drum playhead line */
+  drawDrumPlayheadLine?: (x: number, canvasHeight: number) => void;
+  /** Draw drum playhead highlight */
+  drawDrumPlayheadHighlight?: (x: number, width: number, canvasHeight: number, timestamp: number) => void;
+  /** Update beat line highlight position (for button rows) */
+  updateBeatLineHighlight?: (x: number, width: number, visible: boolean) => void;
+  /** Trigger note pop animation on drum grid */
+  triggerDrumNotePop?: (columnIndex: number, drumTrack: number) => void;
+  /** Trigger ADSR playhead visual */
+  triggerAdsrVisual?: (noteId: string, phase: 'attack' | 'release', color: string, adsr: any) => void;
+  /** Clear all ADSR visuals */
+  clearAdsrVisuals?: () => void;
+  /** Get canvas logical width */
+  getPlayheadCanvasWidth?: () => number;
+  /** Get canvas logical height */
+  getPlayheadCanvasHeight?: () => number;
+  /** Get drum canvas logical height */
+  getDrumCanvasHeight?: () => number;
+}
+
+/**
+ * Callbacks for transport state access (decouples from store)
+ */
+export interface TransportStateCallbacks {
+  /** Get current state */
+  getState: () => TransportState;
+  /** Get stamp playback data */
+  getStampPlaybackData?: () => SchedulableStamp[];
+  /** Get stamp schedule events */
+  getStampScheduleEvents?: (stampId: string, placement?: any) => StampScheduleEvent[];
+  /** Get triplet playback data */
+  getTripletPlaybackData?: () => SchedulableTriplet[];
+  /** Get triplet schedule events */
+  getTripletScheduleEvents?: (tripletId: string, placement?: any) => StampScheduleEvent[];
+  /** Convert time index to canvas column */
+  timeToCanvas?: (timeIndex: number, state: TransportState) => number;
+  /** Get placed tonic signs */
+  getPlacedTonicSigns?: () => Array<{ columnIndex: number; spanColumns?: number }>;
+  /** Get tonic span column indices */
+  getTonicSpanColumnIndices?: (tonicSigns: Array<{ columnIndex: number; spanColumns?: number }>) => Set<number>;
+  /** Get macrobeat info by index */
+  getMacrobeatInfo?: (index: number) => { startColumn: number; endColumn: number } | null;
+  /** Get column start X position */
+  getColumnStartX?: (columnIndex: number) => number;
+  /** Get column width */
+  getColumnWidth?: (columnIndex: number) => number;
+  /** Get total canvas width */
+  getCanvasWidth?: () => number;
+  /** Get macrobeat highlight rect for column */
+  getMacrobeatHighlightRect?: (columnIndex: number) => { x: number; width: number } | null;
+}
+
+/**
+ * Callbacks for transport events (decouples from store)
+ */
+export interface TransportEventCallbacks {
+  /** Subscribe to state changes */
+  on: (event: string, handler: (data?: any) => void) => void;
+  /** Emit event */
+  emit: (event: string, data?: any) => void;
+  /** Set playback state */
+  setPlaybackState?: (isPlaying: boolean, isPaused: boolean) => void;
+}
+
+/**
  * Configuration for transport service
  */
 export interface TransportConfig {
-  /** Store instance for state access */
-  store: unknown;
   /** Synth engine instance */
   synthEngine: SynthEngineInstance;
-  /** Pitch grid playhead canvas context (optional) */
-  pitchPlayheadContext?: CanvasRenderingContext2D;
-  /** Drum grid playhead canvas context (optional) */
-  drumPlayheadContext?: CanvasRenderingContext2D;
+  /** State access callbacks */
+  stateCallbacks: TransportStateCallbacks;
+  /** Event callbacks */
+  eventCallbacks: TransportEventCallbacks;
+  /** Visual update callbacks (optional - for headless operation) */
+  visualCallbacks?: TransportVisualCallbacks;
+  /** Optional logger */
+  logger?: SynthLogger;
+  /** Optional audio init callback (for user gesture compliance) */
+  audioInit?: AudioInitCallback;
 }
 
 /**
  * Extended timbre state for internal synth use
+ * Note: gain, vibrato, tremelo, and filter are inherited from TimbreState
+ * This interface can be extended with additional internal-only properties
  */
 export interface InternalTimbreState extends TimbreState {
-  vibrato?: { speed: number; span: number };
-  tremelo?: { speed: number; span: number };
-  filter?: {
-    enabled: boolean;
-    cutoff: number;
-    resonance: number;
-    blend: number;
-  };
-  gain?: number;
+  // Inherits all properties from TimbreState including:
+  // gain, vibrato, tremelo, filter
 }

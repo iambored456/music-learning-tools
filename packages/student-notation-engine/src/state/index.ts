@@ -28,3 +28,21 @@ export {
   getPitchIndex,
   resolvePitchRange
 } from './pitchData.js';
+
+// Action modules
+export {
+  createNoteActions,
+  type NoteActionCallbacks,
+  type MacrobeatInfo,
+  ensureCircleNoteSpan,
+  createSixteenthStampActions,
+  type SixteenthStampActionCallbacks,
+  createTripletStampActions,
+  type TripletStampActionCallbacks,
+  createRhythmActions,
+  type RhythmActionCallbacks,
+  ANACRUSIS_ON_GROUPINGS,
+  ANACRUSIS_ON_STYLES,
+  ANACRUSIS_OFF_GROUPINGS,
+  ANACRUSIS_OFF_STYLES
+} from './actions/index.js';

@@ -17,6 +17,10 @@
 import type { AppState, Store, TimbreState, HistoryEntry } from '@mlt/types';
 import { fullRowData } from './pitchData.js';
 import { getInitialState } from './initialState.js';
+import { createNoteActions, type NoteActionCallbacks } from './actions/noteActions.js';
+import { createSixteenthStampActions, type SixteenthStampActionCallbacks } from './actions/sixteenthStampActions.js';
+import { createTripletStampActions, type TripletStampActionCallbacks } from './actions/tripletStampActions.js';
+import { createRhythmActions, type RhythmActionCallbacks } from './actions/rhythmActions.js';
 
 // Event callback type
 export type EventCallback<T = unknown> = (data: T) => void;
@@ -46,6 +50,14 @@ export interface StoreConfig {
   initialState?: Partial<AppState>;
   /** Callback when state should be reloaded (replaces window.location.reload) */
   onClearState?: () => void;
+  /** Callbacks for note actions */
+  noteActionCallbacks?: NoteActionCallbacks;
+  /** Callbacks for sixteenth stamp actions */
+  sixteenthStampActionCallbacks?: SixteenthStampActionCallbacks;
+  /** Callbacks for triplet stamp actions */
+  tripletStampActionCallbacks?: TripletStampActionCallbacks;
+  /** Callbacks for rhythm actions */
+  rhythmActionCallbacks?: RhythmActionCallbacks;
 }
 
 /**
@@ -194,7 +206,11 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     storageKey = 'studentNotationState',
     storage,
     initialState: configInitialState,
-    onClearState
+    onClearState,
+    noteActionCallbacks = {},
+    sixteenthStampActionCallbacks = {},
+    tripletStampActionCallbacks = {},
+    rhythmActionCallbacks = {}
   } = config;
 
   // Event subscribers
@@ -356,22 +372,31 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       store.emit('playheadModeChanged', mode);
     },
 
-    setSelectedTool(tool: string): void {
+    setSelectedTool(tool: string, tonicNumber?: string | number): void {
       const oldTool = store.state.selectedTool;
       store.state.previousTool = oldTool;
       store.state.selectedTool = tool;
+
+      // Update tonic number if provided
+      if (tonicNumber !== undefined) {
+        const numericTonic = typeof tonicNumber === 'string' ? parseInt(tonicNumber, 10) : tonicNumber;
+        if (!isNaN(numericTonic)) {
+          store.state.selectedToolTonicNumber = numericTonic;
+        }
+      }
+
       store.emit('toolChanged', { newTool: tool, oldTool });
     },
 
-    setSelectedNote(note: { shape?: string; color?: string }): void {
+    setSelectedNote(shape: 'circle' | 'oval' | 'diamond', color: string): void {
       const oldNote = { ...store.state.selectedNote };
-      store.state.selectedNote = { ...store.state.selectedNote, ...note };
+      store.state.selectedNote = { shape, color };
       store.emit('noteChanged', { newNote: store.state.selectedNote, oldNote });
     },
 
-    setPitchRange(topIndex: number, bottomIndex: number): void {
-      store.state.pitchRange = { topIndex, bottomIndex };
-      store.emit('pitchRangeChanged', { topIndex, bottomIndex });
+    setPitchRange(range: Partial<AppState['pitchRange']>): void {
+      store.state.pitchRange = { ...store.state.pitchRange, ...range };
+      store.emit('pitchRangeChanged', store.state.pitchRange);
     },
 
     setDegreeDisplayMode(mode: 'off' | 'diatonic' | 'modal'): void {
@@ -409,14 +434,22 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       store.emit('waveformExtendedViewChanged', store.state.waveformExtendedView);
     },
 
-    setLayoutConfig(config: Partial<AppState>): void {
-      Object.assign(store.state, config);
+    setLayoutConfig(config: { cellWidth?: number; cellHeight?: number; columnWidths?: number[] }): void {
+      if (config.cellWidth !== undefined) {
+        store.state.cellWidth = config.cellWidth;
+      }
+      if (config.cellHeight !== undefined) {
+        store.state.cellHeight = config.cellHeight;
+      }
+      if (config.columnWidths !== undefined) {
+        store.state.columnWidths = config.columnWidths;
+      }
       store.emit('layoutConfigChanged', config);
     },
 
-    setDeviceProfile(profile: AppState['deviceProfile']): void {
-      store.state.deviceProfile = profile;
-      store.emit('deviceProfileChanged', profile);
+    setDeviceProfile(profile: Partial<AppState['deviceProfile']>): void {
+      store.state.deviceProfile = { ...store.state.deviceProfile, ...profile };
+      store.emit('deviceProfileChanged', store.state.deviceProfile);
     },
 
     setPrintPreviewActive(isActive: boolean): void {
@@ -507,55 +540,21 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       }
     },
 
-    // ========== PLACEHOLDER ACTIONS ==========
-    // These will be implemented when the full action modules are extracted
-    addNote: () => null,
-    updateNoteTail: () => {},
-    updateMultipleNoteTails: () => {},
-    updateNoteRow: () => {},
-    updateMultipleNoteRows: () => {},
-    updateNotePosition: () => {},
-    updateMultipleNotePositions: () => {},
-    removeNote: () => {},
-    removeMultipleNotes: () => {},
-    clearAllNotes: () => {},
-    loadNotes: () => {},
-    eraseInPitchArea: () => false,
-    eraseTonicSignAt: () => false,
-    addTonicSignGroup: () => {},
-    increaseMacrobeatCount: () => {},
-    decreaseMacrobeatCount: () => {},
-    updateTimeSignature: () => {},
-    setAnacrusis: () => {},
-    addModulationMarker: () => null,
-    removeModulationMarker: () => {},
-    moveModulationMarker: () => {},
-    setModulationRatio: () => {},
-    toggleModulationMarker: () => {},
-    clearModulationMarkers: () => {},
-    toggleMacrobeatGrouping: () => {},
-    cycleMacrobeatBoundaryStyle: () => {},
-    addSixteenthStampPlacement: () => ({}) as ReturnType<Store['addSixteenthStampPlacement']>,
-    removeSixteenthStampPlacement: () => false,
-    eraseSixteenthStampsInArea: () => false,
-    getAllSixteenthStampPlacements: () => [],
-    getSixteenthStampAt: () => null,
-    clearAllSixteenthStamps: () => {},
-    getSixteenthStampPlaybackData: () => [],
-    updateSixteenthStampShapeOffset: () => {},
-    getSixteenthStampShapeRow: () => 0,
-    addTripletStampPlacement: () => ({}) as ReturnType<Store['addTripletStampPlacement']>,
-    removeTripletStampPlacement: () => false,
-    eraseTripletStampsInArea: () => false,
-    getAllTripletStampPlacements: () => [],
-    getTripletStampAt: () => null,
-    clearAllTripletStamps: () => {},
-    getTripletStampPlaybackData: () => [],
-    updateTripletStampShapeOffset: () => {},
-    getTripletStampShapeRow: () => 0,
+    // ========== NOTE ACTIONS ==========
+    // Extracted from note actions module
+    ...createNoteActions(noteActionCallbacks),
 
-    // Internal helper
-    _isBoundaryInAnacrusis: () => false
+    // ========== SIXTEENTH STAMP ACTIONS ==========
+    // Extracted from sixteenth stamp actions module
+    ...createSixteenthStampActions(sixteenthStampActionCallbacks),
+
+    // ========== TRIPLET STAMP ACTIONS ==========
+    // Extracted from triplet stamp actions module
+    ...createTripletStampActions(tripletStampActionCallbacks),
+
+    // ========== RHYTHM ACTIONS ==========
+    // Extracted from rhythm actions module
+    ...createRhythmActions(rhythmActionCallbacks)
   };
 
   // Set up automatic persistence on key events

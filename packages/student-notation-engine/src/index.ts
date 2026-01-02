@@ -171,5 +171,46 @@ export {
   type ModulationMarkerData,
 } from './transport/index.js';
 
+// Services module
+export {
+  createColumnMapService,
+  visualToCanvas,
+  visualToTime,
+  canvasToVisual,
+  canvasToTime,
+  timeToCanvas,
+  timeToVisual,
+  getTimeBoundaryAfterMacrobeat,
+  getColumnEntry,
+  getColumnEntryByCanvas,
+  isPlayableColumn,
+  getColumnType,
+  getMacrobeatBoundary,
+  getCanvasColumnWidths,
+  getTotalCanvasWidth,
+  type ColumnMapService,
+  type ColumnMapCallbacks,
+  type ColumnMapState,
+  type ColumnMap,
+  type ColumnEntry,
+  type MacrobeatBoundary,
+} from './services/index.js';
+
+// Rhythm module
+export {
+  createModulationMarker,
+  createCoordinateMapping,
+  getModulationDisplayText,
+  getModulationColor,
+  columnToRegularTime,
+  canvasXToSeconds,
+  secondsToCanvasX,
+  MODULATION_RATIOS,
+  type ModulationSegment,
+  type CoordinateMapping,
+  type ModulationMappingState,
+  type ModulationMappingCallbacks,
+} from './rhythm/index.js';
+
 // Version
 export const VERSION = '0.1.0';
