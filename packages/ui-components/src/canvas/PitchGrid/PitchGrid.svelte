@@ -77,6 +77,7 @@
     accidentalMode?: AccidentalMode;
     showFrequencyLabels?: boolean;
     showOctaveLabels?: boolean;
+    showRightLegend?: boolean;
     legendHighlight?: LegendHighlightConfig;
 
     // Notation/Playback mode props
@@ -108,6 +109,7 @@
     accidentalMode = { sharp: true, flat: true },
     showFrequencyLabels = false,
     showOctaveLabels = true,
+    showRightLegend = true,
     legendHighlight,
     placedNotes = [],
     placedTonicSigns = [],
@@ -138,7 +140,8 @@
   const LEGEND_COLUMN_WIDTH_UNITS = 3;
   const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
   const legendCanvasWidth = $derived(legendColumnWidth * 2);
-  const legendTotalWidth = $derived((showOctaveLabels || showFrequencyLabels) ? legendCanvasWidth * 2 : 0);
+  const showLegends = $derived(showOctaveLabels || showFrequencyLabels);
+  const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
   const gridWidth = $derived(Math.max(0, viewport.containerWidth - legendTotalWidth));
 
   // ============================================================================
@@ -209,7 +212,7 @@
     }
 
     // Render legends if enabled and contexts are available
-    if ((showOctaveLabels || showFrequencyLabels) && (leftCtx || rightCtx)) {
+    if (showLegends && (leftCtx || rightCtx)) {
       renderLegends(coords, paddedStartRow, paddedEndRow);
     }
   }
@@ -656,7 +659,7 @@
 </script>
 
 <div class="pitch-grid-container">
-  {#if showOctaveLabels || showFrequencyLabels}
+  {#if showLegends}
     <canvas
       bind:this={legendLeftCanvas}
       class="pitch-grid-legend pitch-grid-legend--left"
@@ -668,7 +671,7 @@
     class="pitch-grid-canvas"
   ></canvas>
 
-  {#if showOctaveLabels || showFrequencyLabels}
+  {#if showLegends && showRightLegend}
     <canvas
       bind:this={legendRightCanvas}
       class="pitch-grid-legend pitch-grid-legend--right"

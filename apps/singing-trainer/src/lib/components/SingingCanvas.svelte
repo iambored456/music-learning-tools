@@ -46,14 +46,16 @@
   const cellWidth = 20;
   const showOctaveLabels = true;
   const showFrequencyLabels = false;
+  const showRightLegend = $derived(containerWidth >= 720);
 
   // Keep legend sizing in sync with PitchGrid
   const LEGEND_COLUMN_WIDTH_UNITS = 3;
   const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
   const legendCanvasWidth = $derived(legendColumnWidth * 2);
-  const legendTotalWidth = $derived((showOctaveLabels || showFrequencyLabels) ? legendCanvasWidth * 2 : 0);
+  const showLegends = $derived(showOctaveLabels || showFrequencyLabels);
+  const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
   const gridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
-  const gridOffsetX = $derived((showOctaveLabels || showFrequencyLabels) ? legendCanvasWidth : 0);
+  const gridOffsetX = $derived(showLegends ? legendCanvasWidth : 0);
   const getDebugTrailFlag = (): boolean => {
     try {
       const win = globalThis as typeof globalThis & { __ST_DEBUG_TRAIL?: boolean };
@@ -348,6 +350,7 @@
     colorMode="color"
     {showOctaveLabels}
     {showFrequencyLabels}
+    {showRightLegend}
     {singingConfig}
     {highwayConfig}
     legendHighlight={legendHighlight}
