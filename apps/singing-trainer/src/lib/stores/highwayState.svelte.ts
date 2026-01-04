@@ -2,13 +2,22 @@
  * Highway State Store - Svelte 5 Runes
  *
  * State for the "Guitar Hero" note highway visualization mode.
+ * Now uses the @mlt/student-notation-engine highway service.
  */
+
+import {
+  createNoteHighwayService,
+  type NoteHighwayServiceInstance,
+  type HighwayTargetNote,
+  type NotePerformance,
+} from '@mlt/student-notation-engine';
 
 export interface TargetNote {
   midi: number;
   startTimeMs: number;
   durationMs: number;
   hit?: boolean;
+  lyric?: string; // For emoji/text display on notes
 }
 
 export interface HighwayState {
@@ -33,13 +42,110 @@ const DEFAULT_STATE: HighwayState = {
 
 function createHighwayState() {
   let state = $state<HighwayState>({ ...DEFAULT_STATE });
+  let engineService: NoteHighwayServiceInstance | null = null;
   let animationFrameId: number | null = null;
 
-  function updateTime() {
-    if (state.isPlaying && state.startTime !== null) {
-      state.currentTimeMs = performance.now() - state.startTime;
-      animationFrameId = requestAnimationFrame(updateTime);
+  // Convert local TargetNote to engine HighwayTargetNote
+  function convertToEngineFormat(notes: TargetNote[]): HighwayTargetNote[] {
+    return notes.map((note, index) => ({
+      id: `target-${index}`,
+      midi: note.midi,
+      startTimeMs: note.startTimeMs,
+      durationMs: note.durationMs,
+      startColumn: 0, // Not used in target notes mode
+      endColumn: 0,   // Not used in target notes mode
+      color: '#3b82f6',
+      shape: 'oval' as const,
+      globalRow: 0,
+    }));
+  }
+
+  // Sync engine state to local state
+  function syncEngineState() {
+    if (!engineService) return;
+
+    const engineState = engineService.getState();
+    state.isPlaying = engineState.isPlaying && !engineState.isPaused;
+    state.currentTimeMs = engineState.currentTimeMs;
+
+    // Update hit status from engine performance
+    const performances = engineService.getPerformanceResults();
+    state.targetNotes = state.targetNotes.map((note, index) => {
+      const noteId = `target-${index}`;
+      const perf = performances.get(noteId);
+      return {
+        ...note,
+        hit: perf?.hitStatus === 'hit',
+      };
+    });
+  }
+
+  // Animation loop to sync state
+  function animate() {
+    if (state.isPlaying && engineService) {
+      syncEngineState();
+      animationFrameId = requestAnimationFrame(animate);
+    } else {
+      animationFrameId = null;
     }
+  }
+
+  function initializeEngine() {
+    if (engineService) {
+      engineService.dispose();
+    }
+
+    // Create engine service with minimal config
+    engineService = createNoteHighwayService({
+      judgmentLinePosition: state.nowLineX / 800, // Assume 800px viewport
+      pixelsPerSecond: state.pixelsPerSecond,
+      lookAheadMs: state.timeWindowMs,
+      scrollMode: 'constant-speed',
+      leadInBeats: 0, // No onramp for singing trainer
+      playMetronomeDuringOnramp: false,
+      playTargetNotes: false,
+      playMetronome: false,
+      inputSources: ['microphone'],
+      feedbackConfig: {
+        onsetToleranceMs: 100,
+        releaseToleranceMs: 150,
+        pitchToleranceCents: 50,
+        hitThreshold: 70,
+      },
+      stateCallbacks: {
+        getTempo: () => 120,
+        getCellWidth: () => 20,
+        getViewportWidth: () => 800,
+      },
+      eventCallbacks: {
+        emit: (event, data) => {
+          // Log highway events for debugging
+          console.debug('[Highway]', event, data);
+
+          // Handle specific events with visual feedback (placeholder for Phase 6)
+          if (event === 'noteHit') {
+            const hitData = data as { noteId: string; note: any; performance: any };
+            console.log(
+              `[Highway] Note HIT: ${hitData.noteId}, accuracy: ${hitData.performance.accuracyTier || 'unknown'}`
+            );
+            // TODO Phase 6: Trigger visual effects (glow, particles, emboldening)
+          } else if (event === 'noteMissed') {
+            const missData = data as { noteId: string; note: any; performance: any };
+            console.log(`[Highway] Note MISSED: ${missData.noteId}`);
+            // TODO Phase 6: Trigger visual effects (fade, shake, miss indicator)
+          } else if (event === 'onrampComplete') {
+            console.log('[Highway] Onramp complete, playback starting!');
+          } else if (event === 'performanceComplete') {
+            console.log('[Highway] Performance complete!');
+            // TODO Phase 6: Show score screen with performance results
+          }
+        },
+      },
+    });
+
+    // Initialize with target notes
+    const engineNotes = convertToEngineFormat(state.targetNotes);
+    engineService.init(engineNotes);
   }
 
   return {
@@ -47,14 +153,28 @@ function createHighwayState() {
       return state;
     },
 
+    get engineService() {
+      return engineService;
+    },
+
     start() {
-      state.isPlaying = true;
-      state.startTime = performance.now();
-      state.currentTimeMs = 0;
-      animationFrameId = requestAnimationFrame(updateTime);
+      if (!engineService && state.targetNotes.length > 0) {
+        initializeEngine();
+      }
+
+      if (engineService) {
+        engineService.start();
+        state.isPlaying = true;
+        state.startTime = performance.now();
+        state.currentTimeMs = 0;
+        animate();
+      }
     },
 
     stop() {
+      if (engineService) {
+        engineService.stop();
+      }
       state.isPlaying = false;
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -63,6 +183,9 @@ function createHighwayState() {
     },
 
     pause() {
+      if (engineService) {
+        engineService.pause();
+      }
       state.isPlaying = false;
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -71,17 +194,21 @@ function createHighwayState() {
     },
 
     resume() {
-      if (state.startTime !== null) {
-        // Adjust start time to account for paused duration
-        const pausedDuration = performance.now() - (state.startTime + state.currentTimeMs);
-        state.startTime += pausedDuration;
+      if (engineService) {
+        engineService.resume();
         state.isPlaying = true;
-        animationFrameId = requestAnimationFrame(updateTime);
+        animate();
       }
     },
 
     setTargetNotes(notes: TargetNote[]) {
       state.targetNotes = notes;
+
+      // Reinitialize engine if it exists
+      if (engineService) {
+        const engineNotes = convertToEngineFormat(notes);
+        engineService.init(engineNotes);
+      }
     },
 
     markNoteHit(noteIndex: number) {
@@ -104,10 +231,24 @@ function createHighwayState() {
       state.timeWindowMs = ms;
     },
 
+    recordPitchInput(midi: number, clarity: number) {
+      if (engineService && state.isPlaying) {
+        engineService.recordPitchInput(midi, clarity, 'microphone');
+      }
+    },
+
+    getPerformanceResults(): Map<string, NotePerformance> {
+      return engineService?.getPerformanceResults() ?? new Map();
+    },
+
     reset() {
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
+      }
+      if (engineService) {
+        engineService.dispose();
+        engineService = null;
       }
       state = { ...DEFAULT_STATE };
     },

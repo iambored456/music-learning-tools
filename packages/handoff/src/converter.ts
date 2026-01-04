@@ -13,6 +13,7 @@ import type {
   VisualOverlay,
   SnapshotPitchRange,
   PitchRangeSource,
+  TonalCenter,
 } from './types.js';
 import { SNAPSHOT_SCHEMA_VERSION } from './types.js';
 
@@ -68,6 +69,8 @@ export interface SnapshotConversionOptions {
   includeClefPitchRange?: boolean;
   /** Optional preference for which range source to use on import */
   preferredPitchRangeSource?: PitchRangeSource;
+  /** Optional tonal center for drone initialization in Singing Trainer */
+  tonalCenter?: TonalCenter;
 }
 
 // ============================================================================
@@ -295,6 +298,11 @@ export function convertToSnapshot(
   // Only include overlays if there are any
   if (visualOverlays.length > 0) {
     snapshot.visualOverlays = visualOverlays;
+  }
+
+  // Include tonal center if provided
+  if (options.tonalCenter) {
+    snapshot.tonalCenter = options.tonalCenter;
   }
 
   return snapshot;

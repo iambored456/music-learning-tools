@@ -8,28 +8,6 @@ importers:
 
   .: {}
 
-  apps/amateur-singing-trainer:
-    dependencies:
-      '@mlt/pitch-trail':
-        specifier: workspace:*
-        version: link:../../packages/pitch-trail
-      pitchy:
-        specifier: ^4.1.0
-        version: 4.1.0
-      tone:
-        specifier: ^15.1.22
-        version: 15.1.22
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-      vite:
-        specifier: ^6.1.1
-        version: 6.4.1(@types/node@24.10.4)
-      vite-plugin-dts:
-        specifier: ^4.5.0
-        version: 4.5.4(@types/node@24.10.4)(rollup@4.54.0)(typescript@5.9.3)(vite@6.4.1(@types/node@24.10.4))
-
   apps/diatonic-compass:
     dependencies:
       gsap:
@@ -51,12 +29,12 @@ importers:
 
   apps/hub:
     dependencies:
-      '@mlt/amateur-singing-trainer':
-        specifier: workspace:*
-        version: link:../amateur-singing-trainer
       '@mlt/diatonic-compass':
         specifier: workspace:*
         version: link:../diatonic-compass
+      '@mlt/pitch-utils':
+        specifier: workspace:*
+        version: link:../../packages/pitch-utils
       '@mlt/singing-trainer':
         specifier: workspace:*
         version: link:../singing-trainer
@@ -103,6 +81,12 @@ importers:
       '@mlt/pitch-data':
         specifier: workspace:*
         version: link:../../packages/pitch-data
+      '@mlt/pitch-utils':
+        specifier: workspace:*
+        version: link:../../packages/pitch-utils
+      '@mlt/student-notation-engine':
+        specifier: workspace:*
+        version: link:../../packages/student-notation-engine
       '@mlt/types':
         specifier: workspace:*
         version: link:../../packages/types

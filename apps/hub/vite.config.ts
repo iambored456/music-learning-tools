@@ -20,7 +20,6 @@ export default defineConfig({
         'student-notation': resolve(root, 'student-notation/index.html'),
         'singing-trainer': resolve(root, 'singing-trainer/index.html'),
         'diatonic-compass': resolve(root, 'diatonic-compass/index.html'),
-        'amateur-singing-trainer': resolve(root, 'amateur-singing-trainer/index.html'),
       },
     },
   },

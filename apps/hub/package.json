@@ -20,8 +20,8 @@
     "vite-tsconfig-paths": "^6.0.3"
   },
   "dependencies": {
-    "@mlt/amateur-singing-trainer": "workspace:*",
     "@mlt/diatonic-compass": "workspace:*",
+    "@mlt/pitch-utils": "workspace:*",
     "@mlt/singing-trainer": "workspace:*",
     "@mlt/student-notation": "workspace:*",
     "clsx": "^2.1.1",

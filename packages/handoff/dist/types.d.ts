@@ -97,6 +97,18 @@ export interface SnapshotPitchRange {
  */
 export type PitchRangeSource = 'notes' | 'clef';
 /**
+ * Tonal center information for drone and degree-based display.
+ * Used to share key/tonic between Student Notation and Singing Trainer.
+ */
+export interface TonalCenter {
+    /** Pitch class (e.g., "C", "C#", "Db", "F#") */
+    pitchClass: string;
+    /** Optional octave for drone purposes (e.g., 3, 4) */
+    octave?: number;
+    /** Optional mode (e.g., "major", "minor", "dorian") */
+    mode?: string;
+}
+/**
  * Complete snapshot for handoff between Student Notation and Singing Trainer.
  *
  * This contains all data needed to reconstruct the pitch grid and target notes
@@ -126,6 +138,11 @@ export interface SingingTrainerSnapshot {
     preferredPitchRangeSource?: PitchRangeSource;
     /** Visual annotations that don't affect logic */
     visualOverlays?: VisualOverlay[];
+    /**
+     * Tonal center for drone and degree-based display.
+     * If provided, Singing Trainer can use this to initialize the drone pitch.
+     */
+    tonalCenter?: TonalCenter;
 }
 /**
  * Represents an overlap conflict within a single voice.

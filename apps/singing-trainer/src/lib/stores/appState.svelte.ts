@@ -41,16 +41,18 @@ export interface AppState {
   tonic: TonicNote;
   useDegrees: boolean;
   showAccidentals: boolean;
+  pitchHighlightEnabled: boolean;
   yAxisRange: YAxisRange;
   drone: DroneState;
 }
 
 const DEFAULT_STATE: AppState = {
   isDetecting: false,
-  visualizationMode: 'stationary',
+  visualizationMode: 'highway',
   tonic: 'C',
   useDegrees: false,
   showAccidentals: true,
+  pitchHighlightEnabled: true,
   yAxisRange: { minMidi: 48, maxMidi: 72 }, // C3 to C5
   drone: { isPlaying: false, octave: 3, volume: -12 },
 };
@@ -85,6 +87,14 @@ function createAppState() {
 
     setShowAccidentals(show: boolean) {
       state.showAccidentals = show;
+    },
+
+    togglePitchHighlight() {
+      state.pitchHighlightEnabled = !state.pitchHighlightEnabled;
+    },
+
+    setPitchHighlightEnabled(enabled: boolean) {
+      state.pitchHighlightEnabled = enabled;
     },
 
     setYAxisRange(range: YAxisRange) {

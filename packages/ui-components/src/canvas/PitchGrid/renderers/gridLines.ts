@@ -37,6 +37,8 @@ export interface TimeBasedVerticalLinesConfig {
   measureIntervalMs?: number;
   visibleTimeRange: { startMs: number; endMs: number };
   nowLineX?: number;
+  /** Time offset for beat alignment (e.g., lead-in time) */
+  beatTimeOffsetMs?: number;
 }
 
 // ============================================================================
@@ -214,18 +216,24 @@ export function drawTimeBasedVerticalLines(
   config: TimeBasedVerticalLinesConfig,
   coords: CoordinateUtils
 ): void {
-  const { viewportHeight, beatIntervalMs, measureIntervalMs, visibleTimeRange, nowLineX } = config;
+  const { viewportHeight, beatIntervalMs, measureIntervalMs, visibleTimeRange, nowLineX, beatTimeOffsetMs = 0 } = config;
 
-  // Calculate beat positions within visible time range
-  const firstBeat = Math.floor(visibleTimeRange.startMs / beatIntervalMs) * beatIntervalMs;
-  const lastBeat = Math.ceil(visibleTimeRange.endMs / beatIntervalMs) * beatIntervalMs;
+  // Calculate beat positions within visible time range, accounting for time offset
+  // Beats should align with: offset, offset + beatIntervalMs, offset + 2*beatIntervalMs, etc.
+  const adjustedStart = visibleTimeRange.startMs - beatTimeOffsetMs;
+  const adjustedEnd = visibleTimeRange.endMs - beatTimeOffsetMs;
+  const firstBeatIndex = Math.floor(adjustedStart / beatIntervalMs);
+  const lastBeatIndex = Math.ceil(adjustedEnd / beatIntervalMs);
 
-  for (let timeMs = firstBeat; timeMs <= lastBeat; timeMs += beatIntervalMs) {
+  for (let beatIndex = firstBeatIndex; beatIndex <= lastBeatIndex; beatIndex++) {
+    const timeMs = beatTimeOffsetMs + (beatIndex * beatIntervalMs);
     const x = coords.getTimeX?.(timeMs);
     if (x === undefined) continue;
 
-    // Determine if this is a measure boundary
-    const isMeasure = measureIntervalMs ? (timeMs % measureIntervalMs === 0) : false;
+    // Determine if this is a measure boundary (every 4 beats from the offset)
+    const isMeasure = measureIntervalMs
+      ? ((timeMs - beatTimeOffsetMs) % measureIntervalMs === 0)
+      : false;
 
     ctx.beginPath();
     ctx.moveTo(x, 0);

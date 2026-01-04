@@ -129,6 +129,7 @@ export {
   type SynthEngineConfig,
   type TransportServiceInstance,
   type TransportConfig,
+  type PlaybackMode,
   type EffectsManager,
   type HarmonicFilter,
   type SynthLogger,
@@ -211,6 +212,35 @@ export {
   type ModulationMappingState,
   type ModulationMappingCallbacks,
 } from './rhythm/index.js';
+
+// Highway module
+export {
+  createNoteHighwayService,
+  createFeedbackCollector,
+  convertNoteToHighway,
+  convertNotesToHighway,
+  convertStateToHighway,
+  createSimpleTimeMap,
+  calculateMicrobeatDuration,
+  type NoteHighwayConfig,
+  type FeedbackCollectorConfig,
+  type ScrollMode,
+  type InputSource,
+  type NoteHighwayState,
+  type HighwayTargetNote,
+  type NotePerformance,
+  type PitchSample,
+  type HighwayStateCallbacks,
+  type HighwayEventCallbacks,
+  type HighwayVisualCallbacks,
+  type HighwayLogger,
+  type NoteHighwayServiceInstance,
+  type FeedbackCollectorInstance,
+  type NoteHighwayEvent,
+  type NoteEventData,
+  type ConverterConfig,
+  type StudentNotationState,
+} from './highway/index.js';
 
 // Version
 export const VERSION = '0.1.0';

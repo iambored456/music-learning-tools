@@ -43,7 +43,6 @@ This is a **pnpm monorepo** for music education web applications. The workspace 
 | `hub` | Main entry point - aggregates all tools into single interface |
 | `student-notation` | Grid-based music notation for accessible music theory |
 | `singing-trainer` | Real-time pitch detection with note highway visualization |
-| `amateur-singing-trainer` | Simplified pitch visualizer for tonic + drone practice |
 | `diatonic-compass` | Interactive diatonic relationship visualizer |
 
 ### Key Packages
@@ -77,18 +76,38 @@ In `student-notation`, legacy vanilla JS is integrated via "bridge" components (
 ### Package Dependencies
 Apps depend on workspace packages using `workspace:*` protocol. Changes to packages require rebuilding dependent apps.
 
-## Current Migration (Phase 5)
+## Student Notation Architecture
 
-The codebase is actively extracting `student-notation`'s vanilla JS into the framework-agnostic engine:
+The `student-notation` app uses the `@mlt/student-notation-engine` package for all core functionality:
 
-- **State module**: Complete (`createStore()` factory)
-- **Audio module**: Complete (`createSynthEngine()`, `GainManager`, `FilteredVoice`)
-- **Transport module**: Complete (`createTimeMapCalculator()`, `createDrumManager()`)
-- **Transport service**: Complete (`createTransportService()` - no DOM dependencies)
-- **Engine controller**: Skeleton complete (blocked by type drift and canvas renderers)
-- **Canvas rendering**: Not started
+### Engine Integration
 
-See `MIGRATION-STATUS.md` for detailed phase tracking.
+The app initializes the engine through three main files in `apps/student-notation/src`:
+
+- **`state/initStore.ts`** - Initializes store with `createStore()` factory
+  - Configures localStorage persistence
+  - Wires column map callbacks for rhythm actions
+  - Provides app-specific logging
+
+- **`services/initAudio.ts`** - Initializes synth engine with `createSynthEngine()` factory
+  - Injects harmonic filter callbacks
+  - Injects effects manager (vibrato, tremolo, filter)
+  - Sets up store event subscriptions
+
+- **`services/initTransport.ts`** - Initializes transport with `createTransportService()` factory
+  - Wires 30+ callbacks for state access, events, and DOM updates
+  - Handles playback, looping, and tempo modulation
+  - Manages playhead animation
+
+### Engine Package Structure
+
+The engine (`@mlt/student-notation-engine`) provides:
+- **State**: `createStore()` - Event-driven state management with undo/redo
+- **Audio**: `createSynthEngine()` - Polyphonic synthesis with Tone.js
+- **Transport**: `createTransportService()` - Playback scheduling and timing
+- **Services**: `createColumnMapService()` - Coordinate transformations
+- **Canvas**: Rendering utilities (currently app uses custom renderers)
+- **Controller**: `createEngineController()` - Unified API (available for future use)
 
 ## TypeScript Configuration
 

@@ -589,6 +589,9 @@ export function drawUserPitchTrace(
   const timeWindowMs = trail.timeWindowMs;
   const pixelsPerSecond = trail.pixelsPerSecond;
 
+  // Use nowLineX as origin if provided (highway mode), otherwise use right edge (stationary mode)
+  const trailOriginX = config.nowLineX ?? viewportWidth;
+
   // Filter to visible time window and transform to screen coordinates
   const notePoints: TrailPoint[] = history
     .filter(p => p.midi > 0 && p.clarity >= trail.clarityThreshold)
@@ -597,7 +600,8 @@ export function drawUserPitchTrace(
       // Skip points outside time window
       if (age >= timeWindowMs || age < 0) return null;
 
-      const x = viewportWidth - (age / 1000) * pixelsPerSecond;
+      // Trail extends leftward from origin point (nowLineX for highway, right edge for stationary)
+      const x = trailOriginX - (age / 1000) * pixelsPerSecond;
 
       // Use continuous Y positioning for sub-semitone accuracy
       const y = getMidiY(coords, point.midi, cellHeight, fullRowData);
@@ -668,9 +672,13 @@ export function drawTargetNotes(
   coords: CoordinateUtils,
   targetNotes: TargetNote[],
   currentTimeMs: number,
-  config: UserPitchRenderConfig
+  config: UserPitchRenderConfig,
+  fullRowData?: PitchRowData[],
+  userMidi?: number | null,
+  userClarity?: number
 ): void {
   const { cellHeight, nowLineX = 100, pixelsPerSecond } = config;
+  const pitchToleranceSemitones = 0.5; // Half semitone tolerance for hit detection
 
   for (const note of targetNotes) {
     // Calculate X position based on time
@@ -680,10 +688,30 @@ export function drawTargetNotes(
     // Skip if completely off-screen
     if (endX < 0 || startX > config.viewportWidth) continue;
 
-    const rowIndex = Math.round(108 - note.midi);
+    // Find row index from fullRowData if provided, otherwise use default calculation
+    let rowIndex: number;
+    if (fullRowData) {
+      rowIndex = fullRowData.findIndex(row => row.midi === note.midi);
+      if (rowIndex === -1) {
+        // Note MIDI is outside the current viewport range, skip it
+        continue;
+      }
+    } else {
+      // Fallback to default calculation (assumes fullRowData starts at C8)
+      rowIndex = Math.round(108 - note.midi);
+    }
+
     const y = coords.getRowY(rowIndex);
     const ry = (cellHeight / 2) - 2;
     const color = note.color ?? '#4CAF50';
+
+    // Check if this note is currently being hit (at judgment line and pitch matches)
+    const isAtJudgmentLine = startX <= nowLineX && endX >= nowLineX;
+    const pitchMatches = userMidi !== null &&
+                         userMidi !== undefined &&
+                         (userClarity ?? 0) > 0.5 &&
+                         Math.abs(userMidi - note.midi) <= pitchToleranceSemitones;
+    const isBeingHit = isAtJudgmentLine && pitchMatches;
 
     // Draw stadium shape
     ctx.save();
@@ -694,22 +722,70 @@ export function drawTargetNotes(
     ctx.lineTo(startX, y + ry);
     ctx.closePath();
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 8;
-    ctx.stroke();
+    if (isBeingHit) {
+      // Enhanced glow effect when hitting the note
+      ctx.strokeStyle = '#FFD700'; // Gold color for hit
+      ctx.lineWidth = 5;
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 20;
+      ctx.stroke();
+
+      // Add inner fill for extra visibility
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+      ctx.fill();
+
+      // Draw particle burst effect
+      drawHitParticles(ctx, nowLineX, y, ry);
+    } else {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+    }
+
     ctx.shadowBlur = 0;
     ctx.restore();
 
-    // Draw label if provided
+    // Draw label if provided (at left edge of note)
     if (note.label) {
-      const centerX = (startX + endX) / 2;
-      ctx.fillStyle = color;
-      ctx.font = `bold ${ry}px 'Atkinson Hyperlegible', sans-serif`;
-      ctx.textAlign = 'center';
+      const labelX = startX + ry + 4; // Position inside the left cap
+      ctx.fillStyle = isBeingHit ? '#FFD700' : '#212529'; // Gold when hit
+      ctx.font = `bold ${Math.max(16, ry * 1.2)}px 'Atkinson Hyperlegible', sans-serif`;
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(note.label, centerX, y);
+      ctx.fillText(note.label, labelX, y);
     }
   }
+}
+
+/**
+ * Draw particle burst effect for hit notes
+ */
+function drawHitParticles(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number
+): void {
+  const particleCount = 8;
+  const particleSize = 3;
+  const burstRadius = radius * 1.5;
+
+  ctx.save();
+  ctx.fillStyle = '#FFD700';
+  ctx.shadowColor = '#FFD700';
+  ctx.shadowBlur = 6;
+
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (i / particleCount) * Math.PI * 2;
+    const px = x + Math.cos(angle) * burstRadius;
+    const py = y + Math.sin(angle) * burstRadius;
+
+    ctx.beginPath();
+    ctx.arc(px, py, particleSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }

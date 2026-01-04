@@ -4,7 +4,7 @@
  * Converts between Student Notation state and Singing Trainer snapshot format.
  * Handles the translation of coordinate systems and data structures.
  */
-import type { SingingTrainerSnapshot, SnapshotPitchRange, PitchRangeSource } from './types.js';
+import type { SingingTrainerSnapshot, SnapshotPitchRange, PitchRangeSource, TonalCenter } from './types.js';
 /**
  * Minimal interface for Student Notation placed note.
  * This mirrors the PlacedNote type from @mlt/types.
@@ -53,6 +53,8 @@ export interface SnapshotConversionOptions {
     includeClefPitchRange?: boolean;
     /** Optional preference for which range source to use on import */
     preferredPitchRangeSource?: PitchRangeSource;
+    /** Optional tonal center for drone initialization in Singing Trainer */
+    tonalCenter?: TonalCenter;
 }
 /**
  * Calculate the total number of microbeat columns from macrobeat groupings.

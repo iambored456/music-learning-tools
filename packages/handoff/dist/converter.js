@@ -184,6 +184,10 @@ export function convertToSnapshot(state, sourceFileId, options = {}) {
     if (visualOverlays.length > 0) {
         snapshot.visualOverlays = visualOverlays;
     }
+    // Include tonal center if provided
+    if (options.tonalCenter) {
+        snapshot.tonalCenter = options.tonalCenter;
+    }
     return snapshot;
 }
 // ============================================================================

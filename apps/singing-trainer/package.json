@@ -21,6 +21,8 @@
   "dependencies": {
     "@mlt/handoff": "workspace:*",
     "@mlt/pitch-data": "workspace:*",
+    "@mlt/pitch-utils": "workspace:*",
+    "@mlt/student-notation-engine": "workspace:*",
     "@mlt/types": "workspace:*",
     "@mlt/ui-components": "workspace:*",
     "pitchy": "^4.1.0",

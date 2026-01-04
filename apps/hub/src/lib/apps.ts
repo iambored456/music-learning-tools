@@ -35,12 +35,4 @@ export const appCards: AppCard[] = [
     tags: ['Canvas', 'Theory', 'Accessibility'],
     accent: '#27b6a1',
   },
-  {
-    id: 'amateur-singing-trainer',
-    name: 'Amateur Singing Trainer',
-    description: 'Pitch visualizer for tonic + drone practice with real-time feedback.',
-    href: withBase('amateur-singing-trainer/'),
-    tags: ['Canvas', 'Audio', 'Pitch'],
-    accent: '#829ae9',
-  },
 ];

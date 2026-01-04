@@ -45,7 +45,8 @@
 
 	const viewportHeight = $derived(viewportElement?.clientHeight ?? 0);
 	const padding = $derived(Math.max(0, (viewportHeight - measuredOptionHeight) / 2));
-	const centerOffset = $derived(selectedIndex * measuredOptionHeight + measuredOptionHeight / 2);
+	// centerOffset must include padding since it's applied to the options container
+	const centerOffset = $derived(padding + selectedIndex * measuredOptionHeight + measuredOptionHeight / 2);
 	// Only apply translateY when we have valid viewport dimensions to avoid incorrect positioning
 	const translateY = $derived(viewportHeight > 0 ? viewportHeight / 2 - centerOffset : 0);
 
@@ -265,7 +266,7 @@
 		justify-content: center;
 		font-size: 0.8rem;
 		font-weight: 500;
-		color: rgba(33, 37, 41, 0.35);
+		color: #212529;
 		user-select: none;
 		pointer-events: none;
 		transform-origin: center;
@@ -273,22 +274,23 @@
 			color 0.18s ease-out,
 			transform 0.18s ease-out,
 			opacity 0.18s ease-out;
-		opacity: 0.3;
+		opacity: 0.4;
 	}
 
 	.pitch-wheel-option[data-distance='0'] {
 		font-size: 0.95rem;
-		color: #212529;
+		font-weight: 700;
+		color: #000000;
 		opacity: 1;
 	}
 
 	.pitch-wheel-option[data-distance='1'] {
-		opacity: 0.55;
+		opacity: 0.6;
 		transform: scale(0.95);
 	}
 
 	.pitch-wheel-option[data-distance='2'] {
-		opacity: 0.4;
+		opacity: 0.5;
 		transform: scale(0.9);
 	}
 

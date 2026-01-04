@@ -54,6 +54,7 @@ export type {
   TransportStateCallbacks,
   TransportEventCallbacks,
   TransportVisualCallbacks,
+  PlaybackMode,
   SchedulableNote,
   SchedulableStamp,
   SchedulableTriplet,

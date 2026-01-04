@@ -20,6 +20,7 @@ export interface AppState {
     tonic: TonicNote;
     useDegrees: boolean;
     showAccidentals: boolean;
+    pitchHighlightEnabled: boolean;
     yAxisRange: YAxisRange;
     drone: DroneState;
 }
@@ -31,6 +32,8 @@ export declare const appState: {
     setTonic(tonic: TonicNote): void;
     setUseDegrees(useDegrees: boolean): void;
     setShowAccidentals(show: boolean): void;
+    togglePitchHighlight(): void;
+    setPitchHighlightEnabled(enabled: boolean): void;
     setYAxisRange(range: YAxisRange): void;
     expandYAxisUpper(): void;
     contractYAxisUpper(): void;

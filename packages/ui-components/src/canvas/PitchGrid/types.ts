@@ -106,6 +106,18 @@ export interface CurrentPitch {
 }
 
 /**
+ * Highlight overlay configuration for legend labels.
+ */
+export interface LegendHighlightConfig {
+  /** Pitch class to highlight (0-11, C=0). Null disables highlight. */
+  pitchClass: number | null;
+  /** Opacity of the highlight (0-1). */
+  opacity: number;
+  /** Highlight color (default: yellow). */
+  color?: string;
+}
+
+/**
  * A target note to display on the note highway.
  */
 export interface TargetNote {
@@ -170,6 +182,27 @@ export interface SingingModeConfig {
 }
 
 /**
+ * Scrolling grid data for Student Notation highway mode.
+ * Contains the notation content that will scroll past the judgment line.
+ */
+export interface ScrollingGridData {
+  /** Notes to display on the scrolling grid */
+  placedNotes: PlacedNote[];
+  /** Width multipliers for each canvas-space column */
+  columnWidths: number[];
+  /** Macrobeat groupings (2 or 3 per group) */
+  macrobeatGroupings: MacrobeatGrouping[];
+  /** Boundary line styles at each macrobeat */
+  macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
+  /** Modulation markers for tempo/key changes */
+  modulationMarkers?: ModulationMarker[];
+  /** Drum notes for drum grid */
+  drumNotes?: PlacedNote[];
+  /** Tonic signs for grid */
+  tonicSigns?: TonicSign[];
+}
+
+/**
  * Configuration specific to highway (Guitar Hero) mode.
  */
 export interface HighwayModeConfig extends SingingModeConfig {
@@ -177,6 +210,14 @@ export interface HighwayModeConfig extends SingingModeConfig {
   nowLineX: number;
   /** Current time in the exercise/lesson (ms from start) */
   currentTimeMs: number;
+  /** Current scroll offset in pixels (for scrolling grids) */
+  scrollOffset?: number;
+  /** Scrolling grid data from Student Notation (optional, for scrolling mode) */
+  scrollingGridData?: ScrollingGridData;
+  /** Whether to show onramp countdown */
+  showOnrampCountdown?: boolean;
+  /** Beats remaining in onramp (if in onramp phase) */
+  onrampBeatsRemaining?: number;
 }
 
 // ============================================================================
@@ -250,6 +291,8 @@ export interface PitchGridBaseProps {
   showFrequencyLabels?: boolean;
   /** Whether to show octave labels on legend */
   showOctaveLabels?: boolean;
+  /** Optional highlight overlay for legend labels */
+  legendHighlight?: LegendHighlightConfig;
 }
 
 /**

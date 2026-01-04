@@ -13,6 +13,7 @@
     drawUserPitchTrace,
   } from '@mlt/ui-components/canvas';
   import type {
+    LegendHighlightConfig,
     PitchGridMode,
     PitchGridViewport,
     SingingModeConfig,
@@ -26,6 +27,7 @@
   import { appState } from '../stores/appState.svelte.js';
   import { pitchState } from '../stores/pitchState.svelte.js';
   import { highwayState } from '../stores/highwayState.svelte.js';
+  import { demoExerciseState } from '../stores/demoExerciseState.svelte.js';
 
   // Container element for measuring size
   let container: HTMLDivElement | undefined = $state(undefined);
@@ -82,6 +84,32 @@
     appState.state.visualizationMode === 'highway' ? 'highway' : 'singing'
   );
 
+  // Calculate beat interval based on exercise tempo
+  // 1 beat = 2 microbeats, beatIntervalMs = 60000 / tempo
+  const beatIntervalMs = $derived<number>(
+    (60 / demoExerciseState.state.config.tempo) * 1000 // ms per beat (quarter note)
+  );
+
+  // Lead-in time offset for beat line alignment (matches demoExerciseState)
+  const beatTimeOffsetMs = 2000;
+
+  const legendHighlight = $derived<LegendHighlightConfig | undefined>((() => {
+    if (!appState.state.pitchHighlightEnabled) {
+      return undefined;
+    }
+
+    const stable = pitchState.state.stablePitch;
+    if (stable.pitchClass === null || stable.opacity <= 0.01) {
+      return undefined;
+    }
+
+    return {
+      pitchClass: stable.pitchClass,
+      opacity: stable.opacity,
+      color: '#ffff00',
+    };
+  })());
+
   // Convert local target notes to shared format
   function convertTargetNotes(): SharedTargetNote[] {
     return highwayState.state.targetNotes.map((n, i) => ({
@@ -89,6 +117,7 @@
       midi: n.midi,
       startTimeMs: n.startTimeMs,
       durationMs: n.durationMs,
+      label: n.lyric, // Pass emoji as label
     }));
   }
 
@@ -188,28 +217,33 @@
     const trailHistory = pitchState.state.history;
     if (trailHistory.length === 0) return;
 
-    if (mode !== 'singing' || !singingConfig) {
-      return;
-    }
+    // Support both stationary and highway modes
+    const activeConfig = mode === 'singing' ? singingConfig : highwayConfig;
+    if (!activeConfig) return;
 
     const debugTrail = getDebugTrailFlag();
     const frameStart = debugTrail ? performance.now() : 0;
+
+    // Use appropriate nowLineX based on mode
+    const nowLineX = mode === 'highway' && highwayConfig
+      ? highwayConfig.nowLineX
+      : 100;
 
     const coords = createTimeCoordinates({
       cellWidth,
       cellHeight: viewportWindow.cellHeight,
       viewport,
-      pixelsPerSecond: singingConfig.pixelsPerSecond ?? 200,
-      nowLineX: 100,
-      currentTimeMs: 0,
+      pixelsPerSecond: activeConfig.pixelsPerSecond ?? 200,
+      nowLineX,
+      currentTimeMs: mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0,
     });
 
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight: viewportWindow.cellHeight,
       viewportWidth: gridWidth,
-      nowLineX: 100,
-      pixelsPerSecond: singingConfig.pixelsPerSecond ?? 200,
-      timeWindowMs: singingConfig.timeWindowMs ?? 4000,
+      nowLineX,
+      pixelsPerSecond: activeConfig.pixelsPerSecond ?? 200,
+      timeWindowMs: activeConfig.timeWindowMs ?? 4000,
       colorMode: 'color',
       trailConfig,
     };
@@ -291,7 +325,8 @@
   $effect(() => {
     void mode;
     void trailCtx;
-    if (mode === 'singing') {
+    // Run trail loop for both stationary and highway modes
+    if (mode === 'singing' || mode === 'highway') {
       startTrailLoop();
     } else {
       stopTrailLoop();
@@ -315,6 +350,9 @@
     {showFrequencyLabels}
     {singingConfig}
     {highwayConfig}
+    legendHighlight={legendHighlight}
+    {beatIntervalMs}
+    {beatTimeOffsetMs}
   />
   <canvas
     bind:this={trailCanvas}

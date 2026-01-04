@@ -314,6 +314,11 @@ export interface TransportEventCallbacks {
 }
 
 /**
+ * Playback mode for the transport service.
+ */
+export type PlaybackMode = 'standard' | 'highway';
+
+/**
  * Configuration for transport service
  */
 export interface TransportConfig {
@@ -329,6 +334,10 @@ export interface TransportConfig {
   logger?: SynthLogger;
   /** Optional audio init callback (for user gesture compliance) */
   audioInit?: AudioInitCallback;
+  /** Playback mode (default: 'standard') */
+  playbackMode?: PlaybackMode;
+  /** Note Highway service instance (required when playbackMode is 'highway') */
+  highwayService?: any; // Using 'any' to avoid circular dependency with highway module
 }
 
 /**

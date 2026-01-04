@@ -4,20 +4,24 @@
    *
    * Main application layout for the Singing Trainer.
    */
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     SingingCanvas,
-    StartButton,
     TonicSelector,
     DroneControls,
-    ModeToggle,
+    PitchHighlightToggle,
     PitchReadout,
     RangeControl,
+    DemoExerciseControls,
   } from './lib/components/index.js';
   import { handoffState } from './lib/stores/handoffState.svelte.js';
   import { appState } from './lib/stores/appState.svelte.js';
+  import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
 
-  // Check for handoff on mount
+  // Settings panel state
+  let showSettings = $state(false);
+
+  // Check for handoff and auto-start pitch detection on mount
   onMount(async () => {
     const wasHandoff = await handoffState.checkAndConsumeHandoff();
 
@@ -30,6 +34,20 @@
         appState.setYAxisRange(suggestedRange);
       }
     }
+
+    // Auto-start pitch detection
+    try {
+      await startDetection();
+      appState.setDetecting(true);
+      console.log('[App] Pitch detection auto-started');
+    } catch (err) {
+      console.error('[App] Failed to auto-start pitch detection:', err);
+    }
+  });
+
+  // Clean up on unmount
+  onDestroy(() => {
+    stopDetection();
   });
 
   // Reactive state
@@ -68,7 +86,6 @@
           </button>
         </div>
       {/if}
-      <ModeToggle />
     </div>
   </header>
 
@@ -81,17 +98,22 @@
   <main class="main">
     <aside class="sidebar sidebar--left">
       <div class="control-group">
-        <StartButton />
-      </div>
-
-      <div class="control-group">
         <PitchReadout />
       </div>
 
       <div class="control-group">
-        <h3 class="control-group-title">Settings</h3>
-        <TonicSelector />
-        <DroneControls />
+        <DemoExerciseControls />
+      </div>
+
+      <div class="control-group">
+        <details class="settings-details" bind:open={showSettings}>
+          <summary class="settings-summary">Settings</summary>
+          <div class="settings-content">
+            <TonicSelector />
+            <DroneControls />
+            <PitchHighlightToggle />
+          </div>
+        </details>
       </div>
 
       <div class="control-group">
@@ -279,5 +301,52 @@
   .import-value {
     color: var(--color-text);
     font-weight: 600;
+  }
+
+  /* Settings dropdown */
+  .settings-details {
+    background-color: var(--color-surface, rgba(255, 255, 255, 0.05));
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-xs);
+  }
+
+  .settings-summary {
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--spacing-xs);
+    user-select: none;
+    list-style: none;
+  }
+
+  .settings-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .settings-summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: var(--spacing-xs);
+    font-size: 0.7em;
+    transition: transform 0.2s ease;
+  }
+
+  .settings-details[open] .settings-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .settings-summary:hover {
+    color: var(--color-primary);
+  }
+
+  .settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm);
+    padding-top: var(--spacing-md);
   }
 </style>

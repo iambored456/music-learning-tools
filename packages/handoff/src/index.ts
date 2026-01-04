@@ -27,6 +27,7 @@ export type {
   VisualOverlay,
   SnapshotPitchRange,
   PitchRangeSource,
+  TonalCenter,
   // Validation
   OverlapConflict,
   ValidationResult,

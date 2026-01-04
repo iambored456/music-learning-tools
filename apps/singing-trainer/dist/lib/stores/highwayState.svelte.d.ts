@@ -1,13 +1,10 @@
-/**
- * Highway State Store - Svelte 5 Runes
- *
- * State for the "Guitar Hero" note highway visualization mode.
- */
+import { NoteHighwayServiceInstance, NotePerformance } from '@mlt/student-notation-engine';
 export interface TargetNote {
     midi: number;
     startTimeMs: number;
     durationMs: number;
     hit?: boolean;
+    lyric?: string;
 }
 export interface HighwayState {
     isPlaying: boolean;
@@ -20,6 +17,7 @@ export interface HighwayState {
 }
 export declare const highwayState: {
     readonly state: HighwayState;
+    readonly engineService: NoteHighwayServiceInstance | null;
     start(): void;
     stop(): void;
     pause(): void;
@@ -29,5 +27,7 @@ export declare const highwayState: {
     setNowLineX(x: number): void;
     setPixelsPerSecond(pps: number): void;
     setTimeWindowMs(ms: number): void;
+    recordPitchInput(midi: number, clarity: number): void;
+    getPerformanceResults(): Map<string, NotePerformance>;
     reset(): void;
 };

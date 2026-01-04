@@ -39,7 +39,9 @@ export function createTransportService(config: TransportConfig): TransportServic
     eventCallbacks,
     visualCallbacks,
     logger,
-    audioInit
+    audioInit,
+    playbackMode = 'standard',
+    highwayService
   } = config;
 
   // Logger helper
@@ -548,7 +550,11 @@ export function createTransportService(config: TransportConfig): TransportServic
           timeMapCalculator?.reapplyConfiguredLoopBounds(stateCallbacks.getState().isLooping);
           scheduleNotes();
           Tone.Transport.start(undefined, currentPosition);
-          animatePlayhead();
+
+          // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
+          if (playbackMode === 'standard') {
+            animatePlayhead();
+          }
         } else {
           Tone.Transport.bpm.value = newTempo;
           timeMapCalculator?.reapplyConfiguredLoopBounds(stateCallbacks.getState().isLooping);
@@ -632,7 +638,12 @@ export function createTransportService(config: TransportConfig): TransportServic
 
         const startTime = Tone.now() + 0.1;
         Tone.Transport.start(startTime, 0);
-        animatePlayhead();
+
+        // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
+        if (playbackMode === 'standard') {
+          animatePlayhead();
+        }
+
         eventCallbacks.emit('playbackStarted');
       });
     },
@@ -643,7 +654,12 @@ export function createTransportService(config: TransportConfig): TransportServic
       const init = audioInit || (() => Tone.start());
       void init().then(() => {
         Tone.Transport.start();
-        animatePlayhead();
+
+        // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
+        if (playbackMode === 'standard') {
+          animatePlayhead();
+        }
+
         eventCallbacks.emit('playbackResumed');
       });
     },

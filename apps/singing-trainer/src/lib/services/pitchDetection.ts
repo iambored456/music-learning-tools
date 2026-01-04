@@ -7,7 +7,10 @@
 
 import * as Tone from 'tone';
 import { PitchDetector } from 'pitchy';
+import { getCentsOffset, getNearestMidi, midiToPitchClass } from '@mlt/pitch-utils';
 import { pitchState, type DetectedPitch } from '../stores/pitchState.svelte.js';
+import { highwayState } from '../stores/highwayState.svelte.js';
+import { referenceAudio } from './referenceAudio.js';
 
 // Configuration
 const CONFIG = {
@@ -15,8 +18,7 @@ const CONFIG = {
   CLARITY_THRESHOLD: 0.8,
   MIN_PITCH_HZ: 60,
   MAX_PITCH_HZ: 1600,
-  STABILITY_THRESHOLD: 15,
-  HIGHLIGHT_FADE_SPEED: 0.2,
+  HIGHLIGHT_CENTS_RANGE: 50,
   MIN_VOLUME_DB: -60,
 } as const;
 
@@ -27,11 +29,7 @@ let detector: ReturnType<typeof PitchDetector.forFloat32Array> | null = null;
 let animationFrameId: number | null = null;
 let isRunning = false;
 
-// Stability tracking
-let stablePitchClass = -1;
-let stablePitchCounter = 0;
-let targetOpacity = 0;
-let targetSize = 1.0;
+const HIGHLIGHT_DEFAULT_SIZE = 1.0;
 
 /**
  * Convert frequency in Hz to MIDI note number
@@ -46,6 +44,19 @@ function frequencyToMidi(frequency: number): number {
 function animationLoop(): void {
   if (!isRunning || !analyser || !detector) {
     animationFrameId = null;
+    return;
+  }
+
+  // Skip pitch detection while reference tone is playing (avoid mic picking up speakers)
+  if (referenceAudio.isPlaying) {
+    // Still add a silent history point to keep the trail continuous
+    pitchState.addHistoryPoint({
+      frequency: 0,
+      midi: 0,
+      time: performance.now(),
+      clarity: 0,
+    });
+    animationFrameId = requestAnimationFrame(animationLoop);
     return;
   }
 
@@ -75,6 +86,9 @@ function animationLoop(): void {
       time: performance.now(),
       clarity,
     });
+
+    // Record pitch input for highway performance tracking
+    highwayState.recordPitchInput(midi, clarity);
   } else {
     pitchState.addHistoryPoint({
       frequency: 0,
@@ -84,32 +98,22 @@ function animationLoop(): void {
     });
   }
 
-  // Stability highlighting logic
-  const currentPitchClass = isValidPitch && pitchState.state.currentPitch
-    ? Math.round(pitchState.state.currentPitch.midi) % 12
-    : -1;
+  // Highlight opacity based on cents deviation from nearest pitch
+  if (isValidPitch && pitchState.state.currentPitch) {
+    const midi = pitchState.state.currentPitch.midi;
+    const nearestMidi = getNearestMidi(midi);
+    const centsOffset = getCentsOffset(midi);
+    const centsDistance = Math.min(Math.abs(centsOffset), CONFIG.HIGHLIGHT_CENTS_RANGE);
+    const opacity = Math.max(0, 1 - (centsDistance / CONFIG.HIGHLIGHT_CENTS_RANGE));
 
-  if (currentPitchClass === stablePitchClass && currentPitchClass !== -1) {
-    stablePitchCounter++;
+    pitchState.setStablePitch({
+      pitchClass: midiToPitchClass(nearestMidi),
+      opacity,
+      size: HIGHLIGHT_DEFAULT_SIZE,
+    });
   } else {
-    stablePitchCounter = 0;
-    stablePitchClass = currentPitchClass;
+    pitchState.setStablePitch({ pitchClass: null, opacity: 0, size: HIGHLIGHT_DEFAULT_SIZE });
   }
-
-  targetOpacity = stablePitchCounter >= CONFIG.STABILITY_THRESHOLD ? 1 : 0;
-  targetSize = stablePitchCounter >= CONFIG.STABILITY_THRESHOLD ? 1.05 : 1.0;
-
-  const currentStable = pitchState.state.stablePitch;
-  const newOpacity =
-    currentStable.opacity + (targetOpacity - currentStable.opacity) * CONFIG.HIGHLIGHT_FADE_SPEED;
-  const newSize =
-    currentStable.size + (targetSize - currentStable.size) * CONFIG.HIGHLIGHT_FADE_SPEED;
-
-  pitchState.setStablePitch({
-    pitchClass: stablePitchClass >= 0 ? stablePitchClass : null,
-    opacity: newOpacity,
-    size: newSize,
-  });
 
   // Request next frame
   animationFrameId = requestAnimationFrame(animationLoop);
@@ -169,11 +173,7 @@ function cleanup(): void {
   analyser = null;
   detector = null;
 
-  // Reset stability tracking
-  stablePitchCounter = 0;
-  stablePitchClass = -1;
-
-  pitchState.setStablePitch({ pitchClass: null, opacity: 0, size: 1.0 });
+  pitchState.setStablePitch({ pitchClass: null, opacity: 0, size: HIGHLIGHT_DEFAULT_SIZE });
   pitchState.setCurrentPitch(null);
 }
 

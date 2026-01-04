@@ -33,6 +33,12 @@ export interface LegendRenderConfig {
   focusedPitchClasses: Set<number> | null;
   /** Whether focus coloring is enabled */
   focusColorsEnabled: boolean;
+  /** Optional highlight overlay for a specific pitch class */
+  highlight?: {
+    pitchClass: number | null;
+    opacity: number;
+    color?: string;
+  };
 }
 
 export interface LegendRenderOptions {
@@ -235,6 +241,22 @@ export function drawLegend(
       // Draw background
       ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
       ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+
+      // Optional highlight overlay
+      if (
+        config.highlight &&
+        typeof config.highlight.pitchClass === 'number' &&
+        config.highlight.opacity > 0.01
+      ) {
+        const rowPitchClass = getPitchClassFromRow(row);
+        if (rowPitchClass === config.highlight.pitchClass) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(Math.max(config.highlight.opacity, 0), 1);
+          ctx.fillStyle = config.highlight.color ?? '#ffff00';
+          ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+          ctx.restore();
+        }
+      }
 
       // Draw text
       const fontSize = getLegendFontSize(cellWidth, cellHeight, label.length, pixelRatio);

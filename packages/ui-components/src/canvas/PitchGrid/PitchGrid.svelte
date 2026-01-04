@@ -14,6 +14,7 @@
     PitchGridMode,
     PitchGridViewport,
     CoordinateUtils,
+    LegendHighlightConfig,
     SingingModeConfig,
     HighwayModeConfig,
     PitchHistoryPoint,
@@ -76,6 +77,7 @@
     accidentalMode?: AccidentalMode;
     showFrequencyLabels?: boolean;
     showOctaveLabels?: boolean;
+    legendHighlight?: LegendHighlightConfig;
 
     // Notation/Playback mode props
     placedNotes?: PlacedNote[];
@@ -92,6 +94,7 @@
     // Highway mode props
     highwayConfig?: HighwayModeConfig;
     beatIntervalMs?: number;
+    beatTimeOffsetMs?: number;
   }
 
   let {
@@ -105,6 +108,7 @@
     accidentalMode = { sharp: true, flat: true },
     showFrequencyLabels = false,
     showOctaveLabels = true,
+    legendHighlight,
     placedNotes = [],
     placedTonicSigns = [],
     columnWidths = [],
@@ -115,6 +119,7 @@
     singingConfig,
     highwayConfig,
     beatIntervalMs = 500,
+    beatTimeOffsetMs = 0,
   }: Props = $props();
 
   // ============================================================================
@@ -300,7 +305,8 @@
         coords,
         singingConfig.targetNotes,
         performance.now(),
-        userPitchConfig
+        userPitchConfig,
+        fullRowData
       );
     }
 
@@ -331,30 +337,51 @@
       trailConfig: highwayConfig.trailConfig,
     };
 
-    // Draw time-based vertical lines
-    const visibleTimeRange = {
-      startMs: highwayConfig.currentTimeMs - 1000,
-      endMs: highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
-    };
+    // Check if we have scrolling grid data (Student Notation mode)
+    const hasScrollingGrid = highwayConfig.scrollingGridData && highwayConfig.scrollOffset !== undefined;
 
-    const verticalConfig: TimeBasedVerticalLinesConfig = {
-      viewportWidth: gridWidth,
-      viewportHeight: viewport.containerHeight,
-      beatIntervalMs,
-      visibleTimeRange,
-      nowLineX: highwayConfig.nowLineX,
-    };
-    drawTimeBasedVerticalLines(renderCtx, verticalConfig, coords);
+    if (hasScrollingGrid) {
+      // Render scrolling grid mode (Student Notation style)
+      renderScrollingGrid(renderCtx, coords);
+    } else {
+      // Render target notes mode (Singing Trainer style - original behavior)
+      // Draw time-based vertical lines
+      const visibleTimeRange = {
+        startMs: highwayConfig.currentTimeMs - 1000,
+        endMs: highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
+      };
 
-    // Draw target notes
-    if (highwayConfig.targetNotes && highwayConfig.targetNotes.length > 0) {
-      drawTargetNotes(
-        renderCtx,
-        coords,
-        highwayConfig.targetNotes,
-        highwayConfig.currentTimeMs,
-        userPitchConfig
-      );
+      const verticalConfig: TimeBasedVerticalLinesConfig = {
+        viewportWidth: gridWidth,
+        viewportHeight: viewport.containerHeight,
+        beatIntervalMs,
+        visibleTimeRange,
+        nowLineX: highwayConfig.nowLineX,
+        beatTimeOffsetMs,
+      };
+      drawTimeBasedVerticalLines(renderCtx, verticalConfig, coords);
+
+      // Draw target notes with user pitch for hit detection
+      if (highwayConfig.targetNotes && highwayConfig.targetNotes.length > 0) {
+        drawTargetNotes(
+          renderCtx,
+          coords,
+          highwayConfig.targetNotes,
+          highwayConfig.currentTimeMs,
+          userPitchConfig,
+          fullRowData,
+          highwayConfig.userPitch?.midi ?? null,
+          highwayConfig.userPitch?.clarity ?? 0
+        );
+      }
+    }
+
+    // Draw judgment line (both modes)
+    drawJudgmentLine(renderCtx, highwayConfig.nowLineX, viewport.containerHeight);
+
+    // Draw onramp countdown if active
+    if (highwayConfig.showOnrampCountdown && highwayConfig.onrampBeatsRemaining !== undefined) {
+      drawOnrampCountdown(renderCtx, highwayConfig.onrampBeatsRemaining);
     }
 
     // Draw user pitch indicator at now line
@@ -371,6 +398,98 @@
     }
   }
 
+  function renderScrollingGrid(renderCtx: CanvasRenderingContext2D, coords: CoordinateUtils): void {
+    if (!highwayConfig?.scrollingGridData || highwayConfig.scrollOffset === undefined) return;
+
+    const gridData = highwayConfig.scrollingGridData;
+    const scrollOffset = highwayConfig.scrollOffset;
+
+    // Draw scrolling vertical lines (macrobeat boundaries, bar lines)
+    const macrobeatBoundaries = calculateMacrobeatBoundaries(gridData.macrobeatGroupings);
+    for (let i = 0; i < macrobeatBoundaries.length; i++) {
+      const columnIndex = macrobeatBoundaries[i];
+      const x = (columnIndex * cellWidth) - scrollOffset;
+
+      // Only draw if visible
+      if (x >= -cellWidth && x <= gridWidth + cellWidth) {
+        const boundaryStyle = gridData.macrobeatBoundaryStyles[i] || 'solid';
+        const lineWidth = boundaryStyle === 'solid' ? 2 : 1;
+        const dash = boundaryStyle === 'dashed' ? [5, 5] : [];
+
+        renderCtx.strokeStyle = '#495057';
+        renderCtx.lineWidth = lineWidth;
+        renderCtx.setLineDash(dash);
+        renderCtx.beginPath();
+        renderCtx.moveTo(x, 0);
+        renderCtx.lineTo(x, viewport.containerHeight);
+        renderCtx.stroke();
+        renderCtx.setLineDash([]);
+      }
+    }
+
+    // Draw scrolling notes
+    const noteConfig: NoteRenderConfig = {
+      cellWidth,
+      cellHeight,
+      columnWidths: gridData.columnWidths,
+      degreeDisplayMode,
+      accidentalMode,
+      longNoteStyle,
+      colorMode,
+    };
+
+    for (const note of gridData.placedNotes) {
+      if (note.isDrum || note.globalRow === undefined) continue;
+      if (!isRowVisible(note.globalRow, viewport, cellHeight, coords)) continue;
+
+      // Calculate scrolled X position
+      const noteStartX = (note.startColumnIndex * cellWidth) - scrollOffset;
+      const noteEndX = (note.endColumnIndex * cellWidth) - scrollOffset;
+
+      // Only render if visible
+      if (noteEndX >= -cellWidth && noteStartX <= gridWidth + cellWidth) {
+        // Create a temporary scrolled coords utility
+        const scrolledCoords = {
+          ...coords,
+          getColumnX: (colIndex: number) => (colIndex * cellWidth) - scrollOffset,
+        };
+
+        const noteContext: NoteRenderContext = {
+          config: noteConfig,
+          coords: scrolledCoords,
+          allNotes: gridData.placedNotes,
+        };
+
+        if (note.shape === 'oval') {
+          drawSingleColumnOvalNote(renderCtx, noteContext, note, note.globalRow);
+        } else if (note.shape === 'circle') {
+          drawTwoColumnOvalNote(renderCtx, noteContext, note, note.globalRow);
+        }
+      }
+    }
+  }
+
+  function drawJudgmentLine(ctx: CanvasRenderingContext2D, x: number, height: number): void {
+    ctx.strokeStyle = 'rgba(255, 0, 0, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+
+  function drawOnrampCountdown(ctx: CanvasRenderingContext2D, beatsRemaining: number): void {
+    // Simple countdown display at top center
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(gridWidth / 2 - 40, 10, 80, 50);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(beatsRemaining.toString(), gridWidth / 2, 35);
+  }
+
   function renderLegends(coords: CoordinateUtils, startRow: number, endRow: number): void {
     const legendConfig: LegendRenderConfig = {
       fullRowData,
@@ -383,6 +502,7 @@
       accidentalMode,
       focusedPitchClasses: null, // No focus filtering in basic mode
       focusColorsEnabled: false,
+      highlight: legendHighlight,
     };
 
     const legendOptions = {
