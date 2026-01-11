@@ -47,12 +47,32 @@ export default defineConfig({
     },
   },
   build: {
+    // Student-notation app is ~590KB after splitting vendors, which is reasonable
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       input: {
         main: resolve(root, 'index.html'),
         'student-notation': resolve(root, 'student-notation/index.html'),
         'singing-trainer': resolve(root, 'singing-trainer/index.html'),
         'diatonic-compass': resolve(root, 'diatonic-compass/index.html'),
+      },
+      output: {
+        manualChunks(id) {
+          // Split large vendor libraries into separate chunks for better caching
+          if (id.includes('node_modules/tone/') || id.includes('node_modules/standardized-audio-context/')) {
+            return 'vendor-tone';
+          }
+          if (id.includes('node_modules/tonal/') || id.includes('node_modules/@tonaljs/')) {
+            return 'vendor-tonal';
+          }
+          if (id.includes('node_modules/html2canvas/')) {
+            return 'vendor-html2canvas';
+          }
+          if (id.includes('node_modules/pitchy/')) {
+            return 'vendor-pitchy';
+          }
+          return undefined;
+        },
       },
     },
   },

@@ -1,5 +1,5 @@
 import type { PitchRowData } from '@mlt/types';
-import type { WheelOption } from './types.js';
+import type { WheelOption, PitchRangePreset } from './types.js';
 
 const DEFAULT_MIN_SPAN = 7; // Default minimum span
 
@@ -70,4 +70,80 @@ export function createWheelOptions(pitchRowData: PitchRowData[]): WheelOption[] 
 		toneNote: row.toneNote,
 		frequency: row.frequency
 	}));
+}
+
+/**
+ * Finds the index of a pitch by MIDI number in the pitch data array.
+ *
+ * @param pitchData - Array of pitch row data
+ * @param midiNumber - MIDI note number to find
+ * @returns Index of the pitch, or 0 if not found
+ */
+function findMidiIndex(pitchData: readonly PitchRowData[], midiNumber: number): number {
+	const index = pitchData.findIndex((p) => p.midi === midiNumber);
+	return index >= 0 ? index : 0;
+}
+
+/**
+ * Creates voice range presets for singing applications.
+ * Voice I: A3 to A5 (MIDI 57-81)
+ * Voice II: C3 to C5 (MIDI 48-72)
+ * Voice III: E2 to E4 (MIDI 40-64)
+ *
+ * @param pitchData - Array of pitch row data (should be 88-key piano range)
+ * @returns Array of voice preset configurations
+ */
+export function createVoicePresets(pitchData: readonly PitchRowData[]): PitchRangePreset[] {
+	return [
+		{
+			label: 'Voice I',
+			topIndex: findMidiIndex(pitchData, 81), // A5
+			bottomIndex: findMidiIndex(pitchData, 57) // A3
+		},
+		{
+			label: 'Voice II',
+			topIndex: findMidiIndex(pitchData, 72), // C5
+			bottomIndex: findMidiIndex(pitchData, 48) // C3
+		},
+		{
+			label: 'Voice III',
+			topIndex: findMidiIndex(pitchData, 64), // E4
+			bottomIndex: findMidiIndex(pitchData, 40) // E2
+		}
+	];
+}
+
+/**
+ * Creates standard clef range presets for notation applications.
+ * Full Range: A0 to C8
+ * Treble: C4 to G5 (MIDI 60-79)
+ * Alto: D3 to A4 (MIDI 62-69)
+ * Bass: E2 to C4 (MIDI 40-60)
+ *
+ * @param pitchData - Array of pitch row data (should be 88-key piano range)
+ * @returns Array of clef preset configurations
+ */
+export function createRangePresets(pitchData: readonly PitchRowData[]): PitchRangePreset[] {
+	return [
+		{
+			label: 'Full Range',
+			topIndex: 0,
+			bottomIndex: Math.max(0, pitchData.length - 1)
+		},
+		{
+			label: 'Treble',
+			topIndex: findMidiIndex(pitchData, 79), // G5
+			bottomIndex: findMidiIndex(pitchData, 60) // C4
+		},
+		{
+			label: 'Alto',
+			topIndex: findMidiIndex(pitchData, 69), // A4
+			bottomIndex: findMidiIndex(pitchData, 62) // D3
+		},
+		{
+			label: 'Bass',
+			topIndex: findMidiIndex(pitchData, 60), // C4
+			bottomIndex: findMidiIndex(pitchData, 40) // E2
+		}
+	];
 }

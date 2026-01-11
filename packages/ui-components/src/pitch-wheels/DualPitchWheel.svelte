@@ -6,8 +6,9 @@
 	 * Displays range summary showing selected pitch range.
 	 */
 	import PitchWheel from './PitchWheel.svelte';
+	import PresetButtons from './PresetButtons.svelte';
 	import type { PitchRowData } from '@mlt/types';
-	import type { WheelOption, PitchWheelRange } from './types.js';
+	import type { WheelOption, PitchWheelRange, PitchRangePreset } from './types.js';
 	import {
 		createWheelOptions,
 		computeConstrainedTopIndex,
@@ -22,6 +23,8 @@
 		onrangechange?: (range: PitchWheelRange) => void;
 		showSummary?: boolean;
 		wheelHeight?: number;
+		presets?: PitchRangePreset[];
+		showPresets?: boolean;
 	}
 
 	let {
@@ -31,7 +34,9 @@
 		minSpan = 7,
 		onrangechange,
 		showSummary = true,
-		wheelHeight
+		wheelHeight,
+		presets,
+		showPresets = false
 	}: Props = $props();
 
 	// Convert pitch data to wheel options
@@ -56,6 +61,15 @@
 		`${currentRange.span} ${currentRange.span === 1 ? 'pitch' : 'pitches'}`
 	);
 
+	// Determine which preset is currently active based on current range
+	const activePreset = $derived.by(() => {
+		if (!presets || presets.length === 0) return undefined;
+		const matchingPreset = presets.find(
+			(p) => p.topIndex === topIndex && p.bottomIndex === bottomIndex
+		);
+		return matchingPreset?.label;
+	});
+
 	// Constraint functions for each wheel
 	function constrainTopIndex(requestedTopIndex: number): number {
 		return computeConstrainedTopIndex(bottomIndex, requestedTopIndex, options.length, minSpan);
@@ -76,6 +90,15 @@
 	// Handle bottom wheel change
 	function handleBottomChange(newBottomIndex: number, _option: WheelOption) {
 		bottomIndex = newBottomIndex;
+		if (typeof onrangechange === 'function') {
+			onrangechange(currentRange);
+		}
+	}
+
+	// Handle preset button click
+	function handlePresetClick(preset: PitchRangePreset) {
+		topIndex = preset.topIndex;
+		bottomIndex = preset.bottomIndex;
 		if (typeof onrangechange === 'function') {
 			onrangechange(currentRange);
 		}
@@ -114,6 +137,10 @@
 			<div class="summary-label">{rangeLabel}</div>
 			<div class="summary-metadata">{rangeCount}</div>
 		</div>
+	{/if}
+
+	{#if showPresets && presets && presets.length > 0}
+		<PresetButtons {presets} activePreset={activePreset} onPresetClick={handlePresetClick} />
 	{/if}
 </div>
 

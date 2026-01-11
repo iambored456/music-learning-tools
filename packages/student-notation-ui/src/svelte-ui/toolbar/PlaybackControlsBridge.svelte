@@ -114,13 +114,15 @@
     redoBtn?.addEventListener('click', handleRedo);
 
     // Subscribe to store events
-    const handlePlaybackState = (data: { isPlaying: boolean; isPaused: boolean }) => {
+    const handlePlaybackState = (data?: { isPlaying: boolean; isPaused: boolean }) => {
+      if (!data) return;
       isPlaying = data.isPlaying;
       isPaused = data.isPaused;
       updatePlayButton();
     };
 
-    const handleLoopingChanged = (data: boolean) => {
+    const handleLoopingChanged = (data?: boolean) => {
+      if (data === undefined) return;
       isLooping = data;
       updateLoopButton();
     };

@@ -5,8 +5,8 @@
 	 * Wrapper for DualPitchWheel that integrates with singing-trainer app state.
 	 * Converts between MIDI values (used in app state) and indices (used by wheels).
 	 */
-	import { DualPitchWheel } from '@mlt/ui-components/pitch-wheels';
-	import type { PitchWheelRange } from '@mlt/ui-components/pitch-wheels';
+	import { DualPitchWheel, createVoicePresets } from '@mlt/ui-components/pitch-wheels';
+	import type { PitchWheelRange, PitchRangePreset } from '@mlt/ui-components/pitch-wheels';
 	import { fullRowData } from '@mlt/pitch-data';
 	import { appState } from '../../stores/appState.svelte';
 
@@ -19,6 +19,9 @@
 	// Current indices derived from app state
 	const topIndex = $derived(midiToIndex(appState.state.yAxisRange.maxMidi));
 	const bottomIndex = $derived(midiToIndex(appState.state.yAxisRange.minMidi));
+
+	// Create voice presets
+	const voicePresets: PitchRangePreset[] = createVoicePresets(fullRowData);
 
 	// Handle range change from wheels
 	function handleRangeChange(range: PitchWheelRange) {
@@ -38,6 +41,8 @@
 		onrangechange={handleRangeChange}
 		showSummary={true}
 		wheelHeight={200}
+		presets={voicePresets}
+		showPresets={true}
 	/>
 </div>
 

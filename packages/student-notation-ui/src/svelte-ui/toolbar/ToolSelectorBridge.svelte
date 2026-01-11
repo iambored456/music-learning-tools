@@ -318,7 +318,8 @@
     });
   };
 
-  const syncFrequencyUiState = (showFrequencyLabels: boolean): void => {
+  const syncFrequencyUiState = (showFrequencyLabels?: boolean): void => {
+    if (showFrequencyLabels === undefined) return;
     if (frequencyBtn) {
       frequencyBtn.classList.toggle('active', showFrequencyLabels);
       frequencyBtn.setAttribute('aria-pressed', showFrequencyLabels ? 'true' : 'false');
@@ -326,7 +327,8 @@
     setAccidentalButtonsLocked(showFrequencyLabels);
   };
 
-  const syncOctaveUiState = (showOctaveLabels: boolean): void => {
+  const syncOctaveUiState = (showOctaveLabels?: boolean): void => {
+    if (showOctaveLabels === undefined) return;
     if (!octaveToggleBtn) return;
     octaveToggleBtn.classList.toggle('active', showOctaveLabels);
     octaveToggleBtn.setAttribute('aria-pressed', showOctaveLabels ? 'true' : 'false');
@@ -381,12 +383,14 @@
     }
   }
 
-  function handleDegreeDisplayModeChanged(mode: DegreeDisplayMode) {
+  function handleDegreeDisplayModeChanged(mode?: DegreeDisplayMode) {
+    if (!mode) return;
     syncDegreeVisibilityButton(mode, degreeVisibilityToggle);
     updateScaleModeToggleState(mode);
   }
 
-  function handleAccidentalModeChanged(accidentalMode: { sharp: boolean; flat: boolean }) {
+  function handleAccidentalModeChanged(accidentalMode?: { sharp: boolean; flat: boolean }) {
+    if (!accidentalMode) return;
     sharpBtn?.classList.toggle('active', accidentalMode.sharp);
     flatBtn?.classList.toggle('active', accidentalMode.flat);
   }
@@ -625,7 +629,7 @@
         const currentStep = getCurrentStep();
         const maxSteps = getMaxSteps();
         setStepValue((currentStep + 1) % maxSteps);
-        unifiedPositionToggle.blur();
+        unifiedPositionToggle?.blur();
       });
 
       unifiedPositionToggle.querySelectorAll<HTMLElement>('.left-labels .state-label').forEach(label => {
@@ -661,7 +665,7 @@
         } else {
           store.setDegreeDisplayMode('off');
         }
-        degreeVisibilityToggle.blur();
+        degreeVisibilityToggle?.blur();
       });
     }
 
@@ -671,7 +675,7 @@
         if (store.state.degreeDisplayMode !== 'off' && store.state.degreeDisplayMode !== 'diatonic') {
           store.setDegreeDisplayMode('diatonic');
         }
-        degreeModeScaleButton.blur();
+        degreeModeScaleButton?.blur();
       });
     }
 
@@ -680,7 +684,7 @@
         if (store.state.degreeDisplayMode !== 'off' && store.state.degreeDisplayMode !== 'modal') {
           store.setDegreeDisplayMode('modal');
         }
-        degreeModeModalButton.blur();
+        degreeModeModalButton?.blur();
       });
     }
 
@@ -689,7 +693,7 @@
       flatBtn.addEventListener('click', () => {
         if (store.state.showFrequencyLabels) store.toggleFrequencyLabels();
         store.toggleAccidentalMode('flat');
-        flatBtn.blur();
+        flatBtn?.blur();
       });
     }
 
@@ -697,14 +701,14 @@
       sharpBtn.addEventListener('click', () => {
         if (store.state.showFrequencyLabels) store.toggleFrequencyLabels();
         store.toggleAccidentalMode('sharp');
-        sharpBtn.blur();
+        sharpBtn?.blur();
       });
     }
 
     if (frequencyBtn) {
       frequencyBtn.addEventListener('click', () => {
         store.toggleFrequencyLabels();
-        frequencyBtn.blur();
+        frequencyBtn?.blur();
       });
     }
 
@@ -715,7 +719,7 @@
           store.toggleFrequencyLabels();
         }
         store.toggleOctaveLabels();
-        octaveToggleBtn.blur();
+        octaveToggleBtn?.blur();
       });
     }
 
@@ -723,7 +727,7 @@
       focusColoursToggle.addEventListener('change', () => {
         if (!store.state.focusColours && !hasTonicShapesOnCanvas()) {
           notificationSystem.alert('Please place a tonal center on the canvas before enabling focus colours.', 'Tonal Center Required');
-          focusColoursToggle.checked = false;
+          if (focusColoursToggle) focusColoursToggle.checked = false;
           return;
         }
         store.toggleFocusColours();

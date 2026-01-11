@@ -193,9 +193,9 @@
   }
 
   // Store event handlers
-  function handleNoteChanged({ newNote }: { newNote?: { color?: string } }): void {
-    if (newNote?.color) {
-      updatePresetSelection(newNote.color);
+  function handleNoteChanged(data?: { newNote?: { color?: string } }): void {
+    if (data?.newNote?.color) {
+      updatePresetSelection(data.newNote.color);
     } else {
       document.querySelectorAll('.preset-button').forEach(btn => btn.classList.remove('selected'));
       if (presetContainer) {
@@ -205,13 +205,15 @@
     }
   }
 
-  function handleTimbreChanged(color: string): void {
+  function handleTimbreChanged(color?: string): void {
+    if (!color) return;
     if (color === store.state.selectedNote?.color) {
       updatePresetSelection(color);
     }
   }
 
-  function handleTempoChanged(newTempo: number): void {
+  function handleTempoChanged(newTempo?: number): void {
+    if (newTempo === undefined) return;
     updateTempoDisplays(newTempo);
   }
 

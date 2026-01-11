@@ -105,6 +105,7 @@
 	}
 
 	function handlePointerDown(event: PointerEvent) {
+		event.preventDefault();
 		pointerActive = true;
 		pointerId = event.pointerId;
 		lastPointerY = event.clientY;
@@ -225,6 +226,7 @@
 		align-items: center;
 		justify-content: center;
 		transition: box-shadow 0.2s ease, border-color 0.2s ease;
+		touch-action: none;
 	}
 
 	.pitch-wheel:focus-visible {
@@ -244,6 +246,7 @@
 		display: flex;
 		align-items: stretch;
 		justify-content: center;
+		touch-action: none;
 	}
 
 	.pitch-wheel-options {

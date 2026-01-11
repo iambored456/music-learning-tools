@@ -1,4 +1,4 @@
-import { mount } from 'svelte';
+import { mount, unmount } from 'svelte';
 import App from './App.svelte';
 
 export type SingingTrainerInstance = {
@@ -10,7 +10,7 @@ export function mountSingingTrainer(container: HTMLElement): SingingTrainerInsta
 
   return {
     destroy: () => {
-      instance.$destroy();
+      unmount(instance);
     },
   };
 }

@@ -1,6 +1,7 @@
 // Export wheel components
 export { default as PitchWheel } from './PitchWheel.svelte';
 export { default as DualPitchWheel } from './DualPitchWheel.svelte';
+export { default as PresetButtons } from './PresetButtons.svelte';
 
 // Export dropdown components
 export { default as PitchDropdown } from './PitchDropdown.svelte';

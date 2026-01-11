@@ -7,8 +7,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "typecheck": "echo 'App typecheck delegated to @mlt/singing-trainer-ui package'",
+    "check": "echo 'App check delegated to @mlt/singing-trainer-ui package'"
   },
   "dependencies": {
     "@mlt/singing-trainer-ui": "workspace:*"

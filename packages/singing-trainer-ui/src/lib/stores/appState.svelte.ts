@@ -53,7 +53,7 @@ const DEFAULT_STATE: AppState = {
   useDegrees: false,
   showAccidentals: true,
   pitchHighlightEnabled: true,
-  yAxisRange: { minMidi: 48, maxMidi: 72 }, // C3 to C5
+  yAxisRange: { minMidi: 40, maxMidi: 72 }, // E2 to C5
   drone: { isPlaying: false, octave: 3, volume: -12 },
 };
 

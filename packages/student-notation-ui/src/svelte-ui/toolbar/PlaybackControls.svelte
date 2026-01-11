@@ -22,12 +22,14 @@
 
   // Subscribe to store events
   $effect(() => {
-    const handlePlaybackState = (data: { isPlaying: boolean; isPaused: boolean }) => {
+    const handlePlaybackState = (data?: { isPlaying: boolean; isPaused: boolean }) => {
+      if (!data) return;
       isPlaying = data.isPlaying;
       isPaused = data.isPaused;
     };
 
-    const handleLoopingChanged = (data: boolean) => {
+    const handleLoopingChanged = (data?: boolean) => {
+      if (data === undefined) return;
       isLooping = data;
     };
 

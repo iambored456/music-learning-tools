@@ -21,3 +21,17 @@ export interface PitchWheelRange {
 	bottomPitch: PitchRowData; // Pitch data for bottom of range
 	span: number; // Number of pitches in range
 }
+
+/**
+ * Preset pitch range configuration
+ */
+export interface PitchRangePreset {
+	label: string; // Display name (e.g., "Voice I", "Treble")
+	topIndex: number; // Index of highest pitch
+	bottomIndex: number; // Index of lowest pitch
+}
+
+/**
+ * Category of preset ranges
+ */
+export type PresetCategory = 'range' | 'voice';

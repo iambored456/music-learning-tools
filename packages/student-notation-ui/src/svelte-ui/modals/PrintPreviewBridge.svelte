@@ -556,7 +556,8 @@
   }
 
   // Store event handlers
-  function handlePrintPreviewStateChanged(isActive: boolean): void {
+  function handlePrintPreviewStateChanged(isActive?: boolean): void {
+    if (isActive === undefined) return;
     if (isActive) {
       show();
     } else {

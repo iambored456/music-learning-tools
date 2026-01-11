@@ -416,7 +416,10 @@ class ClefViewportController {
       full: { topIndex: 0, bottomIndex: Math.max(0, this.masterOptions.length - 1) },
       treble: resolvePresetFromToneNotes('G5', 'C4'),
       alto: resolvePresetFromToneNotes('A4', 'D3'),
-      bass: resolvePresetFromToneNotes('C4', 'E2')
+      bass: resolvePresetFromToneNotes('C4', 'E2'),
+      voice1: resolvePresetFromToneNotes('A5', 'A3'),  // Voice I
+      voice2: resolvePresetFromToneNotes('C5', 'C3'),  // Voice II
+      voice3: resolvePresetFromToneNotes('E4', 'E2')   // Voice III
     };
   }
 
