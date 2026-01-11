@@ -1,0 +1,744 @@
+/* (file path: style/main.css) */
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('../fonts/AtkinsonHyperlegibleNext-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('../fonts/AtkinsonHyperlegibleNext-Bold.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+:root {
+  /* --- THEME PALETTE (LIGHT MODE DEFAULT) --- */
+  --color-background: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-surface-dark-mode: #2e2e2e; /* The "grayer white" for dark mode surfaces */
+  --color-text-primary: #333333;
+  --color-text-secondary: #000000;
+  --color-key-white-text: #000000;
+  --color-key-black-text: #ffffff;
+
+  /* Base unit converted to rem (assuming 1rem = 16px base) */
+  --unit: 0.0625rem; /* 1px */
+  --border-width: var(--unit);
+  --border-width-medium: calc(var(--unit) * 1.5);
+  --border-width-thick: calc(var(--unit) * 2.5);
+  --border-width-cursor: calc(var(--unit) * 3);
+  
+  /* Converted to rem */
+  --radius-small: 0.3125rem; /* 5px */
+  --radius-medium: 0.5rem;   /* 8px */
+  --space-xs: 0.5rem;      /* 8px */
+  --space-s: 0.9375rem;   /* 15px */
+  --space-m: 1.25rem;      /* 20px */
+}
+
+/* --- DARK MODE OVERRIDES --- */
+body.dark-mode {
+  --color-background: #121212;
+  --color-surface: #1e1e1e;
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #ffffff;
+  --color-key-white-text: #e0e0e0;
+}
+
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Remove text selection highlight */
+*::selection {
+  background: transparent;
+  color: inherit;
+}
+
+*::-moz-selection {
+  background: transparent;
+  color: inherit;
+}
+
+html {
+  font-size: clamp(14px, 1.2vw + 0.5rem, 18px);
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--color-background); /* UPDATED */
+  font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  transition: background-color 0.3s;
+}
+
+/* --- SOLUTION FOR TALL SCREENS (DEFAULT) --- */
+.main-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 50rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0; 
+  padding:0.2rem;
+}
+
+.main-container .wheel-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.main-container .belts-container {
+  flex: none;
+}
+
+.main-container #result-container {
+  flex: none;
+}
+
+/* Styling for individual belts when moved out of belts-container */
+.main-container > .belt {
+  flex: 0 0 auto; /* Don't grow or shrink */
+  margin: 0.15rem 0; /* Half the gap from belts-container */
+  height: clamp(2rem, 4rem, 8rem); /* Maintain belt height */
+  width: 100%; /* Full width available */
+}
+
+.main-container > .interval-brackets-wrapper {
+  flex: 0 0 auto; /* Don't grow or shrink */
+  margin: 0.15rem 0;
+  height: 1.875rem; /* Fixed height for interval brackets */
+  width: 100%; /* Full width available */
+}
+
+.wheel-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Constrain wheel in horizontal mode when it's a flex child */
+.main-container:not(.vertical-layout) .wheel-container {
+  flex: 1 1 auto;
+  max-height: 100%;
+  max-width: 100%;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+}
+
+canvas {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: var(--color-surface); /* UPDATED */
+  border: var(--border-width) solid #ccc;
+  touch-action: none;
+  transition: background-color 0.3s;
+}
+
+/* Vertical mode: canvas should fill its grid area */
+.main-container.vertical-layout canvas {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
+/* Horizontal mode: canvas should respect flex constraints */
+.main-container:not(.vertical-layout) canvas {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  flex-shrink: 1; /* Allow shrinking in flex layout */
+}
+
+#result-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  width: 100%;
+  max-width: 28.125rem;
+  height: 3.75rem;
+  padding:0.2rem;
+  border-radius: var(--radius-small);
+  background: var(--color-surface); /* UPDATED */
+  color: var(--color-text-primary); /* UPDATED */
+  box-shadow: 0 0 0.3125rem rgba(0,0,0,.1);
+  flex-shrink: 0;
+  transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
+  justify-self: center; 
+  margin: 0 auto; /* Center align in horizontal flexbox mode */
+}
+
+#result-container.playback-active {
+  background-color: #A5D6A7;
+}
+
+#result-text {
+  flex-grow: 1;
+  text-align: center;
+  font-size: 1.8rem;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+}
+
+#volume-icon {
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  pointer-events: none; /* Click passes through to parent */
+  /* Clip to content area to hide squircle border */
+  object-fit: cover;
+  object-position: center;
+}
+
+#volume-icon:hover {
+  opacity: 0.7;
+}
+
+.accidental-toggle {
+  background: #e0e0e0;
+  border: 1px solid #ccc;
+  color: #333;
+  font-size: 1.625rem;
+  font-weight: bold;
+  border-radius: var(--radius-small);
+  padding: var(--space-xs) var(--space-s);
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.2s, background-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.accidental-toggle.active {
+  background-color: #FFEB3B;
+  opacity: 1;
+}
+
+/* --- START: Settings & Sidebar Styles --- */
+#settings-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 1001;
+  background: transparent;
+  border: none;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s ease;
+}
+
+#settings-btn:hover {
+  transform: rotate(45deg);
+}
+
+#settings-btn img {
+  width: 48px;
+  height: 48px;
+  display: block;
+  /* Make icon light gray and remove any borders */
+  filter: brightness(0) saturate(100%) invert(85%);
+  /* Clip to content area to hide squircle border */
+  object-fit: cover;
+  object-position: center;
+}
+
+body.dark-mode #settings-btn img {
+  /* Make icon white in dark mode */
+  filter: brightness(0) saturate(100%) invert(100%);
+}
+
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 18.75rem;
+  max-width: 80%;
+  background: var(--color-surface);
+  box-shadow: 0.25rem 0 0.9375rem rgba(0,0,0,0.2);
+  z-index: 1002;
+  transform: translateX(-100%);
+  transition: transform 0.3s, background-color 0.3s;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+#sidebar.open {
+  transform: translateX(0);
+}
+.sidebar-content {
+  font-size: 1rem;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  padding: 1.5rem;
+  padding-top: 0;
+  width: 100%;
+  transition: color 0.3s;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+/* Enhanced scrollbar for touch devices */
+.sidebar-content::-webkit-scrollbar {
+  width: 12px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  margin: 0.5rem 0;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+  background-clip: padding-box;
+}
+
+/* Firefox scrollbar */
+.sidebar-content {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
+}
+
+#sidebar-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-align: center;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sidebar-subheader {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  text-align: center;
+}
+
+.tutorial-btn {
+  background: #33c6dc;
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-medium);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tutorial-btn:hover {
+  background: #2a9fb5;
+}
+.sidebar-btn {
+  background: #e0e0e0;
+  border: 1px solid #ccc;
+  color: #333;
+  font-size: 1rem;
+  border-radius: var(--radius-small);
+  padding: var(--space-xs) var(--space-s);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.sidebar-btn:hover {
+  background-color: #d0d0d0;
+}
+
+/* Cursor Color Picker */
+.cursor-color-picker {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.cursor-color-btn {
+  width: 3rem;
+  height: 3rem;
+  padding: 0.25rem;
+  border: 2px solid transparent;
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cursor-color-btn:hover {
+  border-color: #33c6dc;
+  transform: scale(1.05);
+}
+
+.cursor-color-btn.active {
+  border-color: #33c6dc;
+  box-shadow: 0 0 8px rgba(51, 198, 220, 0.5);
+}
+
+.color-square {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-small);
+  border: 3px solid;
+}
+
+/* Red variants */
+.color-square.red-outline {
+  border-color: red;
+  background: transparent;
+}
+
+.color-square.red-fill {
+  border-color: red;
+  background: rgba(255, 0, 0, 0.3);
+}
+
+/* Blue variant */
+.color-square.blue-fill {
+  border-color: blue;
+  background: rgba(0, 0, 255, 0.3);
+}
+
+/* Green variant */
+.color-square.green-fill {
+  border-color: green;
+  background: rgba(0, 255, 0, 0.3);
+}
+
+/* Yellow variant */
+.color-square.yellow-fill {
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, 0.3);
+}
+
+/* Dark mode adjustments */
+body.dark-mode .cursor-color-btn {
+  background: #2e2e2e;
+}
+
+/* Modern toggle switches */
+.toggle-switch-container {
+  display: flex;
+  justify-content: center;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  background: #e0e0e0;
+  border-radius: 1.5rem;
+  padding: 0.125rem;
+  min-width: 200px;
+  height: 2rem;
+  cursor: pointer;
+}
+
+.toggle-switch input[type="radio"] {
+  display: none;
+}
+
+.toggle-switch label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  border-radius: 1.25rem;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.toggle-switch input[type="radio"]:checked + label {
+  color: white;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: calc(50% - 0.125rem);
+  height: calc(100% - 0.25rem);
+  background: #33c6dc;
+  border-radius: 1.25rem;
+  transition: transform 0.2s ease;
+  z-index: 1;
+}
+
+.toggle-switch input[name="orientation"]:nth-of-type(2):checked ~ .toggle-slider,
+.toggle-switch input[name="theme"]:nth-of-type(2):checked ~ .toggle-slider {
+  transform: translateX(100%);
+}
+
+/* Accidentals controls */
+.accidentals-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.accidentals-controls .accidental-toggle {
+  font-size: 1.25rem;
+  line-height: 1;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+#sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+}
+#sidebar-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* --- TUTORIAL STYLES --- */
+#tutorial-mask {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    opacity: 0; /* GSAP will control this */
+    visibility: hidden; /* GSAP will control this */
+    pointer-events: none;
+    /* The initial clip-path covers the whole screen. We will animate this. */
+    clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
+}
+
+#tutorial-bubble {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 2001; /* Must be higher than the mask */
+    opacity: 0;
+    visibility: hidden;
+    max-width: 90%;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    border: 1px solid #ccc;
+}
+
+#tutorial-text {
+    font-size: 1.2rem;
+    text-align: center;
+}
+#tutorial-text strong {
+    color: #33c6dc;
+}
+
+/* --- SOLUTION FOR WIDE SCREENS --- */
+.main-container.vertical-layout {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "belts wheel"
+    "result wheel";
+  gap: var(--space-s);
+  max-width: none;
+  justify-content: center;
+  align-content: center;
+}
+
+.main-container.vertical-layout .belts-container {
+  grid-area: belts;
+  justify-self: center;
+}
+
+.main-container.vertical-layout .wheel-container {
+  grid-area: wheel;
+  justify-self: center;
+}
+
+.main-container.vertical-layout #result-container {
+  grid-area: result;
+  justify-self: center;
+  width: auto;
+  max-width: 28.125rem;
+}
+
+.main-container.vertical-layout .wheel-and-result-wrapper {
+  display: none;
+}
+
+/* Accessibility text section */
+.accessibility-text {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.accessibility-text p {
+  margin: 0.25rem 0;
+}
+
+.accessibility-text strong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.accessibility-text em {
+  font-style: italic;
+  color: #666;
+}
+
+/* Sidebar credit */
+.sidebar-credit {
+  text-align: center;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.sidebar-credit small {
+  color: #666;
+  font-size: 0.75rem;
+}
+
+/* Dark mode adjustments for new elements */
+body.dark-mode .toggle-switch {
+  background: #444;
+}
+
+body.dark-mode .toggle-switch label {
+  color: #ccc;
+}
+
+body.dark-mode .toggle-switch input[type="radio"]:checked + label {
+  color: white;
+}
+
+body.dark-mode .tutorial-btn {
+  background: #33c6dc;
+}
+
+body.dark-mode .tutorial-btn:hover {
+  background: #2a9fb5;
+}
+
+body.dark-mode .accessibility-text em {
+  color: #999;
+}
+
+body.dark-mode .sidebar-credit {
+  border-top-color: #444;
+}
+
+body.dark-mode .sidebar-credit small {
+  color: #999;
+}
+
+/* Dark mode scrollbar */
+body.dark-mode .sidebar-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode .sidebar-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+body.dark-mode .sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-mode .sidebar-content {
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* Keyboard key styling */
+.key {
+  display: inline-block;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: monospace;
+  font-size: 0.9em;
+  color: #333;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  margin: 0 1px;
+}
+
+body.dark-mode .key {
+  background: #444;
+  border-color: #666;
+  color: #e0e0e0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+/* Invert result container colors in dark mode */
+body.dark-mode #result-container {
+  background: #e0e0e0; /* Light gray background */
+  color: #000000; /* Black text */
+  border: 1px solid #ccc; /* Light border */
+}
+
+body.dark-mode #result-container.playback-active {
+  background-color: #A5D6A7; /* Keep same green for playback */
+  color: #000000; /* Ensure black text on green */
+}
+

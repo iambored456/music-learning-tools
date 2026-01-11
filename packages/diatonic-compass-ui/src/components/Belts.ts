@@ -1,0 +1,685 @@
+// (file path: src/components/Belts.ts)
+
+import { ANGLE_STEP, TAU, DIATONIC_DEGREE_INDICES, MAJOR_SCALE_INTERVAL_STEPS, CHROMATIC_NOTES, PIANO_KEY_COLOUR, FIXED_INTERVAL_COLOUR, CHROMATIC_DIVISIONS } from '../core/constants.ts';
+import { snapRing, snapChromaticAndSettleMode, snapDegreeToDiatonic } from '../core/animation.ts';
+import { setRingAngle, rotateCoupledRings } from '../core/actions.ts';
+import { normAngle } from '../core/math.ts';
+import { getContrastColor } from '../core/color.ts';
+import type { AppState } from '../state/appState.ts';
+import type { BeltOrientation, DisplayLabels } from '../types.ts';
+
+export default class Belts {
+  container: HTMLElement;
+  state: AppState;
+  onInteractionEnd: () => void;
+  elements: {
+    pitchBelt: HTMLElement | null;
+    degreeBelt: HTMLElement | null;
+    chromaticBelt: HTMLElement | null;
+    chromaticColorsTrack: HTMLElement | null;
+    chromaticNumbersTrack: HTMLElement | null;
+    intervalBracketsTrackContainer: HTMLElement | null;
+    intervalBracketsWrapper: HTMLElement | null;
+    intervalBrackets: HTMLElement | null;
+    cursor: HTMLElement | null;
+    flashOverlay: HTMLElement | null;
+  };
+  cachedCells: {
+    pitch: NodeListOf<HTMLElement> | null;
+    degree: NodeListOf<HTMLElement> | null;
+    chromaticColors: NodeListOf<HTMLElement> | null;
+    chromaticNumbers: NodeListOf<HTMLElement> | null;
+  };
+  lastAppliedLabels: {
+    chromatic: string | null;
+    diatonic: string | null;
+  };
+  _chromaticColorsApplied: boolean;
+
+  constructor(container: HTMLElement, state: AppState, onInteractionEnd: () => void) {
+    this.container = container;
+    this.state = state;
+    this.onInteractionEnd = onInteractionEnd;
+
+    this.elements = {
+      pitchBelt: container.querySelector<HTMLElement>('#pitchBelt'),
+      degreeBelt: container.querySelector<HTMLElement>('#degreeBelt'),
+      chromaticBelt: container.querySelector<HTMLElement>('#chromaticBelt'),
+      chromaticColorsTrack: container.querySelector<HTMLElement>('#chromatic-colors-track'),
+      chromaticNumbersTrack: container.querySelector<HTMLElement>('#chromatic-numbers-track'),
+      intervalBracketsTrackContainer: container.querySelector<HTMLElement>('#intervalBracketsContainer'),
+      intervalBracketsWrapper: container.querySelector<HTMLElement>('.interval-brackets-wrapper'),
+      intervalBrackets: null, // Will be set after track is created
+      cursor: container.querySelector<HTMLElement>('#belt-cursor'),
+      flashOverlay: container.querySelector<HTMLElement>('#belt-flash-overlay'),
+    };
+
+    this.state.belts.tracks = {};
+
+    // PERFORMANCE: Cache belt cell elements to avoid repeated querySelectorAll
+    this.cachedCells = {
+      pitch: null,
+      degree: null,
+      chromaticColors: null,
+      chromaticNumbers: null,
+    };
+
+    // PERFORMANCE: Track last applied styles to avoid redundant updates
+    this.lastAppliedLabels = {
+      chromatic: null,
+      diatonic: null,
+    };
+    this._chromaticColorsApplied = false;
+
+    this._initInteraction();
+  }
+
+  // --- Ring-to-Belt Conversion Helper ---
+  
+  /**
+   * Calculate the conversion factor from ring angle (radians) to belt distance (pixels)
+   * This is the core relationship between circular rings and linear belts
+   */
+  _calculateRingAngleToBeltPixelsRatio(beltCellWidth: number) {
+    if (!beltCellWidth || beltCellWidth <= 0) {
+      console.warn('Invalid beltCellWidth for ring-to-belt conversion:', beltCellWidth);
+      return 0;
+    }
+    return (CHROMATIC_DIVISIONS * beltCellWidth) / TAU;
+  }
+
+  // --- Helper Methods ---
+  _getCellOriginalIndex(cell: HTMLElement): number | null {
+    const rawIndex = cell.dataset.originalIndex;
+    if (rawIndex === undefined) {
+      return null;
+    }
+
+    const index = Number(rawIndex);
+    return Number.isFinite(index) ? index : null;
+  }
+
+  /**
+   * Format a label based on cell dimensions
+   * If cell is wider than tall, display alternatives side-by-side
+   * Otherwise, display them stacked (default)
+   */
+  _formatLabelForCell(label: string, cell: HTMLElement) {
+    if (!label || !label.includes('/')) {
+      return label;
+    }
+
+    const orientation = this.state.belts.orientation;
+
+    // Debug: Log first occurrence of each belt type
+    const beltType = cell.closest('.belt')?.className || 'unknown';
+    if (cell.dataset.originalIndex === '1') {
+      console.log(`🔍 Format check [${beltType}] (${orientation}):`, {
+        label,
+        orientation,
+        decision: orientation === 'vertical' ? 'SIDE-BY-SIDE (vertical mode)' : 'STACKED (horizontal mode)'
+      });
+    }
+
+    // In vertical orientation mode, cells are wider - use side-by-side
+    // In horizontal orientation mode, cells are taller - use stacked
+    if (orientation === 'vertical') {
+      // Replace slash with space for side-by-side display
+      return label.replace('/', ' ');
+    } else {
+      // Default: replace slash with line break for stacked display
+      return label.replace('/', '<br>');
+    }
+  }
+
+  // --- Public API ---
+
+  update(labels: DisplayLabels, highlightPattern: number[]) {
+    const { orientation } = this.state.belts;
+    const { diatonicLabels, chromaticLabels } = labels;
+
+    console.log('=== Belts.update CALLED ===', {
+      init: this.state.belts.init,
+      orientation
+    });
+
+    if (!this.state.belts.init) {
+      console.log('Belts not initialized - setting up...');
+      // Reset caches when belts are being reinitialized (e.g., orientation change)
+      this.cachedCells = {
+        pitch: null,
+        degree: null,
+        chromaticColors: null,
+        chromaticNumbers: null,
+      };
+      this.lastAppliedLabels = {
+        chromatic: null,
+        diatonic: null,
+      };
+      this._chromaticColorsApplied = false;
+
+      this._setupAllBelts(diatonicLabels, chromaticLabels);
+
+      requestAnimationFrame(() => {
+        const sizesCalculated = this._calculateAllBeltCellWidths(orientation);
+        if (sizesCalculated) {
+          console.log('Belt sizes calculated, marking as initialized');
+          this.state.belts.init = true;
+          // Force a redraw after initialization to apply colors
+          import('../utils/StateTracker.ts').then(({ StateTracker }) => {
+            StateTracker.markDirty(this.state);
+          });
+        }
+      });
+      return;
+    }
+
+    console.log('Belts initialized, applying styles...');
+
+    const { pitchClass, degree, chromatic, highlightPosition } = this.state.rings;
+    const { tracks, itemSize } = this.state.belts;
+    
+    this._applyBeltStyles(highlightPattern, diatonicLabels, chromaticLabels);
+
+    let visualPitchClass = orientation === 'vertical' ? -pitchClass : pitchClass;
+    let visualDegree = orientation === 'vertical' ? -degree : degree;
+    let visualChromatic = orientation === 'vertical' ? -chromatic : chromatic;
+    let visualHighlight = orientation === 'vertical' ? -highlightPosition : highlightPosition;
+
+    this._positionBeltFromRingAngle(tracks.pitchBelt, visualPitchClass, itemSize.pitchBelt, orientation);
+    this._positionBeltFromRingAngle(tracks.degreeBelt, visualDegree, itemSize.degreeBelt, orientation);
+    this._positionBeltFromRingAngle(tracks.chromaticColors, visualHighlight, itemSize.chromaticBelt, orientation);
+    this._positionBeltFromRingAngle(tracks.chromaticNumbers, visualChromatic, itemSize.chromaticBelt, orientation);
+    
+    this._positionIntervalBeltFromDegreeRing(visualDegree, itemSize.degreeBelt, orientation);
+    this._positionBeltCursorFromRingAngle(visualChromatic, itemSize.chromaticBelt, orientation);
+    this._updatePlaybackFlashOnBelt();
+  }
+
+
+  _initInteraction() {
+    const { pitchBelt, degreeBelt, chromaticNumbersTrack } = this.elements;
+
+    if (pitchBelt) {
+      this._addDragHandler(pitchBelt,
+        (delta: number) => {
+          const newAngle = this.state.drag.startPitchClass + (this.state.belts.orientation === 'vertical' ? -delta : delta);
+          setRingAngle('pitchClass', newAngle);
+        },
+        () => snapRing('pitchClass', this.onInteractionEnd)
+      );
+    }
+
+    const degreeOnMove = (delta: number) => {
+        const moveDelta = this.state.belts.orientation === 'vertical' ? -delta : delta;
+        setRingAngle('degree', this.state.drag.startDegree + moveDelta);
+        setRingAngle('highlightPosition', this.state.drag.startHighlight + moveDelta);
+    };
+    const degreeOnFinish = () => {
+        snapDegreeToDiatonic(this.onInteractionEnd);
+    };
+    if (degreeBelt) {
+        this._addDragHandler(degreeBelt, degreeOnMove, degreeOnFinish);
+    }
+
+    if (chromaticNumbersTrack) {
+      this._addDragHandler(chromaticNumbersTrack,
+        (delta: number) => {
+          const moveDelta = this.state.belts.orientation === 'vertical' ? -delta : delta;
+          const startAngles = {
+            startPitchClass: this.state.drag.startPitchClass,
+            startDegree: this.state.drag.startDegree,
+            startChrom: this.state.drag.startChrom,
+            startHighlight: this.state.drag.startHighlight
+          };
+          rotateCoupledRings(startAngles, moveDelta);
+        },
+        () => snapChromaticAndSettleMode(this.onInteractionEnd)
+      );
+    }
+  }
+
+  _addDragHandler(element: HTMLElement, onMove: (delta: number) => void, onFinish: () => void) {
+    element.style.cursor = 'grab';
+    let activePointerId: number | null = null;
+    let startX = 0, startY = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      activePointerId = e.pointerId;
+      element.setPointerCapture(activePointerId);
+      startX = e.clientX;
+      startY = e.clientY;
+
+      const { drag, rings } = this.state;
+      drag.active = element.id || 'belt-drag';
+      drag.startPitchClass = rings.pitchClass;
+      drag.startDegree = rings.degree;
+      drag.startChrom = rings.chromatic;
+      drag.startHighlight = rings.highlightPosition;
+
+      element.style.cursor = 'grabbing';
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (activePointerId !== e.pointerId) return;
+      const { orientation, itemSize } = this.state.belts;
+      const beltDragDistance = orientation === 'vertical' ? e.clientY - startY : e.clientX - startX;
+      
+      let beltSizeKey: 'pitchBelt' | 'degreeBelt' | 'chromaticBelt' | null = null;
+      const elementIdentifier = element.id || element.className || '';
+      if (elementIdentifier.includes('pitch')) beltSizeKey = 'pitchBelt';
+      else if (elementIdentifier.includes('degree') || elementIdentifier.includes('interval')) beltSizeKey = 'degreeBelt';
+      else if (elementIdentifier.includes('chromatic')) beltSizeKey = 'chromaticBelt';
+      
+      const beltCellWidth = beltSizeKey ? itemSize[beltSizeKey] : undefined;
+      if (!beltCellWidth || beltCellWidth === 0) return;
+      
+      const beltDistanceToRingAngle = (beltDragDistance / beltCellWidth) * ANGLE_STEP;
+      onMove(beltDistanceToRingAngle);
+    };
+
+    const onPointerUp = () => {
+      if (activePointerId === null) return;
+      element.releasePointerCapture(activePointerId);
+      activePointerId = null;
+      this.state.drag.active = null;
+      element.style.cursor = 'grab';
+      onFinish();
+    };
+
+    element.addEventListener('pointerdown', onPointerDown);
+    element.addEventListener('pointermove', onPointerMove);
+    element.addEventListener('pointerup', onPointerUp);
+    element.addEventListener('pointercancel', onPointerUp);
+  }
+
+  _setupAllBelts(diatonicLabels: string[], chromaticLabels: string[]) {
+    this.elements.pitchBelt!.innerHTML = '';
+    this.elements.degreeBelt!.innerHTML = '';
+    this.elements.intervalBracketsTrackContainer!.innerHTML = '';
+
+    const RING_TO_BELT_UNWRAP_CYCLES = 3;
+    this.state.belts.tracks.pitchBelt = this._createBeltTrack(this.elements.pitchBelt!, chromaticLabels, RING_TO_BELT_UNWRAP_CYCLES);
+    this.state.belts.tracks.degreeBelt = this._createBeltTrack(this.elements.degreeBelt!, diatonicLabels, RING_TO_BELT_UNWRAP_CYCLES);
+    this._populateBeltTrack(this.elements.chromaticColorsTrack!, Array(12).fill(''), RING_TO_BELT_UNWRAP_CYCLES);
+    this._populateBeltTrack(this.elements.chromaticNumbersTrack!, [...Array(12).keys()], RING_TO_BELT_UNWRAP_CYCLES);
+    this.state.belts.tracks.chromaticColors = this.elements.chromaticColorsTrack;
+    this.state.belts.tracks.chromaticNumbers = this.elements.chromaticNumbersTrack;
+
+    this._createIntervalBeltTrack(RING_TO_BELT_UNWRAP_CYCLES);
+  }
+  
+  _createBeltTrack(container: HTMLElement, items: Array<string | number>, ringUnwrapCycles: number) {
+    const track = document.createElement('div');
+    track.className = 'belt-track';
+    this._populateBeltTrack(track, items, ringUnwrapCycles);
+    container.appendChild(track);
+    return track;
+  }
+  
+  _populateBeltTrack(track: HTMLElement, items: Array<string | number>, ringUnwrapCycles: number) {
+    track.innerHTML = '';
+    const BELT_SMOOTH_SCROLL_BUFFER = 3;
+    const numItems = items.length;
+    for (let i = 0; i < (ringUnwrapCycles * CHROMATIC_DIVISIONS) + BELT_SMOOTH_SCROLL_BUFFER; i++) {
+      const itemIndex = i % numItems;
+      const item = items[itemIndex];
+      const cell = document.createElement('div');
+      cell.className = 'belt-cell';
+      cell.innerHTML = String(item);
+      cell.dataset.originalIndex = String(itemIndex);
+      track.appendChild(cell);
+    }
+  }
+
+  _createIntervalBeltTrack(ringUnwrapCycles: number) {
+    const track = document.createElement('div');
+    track.className = 'interval-brackets-track';
+    const BELT_SMOOTH_SCROLL_BUFFER = 3;
+    for (let i = 0; i < CHROMATIC_DIVISIONS * ringUnwrapCycles + BELT_SMOOTH_SCROLL_BUFFER; i++) {
+        const originalIndex = i % CHROMATIC_DIVISIONS;
+        const majorScaleIndex = DIATONIC_DEGREE_INDICES.indexOf(originalIndex);
+        const cell = document.createElement('div');
+        cell.className = 'interval-bracket-cell';
+        if (majorScaleIndex !== -1) {
+            const steps = MAJOR_SCALE_INTERVAL_STEPS[majorScaleIndex];
+            cell.dataset.steps = String(steps);
+            cell.innerHTML = `<span>+${steps}</span>`;
+        }
+        track.appendChild(cell);
+    }
+    this.elements.intervalBracketsTrackContainer!.appendChild(track);
+
+    // Store reference to the wrapper for drag handling
+    this.elements.intervalBrackets = this.elements.intervalBracketsWrapper;
+
+    // Attach drag handler to interval belt (same behavior as diatonic belt)
+    const degreeOnMove = (delta: number) => {
+        const moveDelta = this.state.belts.orientation === 'vertical' ? -delta : delta;
+        setRingAngle('degree', this.state.drag.startDegree + moveDelta);
+        setRingAngle('highlightPosition', this.state.drag.startHighlight + moveDelta);
+    };
+    const degreeOnFinish = () => {
+        snapDegreeToDiatonic(this.onInteractionEnd);
+    };
+    if (this.elements.intervalBrackets) {
+      this._addDragHandler(this.elements.intervalBrackets, degreeOnMove, degreeOnFinish);
+    }
+  }
+
+  _calculateAllBeltCellWidths(orientation: BeltOrientation) {
+    return this._calculateBeltCellWidth('pitchBelt', this.elements.pitchBelt!, orientation) &&
+           this._calculateBeltCellWidth('degreeBelt', this.elements.degreeBelt!, orientation) &&
+           this._calculateBeltCellWidth('chromaticBelt', this.elements.chromaticBelt!, orientation) &&
+           this._calculateBeltCellWidth('intervalBracketsContainer', this.elements.intervalBracketsWrapper!, orientation);
+  }
+
+  _calculateBeltCellWidth(
+    beltId: 'pitchBelt' | 'degreeBelt' | 'chromaticBelt' | 'intervalBracketsContainer',
+    container: HTMLElement,
+    orientation: BeltOrientation
+  ) {
+    const beltContainerSize = orientation === 'vertical' ? container.offsetHeight : container.offsetWidth;
+    if (beltContainerSize > 0) {
+      this.state.belts.itemSize[beltId] = beltContainerSize / CHROMATIC_DIVISIONS;
+      return true;
+    }
+    return false;
+  }
+  
+  _applyBeltStyles(highlightPattern: number[], diatonicLabels: string[], chromaticLabels: string[]) {
+    console.log('=== _applyBeltStyles CALLED ===');
+
+    // PERFORMANCE: Check if labels have changed to avoid redundant updates
+    const chromaticKey = chromaticLabels.join(',');
+    const diatonicKey = diatonicLabels.join(',');
+    const labelsChanged = this.lastAppliedLabels.chromatic !== chromaticKey ||
+                         this.lastAppliedLabels.diatonic !== diatonicKey;
+
+    // First time running - force update
+    const isFirstRun = this.lastAppliedLabels.chromatic === null;
+
+    // PERFORMANCE: Cache cell queries on first run
+    if (!this.cachedCells.pitch && this.state.belts.tracks.pitchBelt) {
+      this.cachedCells.pitch = this.state.belts.tracks.pitchBelt.querySelectorAll<HTMLElement>('.belt-cell');
+      console.log('Cached pitch cells:', this.cachedCells.pitch.length);
+    }
+    if (!this.cachedCells.degree && this.state.belts.tracks.degreeBelt) {
+      this.cachedCells.degree = this.state.belts.tracks.degreeBelt.querySelectorAll<HTMLElement>('.belt-cell');
+      console.log('Cached degree cells:', this.cachedCells.degree.length);
+    }
+    if (!this.cachedCells.chromaticColors && this.elements.chromaticColorsTrack) {
+      this.cachedCells.chromaticColors = this.elements.chromaticColorsTrack.querySelectorAll<HTMLElement>('.belt-cell');
+      console.log('Cached chromatic color cells:', this.cachedCells.chromaticColors.length);
+    }
+    if (!this.cachedCells.chromaticNumbers && this.elements.chromaticNumbersTrack) {
+      this.cachedCells.chromaticNumbers = this.elements.chromaticNumbersTrack.querySelectorAll<HTMLElement>('.belt-cell');
+      console.log('Cached chromatic number cells:', this.cachedCells.chromaticNumbers.length);
+    }
+
+    console.log('Belt styling state:', {
+      isFirstRun,
+      labelsChanged,
+      hasPitchCells: !!this.cachedCells.pitch,
+      pitchCellCount: this.cachedCells.pitch?.length || 0,
+      hasDegreeCells: !!this.cachedCells.degree,
+      degreeCellCount: this.cachedCells.degree?.length || 0,
+      hasChromaticColors: !!this.cachedCells.chromaticColors,
+      chromaticColorCount: this.cachedCells.chromaticColors?.length || 0
+    });
+
+    // Update pitch belt - always update labels to handle dimension changes
+    const shouldUpdatePitch = (labelsChanged || isFirstRun) && this.cachedCells.pitch;
+    const needsInitialColors = this.cachedCells.pitch && this.cachedCells.pitch.length > 0 && !this.cachedCells.pitch[0].style.background;
+
+    if ((shouldUpdatePitch || needsInitialColors) && this.cachedCells.pitch) {
+      console.log('APPLYING PITCH BELT COLORS!', { shouldUpdatePitch, needsInitialColors, cellCount: this.cachedCells.pitch.length });
+      this.cachedCells.pitch.forEach(cell => {
+        const idx = this._getCellOriginalIndex(cell);
+        if (idx === null) {
+          return;
+        }
+        const note = CHROMATIC_NOTES[idx];
+        const isWhiteKey = (PIANO_KEY_COLOUR as Record<string, boolean>)[note];
+        cell.style.background = isWhiteKey ? '#fff' : '#000';
+        cell.style.color = isWhiteKey ? '#000' : '#fff';
+        cell.innerHTML = this._formatLabelForCell(chromaticLabels[idx], cell);
+      });
+    } else if (this.cachedCells.pitch && labelsChanged) {
+      // Update labels even if colors don't need updating
+      console.log('UPDATING PITCH LABELS ONLY');
+      this.cachedCells.pitch.forEach(cell => {
+        const idx = this._getCellOriginalIndex(cell);
+        if (idx === null) {
+          return;
+        }
+        cell.innerHTML = this._formatLabelForCell(chromaticLabels[idx], cell);
+      });
+    } else {
+      console.log('SKIPPED pitch belt colors:', { shouldUpdatePitch, needsInitialColors, hasCells: !!this.cachedCells.pitch });
+    }
+
+    // Update degree belt if labels changed OR first run OR cells just became available
+    const shouldUpdateDegree = (labelsChanged || isFirstRun) && this.cachedCells.degree;
+    const needsInitialDegreeColors = this.cachedCells.degree && this.cachedCells.degree.length > 0 && !this.cachedCells.degree[0].style.background;
+
+    if ((shouldUpdateDegree || needsInitialDegreeColors) && this.cachedCells.degree) {
+      console.log('APPLYING DEGREE BELT COLORS!', { shouldUpdateDegree, needsInitialDegreeColors, cellCount: this.cachedCells.degree.length });
+      this.cachedCells.degree.forEach(cell => {
+        const idx = this._getCellOriginalIndex(cell);
+        if (idx === null) {
+          return;
+        }
+        const bgColor = (FIXED_INTERVAL_COLOUR as Record<number, string>)[idx] || '#f0f0f0';
+        cell.style.background = bgColor;
+        cell.style.color = getContrastColor(bgColor);
+        cell.innerHTML = this._formatLabelForCell(diatonicLabels[idx], cell);
+      });
+    } else if (this.cachedCells.degree && labelsChanged) {
+      // Update labels even if colors don't need updating
+      console.log('UPDATING DEGREE LABELS ONLY');
+      this.cachedCells.degree.forEach(cell => {
+        const idx = this._getCellOriginalIndex(cell);
+        if (idx === null) {
+          return;
+        }
+        cell.innerHTML = this._formatLabelForCell(diatonicLabels[idx], cell);
+      });
+    } else {
+      console.log('SKIPPED degree belt colors:', { shouldUpdateDegree, needsInitialDegreeColors, hasCells: !!this.cachedCells.degree });
+    }
+
+    // Chromatic colors - apply on first run or when cells just became available
+    const needsInitialChromatic = this.cachedCells.chromaticColors && this.cachedCells.chromaticColors.length > 0 && !this.cachedCells.chromaticColors[0].style.background;
+
+    if ((!this._chromaticColorsApplied || isFirstRun || needsInitialChromatic) && this.cachedCells.chromaticColors) {
+      console.log('APPLYING CHROMATIC COLORS!', {
+        chromaticColorsApplied: this._chromaticColorsApplied,
+        isFirstRun,
+        needsInitialChromatic,
+        cellCount: this.cachedCells.chromaticColors.length
+      });
+      this.cachedCells.chromaticColors.forEach(cell => {
+        const idx = this._getCellOriginalIndex(cell);
+        if (idx === null) {
+          return;
+        }
+        cell.style.background = highlightPattern.includes(idx) ? '#e0e0e0' : '#4a4a4a';
+      });
+      this._chromaticColorsApplied = true;
+    } else {
+      console.log('SKIPPED chromatic colors:', {
+        chromaticColorsApplied: this._chromaticColorsApplied,
+        isFirstRun,
+        needsInitialChromatic,
+        hasCells: !!this.cachedCells.chromaticColors
+      });
+    }
+
+    // Chromatic numbers need update each frame (ring-dependent)
+    if (this.cachedCells.chromaticNumbers) {
+      const { chromatic, highlightPosition } = this.state.rings;
+      const angle_diff = normAngle(highlightPosition - chromatic);
+      const index_shift = angle_diff / ANGLE_STEP;
+
+      this.cachedCells.chromaticNumbers.forEach(cell => {
+        const numIndex = this._getCellOriginalIndex(cell);
+        if (numIndex === null) {
+          return;
+        }
+        const effectiveColorIndex = Math.round((numIndex - index_shift + 12 * 100) % 12) % 12;
+        const newColor = highlightPattern.includes(effectiveColorIndex) ? 'black' : 'lightgray';
+        // Only update if changed
+        if (cell.style.color !== newColor) {
+          cell.style.color = newColor;
+        }
+      });
+    }
+
+    // Update last applied labels
+    if (labelsChanged) {
+      this.lastAppliedLabels.chromatic = chromaticKey;
+      this.lastAppliedLabels.diatonic = diatonicKey;
+    }
+  }
+  
+  _convertRingAngleToBeltDistance(ringAngle: number, beltCellWidth: number, orientation: BeltOrientation) {
+    const ringAngleToBeltPixels = this._calculateRingAngleToBeltPixelsRatio(beltCellWidth);
+    if (ringAngleToBeltPixels === 0) return 0; // Early exit for invalid calculations
+    
+    const ringAngleAsBeltPixels = ringAngle * ringAngleToBeltPixels;
+    let baseBeltOffset, verticalBeltAdjustment = 0;
+
+    if (orientation === 'vertical') {
+        baseBeltOffset = -(beltCellWidth * CHROMATIC_DIVISIONS);
+        verticalBeltAdjustment = 3 * beltCellWidth;
+        return baseBeltOffset - verticalBeltAdjustment + ringAngleAsBeltPixels;
+    } else {
+        baseBeltOffset = -(beltCellWidth * CHROMATIC_DIVISIONS);
+        return baseBeltOffset + ringAngleAsBeltPixels;
+    }
+  }
+
+  _positionBeltFromRingAngle(
+    beltTrack: HTMLElement | null,
+    ringAngle: number,
+    beltCellWidth: number,
+    orientation: BeltOrientation
+  ) {
+    if (!beltTrack || !beltCellWidth) return;
+    const beltScrollDistance = this._convertRingAngleToBeltDistance(ringAngle, beltCellWidth, orientation);
+    const transform = orientation === 'vertical' ? `translateY(${beltScrollDistance}px)` : `translateX(${beltScrollDistance}px)`;
+    beltTrack.style.transform = transform;
+  }
+  
+  _positionIntervalBeltFromDegreeRing(degreeRingAngle: number, beltCellWidth: number, orientation: BeltOrientation) {
+    const intervalContainer = this.elements.intervalBracketsTrackContainer;
+    if (!intervalContainer || !beltCellWidth) return;
+    const intervalBeltTrack = intervalContainer.querySelector<HTMLElement>('.interval-brackets-track');
+    if (!intervalBeltTrack) return;
+    let beltScrollDistance = this._convertRingAngleToBeltDistance(degreeRingAngle, beltCellWidth, orientation);
+    if (orientation === 'horizontal') {
+        beltScrollDistance += 0.5 * beltCellWidth;
+    }
+    const transform = orientation === 'vertical' ? `translateY(${beltScrollDistance}px)` : `translateX(${beltScrollDistance}px)`;
+    intervalBeltTrack.style.transform = transform;
+  }
+  
+  _positionBeltCursorFromRingAngle(chromaticRingAngle: number, beltCellWidth: number, orientation: BeltOrientation) {
+    const beltCursor = this.elements.cursor;
+    console.log('=== Positioning belt cursor ===', {
+      hasCursor: !!beltCursor,
+      beltCellWidth,
+      orientation,
+      chromaticRingAngle
+    });
+
+    if (!beltCursor || !beltCellWidth) {
+      console.warn('Cannot position cursor - missing element or cell width');
+      return;
+    }
+
+    // Update cursor colors from state
+    this._updateBeltCursorColors(beltCursor);
+
+    const ringAngleToBeltPixels = this._calculateRingAngleToBeltPixelsRatio(beltCellWidth);
+    if (ringAngleToBeltPixels === 0) {
+      console.warn('Cannot position cursor - invalid pixel ratio');
+      return; // Early exit for invalid calculations
+    }
+
+    const ringAngleAsBeltPixels = chromaticRingAngle * ringAngleToBeltPixels;
+    let cursorBeltPosition;
+
+    if (orientation === 'vertical') {
+        const beltWindowHeight = -CHROMATIC_DIVISIONS * beltCellWidth;
+        cursorBeltPosition = ((ringAngleAsBeltPixels % beltWindowHeight) + beltWindowHeight) % beltWindowHeight;
+    } else {
+        cursorBeltPosition = ringAngleAsBeltPixels;
+    }
+
+    const transform = orientation === 'vertical' ? `translateY(${cursorBeltPosition}px)` : `translateX(${cursorBeltPosition}px)`;
+    beltCursor.style.transform = transform;
+    console.log('Belt cursor positioned:', { transform, cursorBeltPosition });
+  }
+
+  _updateBeltCursorColors(beltCursor: HTMLElement) {
+    const cursorColor = this.state.ui.cursorColor || 'red';
+    const hasFill = this.state.ui.cursorFill;
+
+    const colorMap = {
+      red: { solid: 'red', fill: 'rgba(255, 0, 0, 0.2)' },
+      blue: { solid: 'blue', fill: 'rgba(0, 0, 255, 0.2)' },
+      green: { solid: 'green', fill: 'rgba(0, 255, 0, 0.2)' },
+      yellow: { solid: '#FFD700', fill: 'rgba(255, 215, 0, 0.2)' }
+    };
+
+    const colors = colorMap[cursorColor];
+    beltCursor.style.borderColor = colors.solid;
+    beltCursor.style.background = hasFill ? colors.fill : 'transparent';
+  }
+  
+  _updatePlaybackFlashOnBelt() {
+      const { rings, playback, belts } = this.state;
+      const beltFlashOverlay = this.elements.flashOverlay;
+      const beltCellWidth = belts.itemSize.chromaticBelt;
+      const orientation = belts.orientation;
+
+      if (!beltFlashOverlay) {
+        return;
+      }
+
+      if (!beltCellWidth || !playback.isPlaying || playback.currentNoteIndex === null || playback.rootNoteIndexForPlayback === null) {
+        beltFlashOverlay.style.display = 'none';
+        return;
+      }
+      
+      const ringAngleToBeltPixels = this._calculateRingAngleToBeltPixelsRatio(beltCellWidth);
+      if (ringAngleToBeltPixels === 0) {
+        beltFlashOverlay.style.display = 'none';
+        return; // Early exit for invalid calculations
+      }
+      
+      let flashBeltPosition;
+
+      if (orientation === 'vertical') {
+          const visualChromaticRingAngle = -rings.chromatic;
+          const noteOffsetRingAngle = (playback.currentNoteIndex - playback.rootNoteIndexForPlayback) * ANGLE_STEP;
+          const totalVisualRingAngle = visualChromaticRingAngle - noteOffsetRingAngle;
+          const ringAngleAsBeltPixels = totalVisualRingAngle * ringAngleToBeltPixels;
+          const beltWindowHeight = -CHROMATIC_DIVISIONS * beltCellWidth;
+          flashBeltPosition = ((ringAngleAsBeltPixels % beltWindowHeight) + beltWindowHeight) % beltWindowHeight;
+      } else {
+          const totalRingAngle = rings.chromatic + (playback.currentNoteIndex - playback.rootNoteIndexForPlayback) * ANGLE_STEP;
+          flashBeltPosition = totalRingAngle * ringAngleToBeltPixels;
+      }
+      
+      const transform = orientation === 'vertical' ? `translateY(${flashBeltPosition}px)` : `translateX(${flashBeltPosition}px)`;
+      beltFlashOverlay.style.transform = transform;
+      beltFlashOverlay.style.display = 'block';
+  }
+
+  destroy() {
+    // No-op placeholder for lifecycle parity with App cleanup.
+  }
+}

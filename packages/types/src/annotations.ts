@@ -6,7 +6,7 @@
  */
 
 // Currently using a flexible type until the annotation system is fully defined
-export type Annotation = unknown;
+export type Annotation = any;
 
 /**
  * Base annotation interface (for future expansion)

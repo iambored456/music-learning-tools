@@ -1,0 +1,147 @@
+src/_deprecated/state-index.ts(2,30): error TS2307: Cannot find module './initialState/index.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(3,46): error TS2307: Cannot find module './pitchData.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(4,32): error TS2307: Cannot find module './actions/historyActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(5,51): error TS2307: Cannot find module './actions/noteActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(6,31): error TS2307: Cannot find module './actions/timbreActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(7,31): error TS2307: Cannot find module './actions/rhythmActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(8,29): error TS2307: Cannot find module './actions/viewActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(9,32): error TS2307: Cannot find module './actions/harmonyActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(10,39): error TS2307: Cannot find module './actions/sixteenthStampActions.js' or its corresponding type declarations.
+src/_deprecated/state-index.ts(11,37): error TS2307: Cannot find module './actions/tripletStampActions.js' or its corresponding type declarations.
+src/_deprecated/synthEngine.ts(32,23): error TS2503: Cannot find namespace 'NodeJS'.
+src/_deprecated/synthEngine.ts(33,24): error TS2503: Cannot find namespace 'NodeJS'.
+src/_deprecated/synthEngine.ts(242,31): error TS2345: Argument of type '(color: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/_deprecated/synthEngine.ts(246,31): error TS2345: Argument of type '(color: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/_deprecated/synthEngine.ts(256,36): error TS2345: Argument of type '(data?: { effectType?: string; color?: string; effectParams?: Record<string, number>; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/_deprecated/synthEngine.ts(267,31): error TS2345: Argument of type '(dB: number) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/_deprecated/transportService.ts(18,27): error TS2307: Cannot find module './globalService.ts' or its corresponding type declarations.
+src/_deprecated/transportService.ts(19,22): error TS2307: Cannot find module './domCache.ts' or its corresponding type declarations.
+src/_deprecated/transportService.ts(49,8): error TS2307: Cannot find module './transport/timeMapCalculator.ts' or its corresponding type declarations.
+src/_deprecated/transportService.ts(55,8): error TS2307: Cannot find module './transport/drumManager.ts' or its corresponding type declarations.
+src/_deprecated/transportService.ts(717,9): error TS2322: Type 'unknown' is not assignable to type 'number'.
+src/_deprecated/transportService.ts(733,9): error TS2322: Type 'unknown' is not assignable to type 'number'.
+src/_deprecated/transportService.ts(741,7): error TS2322: Type 'unknown' is not assignable to type 'boolean'.
+src/components/audio/adsr/adsrComponent.ts(159,29): error TS2345: Argument of type '(payload?: NoteChangedPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/adsr/adsrComponent.ts(167,31): error TS2345: Argument of type '(color?: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/adsr/adsrComponent.ts(180,40): error TS2345: Argument of type '(payload?: TremoloAmplitudePayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/adsr/adsrComponent.ts(187,38): error TS2345: Argument of type '(payload?: PlaybackStatePayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/adsr/adsrComponent.ts(199,36): error TS2345: Argument of type '(payload?: AudioEffectPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/effects/effectsController.ts(366,29): error TS2345: Argument of type '({ newNote }: { newNote: { color?: string; }; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/harmonicsFilter/filterControls.ts(170,27): error TS2345: Argument of type '({ newNote }: { newNote: { color?: string; }; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/harmonicsFilter/filterControls.ts(177,29): error TS2345: Argument of type '(color: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/harmonicsFilter/harmonicBins.ts(333,7): error TS2322: Type 'Float32Array<ArrayBufferLike>' is not assignable to type 'Float32Array<ArrayBuffer>'.
+src/components/audio/harmonicsFilter/harmonicBins.ts(372,7): error TS2322: Type 'Float32Array<ArrayBufferLike>' is not assignable to type 'Float32Array<ArrayBuffer>'.
+src/components/audio/harmonicsFilter/harmonicBins.ts(566,13): error TS2322: Type 'Float32Array<ArrayBufferLike>' is not assignable to type 'Float32Array<ArrayBuffer>'.
+src/components/audio/harmonicsFilter/harmonicBins.ts(755,42): error TS2538: Type 'unknown' cannot be used as an index type.
+src/components/audio/harmonicsFilter/harmonicBins.ts(830,27): error TS2345: Argument of type '({ newNote }: { newNote: any; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/audio/harmonicsFilter/harmonicBins.ts(851,9): error TS2322: Type 'Float32Array<ArrayBufferLike>' is not assignable to type 'Float32Array<ArrayBuffer>'.
+src/components/canvas/PitchGrid/renderers/pitchGridRenderer.ts(186,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/components/draw/drawToolsController.ts(108,29): error TS2345: Argument of type '({ newNote }: { newNote: any; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/dynamicWaveform/dynamicWaveformVisualizer.ts(61,29): error TS2345: Argument of type '({ newNote }: { newNote?: { color?: string; }; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/dynamicWaveform/dynamicWaveformVisualizer.ts(67,38): error TS2345: Argument of type '({ isPlaying, isPaused }: { isPlaying: boolean; isPaused: boolean; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/dynamicWaveform/dynamicWaveformVisualizer.ts(75,34): error TS2345: Argument of type '({ color, isPlaying }: { color?: string; isPlaying: boolean; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/dynamicWaveform/dynamicWaveformVisualizer.ts(83,40): error TS2345: Argument of type '({ activeColors }: { activeColors?: string[]; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/rhythm/stampToolbars/sixteenthStampsToolbar.ts(128,29): error TS2345: Argument of type '({ newNote }: { newNote: { color?: string; }; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/rhythm/stampToolbars/sixteenthStampsToolbar.ts(139,29): error TS2345: Argument of type '({ newTool }: { newTool: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/rhythm/stampToolbars/tripletStampsToolbar.ts(122,29): error TS2345: Argument of type '({ newTool }: { newTool: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/staticWaveform/waveformVisualizer.ts(110,29): error TS2345: Argument of type '(payload?: NoteChangedPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/staticWaveform/waveformVisualizer.ts(118,31): error TS2345: Argument of type '(color?: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/audioControlsInitializer.ts(319,27): error TS2345: Argument of type '({ newNote }: { newNote: { color?: string; }; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/audioControlsInitializer.ts(333,29): error TS2345: Argument of type '(color: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/audioControlsInitializer.ts(340,28): error TS2345: Argument of type '(newTempo: number) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(391,72): error TS2304: Cannot find name 'HarmonyChordShapes'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(855,27): error TS2345: Argument of type '({ newTool }?: ToolChangedPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(889,27): error TS2345: Argument of type '({ newNote }?: NoteChangedPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(914,40): error TS2345: Argument of type '(mode: DegreeDisplayMode) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(919,37): error TS2345: Argument of type '(accidentalMode: { sharp: boolean; flat: boolean; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(925,38): error TS2345: Argument of type '(showFrequencyLabels: boolean) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/toolbar/initializers/toolSelectorInitializer.ts(928,35): error TS2345: Argument of type '(showOctaveLabels: boolean) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/ui/cartesianSliderController.ts(228,29): error TS2345: Argument of type '({ newNote }: { newNote: { color?: string; }; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/components/ui/printPreview.ts(106,42): error TS2345: Argument of type '(isActive: boolean) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/core/main.ts(127,28): error TS2339: Property 'teardown' does not exist on type '{ init(): void; updateSynthForColor(color: string): void; playNote(pitch: string, duration: string, time?: number | undefined): void; triggerAttack(pitch: string, color: string, time?: number | undefined, isDrum?: boolean | undefined): void; ... 17 more ...; dispose(): void; }'.
+src/core/main.ts(128,19): error TS2339: Property 'teardown' does not exist on type '{ init(): void; updateSynthForColor(color: string): void; playNote(pitch: string, duration: string, time?: number | undefined): void; triggerAttack(pitch: string, color: string, time?: number | undefined, isDrum?: boolean | undefined): void; ... 17 more ...; dispose(): void; }'.
+src/core/main.ts(521,26): error TS2339: Property 'teardown' does not exist on type '{ init(): void; updateSynthForColor(color: string): void; playNote(pitch: string, duration: string, time?: number | undefined): void; triggerAttack(pitch: string, color: string, time?: number | undefined, isDrum?: boolean | undefined): void; ... 17 more ...; dispose(): void; }'.
+src/core/main.ts(522,17): error TS2339: Property 'teardown' does not exist on type '{ init(): void; updateSynthForColor(color: string): void; playNote(pitch: string, duration: string, time?: number | undefined): void; triggerAttack(pitch: string, color: string, time?: number | undefined, isDrum?: boolean | undefined): void; ... 17 more ...; dispose(): void; }'.
+src/services/annotationService.ts(110,31): error TS2345: Argument of type '(direction: number) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/annotationService.ts(1491,12): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1493,12): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1493,31): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1494,12): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1494,29): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1498,18): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1502,31): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1503,28): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1504,33): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1504,50): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1505,30): error TS18046: 'annotation' is of type 'unknown'.
+src/services/annotationService.ts(1505,47): error TS18046: 'annotation' is of type 'unknown'.
+src/services/audioPreviewService.ts(67,31): error TS2345: Argument of type 'string | number' is not assignable to parameter of type 'string'.
+src/services/audioPreviewService.ts(78,33): error TS2345: Argument of type 'string | number' is not assignable to parameter of type 'string'.
+src/services/audioPreviewService.ts(85,32): error TS2345: Argument of type 'string | number' is not assignable to parameter of type 'string'.
+src/services/audioPreviewService.ts(99,37): error TS2345: Argument of type '(string | number)[]' is not assignable to parameter of type 'string[]'.
+src/services/deviceProfileService.ts(161,36): error TS2345: Argument of type '(profile: DeviceProfile) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/initAudio.ts(66,31): error TS2345: Argument of type '(color: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/initAudio.ts(70,31): error TS2345: Argument of type '(color: string) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/initAudio.ts(74,36): error TS2345: Argument of type '(data?: { effectType?: string; color?: string; effectParams?: Record<string, number>; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/initAudio.ts(84,31): error TS2345: Argument of type '(dB: number) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/initAudio.ts(141,20): error TS2551: Property 'setSynth' does not exist on type 'SynthEngineInstance'. Did you mean 'getSynth'?
+src/services/initTransport.ts(58,9): error TS2322: Type '() => SixteenthStampPlaybackData[]' is not assignable to type '() => SchedulableStamp[]'.
+src/services/initTransport.ts(59,9): error TS2322: Type '(stampId: string, placement: any) => SixteenthStampScheduleEvent[]' is not assignable to type '(stampId: string, placement?: any) => StampScheduleEvent[]'.
+src/services/initTransport.ts(60,9): error TS2322: Type '() => TripletStampPlaybackData[]' is not assignable to type '() => SchedulableTriplet[]'.
+src/services/initTransport.ts(64,78): error TS2345: Argument of type '{ columnIndex: number; spanColumns?: number | undefined; }[]' is not assignable to parameter of type 'TonicSign[]'.
+src/services/initTransport.ts(82,43): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(91,47): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(100,43): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(112,43): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(119,47): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(121,32): error TS2339: Property 'drawPlayheadLine' does not exist on type 'DrumPlayheadRenderer'.
+src/services/initTransport.ts(124,47): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(126,32): error TS2339: Property 'drawColumnHighlight' does not exist on type 'DrumPlayheadRenderer'.
+src/services/initTransport.ts(130,24): error TS2339: Property 'beatLineHighlight' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(132,24): error TS2339: Property 'beatLineHighlight' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(133,24): error TS2339: Property 'beatLineHighlight' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(134,24): error TS2339: Property 'beatLineHighlight' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(136,24): error TS2339: Property 'beatLineHighlight' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(145,22): error TS2339: Property 'adsrComponent' does not exist on type 'Window & typeof globalThis'.
+src/services/initTransport.ts(146,20): error TS2339: Property 'adsrComponent' does not exist on type 'Window & typeof globalThis'.
+src/services/initTransport.ts(150,22): error TS2339: Property 'adsrComponent' does not exist on type 'Window & typeof globalThis'.
+src/services/initTransport.ts(151,20): error TS2339: Property 'adsrComponent' does not exist on type 'Window & typeof globalThis'.
+src/services/initTransport.ts(155,35): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(159,35): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/initTransport.ts(163,35): error TS2339: Property 'canvases' does not exist on type 'DOMCache'.
+src/services/layoutService.ts(1656,24): error TS2345: Argument of type '(payload?: { source?: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/layoutService.ts(1660,25): error TS2345: Argument of type '(payload?: { source?: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/animationEffectsManager.ts(58,37): error TS2345: Argument of type '(payload?: { effectType?: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/animationEffectsManager.ts(73,36): error TS2345: Argument of type '(payload?: { effectType?: string; color?: string; effectParams?: Record<string, number>; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(64,37): error TS2345: Argument of type '(payload?: VisualEffectChangeEvent<TEffectParams>) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(86,38): error TS2345: Argument of type '(payload?: NoteInteractionPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(93,36): error TS2345: Argument of type '(payload?: { noteId: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(101,34): error TS2345: Argument of type '(payload?: GhostNotePayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(109,34): error TS2345: Argument of type '(payload?: PlaybackTogglePayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(117,28): error TS2345: Argument of type '(payload?: NoteInteractionPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(123,29): error TS2345: Argument of type '(payload?: NoteInteractionPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(130,44): error TS2345: Argument of type '(payload?: DialInteractionPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts(138,42): error TS2345: Argument of type '(payload?: DialInteractionPayload) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/envelopeFillEffect.ts(35,28): error TS2345: Argument of type '(payload?: { noteId?: string; color?: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAnimation/envelopeFillEffect.ts(63,29): error TS2345: Argument of type '(payload?: { noteId?: string; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/timbreEffects/effectsAudio/audioEffectsManager.ts(55,36): error TS2345: Argument of type '(data?: AudioEffectChangeEvent) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/services/transport/index.ts(45,30): error TS2307: Cannot find module '../transportService.ts' or its corresponding type declarations.
+src/svelte-ui/toolbar/playbackState.svelte.ts(35,36): error TS2345: Argument of type '(data: { isPlaying: boolean; isPaused: boolean; }) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/svelte-ui/toolbar/playbackState.svelte.ts(40,30): error TS2345: Argument of type '(data: boolean) => void' is not assignable to parameter of type '(data?: unknown) => void'.
+src/utils/coordinateConversion.ts(38,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateConversion.ts(68,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateConversion.ts(121,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateConversion.ts(141,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateDebugger.ts(31,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateDebugger.ts(122,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateDebugger.ts(243,40): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateTypes.ts(43,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/coordinateTypes.ts(59,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+src/utils/rowCoordinates.ts(85,7): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.
+packages/pitch-data/src/pitchTrailColors.ts(88,59): error TS2532: Object is possibly 'undefined'.
+packages/pitch-data/src/pitchTrailColors.ts(104,3): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+packages/pitch-data/src/pitchTrailColors.ts(124,30): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+packages/pitch-data/src/pitchTrailColors.ts(125,30): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+packages/student-notation-engine/src/audio/synthEngine.ts(346,28): error TS2538: Type 'undefined' cannot be used as an index type.
+packages/student-notation-engine/src/highway/feedbackCollector.ts(127,42): error TS18048: 'sample' is possibly 'undefined'.
+packages/student-notation-engine/src/highway/feedbackCollector.ts(131,55): error TS18048: 'sample' is possibly 'undefined'.

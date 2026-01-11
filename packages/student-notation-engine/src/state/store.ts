@@ -23,7 +23,7 @@ import { createTripletStampActions, type TripletStampActionCallbacks } from './a
 import { createRhythmActions, type RhythmActionCallbacks } from './actions/rhythmActions.js';
 
 // Event callback type
-export type EventCallback<T = unknown> = (data: T) => void;
+export type EventCallback<T = unknown> = (data?: T) => void;
 
 // Unsubscribe function
 export type Unsubscribe = () => void;
@@ -233,11 +233,11 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     state: mergedState,
     isColdStart,
 
-    on(eventName: string, callback: EventCallback): void {
+    on<T = unknown>(eventName: string, callback: EventCallback<T>): void {
       if (!subscribers[eventName]) {
         subscribers[eventName] = [];
       }
-      subscribers[eventName].push(callback);
+      subscribers[eventName].push(callback as EventCallback);
     },
 
     off(eventName: string, callback: EventCallback): void {
@@ -249,7 +249,7 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       }
     },
 
-    emit(eventName: string, data?: unknown): void {
+    emit<T = unknown>(eventName: string, data?: T): void {
       if (subscribers[eventName]) {
         subscribers[eventName].forEach(callback => {
           try {

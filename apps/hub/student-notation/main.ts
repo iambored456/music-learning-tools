@@ -1,7 +1,6 @@
-import '@mlt/student-notation/dist/index.css';
-import { mount } from '@mlt/student-notation';
+import { mountStudentNotation } from '@mlt/student-notation-ui';
 
 const app = document.getElementById('app');
 if (app) {
-  mount(app);
+  mountStudentNotation(app);
 }

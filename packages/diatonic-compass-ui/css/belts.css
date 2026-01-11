@@ -1,0 +1,476 @@
+/* (file path: css/belts.css) */
+
+/* --- DEFAULT BELT ORDERING --- */
+.pitch-belt {
+  order: 1;
+}
+.degree-belt {
+  order: 2;
+}
+.interval-brackets-wrapper {
+  order: 3;
+  cursor: grab;
+  user-select: none;
+  background: transparent;
+  position: relative;
+}
+
+.interval-brackets-wrapper:active {
+  cursor: grabbing;
+}
+.chromatic-belt {
+  order: 4;
+}
+
+/* --- BELT ORDER CONTROLS --- */
+#belt-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+}
+
+/* Generic order item styles */
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius-small);
+  background: #f8f8f8;
+  cursor: default; /* Not draggable from the item itself */
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+/* Legacy support */
+.belt-order-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius-small);
+  background: #f8f8f8;
+  cursor: default; /* Not draggable from the item itself */
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+/* Hover states */
+.order-item:hover,
+.belt-order-item:hover {
+  background: #e8e8e8;
+  border-color: #bbb;
+}
+
+/* Active and dragging states */
+.order-item:active,
+.order-item.dragging,
+.belt-order-item:active,
+.belt-order-item.dragging {
+  cursor: grabbing;
+  background: #d8d8d8;
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  z-index: 1000;
+}
+
+/* Drag over states */
+.order-item.drag-over,
+.belt-order-item.drag-over {
+  border-color: #33c6dc;
+  background: #e6f7ff;
+}
+
+/* Nested item styles */
+.order-item.nested {
+  margin-left: 1rem;
+  border-left: 2px solid #33c6dc;
+  background: #f0f8ff;
+  font-size: 0.85rem;
+}
+
+.order-item.group {
+  background: #e8f4fd;
+  border-color: #33c6dc;
+  font-weight: 600;
+}
+
+.nested-indent {
+  color: #999;
+  font-size: 0.8rem;
+}
+
+/* Drag handles */
+.drag-handle,
+.belt-drag-handle {
+  color: #666;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: grab;
+  padding: 0.5rem;
+  min-width: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none; /* Prevent scrolling when touching the handle */
+  -webkit-user-select: none;
+  user-select: none;
+  border-radius: var(--radius-small);
+  transition: background-color 0.2s;
+}
+
+.drag-handle:hover,
+.belt-drag-handle:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.drag-handle:active,
+.belt-drag-handle:active {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.order-item:active .drag-handle,
+.order-item.dragging .drag-handle,
+.belt-order-item:active .belt-drag-handle,
+.belt-order-item.dragging .belt-drag-handle {
+  cursor: grabbing;
+}
+
+/* Labels */
+.component-label,
+.belt-label {
+  flex-grow: 1;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* Dark mode styles */
+body.dark-mode .order-item,
+body.dark-mode .belt-order-item {
+  background: #3a3a3a;
+  border-color: #555;
+  color: var(--color-text-primary);
+}
+
+body.dark-mode .order-item:hover,
+body.dark-mode .belt-order-item:hover {
+  background: #444;
+  border-color: #666;
+}
+
+body.dark-mode .order-item:active,
+body.dark-mode .order-item.dragging,
+body.dark-mode .belt-order-item:active,
+body.dark-mode .belt-order-item.dragging {
+  background: #4a4a4a;
+}
+
+body.dark-mode .order-item.drag-over,
+body.dark-mode .belt-order-item.drag-over {
+  border-color: #33c6dc;
+  background: #2a4a5a;
+}
+
+body.dark-mode .order-item.nested {
+  background: #2a3a4a;
+  border-left-color: #33c6dc;
+}
+
+body.dark-mode .order-item.group {
+  background: #2a4a5a;
+  border-color: #33c6dc;
+}
+
+body.dark-mode .drag-handle,
+body.dark-mode .belt-drag-handle {
+  color: #bbb;
+}
+
+body.dark-mode .drag-handle:hover,
+body.dark-mode .belt-drag-handle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .drag-handle:active,
+body.dark-mode .belt-drag-handle:active {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Drag ghost styling */
+.drag-ghost {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  cursor: grabbing !important;
+}
+
+body.dark-mode .drag-ghost {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+}
+
+.belts-container {
+  width: 100%;
+  max-width: 46.875rem;
+  min-width: 0;
+  height: clamp(1rem, 14rem, 25rem);
+  display: flex;
+  flex-direction: column;
+  gap:0.3rem;
+  position: relative;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+#belt-flash-overlay {
+  display: none; 
+  position: absolute;
+  top: calc(-1 * var(--border-width-thick));
+  bottom: calc(-1 * var(--border-width-thick));
+  left: 0;
+  width: calc(100% / 12);
+  pointer-events: none;
+  background: rgba(255, 255, 0, 0.5); 
+  border-radius: var(--radius-medium);
+  z-index: 90; 
+  will-change: transform;
+}
+
+#belt-cursor {
+  position: absolute;
+  top: calc(-1 * var(--border-width-thick));
+  bottom: calc(-1 * var(--border-width-thick));
+  left: 0;
+  width: calc(100% / 12);
+  pointer-events: none;
+  background: rgba(255, 0, 0, 0.2);
+  border: var(--border-width-cursor) solid red;
+  border-radius: var(--radius-medium);
+  z-index: 100;
+  will-change: transform;
+}
+
+.belt {
+  height: clamp(2rem, 4rem, 8rem);
+  background: #e0e0e0;
+  border-radius: var(--radius-small);
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 0 0.3125rem rgba(0,0,0,.1); /* 5px */
+  touch-action: none;
+}
+
+.belt-track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+  width: 325%;
+}
+
+.chromatic-belt .belt-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#chromatic-numbers-track {
+  pointer-events: all;
+}
+
+#chromatic-colors-track {
+  pointer-events: none;
+}
+
+.belt-cell {
+  flex: 0 0 calc(100% / 39);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.75rem, 6vw, 1.35rem);
+  border-right: var(--border-width) solid #ccc;
+  user-select: none;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+}
+
+#chromatic-numbers-track .belt-cell {
+  border-right: none;
+  background: transparent;
+  font-weight: bold;
+}
+
+#chromatic-colors-track .belt-cell {
+  border-right: none;
+}
+
+.interval-brackets-container {
+  height: 1.875rem; /* 30px */
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  /* Add invisible background to make entire area draggable */
+  background: transparent;
+  cursor: inherit;
+}
+
+.interval-brackets-track {
+  display:flex;
+  height:100%;
+  will-change: transform;
+  width:325%;
+}
+
+.interval-bracket-cell {
+  flex: 0 0 calc(100% / 39);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-size: clamp(0.75rem, 1.5vw, 1.3rem);
+  padding: 0;
+  position:relative;
+  user-select: none;
+  pointer-events: none; /* Allow clicks to pass through to parent wrapper */
+}
+
+.interval-bracket-cell span,
+.interval-bracket-cell::after {
+  pointer-events: none; /* Ensure text and brackets don't block dragging */
+}
+
+/* Default Horizontal Interval Bracket */
+.interval-bracket-cell[data-steps]::after {
+  content:"";
+  position:absolute;
+  bottom: 0.125rem; /* 2px */
+  left:5%;
+  height:40%;
+  border: var(--border-width-medium) solid var(--color-text-secondary);
+  border-top:none;
+  border-radius:0 0 var(--radius-medium) var(--radius-medium);
+  transition: border-color 0.3s;
+}
+
+.interval-bracket-cell[data-steps="1"]::after { right: 5%; }
+.interval-bracket-cell[data-steps="2"]::after {
+  right: calc(-100% + 5%); 
+}
+
+/* Nudges the "+2" interval label in horizontal orientation */
+.interval-bracket-cell[data-steps="2"] span {
+  position: relative;
+  left: 50%;
+}
+
+/* --- ADDED --- */
+.interval-bracket-cell span {
+  color: var(--color-text-secondary);
+  transition: color 0.3s;
+}
+
+/* --- Vertical Layout Styles for Belts --- */
+
+.main-container.vertical-layout .belts-container {
+  order: 1;
+  flex-direction: row;
+  width: auto;
+  height: 100%;
+  max-width: none;
+  max-height: 100%;
+  min-height: 0;
+  flex-shrink: 0;
+  gap:1.5rem; 
+
+}
+
+/* This resets any custom ordering for vertical mode */
+/* Removed order: initial to allow dynamic reordering */
+
+.main-container.vertical-layout .belt {
+  width: 2.8125rem; /* 45px */
+  height: 100%;
+}
+
+.main-container.vertical-layout .interval-brackets-container {
+  width: 1.875rem; /* 30px */
+  height: 100%;
+}
+
+.main-container.vertical-layout .belt-track,
+.main-container.vertical-layout .interval-brackets-track {
+  flex-direction: column-reverse;
+  width: 100%;
+  height: 325%;
+}
+
+.main-container.vertical-layout .belt-cell {
+  border-right: none;
+  border-top: var(--border-width) solid #ccc;
+  white-space: nowrap; /* Prevent text wrapping in vertical mode */
+  font-size: clamp(0.6rem, 2.3vw, 1.2rem); /* Increased font size for vertical mode side-by-side labels */
+}
+
+.main-container.vertical-layout .belt-cell:first-child {
+  border-top: none;
+}
+
+.main-container.vertical-layout #chromatic-numbers-track .belt-cell,
+.main-container.vertical-layout #chromatic-colors-track .belt-cell {
+  border-top: none;
+}
+
+.main-container.vertical-layout #belt-cursor {
+  top: auto;
+  bottom: 0;
+  left: calc(-1 * var(--border-width-thick));
+  right: calc(-1 * var(--border-width-thick));
+  width: auto;
+  height: calc(100% / 12);
+}
+
+.main-container.vertical-layout #belt-flash-overlay {
+  top: auto;
+  bottom: 0;
+  left: calc(-1 * var(--border-width-thick));
+  right: calc(-1 * var(--border-width-thick));
+  width: auto;
+  height: calc(100% / 12);
+}
+
+.main-container.vertical-layout .interval-bracket-cell {
+  /* This parent is now just a positioning anchor for its children */
+}
+
+.main-container.vertical-layout .interval-bracket-cell span {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%); 
+}
+
+.main-container.vertical-layout .interval-bracket-cell[data-steps="1"] span {
+    top: -0%;
+}
+
+.main-container.vertical-layout .interval-bracket-cell[data-steps="2"] span {
+    top: -50%;
+}
+
+.main-container.vertical-layout .interval-bracket-cell[data-steps]::after {
+    left: 0.125rem; /* 2px */
+    width: 40%;
+    border-right: none;
+    border-radius: var(--radius-medium) 0 0 var(--radius-medium);
+    height: 100%; 
+    top: -50%;
+    bottom: auto;
+}
+.main-container.vertical-layout .interval-bracket-cell[data-steps="2"]::after {
+    height: 200%;
+    top: -150%;
+}

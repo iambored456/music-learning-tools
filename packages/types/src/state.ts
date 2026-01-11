@@ -3,6 +3,7 @@
  */
 
 import type { CanvasSpaceColumn } from './coordinates.js';
+import type { Annotation } from './annotations.js';
 import type {
   PitchRowData,
   PitchRange,
@@ -45,7 +46,7 @@ export interface HistoryEntry {
   placedChords: PlacedChord[];
   sixteenthStampPlacements: SixteenthStampPlacement[];
   tripletStampPlacements: TripletStampPlacement[];
-  annotations: unknown[];
+  annotations: Annotation[];
   lassoSelection: LassoSelection;
 }
 
@@ -59,7 +60,7 @@ export interface AppState {
   tonicSignGroups: TonicSignGroups;
   sixteenthStampPlacements: SixteenthStampPlacement[];
   tripletStampPlacements: TripletStampPlacement[];
-  annotations: unknown[];
+  annotations: Annotation[];
   lassoSelection: LassoSelection;
   history: HistoryEntry[];
   historyIndex: number;
@@ -140,8 +141,8 @@ export interface Store {
   _isBoundaryInAnacrusis: (boundaryIndex: number) => boolean;
 
   // Event system
-  on(eventName: string, callback: (data?: unknown) => void): void;
-  emit(eventName: string, data?: unknown): void;
+  on<T = unknown>(eventName: string, callback: (data?: T) => void): void;
+  emit<T = unknown>(eventName: string, data?: T): void;
 
   // Note actions
   addNote(note: Partial<PlacedNote>): PlacedNote | null;

@@ -1,0 +1,918 @@
+<div id="app-loading-screen">
+  <div class="loading-container">
+    <div class="loading-logo">
+      <svg viewBox="0 0 100 100" class="logo-svg">
+        <circle cx="50" cy="50" r="45" class="logo-circle" />
+        <path d="M 30 50 Q 50 30, 70 50 T 70 70" class="logo-path" />
+      </svg>
+    </div>
+    <h1 class="loading-title">Student Notation</h1>
+    <div class="loading-progress-container">
+      <div class="loading-progress-bar">
+        <div class="loading-progress-fill" id="loading-progress-fill"></div>
+      </div>
+      <div class="loading-progress-text" id="loading-progress-text">0%</div>
+    </div>
+    <div class="loading-status" id="loading-status">Initializing...</div>
+  </div>
+</div>
+<!-- Sidebar for File/App Actions -->
+<div id="sidebar-overlay"></div>
+<aside id="sidebar" role="complementary" aria-label="Application settings and controls">
+<div class="sidebar-container">
+<div class="app-title">Student Notation</div>
+</div>
+<div class="sidebar-container">
+<button class="sidebar-button" id="save-as-button" title="Save As"><img src="assets/sidebar/saveAs.svg" alt="Save As"><span class="sidebar-button-text">Save As</span></button>
+<button class="sidebar-button" id="import-button" title="Open"><img src="assets/sidebar/open.svg" alt="Open"><span class="sidebar-button-text">Open</span></button>
+<button class="sidebar-button" id="print-button" title="Print"><img src="assets/sidebar/print.svg" alt="Print"><span class="sidebar-button-text">Print</span></button>
+<button class="sidebar-button" id="reset-canvas-button" title="New File"><img src="assets/sidebar/newPage.svg" alt="New Page"><span class="sidebar-button-text">New Page</span></button>
+</div>
+<div class="sidebar-container">
+<h4 class="sidebar-section-header">Handoff</h4>
+<button class="sidebar-button" id="take-to-singing-trainer-button" title="Take to Singing Trainer">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M7 17L17 7"/><path d="M7 7h10v10"/>
+</svg>
+<span class="sidebar-button-text">Take to Singing Trainer</span></button>
+</div>
+<div class="sidebar-container">
+<button class="sidebar-button" id="hide-drumgrid-toggle" title="Toggle Drum Grid"><img src="assets/sidebar/hideDrums.svg" alt="Toggle Drum Grid"><span class="sidebar-button-text">Hide Drum Grid</span></button>
+<button class="sidebar-button" id="hide-buttongrid-toggle" title="Toggle Button Grid"><img src="assets/sidebar/hideAnalysis.svg" alt="Toggle Button Grid"><span class="sidebar-button-text">Hide Button Grid</span></button>
+<div class="sidebar-legend-toggle-row" role="group" aria-label="Legend visibility">
+  <button class="sidebar-toggle-button" id="hide-leftlegend-toggle" type="button">Hide Left Legend</button>
+  <button class="sidebar-toggle-button" id="hide-rightlegend-toggle" type="button">Hide Right Legend</button>
+</div>
+</div>
+<div class="sidebar-container">
+<h4 class="sidebar-section-header">Long Notes Style</h4>
+<div class="toggle-button-group"><button class="sidebar-toggle-button active" id="long-note-style1-btn">Circle & Tails</button><button class="sidebar-toggle-button" id="long-note-style2-btn">Stadium</button></div>
+</div>
+<div class="sidebar-container">
+<h4 class="sidebar-section-header">Playhead</h4>
+<div class="toggle-button-group"><button class="sidebar-toggle-button active" id="playhead-mode-cursor-btn">Cursor Playhead</button><button class="sidebar-toggle-button" id="playhead-mode-microbeat-btn">Pulsing Microbeat</button><button class="sidebar-toggle-button" id="playhead-mode-macrobeat-btn">Pulsing Macrobeat</button></div>
+</div>
+</aside>
+<main id="app-container" role="main">
+  <!-- Toolbar Container -->
+  <nav id="toolbar" role="navigation" aria-label="Music notation tools">
+    <!-- Primary Toolbar -->
+    <div id="toolbar-primary" class="toolbar-primary">
+        <div class="primary-toolbar-grid-5x5">
+            <!-- Row 1: settings, volume, blue notes -->
+            <button class="toolkit-icon-button" id="settings-button" title="Settings"><img src="assets/icons/settings.svg" alt="Settings"></button>
+            <div id="volume-control-wrapper">
+                <button class="toolkit-icon-button" id="volume-icon-button" aria-label="Volume" title="Volume"><img src="assets/icons/volume.svg" alt="Volume"></button>
+                <div id="volume-popup">
+                    <input type="range" id="vertical-volume-slider" orient="vertical" min="0" max="100" value="70" step="1" />
+                </div>
+            </div>
+            <div class="note circle-note" data-type="circle" data-color="#4a90e2"></div>
+            <div class="note oval-note" data-type="oval" data-color="#4a90e2"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#4a90e2" aria-label="Sixteenth note jewel">
+                <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                    <path d="M60 5 L35 48.3 L35 71.7 L60 115 L85 71.7 L85 48.3 Z" />
+                </svg>
+            </div>
+            <!-- Row 2: zoom in/out, black notes -->
+            <button class="toolkit-icon-button" id="grid-zoom-in" title="Zoom In"><img src="assets/icons/zoomIn.svg" alt="Zoom In"></button>
+            <button class="toolkit-icon-button" id="grid-zoom-out" title="Zoom Out"><img src="assets/icons/zoomOut.svg" alt="Zoom Out"></button>
+            <div class="note circle-note" data-type="circle" data-color="#2d2d2d"></div>
+            <div class="note oval-note" data-type="oval" data-color="#2d2d2d"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#2d2d2d" aria-label="Sixteenth note jewel">
+                <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                    <path d="M60 5 L35 48.3 L35 71.7 L60 115 L85 71.7 L85 48.3 Z" />
+                </svg>
+            </div>
+            <!-- Row 3: redo/undo, red notes -->
+            <button class="toolkit-icon-button" id="redo-button" title="Redo"><img src="assets/icons/redo.svg" alt="Redo"></button>
+            <button class="toolkit-icon-button" id="undo-button" title="Undo"><img src="assets/icons/undo.svg" alt="Undo"></button>
+            <div class="note circle-note" data-type="circle" data-color="#d66573"></div>
+            <div class="note oval-note" data-type="oval" data-color="#d66573"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#d66573" aria-label="Sixteenth note jewel">
+                <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                    <path d="M60 5 L35 48.3 L35 71.7 L60 115 L85 71.7 L85 48.3 Z" />
+                </svg>
+            </div>
+            <!-- Row 4: clear/eraser, green notes -->
+            <button class="toolkit-icon-button" id="clear-button" title="Clear"><img src="assets/icons/clear.svg" alt="Clear"></button>
+            <button class="toolkit-icon-button eraser-button" id="eraser-tool-button" title="Eraser">
+                <img src="assets/icons/eraser.svg" alt="Eraser" class="eraser-icon">
+            </button>
+            <div class="note circle-note" data-type="circle" data-color="#68a03f"></div>
+            <div class="note oval-note" data-type="oval" data-color="#68a03f"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#68a03f" aria-label="Sixteenth note jewel">
+                <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                    <path d="M60 5 L35 48.3 L35 71.7 L60 115 L85 71.7 L85 48.3 Z" />
+                </svg>
+            </div>
+            <!-- Row 5: lasso/marker shortcuts, playback controls -->
+            <button class="toolkit-icon-button" id="lasso-shortcut-button" title="Lasso Tool">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2">
+                    <ellipse cx="12" cy="12" rx="8" ry="6" transform="rotate(-15 12 12)"/>
+                </svg>
+            </button>
+            <button class="toolkit-icon-button" id="marker-shortcut-button" title="Marker Tool">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 2L6 14l-2 6 6-2L22 6l-4-4z"/>
+                    <line x1="14" y1="6" x2="18" y2="10"/>
+                </svg>
+            </button>
+            <button class="toolkit-icon-button" id="play-button" title="Play"><img src="assets/icons/play.svg" alt="Play"></button>
+            <button class="toolkit-icon-button" id="stop-button" title="Stop"><img src="assets/icons/stop.svg" alt="Stop"></button>
+            <button class="toolkit-icon-button" id="loop-button" title="Loop"><img src="assets/icons/loop.svg" alt="Loop"></button>
+        </div>
+    </div>
+    <!-- Secondary Toolbar -->
+    <div id="toolbar-secondary" class="toolbar-secondary">
+        <div class="tab-sidebar">
+            <button class="tab-button" data-tab="timbre">Timbre</button>
+            <button class="tab-button" data-tab="pitch">Pitch</button>
+            <button class="tab-button" data-tab="rhythm">Rhythm</button>
+        </div>
+        <div class="tab-content">
+            <!-- Timbre Tab -->
+            <div class="tab-panel" id="timbre-panel">
+                <!-- Presets/Effects Section (Separate) -->
+                <div class="control-section preset-effects-container">
+                    <div class="preset-effects-controls">
+                            <div class="preset-effects-tabs">
+                                <button class="preset-tab-button active" data-preset-tab="presets">Presets</button>
+                                <button class="preset-tab-button" data-preset-tab="effects">Effects</button>
+                            </div>
+                            <div class="preset-effects-content">
+                                <!-- Presets Tab -->
+                                <div class="preset-tab-panel active" id="presets-panel">
+                            <div class="preset-content-box">
+                                <div class="preset-grid" id="preset-buttons">
+                                    <div class="preset-column">
+                                        <button class="preset-button" id="preset-sine">Sine</button>
+                                        <button class="preset-button" id="preset-triangle">Triangle</button>
+                                        <button class="preset-button" id="preset-square">Square</button>
+                                        <button class="preset-button" id="preset-sawtooth">Sawtooth</button>
+                                    </div>
+                                    <div class="preset-column">
+                                        <button class="preset-button" id="preset-piano">Piano</button>
+                                        <button class="preset-button" id="preset-marimba">Marimba</button>
+                                        <button class="preset-button" id="preset-woodwind">Woodwind</button>
+                                        <button class="preset-button" id="preset-strings">Strings</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Effects Tab -->
+                        <div class="preset-tab-panel" id="effects-panel">
+                            <div class="effects-content-box">
+                                <div class="position-controls-container">
+                                    <div class="position-control-group">
+                                        <h5 class="position-label">Delay</h5>
+                                        <div class="position-component-wrapper">
+                                            <div class="position-component" id="delay-position"></div>
+                                            <div id="delay-mix-wrapper"></div>
+                                        </div>
+                                        <div class="position-axis-labels" data-axis-x="Time" data-axis-y="Echoes"></div>
+                                    </div>
+                                    <div class="position-control-group">
+                                        <h5 class="position-label">Vibrato</h5>
+                                        <div class="position-component-wrapper">
+                                            <div class="position-component" id="vibrato-position"></div>
+                                            <div id="vibrato-mix-wrapper"></div>
+                                        </div>
+                                        <div class="position-axis-labels" data-axis-x="Speed" data-axis-y="Span"></div>
+                                    </div>
+                                    <div class="position-control-group">
+                                        <h5 class="position-label">Tremolo</h5>
+                                        <div class="position-component-wrapper">
+                                            <div class="position-component" id="tremolo-position"></div>
+                                            <div id="tremolo-mix-wrapper"></div>
+                                        </div>
+                                        <div class="position-axis-labels" data-axis-x="Speed" data-axis-y="Span"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>                        
+                        <div class="effect-controls-container" id="effect-controls" style="display: none;">
+                            <!-- Effect controls will be dynamically inserted here for data synchronization -->
+                        </div>
+                            </div>
+                    </div>
+                </div>
+                <div class="control-section filter-container">
+                    <!-- Row 1, Col 1: Blend slider -->
+                    <div class="blend-slider-container"><div id="blend-slider-container"><div class="filter-blend-thumb" id="thumb-b" tabindex="0">B</div></div></div>
+                    <!-- Row 2, Col 1: Bins grid (appended via JS) -->
+                    <div class="filter-bins-wrapper"></div>
+                    <!-- Row 3, Col 1: Cutoff slider -->
+                    <div id="cutoff-slider-container"><div class="filter-cutoff-thumb" id="thumb-c" tabindex="0">C</div></div>
+                    <!-- Row 2, Col 2: Vertical M slider (appended via JS) -->
+                    <div class="filter-vertical-blend-wrapper"></div>
+                </div>
+                <div class="control-section adsr-container">
+                    <!-- Row 1, Col 1: ADSR graph -->
+                    <div class="adsr-graph-wrapper"><div id="adsr-envelope"></div></div>
+                    <!-- Row 1, Col 2: Sustain slider -->
+                    <div class="sustain-slider-wrapper"><div id="sustain-slider-track"><div id="sustain-slider-thumb" tabindex="0">S</div></div></div>
+                    <!-- Row 2, Col 1: ADR slider -->
+                    <div id="multi-thumb-slider-container"><div class="time-slider-thumb" id="thumb-a" tabindex="0">A</div><div class="time-slider-thumb" id="thumb-d" tabindex="0">D</div><div class="time-slider-thumb" id="thumb-r" tabindex="0">R</div></div>
+                </div>
+                  <!-- Waveform Section (Separate) -->
+                  <div class="control-section">
+                      <div class="waveform-section">
+                          <div class="waveform-content-box">
+                              <div class="waveform-display-wrapper">
+                                  <canvas id="static-waveform-canvas"></canvas>
+                                  <div class="waveform-speed-controls">
+                                      <button class="waveform-speed-btn" data-speed="50">50%</button>
+                                      <button class="waveform-speed-btn" data-speed="10">10%</button>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+              <!-- Pitch Tab -->
+            <div class="tab-panel" id="pitch-panel">
+                <div class="control-section pitch-tabs-container">
+                    <div class="pitch-tabs">
+                        <button class="pitch-tab-button active" data-pitch-tab="range">Range</button>
+                        <button class="pitch-tab-button" data-pitch-tab="chords">Chords</button>
+                        <button class="pitch-tab-button" data-pitch-tab="draw">Draw</button>
+                    </div>
+                    <div class="pitch-tab-content">
+                        <div class="pitch-tab-panel active" id="range-panel">
+                            <div class="range-content-box">
+                                <div class="range-layout">
+                                   <div class="range-panel-section modes-section">
+                                       <!-- <h4 class="panel-section-title">Modes</h4> -->
+                                       <div class="tonic-modes-container">
+                                           <div class="tonic-modes-grid">
+                                               <button class="tonic-mode-button" data-tonic="1">
+                                                   <img src="assets/tabicons/tonicShape_1.svg" alt="Major" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Major</span>
+                                               </button>
+                                               <button class="tonic-mode-button" data-tonic="2">
+                                                   <img src="assets/tabicons/tonicShape_2.svg" alt="Dorian" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Dorian</span>
+                                               </button>
+                                               <button class="tonic-mode-button" data-tonic="3">
+                                                   <img src="assets/tabicons/tonicShape_3.svg" alt="Phrygian" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Phrygian</span>
+                                               </button>
+                                               <button class="tonic-mode-button" data-tonic="4">
+                                                   <img src="assets/tabicons/tonicShape_4.svg" alt="Lydian" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Lydian</span>
+                                               </button>
+                                               <button class="tonic-mode-button" data-tonic="5">
+                                                   <img src="assets/tabicons/tonicShape_5.svg" alt="Mixolydian" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Mixolydian</span>
+                                               </button>
+                                               <button class="tonic-mode-button" data-tonic="6">
+                                                   <img src="assets/tabicons/tonicShape_6.svg" alt="Minor" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Minor</span>
+                                               </button>
+                                               <button class="tonic-mode-button" data-tonic="7">
+                                                   <img src="assets/tabicons/tonicShape_7.svg" alt="Locrian" class="tonic-mode-icon">
+                                                   <span class="tonic-mode-label">Locrian</span>
+                                               </button>
+                                           </div>
+                                       </div>
+                                   </div>
+                                   <div class="range-panel-section degrees-section">
+                                       <!-- <h4 class="panel-section-title">Degrees</h4> -->
+                                       <div class="degree-visibility-toggle-container">
+                                           <button class="degree-visibility-button" id="degree-visibility-toggle" type="button">
+                                               Show Degrees
+                                           </button>
+                                       </div>
+                                       <div class="degree-mode-toggle-container" id="degree-mode-toggle">
+                                           <button class="degree-mode-button" data-mode="diatonic" type="button">Scale</button>
+                                           <button class="degree-mode-button" data-mode="modal" type="button">Mode</button>
+                                       </div>
+                                       <label class="checkbox-label">
+                                            <input type="checkbox" id="focus-colours-toggle">
+                                            <span class="checkbox-text">Focus Colours</span>
+                                        </label>
+                                   </div>
+                                   <div class="range-panel-section wheels-section">
+                                       <!-- <h4 class="panel-section-title">Select Range</h4> -->
+                                       <div class="clef-wheels-wrapper">
+                                           <div class="clef-picker-column">
+                                               <div class="clef-wheel" id="clef-top-wheel" tabindex="0" aria-label="Select top note">
+                                                   <div class="clef-wheel-viewport">
+                                                       <div class="clef-wheel-options"></div>
+                                                   </div>
+                                                   <div class="clef-wheel-overlay"></div>
+                                               </div>
+                                           </div>
+                                           <div class="clef-picker-column">
+                                               <div class="clef-wheel" id="clef-bottom-wheel" tabindex="0" aria-label="Select bottom note">
+                                                   <div class="clef-wheel-viewport">
+                                                       <div class="clef-wheel-options"></div>
+                                                   </div>
+                                                   <div class="clef-wheel-overlay"></div>
+                                               </div>
+                                           </div>
+                                       </div>
+                                   </div>
+                                   <div class="range-panel-section presets-section">
+                                       <!-- <h4 class="panel-section-title">Presets</h4> -->
+                                       <div class="clef-presets-column">
+                                           <div class="clef-preset-buttons">
+                                               <button class="toolkit-button clef-preset-button" id="clef-full-range-button" type="button">
+                                                   Full Range
+                                               </button>
+                                               <button class="toolkit-button clef-preset-button" id="clef-treble-button" type="button">
+                                                   Treble
+                                               </button>
+                                               <button class="toolkit-button clef-preset-button" id="clef-alto-button" type="button">
+                                                   Alto
+                                               </button>
+                                               <button class="toolkit-button clef-preset-button" id="clef-bass-button" type="button">
+                                                   Bass
+                                               </button>
+                                           </div>
+                                       </div>
+                                   </div>
+                                </div>
+                        </div>
+                    </div>
+                        <div class="pitch-tab-panel" id="chords-panel">
+            <div class="chords-content-box">
+                <div class="chords-layout">
+                    <div class="chords-panel-section intervals-grid-section">
+                        <h4 class="panel-section-title">Intervals</h4>
+                        <div class="intervals-grid-column">
+                            <div class="harmony-preset-grid intervals-4x4-grid">
+                                <button class="harmony-preset-button">M6</button>
+                                <button class="harmony-preset-button">A6</button>
+                                <button class="harmony-preset-button">m7</button>
+                                <button class="harmony-preset-button">M7</button>
+                                <button class="harmony-preset-button">d5</button>
+                                <button class="harmony-preset-button">P5</button>
+                                <button class="harmony-preset-button">A5</button>
+                                <button class="harmony-preset-button">m6</button>
+                                <button class="harmony-preset-button">m3</button>
+                                <button class="harmony-preset-button">M3</button>
+                                <button class="harmony-preset-button">P4</button>
+                                <button class="harmony-preset-button">A4</button>
+                                <button class="harmony-preset-button">U</button>
+                                <button class="harmony-preset-button">m2</button>
+                                <button class="harmony-preset-button">M2</button>
+                                <button class="harmony-preset-button">A2</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chords-panel-section unified-position-section">
+                        <h4 class="panel-section-title">Position</h4>
+                        <div class="unified-position-column">
+                            <div class="unified-position-toggle" id="unified-position-toggle">
+                                <div class="left-labels">
+                                    <span class="state-label" data-step="0">Asc.</span>
+                                    <span class="state-label" data-step="1">Desc.</span>
+                                </div>
+                                <div class="toggle-track">
+                                    <div class="unified-slider"></div>
+                                </div>
+                                <div class="right-labels">
+                                    <span class="state-label" data-step="0">Root</span>
+                                    <span class="state-label" data-step="1">1st</span>
+                                    <span class="state-label" data-step="2">2nd</span>
+                                    <span class="state-label" data-step="3">3rd</span>
+                                    <span class="state-label" data-step="4">4th</span>
+                                    <span class="state-label" data-step="5">5th</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chords-panel-section chords-grid-section">
+                        <h4 class="panel-section-title">Chords</h4>
+                        <div class="chords-grid-column">
+                            <div class="harmony-preset-grid chords-grid chords-grid-6col" id="chords-preset-grid">
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;]" title="Major triad">X</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;]" title="Minor triad">x</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;]" title="Diminished triad">x°</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;6m&quot;]" title="Augmented triad">X+</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;]" title="Dominant 7">X⁷</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;]" title="Minor 7">x⁷</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;]" title="Major 7">Xmaj⁷</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;, &quot;7m&quot;]" title="Half-diminished 7">ø⁷</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;, &quot;6M&quot;]" title="Fully diminished 7">x°⁷</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;6M&quot;]" title="Major 6">X⁶</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;2M&quot;, &quot;5P&quot;]" title="Suspended 2">Xsus2</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;4P&quot;, &quot;5P&quot;]" title="Suspended 4">Xsus4</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7M&quot;]" title="Minor-major 7">xmaj⁷</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;9M&quot;]" title="Major add 9">Xadd9</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;9M&quot;]" title="Minor add 9">xadd9</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;6M&quot;, &quot;9M&quot;]" title="Major 6/9">X6/9</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;]" title="Dominant 9">X9</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;]" title="Dominant 11">X11</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;13M&quot;]" title="Dominant 13">X13</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;9M&quot;]" title="Major 9">Xmaj9</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;]" title="Minor 9">x⁹</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;6M&quot;]" title="Minor 6">x⁶</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;]" title="Minor 11">x¹¹</button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;11A&quot;]" title="Major 7 sharp 11 (Lydian)">Xmaj7♯11</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+                        <div class="pitch-tab-panel" id="draw-panel">
+                            <div class="draw-content-box">
+                                <div class="draw-layout-grid">
+                                    <!-- Arrow Tool Panel -->
+                                    <div class="draw-tool-panel" id="draw-arrow-controls" data-draw-tool="arrow">
+                                        <div class="draw-tool-header">
+                                            <button class="draw-tool-button" data-draw-tool="arrow" title="Arrow Tool">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <line x1="4" y1="20" x2="20" y2="4"/>
+                                                    <polyline points="14,4 20,4 20,10"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="draw-tool-options" id="arrow-tool-options">
+                                            <div class="draw-option-group">
+                                                <div class="draw-toolbar-row">
+                                                    <!-- Stroke weight popup -->
+                                                    <div class="draw-popup-trigger">
+                                                        <button class="draw-toolbar-button" title="Stroke width">
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <line x1="4" y1="12" x2="20" y2="12"/>
+                                                            </svg>
+                                                        </button>
+                                                        <div class="draw-popup-menu">
+                                                            <div class="draw-option-label">Stroke</div>
+                                                            <input type="range" id="arrow-stroke-weight" min="1" max="20" value="4" aria-label="Arrow stroke weight">
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Line style popup -->
+                                                    <div class="draw-popup-trigger">
+                                                        <button class="draw-toolbar-button" title="Line style">
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <line x1="4" y1="8" x2="20" y2="8" stroke-dasharray="4 3"/>
+                                                                <line x1="4" y1="16" x2="20" y2="16"/>
+                                                            </svg>
+                                                        </button>
+                                                        <div class="draw-popup-menu">
+                                                            <div class="draw-option-label">Line Style</div>
+                                                            <div class="draw-button-group">
+                                                                <button class="draw-option-button active" data-line-style="solid">Solid</button>
+                                                                <button class="draw-option-button" data-line-style="dashed">Dashed</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="draw-toolbar-row">
+                                                    <!-- Left arrowhead popup -->
+                                                    <div class="draw-popup-trigger">
+                                                        <button class="draw-toolbar-button" id="arrow-start-head-trigger" title="Start head">
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <polyline points="9,5 3,12 9,19"/>
+                                                                <line x1="3" y1="12" x2="21" y2="12"/>
+                                                            </svg>
+                                                        </button>
+                                                                <div class="draw-popup-menu">
+                                                                    <div class="draw-option-label">Start</div>
+                                                                    <div class="draw-button-group">
+                                                                    <button class="draw-option-button active" data-arrow-start="none">No head</button>
+                                                                    <button class="draw-option-button" data-arrow-start="filled-arrow">Arrow</button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                    <!-- Swap heads -->
+                                                    <button class="draw-toolbar-button" id="arrow-swap-heads" title="Swap heads">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <polyline points="9 5 15 5 15 11"/>
+                                                            <polyline points="15 19 9 19 9 13"/>
+                                                            <line x1="9" y1="5" x2="5" y2="9"/>
+                                                            <line x1="15" y1="19" x2="19" y2="15"/>
+                                                        </svg>
+                                                    </button>
+                                                    <!-- Right arrowhead popup -->
+                                                    <div class="draw-popup-trigger">
+                                                        <button class="draw-toolbar-button" id="arrow-end-head-trigger" title="End head">
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <polyline points="15,5 21,12 15,19"/>
+                                                                <line x1="3" y1="12" x2="21" y2="12"/>
+                                                            </svg>
+                                                        </button>
+                                                                <div class="draw-popup-menu">
+                                                                    <div class="draw-option-label">End</div>
+                                                                    <div class="draw-button-group">
+                                                                    <button class="draw-option-button active" data-arrow-end="filled-arrow">Arrow</button>
+                                                                    <button class="draw-option-button" data-arrow-end="none">No head</button>
+                                                                    </div>
+                                                                    <div class="draw-option-label">Head Size</div>
+                                                                    <input type="range" id="arrow-head-size" min="8" max="32" value="12" aria-label="Arrowhead size">
+                                                                </div>
+                                                            </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Text Tool Panel -->
+                                    <div class="draw-tool-panel" id="draw-text-controls" data-draw-tool="text">
+                                        <div class="draw-tool-header">
+                                            <button class="draw-tool-button" data-draw-tool="text" title="Text Tool">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <polyline points="4,7 4,4 20,4 20,7"/>
+                                                    <line x1="12" y1="4" x2="12" y2="20"/>
+                                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="draw-tool-options" id="text-tool-options">
+                                            <div class="draw-option-group draw-toolbar-row">
+                                                <!-- Size popup -->
+                                                <div class="draw-popup-trigger">
+                                                    <button class="draw-toolbar-button" title="Text size">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M4 18h16"/>
+                                                            <path d="M8 18l4-12 4 12"/>
+                                                            <path d="M10 12h4"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu">
+                                                        <div class="draw-option-label">Size (px)</div>
+                                                        <input type="number" id="text-size-input" min="8" max="72" value="16" aria-label="Text size (px)">
+                                                    </div>
+                                                </div>
+                                                <!-- Colour popup -->
+                                                <div class="draw-popup-trigger">
+                                                    <button class="draw-toolbar-button" title="Text colour">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M12 3l6 16"/>
+                                                            <path d="M6 19l6-16"/>
+                                                            <path d="M10 12h4"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu">
+                                                        <div class="draw-option-label">Colour</div>
+                                                        <div class="draw-color-picker">
+                                                            <button class="draw-color-button active" data-color="#000000" style="background-color: #000000;" aria-label="Black text"></button>
+                                                            <button class="draw-color-button" data-color="#4a90e2" style="background-color: #4a90e2;" aria-label="Blue text"></button>
+                                                            <button class="draw-color-button" data-color="#d66573" style="background-color: #d66573;" aria-label="Red text"></button>
+                                                            <button class="draw-color-button" data-color="#68a03f" style="background-color: #68a03f;" aria-label="Green text"></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <!-- Style buttons -->
+                                                <div class="text-style-rows">
+                                                    <div class="draw-button-group">
+                                                        <button class="draw-option-button" data-text-style="bold">B</button>
+                                                        <button class="draw-option-button" data-text-style="italic">I</button>
+                                                        <button class="draw-option-button" data-text-style="underline">U</button>
+                                                    </div>
+                                                    <div class="draw-button-group">
+                                                        <button class="draw-option-button" data-text-style="background">Bg</button>
+                                                        <button class="draw-option-button" data-text-style="superscript">x<sup>2</sup></button>
+                                                        <button class="draw-option-button" data-text-style="subscript">x<sub>2</sub></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Marker Tool Panel -->
+                                    <div class="draw-tool-panel" id="draw-marker-controls" data-draw-tool="marker">
+                                        <div class="draw-tool-header">
+                                            <button class="draw-tool-button" data-draw-tool="marker" title="Marker Tool">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <!-- Pointed marker tip -->
+                                                    <path d="M18 2L6 14l-2 6 6-2L22 6l-4-4z"/>
+                                                    <line x1="10" y1="18" x2="6" y2="14"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="draw-tool-options" id="marker-tool-options">
+                                            <div class="draw-option-group draw-toolbar-row">
+                                                <!-- Size popup -->
+                                                <div class="draw-popup-trigger">
+                                                    <button class="draw-toolbar-button" title="Marker size">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M6 19l12-14"/>
+                                                            <path d="M6 19l-2 4 4-2"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu">
+                                                        <div class="draw-option-label">Size</div>
+                                                        <input type="range" id="marker-size-input" min="2" max="20" value="6" aria-label="Marker size">
+                                                    </div>
+                                                </div>
+                                                <!-- Colours popup -->
+                                                <div class="draw-popup-trigger">
+                                                    <button class="draw-toolbar-button" title="Marker colour">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M19 4l-7 7"/>
+                                                            <path d="M5 20l3.5-1.5"/>
+                                                            <path d="M16 7l1.5 1.5"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu">
+                                                        <div class="draw-option-label">Colours</div>
+                                                        <div class="draw-color-picker">
+                                                            <button class="draw-color-button" data-color="#4a90e2" style="background-color: #4a90e2;" aria-label="Blue marker"></button>
+                                                            <button class="draw-color-button" data-color="#2d2d2d" style="background-color: #2d2d2d;" aria-label="Black marker"></button>
+                                                            <button class="draw-color-button" data-color="#d66573" style="background-color: #d66573;" aria-label="Red marker"></button>
+                                                            <button class="draw-color-button" data-color="#68a03f" style="background-color: #68a03f;" aria-label="Green marker"></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Highlighter Tool Panel -->
+                                    <div class="draw-tool-panel" id="draw-highlighter-controls" data-draw-tool="highlighter">
+                                        <div class="draw-tool-header">
+                                            <button class="draw-tool-button" data-draw-tool="highlighter" title="Highlighter Tool">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity="0.5">
+                                                    <!-- Flat highlighter head -->
+                                                    <rect x="3" y="3" width="4" height="18" rx="1"/>
+                                                    <path d="M7 5h12l-2 14H7z"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="draw-tool-options" id="highlighter-tool-options">
+                                            <div class="draw-option-group draw-toolbar-row">
+                                                <!-- Size popup -->
+                                                <div class="draw-popup-trigger">
+                                                    <button class="draw-toolbar-button" title="Highlighter size">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="5" y="5" width="10" height="10" rx="2"/>
+                                                            <path d="M9 15l-2 4"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu">
+                                                        <div class="draw-option-label">Size</div>
+                                                        <input type="range" id="highlighter-size-input" min="4" max="30" value="10" aria-label="Highlighter size">
+                                                    </div>
+                                                </div>
+                                                <!-- Colours popup -->
+                                                <div class="draw-popup-trigger">
+                                                    <button class="draw-toolbar-button" title="Highlighter colour">
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="7" y="7" width="10" height="10" rx="2"/>
+                                                        </svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu">
+                                                        <div class="draw-option-label">Colours</div>
+                                                        <div class="draw-color-picker">
+                                                            <button class="draw-color-button" data-color="#9fc5ff" style="background-color: #9fc5ff;" aria-label="Light blue highlighter"></button>
+                                                            <button class="draw-color-button" data-color="#c2c2c2" style="background-color: #c2c2c2;" aria-label="Gray highlighter"></button>
+                                                            <button class="draw-color-button" data-color="#ffd166" style="background-color: #ffd166;" aria-label="Yellow highlighter"></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Lasso Tool Panel -->
+                                    <div class="draw-tool-panel" id="draw-lasso-controls" data-draw-tool="lasso">
+                                        <div class="draw-tool-header">
+                                            <button class="draw-tool-button" data-draw-tool="lasso" title="Lasso Select">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2">
+                                                    <ellipse cx="12" cy="12" rx="8" ry="6" transform="rotate(-15 12 12)"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="draw-tool-options" id="lasso-tool-options">
+                                            <div class="draw-option-group draw-toolbar-row">
+                                                <div class="draw-option-help">
+                                                    Draw around notes to select and drag them as a group.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Rhythm Tab -->
+            <div class="tab-panel" id="rhythm-panel">
+
+                <!-- Stamps/Triplets Section (Separate) -->
+                <div class="control-section rhythm-stamp-tabs-container">
+                    <div class="rhythm-stamp-tabs-controls">
+                        <div class="rhythm-tab-stamps">
+                            <button class="rhythm-tab-button rhythm-stamp-tab-button active" data-rhythm-stamp-tab="sixteenth">Sixteenths</button>
+                            <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="triplet">Triplets</button>
+                        </div>
+                        <div class="rhythm-stamp-tab-content">
+                            <div class="rhythm-stamp-tab-panel active" id="sixteenth-stamps-panel">
+                                <div id="sixteenth-stamps-toolbar-container" class="sixteenth-stamps-toolbar-container">
+                                    <!-- Stamps toolbar will be rendered here by JavaScript -->
+                                </div>
+                            </div>
+                            <div class="rhythm-stamp-tab-panel" id="triplet-stamps-panel">
+                                <div id="triplet-stamps-toolbar-container" class="triplet-stamps-toolbar-container">
+                                    <!-- Triplets toolbar will be rendered here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                                <!-- Controls Section (Separate) -->
+                <div class="control-section rhythm-controls-container">
+                    <div class="rhythm-controls-section">
+                        <button class="rhythm-tab-button rhythm-controls-tab-button active" disabled>Controls</button>
+                        <div class="rhythm-controls-content-box">
+                            <div class="tempo-content-box">
+                                <div class="tempo-container">
+                                    <div class="tempo-boxes-container">
+                                        <div class="tempo-input-group tempo-row">
+                                            <img src="assets/tabicons/eigthNote.svg" alt="Eighth Note Tempo" class="tempo-label-icon">
+                                            <div id="eighth-note-tempo"></div>
+                                        </div>
+                                        <div class="tempo-input-group tempo-row">
+                                            <img src="assets/tabicons/quarterNote.svg" alt="Quarter Note Tempo" class="tempo-label-icon">
+                                            <div id="quarter-note-tempo"></div>
+                                        </div>
+                                        <div class="tempo-input-group tempo-row">
+                                            <img src="assets/tabicons/dottedQuarterNote.svg" alt="Dotted Quarter Note Tempo" class="tempo-label-icon">
+                                            <div id="dotted-quarter-tempo"></div>
+                                        </div>
+                                    </div>
+                                    <div class="tempo-slider-container tempo-column-2">
+                                        <input type="range" id="tempo-slider" min="30" max="240" value="90">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="rhythm-structure-container">
+                                <div class="control-subsection">
+                                    <h4>Add/Del Beat</h4>
+                                    <div class="macrobeat-adjust-group">
+                                        <button class="toolkit-button" id="macrobeat-decrease">–</button>
+                                        <button class="toolkit-button" id="macrobeat-increase">+</button>
+                                    </div>
+                                </div>
+                                <div class="control-subsection">
+                                    <h4>Pickup</h4>
+                                    <div class="toggle-button-group"><button class="sidebar-toggle-button" id="anacrusis-on-btn">On</button><button class="sidebar-toggle-button" id="anacrusis-off-btn">Off</button></div>
+                                </div>
+                            </div>
+                            <div class="modulation-container">
+                                <div class="control-subsection">
+                                    <h4>Modulation</h4>
+                                    <div class="modulation-controls">
+                                        <button class="toolkit-button modulation-ratio-btn" id="modulation-2-3-btn" data-ratio="2:3" title="Place 2:3 modulation marker (33% faster)">2:3 - 33% faster</button>
+                                        <button class="toolkit-button modulation-ratio-btn" id="modulation-3-2-btn" data-ratio="3:2" title="Place 3:2 modulation marker (33% slower)">3:2 - 33% slower</button>
+                                        <button class="toolkit-button" id="modulation-clear-btn" title="Clear all modulation markers">Clear</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  </nav>
+  <div id="canvas-container" role="region" aria-label="Musical notation canvas">
+    <div id="canvas-content">
+        <div id="grids-wrapper">
+            <div id="button-grid">
+                <div class="button-grid-left-cell">
+                    <div class="left-cell-grid">
+                        <div id="flat-toggle-btn" class="accidental-btn active" role="button" tabindex="0" aria-pressed="true">♭</div>
+                        <div id="sharp-toggle-btn" class="accidental-btn active" role="button" tabindex="0" aria-pressed="true">♯</div>
+                        <div id="hz-toggle-btn" class="accidental-btn" role="button" tabindex="0" aria-pressed="false">Hz</div>
+                        <div id="spn-octave-toggle-btn" class="accidental-btn octave-toggle-btn active" role="button" tabindex="0" aria-pressed="true" title="Show SPN octave digits" aria-label="Toggle SPN octave digits">
+                            <span class="octave-label">
+                                A<span class="octave-digit">1</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="button-grid-middle-cell">
+                    <div id="beat-line-button-layer">
+                        <div id="time-signature-row" class="beat-line-row"></div>
+                        <div id="grouping-buttons-row" class="beat-line-row"></div>
+                        <div id="boundary-buttons-row" class="beat-line-row"></div>
+                    </div>
+                </div>
+                <div class="button-grid-right-cell">
+                    <!-- Null/empty cell for alignment with pitch grid right legend -->
+                </div>
+            </div>
+            <div id="pitch-grid-wrapper">
+                <div id="pitch-grid-container">
+                    <div id="grid-container">
+                        <div id="pitch-canvas-wrapper">
+                            <canvas id="legend-left-canvas"></canvas>
+                            <canvas id="notation-grid"></canvas>
+                            <canvas id="legend-right-canvas"></canvas>
+                            <canvas id="playhead-canvas"></canvas>
+                            <canvas id="hover-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="grid-scrollbar-proxy" role="scrollbar" aria-label="Horizontal scroll for notation grids" tabindex="0">
+                <div class="grid-scrollbar-inner"></div>
+            </div>
+            <div id="drum-grid-wrapper">
+                <div class="drum-grid-left-cell">
+                    <!-- Reserved for future drum legends/controls -->
+                </div>
+                <div class="drum-grid-middle-cell">
+                    <div id="drum-canvas-wrapper">
+                        <canvas id="drum-grid"></canvas>
+                        <canvas id="drum-playhead-canvas"></canvas>
+                        <canvas id="drum-hover-canvas"></canvas>
+                    </div>
+                </div>
+                <div class="drum-grid-right-cell">
+                    <!-- Placeholder for alignment with right legend spacing -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</main>
+<!-- Notification Overlay -->
+<div id="notification-overlay">
+    <div class="notification-modal">
+        <div class="notification-header">
+            <h3 class="notification-title">Notice</h3>
+            <button class="notification-close">×</button>
+        </div>
+        <div class="notification-message"></div>
+        <div class="notification-actions">
+            <button class="notification-button">OK</button>
+        </div>
+    </div>
+</div>
+<!-- ... (Print Preview Modal remains the same) ... -->
+<div id="print-preview-overlay" class="hidden">
+    <div id="print-preview-modal">
+        <div class="print-preview-header">
+            <h2>Print Preview</h2>
+            <button id="print-close-button" class="close-button">×</button>
+        </div>
+        <div class="print-preview-content">
+            <div class="print-preview-canvas-wrapper">
+                <canvas id="print-preview-canvas"></canvas>
+                <canvas id="print-crop-overlay"></canvas>
+            </div>
+                <div class="print-preview-options">
+                <div class="print-info-box">
+                    <p>Use the crop handles on the preview to trim what gets sent to the printer.</p>
+                </div>
+                <h3>Layout</h3>
+                <div class="print-option-row">
+                    <label>Paper</label>
+                    <select id="print-page-size" class="print-select">
+                        <option value="letter">Letter (8.5×11)</option>
+                        <option value="11x14">11×14</option>
+                        <option value="11x17">11×17</option>
+                    </select>
+                </div>
+                <div class="print-option-row">
+                    <label>Orientation</label>
+                    <button id="print-orientation-toggle" class="toggle-button">Landscape</button>
+                </div>
+                <div class="print-option-row">
+                    <label>Buttons</label>
+                    <button id="print-button-grid-toggle" class="toggle-button active">Include</button>
+                </div>
+                <div class="print-option-row">
+                    <label>Drums</label>
+                    <button id="print-drum-grid-toggle" class="toggle-button active">Include</button>
+                </div>
+                <div class="print-option-row">
+                    <label>Left Legend</label>
+                    <button id="print-left-legend-toggle" class="toggle-button active">Include</button>
+                </div>
+                <div class="print-option-row">
+                    <label>Right Legend</label>
+                    <button id="print-right-legend-toggle" class="toggle-button active">Include</button>
+                </div>
+                <div class="print-option-row">
+                    <label>Color</label>
+                    <button id="print-color-mode-toggle" class="toggle-button active">Color</button>
+                </div>
+            </div>
+        </div>
+        <div class="print-preview-footer">
+            <button id="print-confirm-button" class="confirm-button">Print</button>
+        </div>
+    </div>
+</div>
+<div id="print-staging-area"></div>
+
+<!-- Svelte component mount points (headless components) -->
+<!-- Toolbar bridges -->
+<div data-svelte-component="playback-controls-bridge" style="display: none;"></div>
+<div data-svelte-component="file-actions-bridge" style="display: none;"></div>
+<div data-svelte-component="grid-controls-bridge" style="display: none;"></div>
+<div data-svelte-component="modulation-bridge" style="display: none;"></div>
+<div data-svelte-component="sidebar-bridge" style="display: none;"></div>
+<div data-svelte-component="tool-selector-bridge" style="display: none;"></div>
+<div data-svelte-component="audio-controls-bridge" style="display: none;"></div>
+<!-- Tab management bridge -->
+<div data-svelte-component="tab-management-bridge" style="display: none;"></div>
+<!-- Modal bridges -->
+<div data-svelte-component="print-preview-bridge" style="display: none;"></div>

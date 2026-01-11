@@ -20,10 +20,10 @@
     "vite-tsconfig-paths": "^6.0.3"
   },
   "dependencies": {
-    "@mlt/diatonic-compass": "workspace:*",
+    "@mlt/diatonic-compass-ui": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
-    "@mlt/singing-trainer": "workspace:*",
-    "@mlt/student-notation": "workspace:*",
+    "@mlt/singing-trainer-ui": "workspace:*",
+    "@mlt/student-notation-ui": "workspace:*",
     "clsx": "^2.1.1",
     "esm-env": "^1.2.2"
   }

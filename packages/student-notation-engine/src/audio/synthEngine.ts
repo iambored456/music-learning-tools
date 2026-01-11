@@ -343,7 +343,9 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       const colors = Object.keys(synths);
       if (colors.length === 0) return;
 
-      const synth = synths[colors[0]];
+      const [firstColor] = colors;
+      if (!firstColor) return;
+      const synth = synths[firstColor];
       if (synth) {
         synth.triggerAttackRelease(pitch, duration, time);
       }

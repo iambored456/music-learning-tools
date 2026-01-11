@@ -1,0 +1,321 @@
+// (file path: src/components/Wheel.ts)
+
+import { snapRing, snapChromaticAndSettleMode, snapDegreeToDiatonic } from '../core/animation.ts';
+import { setRingAngle, rotateCoupledRings } from '../core/actions.ts';
+import { SEMITONES, ANGLE_STEP, FONT_FACTOR_OUTER, FONT_FACTOR_MIDDLE, FONT_FACTOR_INNER, FIXED_INTERVAL_COLOUR, PIANO_KEY_COLOUR } from '../core/constants.ts';
+import { getContrastColor } from '../core/color.ts';
+import type { AppState } from '../state/appState.ts';
+import type { CursorColor } from '../types.ts';
+
+// Cursor color mapping
+const CURSOR_COLORS: Record<CursorColor, { solid: string; fill: string }> = {
+  red: { solid: 'red', fill: 'rgba(255, 0, 0, 0.2)' },
+  blue: { solid: 'blue', fill: 'rgba(0, 0, 255, 0.2)' },
+  green: { solid: 'green', fill: 'rgba(0, 255, 0, 0.2)' },
+  yellow: { solid: '#FFD700', fill: 'rgba(255, 215, 0, 0.2)' }
+};
+
+export default class Wheel {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  state: AppState;
+  onInteractionEnd: () => void;
+  cachedLayers: {
+    outerRing: HTMLCanvasElement | null;
+    middleRing: HTMLCanvasElement | null;
+    innerRing: HTMLCanvasElement | null;
+    labels: HTMLCanvasElement | null;
+    lastSize: number;
+  };
+
+  constructor(canvas: HTMLCanvasElement, state: AppState, onInteractionEnd: () => void) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    this.state = state;
+    this.onInteractionEnd = onInteractionEnd;
+
+    // Canvas layer caching for performance
+    this.cachedLayers = {
+      outerRing: null,
+      middleRing: null,
+      innerRing: null,
+      labels: null,
+      lastSize: 0,
+    };
+
+    this._initInteraction();
+  }
+
+  // --- Public Methods ---
+
+  /**
+   * Regenerate cached canvas layers when size changes
+   * This pre-renders static content for better performance
+   */
+  _regenerateCachedLayers(size: number, dpr: number) {
+    // Note: We're not actually using full layer caching yet because the rings rotate
+    // But we could cache ring segments and composite them
+    // For now, this is a placeholder for future optimization
+    // The real performance gain will come from dirty checking in the render loop
+  }
+
+  update(rings: AppState['rings'], labels: { chromaticLabels: string[]; diatonicLabels: string[] }, playbackState: AppState['playback']) {
+    const { size, dpr } = this.state.dimensions;
+    this._draw(size, dpr, rings, labels, playbackState);
+  }
+
+  // --- Private Methods ---
+
+  _initInteraction() {
+    const getPointerInfo = (e: PointerEvent) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const { cx, cy, size } = this.state.dimensions;
+      const x = e.clientX - rect.left - cx;
+      const y = e.clientY - rect.top - cy;
+      const r = Math.hypot(x, y);
+
+      const outer = size * 0.5, middle = size * 0.35, inner = size * 0.2;
+
+      let ring = null;
+      if (r > inner && r < middle) ring = 'degree';
+      else if (r > middle && r < outer) ring = 'pitchClass';
+      else if (r <= inner) ring = 'chromatic';
+      
+      return { x, y, ring };
+    };
+
+    const endDrag = () => {
+      if (!this.state.drag.active) return;
+      const ring = this.state.drag.active;
+      this.state.drag.active = null;
+      this.canvas.style.cursor = 'grab';
+
+      if (ring === 'chromatic') snapChromaticAndSettleMode(this.onInteractionEnd);
+      else if (ring === 'pitchClass') snapRing('pitchClass', this.onInteractionEnd);
+      else if (ring === 'degree') snapDegreeToDiatonic(this.onInteractionEnd);
+    };
+
+    this.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+      const { x, y, ring } = getPointerInfo(e);
+      if (!ring) return;
+      
+      const { drag, rings } = this.state;
+      drag.active = ring;
+      drag.startX = x;
+      drag.startY = y;
+      drag.startPitchClass = rings.pitchClass;
+      drag.startDegree = rings.degree;
+      drag.startChrom = rings.chromatic;
+      drag.startHighlight = rings.highlightPosition;
+
+      this.canvas.setPointerCapture(e.pointerId);
+      this.canvas.style.cursor = 'grabbing';
+    });
+
+    this.canvas.addEventListener('pointermove', (e: PointerEvent) => {
+      if (this.state.drag.active) {
+        const { x, y } = getPointerInfo(e);
+        const s = this.state.drag;
+        const startAngle = Math.atan2(s.startY, s.startX);
+        const curAngle = Math.atan2(y, x);
+        const deltaAngle = curAngle - startAngle;
+
+        if (s.active === 'pitchClass') {
+          setRingAngle('pitchClass', s.startPitchClass + deltaAngle);
+        } else if (s.active === 'degree') {
+          setRingAngle('degree', s.startDegree + deltaAngle);
+          setRingAngle('highlightPosition', s.startHighlight + deltaAngle);
+        } else if (s.active === 'chromatic') {
+           rotateCoupledRings({
+              startPitchClass: s.startPitchClass,
+              startDegree: s.startDegree,
+              startChrom: s.startChrom,
+              startHighlight: s.startHighlight
+          }, deltaAngle);
+        }
+      } else {
+        const { ring } = getPointerInfo(e);
+        this.canvas.style.cursor = ring ? 'grab' : 'default';
+      }
+    });
+    
+    this.canvas.addEventListener('pointerup', endDrag);
+    this.canvas.addEventListener('pointercancel', endDrag);
+    this.canvas.addEventListener('pointerleave', () => {
+      if (!this.state.drag.active) this.canvas.style.cursor = 'default';
+    });
+  }
+
+  _draw(
+    size: number,
+    dpr: number,
+    rings: AppState['rings'],
+    labels: { chromaticLabels: string[]; diatonicLabels: string[] },
+    playbackState: AppState['playback']
+  ) {
+    console.log('=== Wheel._draw CALLED ===', { size, dpr });
+
+    const ctx = this.ctx;
+    ctx.save();
+
+    // Clear BEFORE scaling to ensure entire canvas is cleared
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    ctx.scale(dpr, dpr);
+
+    const cx = size / 2, cy = size / 2;
+    const { pitchClass, degree, chromatic } = rings;
+    const { chromaticLabels, diatonicLabels } = labels;
+
+    // Check if we need to regenerate cached layers (size changed)
+    const needsRecache = this.cachedLayers.lastSize !== size;
+    if (needsRecache) {
+      this._regenerateCachedLayers(size, dpr);
+      this.cachedLayers.lastSize = size;
+    }
+
+    const segPath = (r0: number, r1: number, angle: number) => {
+        const a0 = angle - ANGLE_STEP / 2, a1 = angle + ANGLE_STEP / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r1, a0, a1);
+        ctx.arc(cx, cy, r0, a1, a0, true);
+        ctx.closePath();
+    };
+    
+    const drawOuterRing = () => {
+        const r1=size*0.5, r0=size*0.35;
+        const canonicalNotes = Object.keys(PIANO_KEY_COLOUR as Record<string, boolean>);
+        canonicalNotes.forEach((note,i)=>{
+          const ang=i*ANGLE_STEP+pitchClass-Math.PI/2;
+          segPath(r0,r1,ang);
+          // --- REVERTED to original static colors ---
+          ctx.fillStyle = (PIANO_KEY_COLOUR as Record<string, boolean>)[note] ? '#fff' : '#000';
+          ctx.fill();
+          ctx.lineWidth = size * 0.002;
+          ctx.strokeStyle='#000'; ctx.stroke();
+        });
+    };
+
+    const drawMiddleRing = () => {
+        const r1=size*0.35, r0=size*0.2;
+        for(let i=0;i<12;i++){
+          const ang=i*ANGLE_STEP+degree-Math.PI/2;
+          segPath(r0,r1,ang);
+          ctx.fillStyle = (FIXED_INTERVAL_COLOUR as Record<number, string>)[i] || '#e0e0e0';
+          ctx.fill();
+          ctx.lineWidth = size * 0.002;
+          ctx.strokeStyle='#000'; ctx.stroke();
+        }
+    };
+
+    const drawInner = () => {
+        ctx.beginPath();
+        ctx.arc(cx,cy,size*0.2,0,Math.PI*2);
+        ctx.fillStyle='#000';
+        ctx.fill();
+    };
+
+    const drawLabels = () => {
+        const rOuter=size*0.5*0.85, rMid=size*0.35*0.8, rInner=size*0.2*0.8;
+        const canonicalNotes = Object.keys(PIANO_KEY_COLOUR as Record<string, boolean>);
+
+        const label = (angle: number, radius: number, text: string | number, fill: string, fontSize: number) => {
+            ctx.fillStyle = fill;
+            ctx.font = `${fontSize}px 'Atkinson Hyperlegible Next'`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+
+            // Handle multi-line labels (separated by / or <br>)
+            const textStr = String(text);
+            if (textStr.includes('/') || textStr.includes('<br>')) {
+                const lines = textStr.includes('/') ? textStr.split('/') : textStr.split('<br>');
+                const lineHeight = fontSize * 1.1;
+                const startY = y - (lineHeight * (lines.length - 1)) / 2;
+
+                lines.forEach((line, index) => {
+                    ctx.fillText(line, x, startY + (index * lineHeight));
+                });
+            } else {
+                ctx.fillText(String(text), x, y);
+            }
+        };
+
+        const outerFontSize = size * FONT_FACTOR_OUTER;
+        chromaticLabels.forEach((n,i)=> {
+            const originalNote = canonicalNotes[i];
+            const textToDraw = n;
+            // --- REVERTED to original static colors ---
+            const textColor = (PIANO_KEY_COLOUR as Record<string, boolean>)[originalNote] ? '#000' : '#fff';
+            label(i*ANGLE_STEP+pitchClass-Math.PI/2, rOuter, textToDraw, textColor, outerFontSize);
+        });
+        
+        const middleFontSize = size * FONT_FACTOR_MIDDLE;
+        diatonicLabels.forEach((inv,i)=> {
+            const bgColor = (FIXED_INTERVAL_COLOUR as Record<number, string>)[i] || '#e0e0e0';
+            const textColor = getContrastColor(bgColor); 
+            const textToDraw = inv;
+            label(i*ANGLE_STEP+degree-Math.PI/2, rMid, textToDraw, textColor, middleFontSize);
+        });
+
+        const innerFontSize = size * FONT_FACTOR_INNER;
+        SEMITONES.forEach(i=> label(i*ANGLE_STEP+chromatic-Math.PI/2,rInner,i.toString(),'#fff', innerFontSize));
+    };
+
+    const drawPlaybackHighlight = () => {
+        if (!playbackState || !playbackState.isPlaying || playbackState.currentNoteIndex === null) return;
+
+        const visualNoteIndex = playbackState.currentNoteIndex % 12;
+        const angle = visualNoteIndex * ANGLE_STEP + pitchClass - Math.PI / 2;
+        const r1 = size * 0.5, r0 = size * 0.2;
+        segPath(r0, r1, angle);
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
+        ctx.fill();
+    };
+
+    const drawTonalCenterMarker = () => {
+        // Draw pie slice outline at 12 o'clock (chromatic 0 position)
+        // Use dynamic cursor color from app state
+        const cursorColor = this.state.ui.cursorColor || 'red';
+        const hasFill = this.state.ui.cursorFill;
+        const colors = CURSOR_COLORS[cursorColor];
+
+        const angle = chromatic - Math.PI / 2; // 12 o'clock position
+        const r1 = size * 0.5; // Outer radius
+        const r0 = size * 0.12; // Just inside the chromatic ring (which starts at 0.2)
+
+        // Draw the pie slice with optional transparent fill and outline
+        segPath(r0, r1, angle);
+        if (hasFill) {
+            ctx.fillStyle = colors.fill;
+            ctx.fill();
+        }
+        ctx.strokeStyle = colors.solid;
+        ctx.lineWidth = size * 0.005; // Proportional line width
+        ctx.stroke();
+    };
+
+    // --- Execute drawing ---
+    console.log('Drawing outer ring...');
+    drawOuterRing();
+    console.log('Drawing middle ring...');
+    drawMiddleRing();
+    console.log('Drawing inner circle...');
+    drawInner();
+    console.log('Drawing labels...');
+    drawLabels();
+    console.log('Drawing playback highlight...');
+    drawPlaybackHighlight();
+    console.log('Drawing tonal center marker...');
+    drawTonalCenterMarker();
+    console.log('Wheel drawing complete');
+
+    ctx.restore();
+  }
+
+  destroy() {
+    // No-op placeholder for lifecycle parity with App cleanup.
+  }
+}

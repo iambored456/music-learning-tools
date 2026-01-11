@@ -182,7 +182,7 @@ export interface SchedulableNote {
  * Stamp playback data for scheduling
  */
 export interface SchedulableStamp {
-  sixteenthStampId: string;
+  sixteenthStampId: string | number;
   column: number;
   row: number;
   color: string;
@@ -195,7 +195,7 @@ export interface SchedulableStamp {
  * Triplet playback data for scheduling
  */
 export interface SchedulableTriplet {
-  tripletStampId: string;
+  tripletStampId: string | number;
   startTimeIndex: number;
   row: number;
   color: string;
@@ -208,8 +208,8 @@ export interface SchedulableTriplet {
  * Schedule event for stamps/triplets
  */
 export interface StampScheduleEvent {
-  offset: string;
-  duration: string;
+  offset: Tone.Unit.Time;
+  duration: Tone.Unit.Time;
   rowOffset: number;
   slot?: number;
 }
@@ -278,11 +278,11 @@ export interface TransportStateCallbacks {
   /** Get stamp playback data */
   getStampPlaybackData?: () => SchedulableStamp[];
   /** Get stamp schedule events */
-  getStampScheduleEvents?: (stampId: string, placement?: any) => StampScheduleEvent[];
+  getStampScheduleEvents?: (stampId: string | number, placement?: any) => StampScheduleEvent[];
   /** Get triplet playback data */
   getTripletPlaybackData?: () => SchedulableTriplet[];
   /** Get triplet schedule events */
-  getTripletScheduleEvents?: (tripletId: string, placement?: any) => StampScheduleEvent[];
+  getTripletScheduleEvents?: (tripletId: string | number, placement?: any) => StampScheduleEvent[];
   /** Convert time index to canvas column */
   timeToCanvas?: (timeIndex: number, state: TransportState) => number;
   /** Get placed tonic signs */

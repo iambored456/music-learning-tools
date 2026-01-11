@@ -49,6 +49,8 @@ export const PITCH_CLASS_COLORS: readonly string[] = [
   '#db8fd4', // B  - Magenta
 ] as const;
 
+const FALLBACK_COLOR = PITCH_CLASS_COLORS[0] ?? '#000000';
+
 // ============================================================================
 // Color Conversion Utilities
 // ============================================================================
@@ -85,7 +87,10 @@ export function rgbToHex(rgb: RGB): string {
  */
 export function interpolateRgb(c1: RGB, c2: RGB, factor: number): RGB {
   const clampedFactor = Math.max(0, Math.min(1, factor));
-  return c1.map((v, i) => Math.round(v + clampedFactor * (c2[i] - v))) as RGB;
+  return c1.map((v, i) => {
+    const c2Value = c2[i] ?? v;
+    return Math.round(v + clampedFactor * (c2Value - v));
+  }) as RGB;
 }
 
 // ============================================================================
@@ -101,7 +106,7 @@ export function interpolateRgb(c1: RGB, c2: RGB, factor: number): RGB {
  */
 export function getPitchClassColor(pitchClass: number, tonicPitchClass = 0): string {
   const relativePitchClass = ((pitchClass - tonicPitchClass) % 12 + 12) % 12;
-  return PITCH_CLASS_COLORS[relativePitchClass];
+  return PITCH_CLASS_COLORS[relativePitchClass] ?? FALLBACK_COLOR;
 }
 
 /**
@@ -121,8 +126,8 @@ export function getInterpolatedPitchColor(midiValue: number, tonicPitchClass = 0
   const nextPitchClass = (pitchClass + 1) % 12;
 
   // Get colors for current and next semitone
-  const baseColor = hexToRgb(PITCH_CLASS_COLORS[pitchClass]);
-  const nextColor = hexToRgb(PITCH_CLASS_COLORS[nextPitchClass]);
+  const baseColor = hexToRgb(PITCH_CLASS_COLORS[pitchClass] ?? FALLBACK_COLOR);
+  const nextColor = hexToRgb(PITCH_CLASS_COLORS[nextPitchClass] ?? FALLBACK_COLOR);
 
   // Interpolate based on the fractional part
   return interpolateRgb(baseColor, nextColor, fraction);

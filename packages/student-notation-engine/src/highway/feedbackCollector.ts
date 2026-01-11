@@ -121,6 +121,9 @@ export function createFeedbackCollector(
     let coveredMs = 0;
     for (let i = 0; i < correctSamples.length; i++) {
       const sample = correctSamples[i];
+      if (!sample) {
+        continue;
+      }
       const nextSample = correctSamples[i + 1];
 
       if (nextSample) {

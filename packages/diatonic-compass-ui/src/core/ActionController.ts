@@ -1,0 +1,248 @@
+// (file path: src/core/ActionController.ts)
+
+import { appState } from '../state/appState.ts';
+import type { BeltOrientation, CursorColor, RingName } from '../types.ts';
+import { startPlayback, stopPlayback } from '../playback.ts';
+import { startSnap } from './animation.ts';
+import { savePreferences } from '../services/PreferencesService.ts';
+import { ErrorHandler } from '../utils/ErrorHandler.ts';
+import { CONFIG } from './constants.ts';
+
+/**
+ * Enhanced centralized controller for all state-changing actions in the application.
+ * Updated to work with both original and new state structure for compatibility.
+ */
+export const ActionController = {
+  
+  /**
+   * Toggle accidental display (sharp/flat)
+   * @param {string} type - 'sharp' or 'flat'
+   */
+  toggleAccidental(type: 'sharp' | 'flat') {
+    try {
+      if (!['sharp', 'flat'].includes(type)) {
+        throw new Error(`Invalid accidental type: ${type}`);
+      }
+
+      const currentValue = appState.display[type];
+      const newValue = !currentValue;
+      
+      // Validate that at least one accidental will remain active
+      const otherType = type === 'sharp' ? 'flat' : 'sharp';
+      const otherValue = appState.display[otherType];
+      
+      if (!newValue && !otherValue) {
+        // If turning off this type would leave no accidentals, turn on the other
+        appState.display[otherType] = true;
+      }
+      
+      appState.display[type] = newValue;
+      
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
+    }
+  },
+
+  /**
+   * Toggle dark mode
+   */
+  toggleDarkMode() {
+    try {
+      const newDarkMode = !appState.ui.darkMode;
+      
+      appState.ui.darkMode = newDarkMode;
+      
+      // Update DOM class
+      document.body.classList.toggle('dark-mode', newDarkMode);
+      
+      // Save preference
+      savePreferences({ darkMode: newDarkMode });
+      
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI, () => {
+        // Fallback: just toggle the class without state update
+        document.body.classList.toggle('dark-mode');
+      });
+    }
+  },
+
+  /**
+   * Toggle audio playback
+   */
+  togglePlayback() {
+    try {
+      if (appState.playback.isPlaying) {
+        stopPlayback();
+      } else if (!appState.drag.active && !appState.animation) {
+        startPlayback();
+      }
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.AUDIO);
+    }
+  },
+
+  /**
+   * Toggle sidebar open/closed
+   * @param {boolean} forceState - Force specific state (optional)
+   */
+  toggleSidebar(forceState?: boolean) {
+    try {
+      const newState = typeof forceState === 'boolean' ? forceState : !appState.ui.sidebarOpen;
+      appState.ui.sidebarOpen = newState;
+
+      // Mark state as dirty - will be detected by StateTracker automatically
+      if (appState.performance) {
+        appState.performance.needsRedraw = true;
+      }
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
+    }
+  },
+
+  /**
+   * Set layout orientation
+   * @param {string} orientation - 'horizontal' or 'vertical'
+   */
+  setOrientation(orientation: BeltOrientation) {
+    try {
+      if (!['horizontal', 'vertical'].includes(orientation)) {
+        throw new Error(`Invalid orientation: ${orientation}`);
+      }
+      
+      if (appState.belts.orientation === orientation) {
+        return; // No change needed
+      }
+      
+      // Update state
+      appState.belts.orientation = orientation;
+      
+      // Reset ring positions for layout change
+      appState.rings.pitchClass = 0;
+      appState.rings.degree = 0;
+      appState.rings.chromatic = 0;
+      appState.rings.highlightPosition = 0;
+      
+      // Reset belts initialization
+      appState.belts.init = false;
+      
+      // Update DOM class
+      const mainContainer = document.querySelector('.main-container');
+      if (mainContainer) {
+        mainContainer.classList.toggle('vertical-layout', orientation === 'vertical');
+      }
+      
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
+    }
+  },
+  
+  /**
+   * Start snap animation to targets
+   * @param {object} targets - Target angles for rings
+   * @param {Function} onComplete - Callback when animation completes
+   */
+  snapTo(targets: Partial<Record<RingName, number>>, onComplete?: () => void) {
+    try {
+      startSnap(targets, onComplete);
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.ANIMATION);
+    }
+  },
+
+  /**
+   * Set a ring angle directly (for internal use by actions.js)
+   * @param {string} ringName - Name of the ring
+   * @param {number} angle - New angle value
+   */
+  setRingAngle(ringName: RingName, angle: number) {
+    try {
+      const validRings = ['pitchClass', 'degree', 'chromatic', 'highlightPosition'];
+      if (!validRings.includes(ringName)) {
+        throw new Error(`Invalid ring name: ${ringName}`);
+      }
+      
+      if (typeof angle !== 'number' || !isFinite(angle)) {
+        throw new Error(`Invalid angle value: ${angle}`);
+      }
+      
+      appState.rings[ringName] = angle;
+      
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
+    }
+  },
+
+  /**
+   * Set cursor color
+   * @param {string} color - Color name ('red', 'blue', 'green', 'yellow')
+   * @param {boolean} hasFill - Whether cursor should have transparent fill
+   */
+  setCursorColor(color: CursorColor, hasFill: boolean) {
+    try {
+      const validColors = ['red', 'blue', 'green', 'yellow'];
+      if (!validColors.includes(color)) {
+        throw new Error(`Invalid cursor color: ${color}`);
+      }
+
+      appState.ui.cursorColor = color;
+      appState.ui.cursorFill = hasFill;
+
+      // Save to preferences
+      import('../services/PreferencesService.ts').then(({ savePreferences }) => {
+        savePreferences({ cursorColor: color, cursorFill: hasFill });
+      });
+
+      // Mark state as dirty for redraw
+      if (appState.performance) {
+        appState.performance.needsRedraw = true;
+      }
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
+    }
+  },
+
+  /**
+   * Reset all rings to default positions
+   */
+  resetRings() {
+    try {
+      appState.rings.pitchClass = 0;
+      appState.rings.degree = 0;
+      appState.rings.chromatic = 0;
+      appState.rings.highlightPosition = 0;
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
+    }
+  },
+
+  /**
+   * Get current state summary for debugging
+   * @returns {object} Current state summary
+   */
+  getStateSummary() {
+    try {
+      return {
+        rings: { ...appState.rings },
+        ui: {
+          sidebarOpen: appState.ui.sidebarOpen,
+          darkMode: appState.ui.darkMode,
+          display: { sharp: appState.display.sharp, flat: appState.display.flat },
+        },
+        belts: {
+          orientation: appState.belts.orientation,
+          init: appState.belts.init,
+        },
+        playback: {
+          isPlaying: appState.playback.isPlaying,
+        },
+        interaction: {
+          isDragging: !!appState.drag.active,
+          isAnimating: !!appState.animation,
+        },
+      };
+    } catch (error) {
+      ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.APP);
+      return null;
+    }
+  },
+};

@@ -29,5 +29,13 @@ export declare const highwayState: {
     setTimeWindowMs(ms: number): void;
     recordPitchInput(midi: number, clarity: number): void;
     getPerformanceResults(): Map<string, NotePerformance>;
+    /**
+     * Set current time externally (for YouTube sync)
+     */
+    setCurrentTime(timeMs: number): void;
+    /**
+     * Register callback for performance complete event
+     */
+    onPerformanceComplete(callback: (results: Map<string, NotePerformance>) => void): () => void;
     reset(): void;
 };

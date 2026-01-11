@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Architectural Thesis
+
+**This monorepo is package-first:** all domain logic lives in shared packages (`packages/*`), while apps (including the hub) are thin shells that compose those packages into end-user experiences. No app depends on another app, and all development is done live against package source.
+
+Key principles:
+- **Packages contain logic** - Audio engines, state management, UI components, utilities
+- **Apps are composition shells** - Routing, configuration, app-specific glue only
+- **Hub consumes packages** - The hub imports from `@mlt/*` packages, never from other apps
+- **Source-first development** - Packages export from `src/` for HMR during development
+
 ## Build & Development Commands
 
 ```bash

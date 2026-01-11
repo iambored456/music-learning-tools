@@ -1,7 +1,6 @@
-import '@mlt/diatonic-compass/dist/index.css';
-import { mount } from '@mlt/diatonic-compass';
+import { mountDiatonicCompass } from '@mlt/diatonic-compass-ui';
 
 const app = document.getElementById('app');
 if (app) {
-  mount(app);
+  mountDiatonicCompass(app);
 }

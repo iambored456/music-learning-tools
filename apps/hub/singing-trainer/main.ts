@@ -1,7 +1,7 @@
-import '@mlt/singing-trainer/dist/index.css';
-import { mount } from '@mlt/singing-trainer';
+import '@mlt/singing-trainer-ui/styles.css';
+import { mountSingingTrainer } from '@mlt/singing-trainer-ui';
 
 const app = document.getElementById('app');
 if (app) {
-  mount(app);
+  mountSingingTrainer(app);
 }
