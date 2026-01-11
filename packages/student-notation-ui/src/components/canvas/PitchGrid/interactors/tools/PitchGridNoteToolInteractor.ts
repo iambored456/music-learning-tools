@@ -3,7 +3,7 @@ import audioPreviewService from '@services/audioPreviewService.ts';
 import GlobalService from '@services/globalService.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
 import { isNotePlayableAtColumn } from '@/utils/tonicColumnUtils.ts';
-import type { CanvasSpaceColumn, PlacedNote } from '../../../../../../types/state.js';
+import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
 
 export interface PitchGridNoteToolState {
   activeNote: PlacedNote | null;

@@ -10,7 +10,8 @@ const base =
   (process.env.GITHUB_ACTIONS && repoName ? `/${repoName}/` : '/')
 
 // Resolve path aliases for student-notation-ui package
-const studentNotationUiSrc = fileURLToPath(new URL('../../packages/student-notation-ui/src', import.meta.url))
+const studentNotationUiPkg = fileURLToPath(new URL('../../packages/student-notation-ui', import.meta.url))
+const studentNotationUiSrc = resolve(studentNotationUiPkg, 'src')
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -42,6 +43,7 @@ export default defineConfig({
       '@utils': resolve(studentNotationUiSrc, 'utils'),
       '@data': resolve(studentNotationUiSrc, 'data'),
       '@': studentNotationUiSrc,
+      '@app-types': resolve(studentNotationUiPkg, 'types'),
     },
   },
   build: {

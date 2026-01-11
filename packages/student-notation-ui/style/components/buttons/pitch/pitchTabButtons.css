@@ -1,0 +1,865 @@
+/* ==========================================================================
+   HARMONY BUTTON STYLES
+   ========================================================================= */
+
+/* --- Accidental Toggle Buttons --- */
+#accidental-controls-container-v2 { display: flex; justify-content: center; gap: var(--space-025); }
+
+/* --- Chord Shape Container Styles --- */
+.pitch-tabs-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    gap: 0;
+    height: 100%;
+    /* Default to a vivid neutral accent when no note colour is set (overridden by JS once a note is chosen) */
+    --c-accent: var(--c-accent-neutral, #ffc107);
+    --c-accent-light: var(--c-accent-neutral-light, #ffd54f);
+    --harmony-partial-bg: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.25);
+    --harmony-partial-border: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.4);
+    --harmony-partial-bg-hover: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.4);
+    --harmony-partial-border-hover: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.6);
+}
+
+.pitch-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: calc(-1 * var(--space-005));
+    position: relative;
+    z-index: 1;
+}
+
+.pitch-tab-button {
+    padding: var(--space-015) var(--space-035);
+    background-color: var(--c-surface-muted);
+    border: 1px solid var(--c-border);
+    border-bottom: none;
+    color: var(--c-text-muted);
+    font-family: var(--main-font); 
+    font-size: 0.875rem; 
+    font-weight: 500;
+    cursor: pointer; 
+    text-align: center;
+    transition: all 0.2s ease; 
+    position: relative;
+    border-top-left-radius: var(--border-radius-md);
+    border-top-right-radius: var(--border-radius-md);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.pitch-tab-button + .pitch-tab-button {
+    margin-left: -1px;
+}
+
+.pitch-tab-button:hover {
+    background-color: var(--c-border);
+    color: var(--c-text);
+}
+
+.pitch-tab-button.active {
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    font-weight: 600; 
+    border-color: var(--c-border);
+    border-bottom-color: transparent;
+    z-index: 2;
+    margin-bottom: -1px;
+}
+
+.pitch-tab-content {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.pitch-tab-panel {
+    display: none;
+}
+
+.pitch-tab-panel.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.intervals-content-box,
+.chords-content-box,
+.tonic-content-box {
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    padding: clamp(0.25rem, 1dvh, var(--space-015));
+    box-shadow: var(--box-shadow-sm);
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.pitch-tab-panel.active .intervals-content-box::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: calc(50% - 50px);
+    width: 60px;
+    height: 1px;
+    background-color: transparent;
+    z-index: 3;
+}
+
+.pitch-tab-panel.active .chords-content-box::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: calc(50% + 10px);
+    width: 50px;
+    height: 1px;
+    background-color: transparent;
+    z-index: 3;
+}
+
+/* --- Harmony Preset Button Styles --- */
+.harmony-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(0.125rem, 0.5dvh, var(--space-015));
+    flex: 1;
+    grid-auto-rows: 1fr; /* keep all four rows even and fill available height */
+    align-content: stretch;
+    min-height: 0;
+    height: 100%;
+}
+.harmony-preset-grid.chords-grid-6col {
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: 1fr;
+    gap: clamp(2px, 0.3dvh, var(--space-015));
+}
+.harmony-preset-button {
+    background-color: transparent;
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    font-size: clamp(14px, 2.4dvh, 22px);
+    font-weight: bold;
+    min-height: clamp(28px, 3.5dvh, 40px);
+    padding: clamp(2px, 0.3dvh, 4px);
+    line-height: 1.1;
+}
+.chords-grid-6col .harmony-preset-button {
+    font-size: clamp(14px, 2.4dvh, 18px);
+    min-height: clamp(20px, 2.5dvh, 32px);
+    padding: clamp(1px, 0.2dvh, 2px) clamp(2px, 0.3dvw, 4px);
+}
+
+/* --- Intervals Panel Layout --- */
+.intervals-layout {
+    display: flex;
+    gap: var(--space-025);
+    align-items: flex-start;
+}
+
+.intervals-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: flex-start;
+}
+
+.intervals-panel-section.inversion-section {
+    flex: 0 0 auto;
+}
+
+.intervals-panel-section.intervals-grid-section {
+    flex: 1;
+}
+
+.inversion-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-025);
+    flex: 0 0 auto;
+}
+
+.toggle-switch {
+    width: 20px;
+    height: 40px;
+    background: linear-gradient(180deg, var(--c-gridline) 0%, var(--c-border) 100%);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.toggle-switch.active {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+.toggle-slider {
+    width: 16px;
+    height: 16px;
+    background-color: var(--c-surface);
+    border: 2px solid var(--c-border-strong);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active .toggle-slider {
+    transform: translateY(20px);
+}
+
+/* --- Chords Panel Layout (now includes intervals) --- */
+.chords-layout {
+    display: flex;
+    gap: clamp(0.125rem, 0.5dvw, var(--space-025));
+    align-items: stretch; /* allow columns to fill available height */
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.chords-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-015);
+    align-items: flex-start;
+    min-height: 0;
+    height: 100%;
+    align-self: stretch;
+}
+
+#chords-panel .panel-section-title {
+    display: none;
+}
+
+.chords-panel-section > .panel-section-title {
+    flex: 0 0 auto;
+}
+
+.chords-panel-section > :not(.panel-section-title) {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+/* .unified-position-section now handles the combined inversion+position toggle */
+
+.chords-panel-section.intervals-grid-section {
+    flex: 0 0 auto; /* shrink to content width */
+}
+
+.chords-panel-section.chords-grid-section {
+    flex: 1;
+    min-height: 0;
+}
+
+.chord-inversion-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-015);
+    flex: 0 0 auto;
+    text-align: left;
+}
+
+/* --- 3-State Toggle Switch - Vertical --- */
+.three-state-toggle {
+    width: 20px;
+    height: 60px;
+    background-color: var(--c-border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.three-state-toggle.state-1 {
+    background-color: var(--c-border);
+}
+
+.three-state-toggle.state-2 {
+    background-color: var(--c-border);
+}
+
+.three-state-slider {
+    width: 16px;
+    height: 16px;
+    background-color: transparent;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.three-state-toggle.state-1 .three-state-slider {
+    transform: translateY(20px);
+}
+
+.three-state-toggle.state-2 .three-state-slider {
+    transform: translateY(40px);
+}
+
+.state-labels {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 60px;
+    margin-left: var(--space-035);
+    position: absolute;
+    left: 100%;
+    top: 0;
+    font-size: 0.6em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.state-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 20px;
+}
+
+/* --- 4-State Toggle Switch - Vertical --- */
+.four-state-toggle {
+    width: 20px;
+    height: 80px;
+    background-color: var(--c-border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.four-state-toggle.state-1 {
+    background-color: var(--c-border);
+}
+
+.four-state-toggle.state-2 {
+    background-color: var(--c-border);
+}
+
+.four-state-toggle.state-3 {
+    background-color: var(--c-border);
+}
+
+.four-state-slider {
+    width: 16px;
+    height: 16px;
+    background-color: transparent;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.four-state-toggle.state-1 .four-state-slider {
+    transform: translateY(20px);
+}
+
+.four-state-toggle.state-2 .four-state-slider {
+    transform: translateY(40px);
+}
+
+.four-state-toggle.state-3 .four-state-slider {
+    transform: translateY(60px);
+}
+
+.state-labels-4 {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 80px;
+    margin-left: var(--space-035);
+    position: absolute;
+    left: 100%;
+    top: 0;
+    font-size: 0.6em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.state-labels-4 .state-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 20px;
+}
+
+/* --- 5-State Toggle Switch - Vertical --- */
+.five-state-toggle {
+    width: 20px;
+    height: 100px;
+    background-color: var(--c-border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.five-state-toggle.state-1 {
+    background-color: var(--c-border);
+}
+
+.five-state-toggle.state-2 {
+    background-color: var(--c-border);
+}
+
+.five-state-toggle.state-3 {
+    background-color: var(--c-border);
+}
+
+.five-state-toggle.state-4 {
+    background-color: var(--c-border);
+}
+
+.five-state-slider {
+    width: 16px;
+    height: 16px;
+    background-color: transparent;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.five-state-toggle.state-1 .five-state-slider {
+    transform: translateY(20px);
+}
+
+.five-state-toggle.state-2 .five-state-slider {
+    transform: translateY(40px);
+}
+
+.five-state-toggle.state-3 .five-state-slider {
+    transform: translateY(60px);
+}
+
+.five-state-toggle.state-4 .five-state-slider {
+    transform: translateY(80px);
+}
+
+.state-labels-5 {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100px;
+    margin-left: var(--space-035);
+    position: absolute;
+    left: 100%;
+    top: 0;
+    font-size: 0.6em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.state-labels-5 .state-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 20px;
+}
+
+/* --- 6-State Toggle Switch - Vertical --- */
+.six-state-toggle {
+    width: 20px;
+    height: 120px;
+    background: linear-gradient(180deg, var(--c-gridline) 0%, var(--c-border) 100%);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.six-state-toggle.state-1 {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 16.67%, var(--c-border) 33.33%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+.six-state-toggle.state-2 {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 33.33%, var(--c-border) 50%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+.six-state-toggle.state-3 {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 50%, var(--c-border) 66.67%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+.six-state-toggle.state-4 {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 66.67%, var(--c-border) 83.33%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+.six-state-toggle.state-5 {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 83.33%, var(--c-border) 91.67%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+.six-state-slider {
+    width: 16px;
+    height: 16px;
+    background-color: var(--c-surface);
+    border: 2px solid var(--c-border-strong);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.six-state-toggle.state-1 .six-state-slider {
+    transform: translateY(20px);
+}
+
+.six-state-toggle.state-2 .six-state-slider {
+    transform: translateY(40px);
+}
+
+.six-state-toggle.state-3 .six-state-slider {
+    transform: translateY(60px);
+}
+
+.six-state-toggle.state-4 .six-state-slider {
+    transform: translateY(80px);
+}
+
+.six-state-toggle.state-5 .six-state-slider {
+    transform: translateY(100px);
+}
+
+.state-labels-6 {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 120px;
+    margin-left: var(--space-035);
+    position: absolute;
+    left: 100%;
+    top: 0;
+    font-size: 0.6em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.state-labels-6 .state-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 20px;
+}
+
+/* --- Six-State Toggle Disabled States (Grayed Out) --- */
+.six-state-toggle.disabled-state-3 .state-labels-6 .state-label:nth-child(4),
+.six-state-toggle.disabled-state-4 .state-labels-6 .state-label:nth-child(5),
+.six-state-toggle.disabled-state-5 .state-labels-6 .state-label:nth-child(6) {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* --- Unified Position Toggle (Combined Inversion + Position) --- */
+.unified-position-section {
+    /* Use natural width - don't grow to fill available space */
+    flex: 0 0 auto;
+    min-height: 0;
+    height: 100%;
+}
+
+.unified-position-section .panel-section-title {
+    text-align: center; /* Center header over entire component */
+}
+
+.unified-position-column {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-015);
+    flex: 1 1 0;
+    min-height: 0;
+    height: 100%;
+}
+
+/* Wrapper for the toggle + both label sets in a horizontal row */
+.unified-position-toggle {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    align-items: stretch;
+    gap: var(--space-035);
+    position: relative;
+    height: 100%;
+    min-height: 0;
+}
+
+/* The actual track element */
+.unified-position-toggle .toggle-track {
+    width: 20px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--c-gridline) 0%, var(--c-border) 100%);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s ease, border-color 0.3s ease;
+    flex-shrink: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+}
+
+/* Slider thumb */
+.unified-slider {
+    width: 16px;
+    height: 16px;
+    background-color: var(--c-surface);
+    border: 2px solid var(--c-border-strong);
+    border-radius: 50%;
+    position: static;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+    grid-row: 1;
+}
+
+/* Slider position states (same as six-state) */
+.unified-position-toggle.state-1 .unified-slider { grid-row: 2; }
+.unified-position-toggle.state-2 .unified-slider { grid-row: 3; }
+.unified-position-toggle.state-3 .unified-slider { grid-row: 4; }
+.unified-position-toggle.state-4 .unified-slider { grid-row: 5; }
+.unified-position-toggle.state-5 .unified-slider { grid-row: 6; }
+
+/* Background gradient fill states - applied to .toggle-track */
+.unified-position-toggle.state-1 .toggle-track {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 16.67%, var(--c-border) 33.33%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+.unified-position-toggle.state-2 .toggle-track {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 33.33%, var(--c-border) 50%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+.unified-position-toggle.state-3 .toggle-track {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 50%, var(--c-border) 66.67%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+.unified-position-toggle.state-4 .toggle-track {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 66.67%, var(--c-border) 83.33%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+.unified-position-toggle.state-5 .toggle-track {
+    background: linear-gradient(180deg, var(--c-accent-neutral-light) 0%, var(--c-accent-neutral) 83.33%, var(--c-border) 91.67%, var(--c-gridline) 100%);
+    border-color: var(--c-accent-neutral);
+}
+
+/* Left labels (Inversion: Asc/Desc) - now in document flow */
+.unified-position-toggle .left-labels {
+    display: grid;
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    align-items: center;
+    height: 100%;
+    min-height: 0;
+    font-size: 0.6em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+.unified-position-toggle .left-labels .state-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+    min-height: 0;
+}
+
+/* Right labels (Position: Root through 5th) - now in document flow */
+.unified-position-toggle .right-labels {
+    display: grid;
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    align-items: center;
+    height: 100%;
+    min-height: 0;
+    font-size: 0.6em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+.unified-position-toggle .right-labels .state-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+    min-height: 0;
+}
+
+.unified-position-toggle .left-labels .state-label:nth-child(1) {
+    grid-row: 1;
+}
+
+.unified-position-toggle .left-labels .state-label:nth-child(2) {
+    grid-row: 2;
+}
+
+/* Position mode (3+ notes): left labels disabled, right labels active */
+.unified-position-toggle.position-mode .left-labels .state-label {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* Inversion mode (2 notes): right labels disabled, left labels active */
+.unified-position-toggle.inversion-mode .right-labels .state-label {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.unified-position-toggle.inversion-mode .left-labels .state-label {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Disabled position states (based on note count) */
+.unified-position-toggle.disabled-state-1 .right-labels .state-label:nth-child(n+2),
+.unified-position-toggle.disabled-state-2 .right-labels .state-label:nth-child(n+3),
+.unified-position-toggle.disabled-state-3 .right-labels .state-label:nth-child(n+4),
+.unified-position-toggle.disabled-state-4 .right-labels .state-label:nth-child(n+5),
+.unified-position-toggle.disabled-state-5 .right-labels .state-label:nth-child(n+6) {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* --- Panel Section Titles --- */
+.panel-section-title {
+    margin: 0;
+    color: var(--c-text-muted);
+    font-size: clamp(0.55rem, 1dvh, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-weight: 600;
+}
+
+/* --- Utility Classes --- */
+.hidden {
+    display: none;
+}
+
+.intervals-grid-column,
+.chords-grid-column {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.intervals-grid-column {
+    width: max-content;
+    max-width: 100%;
+}
+
+/* Ensure the chords grid grows to fill its column, making buttons taller */
+.chords-grid-column .chords-grid {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+/* --- Intervals 4x4 Grid Specific Styles --- */
+.intervals-4x4-grid {
+    gap: 2px;
+    width: max-content;
+}
+.intervals-4x4-grid .harmony-preset-button {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.harmony-preset-button:hover { background-color: var(--c-border); }
+
+/* Override focus state for harmony preset buttons to prevent lingering blue highlight */
+.harmony-preset-button:focus {
+    background-color: transparent;
+    color: var(--c-text);
+    outline: none;
+}
+.harmony-preset-button:focus:hover {
+    background-color: var(--c-border);
+}
+.harmony-preset-button.selected:focus {
+    background-color: var(--c-accent);
+    color: var(--c-surface);
+}
+
+/* Style for the selected harmony button, using the dynamic accent color */
+.harmony-preset-button.selected {
+    background-color: var(--c-accent-light, #63a9fd);
+    color: var(--c-text, #212529);
+    border-color: var(--c-accent, #4A90E2);
+    font-weight: 600;
+}
+
+/* Style for partial chord matches - lighter highlighting */
+.harmony-preset-button.partial-match {
+    background-color: var(--harmony-partial-bg, rgba(99, 169, 253, 0.25)); /* 25% opacity of --c-accent-light */
+    color: var(--c-text, #212529);
+    border-color: var(--harmony-partial-border, rgba(74, 144, 226, 0.4)); /* 40% opacity of --c-accent */
+    font-weight: 500;
+    opacity: 0.7;
+}
+
+.harmony-preset-button.partial-match:hover {
+    background-color: var(--harmony-partial-bg-hover, rgba(99, 169, 253, 0.4)); /* Slightly stronger on hover */
+    border-color: var(--harmony-partial-border-hover, rgba(74, 144, 226, 0.6));
+    opacity: 0.85;
+}
+
+
+
+
+
+
+
+

@@ -45,7 +45,7 @@ import { getChordPitchesFromIntervals } from '@utils/chordPitchesFromIntervals.t
 import logger from '@utils/logger.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import { setStampHoverCursor, clearStampHoverCursor } from './cursorManager.ts';
-import type { CanvasSpaceColumn, PlacedNote } from '../../../../../types/state.js';
+import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
 
 // --- Interaction State ---
 let pitchHoverCtx: CanvasRenderingContext2D | null = null;

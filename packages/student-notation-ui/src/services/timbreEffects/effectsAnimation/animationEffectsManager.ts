@@ -5,7 +5,7 @@ import VibratoCanvasEffect from './vibratoCanvasEffect.ts';
 import TremoloWaveformEffect from './tremoloWaveformEffect.ts';
 import EnvelopeFillEffect from './envelopeFillEffect.ts';
 import DelayADSREffect from './delayADSREffect.ts';
-import type { AnimatableNote } from '../../../../types/state.js';
+import type { AnimatableNote } from '@app-types/state.js';
 
 logger.moduleLoaded('AnimationEffectsManager');
 

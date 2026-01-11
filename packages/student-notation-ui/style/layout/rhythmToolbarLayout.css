@@ -1,0 +1,379 @@
+/* ==========================================================================
+   RHYTHM TAB TOOLBAR LAYOUT
+   ========================================================================= */
+
+/* --- Main Structure Container (Add/Del Beat, Pickup, Modulation Column) --- */
+.rhythm-structure-container {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.5rem, 1dvh, var(--space-3));
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+    padding: var(--space-015);
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+    justify-content: space-between;
+    overflow: hidden;
+}
+
+.control-subsection {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.control-subsection h4 {
+    margin: 0 0 0 0;
+    color: var(--c-text-muted);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    width: 100%;
+}
+
+/* --- Add/Del Beat Controls --- */
+.macrobeat-adjust-group {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: stretch;
+    flex: 1 1 0;
+    min-height: 0;
+    align-items: stretch;
+}
+
+.macrobeat-adjust-group .toolkit-button {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+/* --- Pickup Controls --- */
+.toggle-button-group {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: center;
+}
+
+.rhythm-structure-container .toggle-button-group {
+    flex: 1 1 0;
+    min-height: 0;
+    align-items: stretch;
+}
+
+.rhythm-structure-container .toggle-button-group .sidebar-toggle-button {
+    min-height: 0;
+    height: 100%;
+}
+
+/* --- Modulation Container --- */
+.modulation-container {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+    padding: var(--space-015);
+    flex: 1 1 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* --- Modulation Controls --- */
+.modulation-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: stretch;
+    /* Fill available height and distribute buttons evenly */
+    height: 100%;
+    min-height: 0;
+    justify-content: space-evenly;
+}
+
+/* --- Rhythm Controls Container (similar to waveform-container) --- */
+.rhythm-controls-container {
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    min-height: 0;
+    height: 100%;
+    gap: 0;
+}
+
+.rhythm-controls-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    min-height: 0;
+    height: 100%;
+    gap: 0;
+    width: 100%;
+}
+
+.rhythm-controls-tab-button {
+    cursor: default !important;
+    pointer-events: none;
+    border-bottom: none !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.rhythm-controls-tab-button {
+    display: none;
+}
+
+.rhythm-controls-tab-button:disabled {
+    opacity: 1;
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    font-weight: 600;
+    border-color: var(--c-border);
+}
+
+.rhythm-controls-content-box {
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-2);
+    box-shadow: var(--box-shadow-sm);
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 100%;
+    min-width: fit-content;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    margin-top: 0;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* --- Rhythm Stamps Container (similar to preset-effects-container) --- */
+.rhythm-stamp-tabs-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
+    min-width: fit-content;
+    gap: 0;
+    box-sizing: border-box;
+    min-height: 0;
+    max-height: 100%;
+}
+
+.rhythm-stamp-tabs-controls {
+    flex: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    max-height: 100%;
+    overflow: visible;
+}
+
+.rhythm-stamp-tabs-controls .rhythm-stamp-tab-content {
+    overflow: visible;
+}
+
+.rhythm-stamp-tabs-controls .rhythm-stamp-tab-panel {
+    overflow: visible;
+}
+
+.rhythm-stamp-tabs-controls .sixteenth-stamps-toolbar-container {
+    overflow: visible;
+}
+
+/* --- Rhythm Tabs Container (matching Pitch tab structure) --- */
+.rhythm-tab-stamps {
+    display: flex;
+    gap: 0;
+    margin-bottom: calc(-1 * var(--space-005));
+    position: relative;
+    z-index: 1;
+}
+
+.rhythm-stamp-tab-content {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.rhythm-stamp-tab-panel {
+    display: none;
+    padding: 0;
+}
+
+.rhythm-stamp-tab-panel.active {
+    display: flex;
+    flex-direction: row;
+    flex: 1 1 0;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    gap: clamp(var(--space-05), 1dvh, var(--space-1));
+}
+
+/* --- Stamps Toolbar Layout --- */
+.sixteenth-stamps-toolbar-container {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    padding: var(--space-1) var(--space-2);
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    /* Background panel styling (matches adjacent controls) */
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+}
+
+.sixteenth-stamps-grid {
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    flex: 1;
+    height: 100%;
+    gap: var(--space-1);
+    align-items: stretch;
+}
+
+.sixteenth-stamps-row {
+    display: grid;
+    gap: var(--space-1);
+    justify-items: center;
+    align-content: center;
+    align-items: center;
+    padding: var(--space-05) var(--space-2);
+    box-sizing: border-box;
+}
+
+.sixteenth-stamps-row-1 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.sixteenth-stamps-row-2 {
+    grid-template-columns: repeat(6, 1fr);
+}
+
+.sixteenth-stamps-row-3 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.sixteenth-stamps-row .sixteenth-stamp-button {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+    justify-self: center;
+    align-self: center;
+}
+
+.sixteenth-stamps-row .sixteenth-stamp-button svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* --- Triplets Toolbar Layout --- */
+.triplet-stamps-toolbar-container {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    padding: var(--space-1) var(--space-2);
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    /* Background panel styling (matches adjacent controls) */
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+}
+
+.triplet-stamps-grid {
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    flex: 1;
+    height: 100%;
+    gap: var(--space-1);
+}
+
+.triplet-stamps-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    justify-items: center;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-05) var(--space-2);
+    box-sizing: border-box;
+}
+
+.triplet-stamps-eighth-row {
+    margin-bottom: 0;
+}
+
+.triplet-stamps-quarter-row {
+    /* Quarter triplets use wider buttons */
+    margin-top: 0;
+}
+
+.triplet-stamps-quarter-row:first-of-type {
+    margin-top: 0;
+}
+
+.triplet-stamps-row .triplet-stamp-button {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+    justify-self: center;
+    align-self: center;
+}
+
+.triplet-stamps-row .triplet-stamp-button-wide {
+    aspect-ratio: 2 / 1;
+    grid-column: span 2;
+}
+
+.triplet-stamps-row .triplet-stamp-button svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}

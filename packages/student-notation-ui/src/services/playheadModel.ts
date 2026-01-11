@@ -8,7 +8,7 @@
 import store from '@state/initStore.ts';
 import pixelMapService from '@services/pixelMapService.ts';
 import columnMapService from '@services/columnMapService.ts';
-import type { AppState } from '../../types/state.js';
+import type { AppState } from '@app-types/state.js';
 
 let cachedTimeMap: number[] = [];
 let cachedMusicalEndTime = 0;

@@ -6,7 +6,7 @@ import TripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStamps
 import { hitTestAnyTripletStampShape } from '@utils/tripletStampHitTest.ts';
 import { canvasToTime, timeToCanvas } from '@services/columnMapService.ts';
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import type { TripletStampPlacement } from '../../../../../../types/state.js';
+import type { TripletStampPlacement } from '@app-types/state.js';
 
 interface DraggedTripletShape {
   type: 'tripletStamp';

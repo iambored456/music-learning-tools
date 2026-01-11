@@ -12,7 +12,7 @@
 
 import { getPlacedTonicSigns } from '@state/selectors.ts';
 import { SIDE_COLUMN_WIDTH, BEAT_COLUMN_WIDTH } from '@/core/constants.ts';
-import type { AppState } from '../../types/state.js';
+import type { AppState } from '@app-types/state.js';
 
 /**
  * Complete metadata for a single column

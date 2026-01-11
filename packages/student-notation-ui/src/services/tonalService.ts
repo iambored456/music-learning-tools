@@ -1,7 +1,7 @@
 // js/services/tonalService.ts
 import { Note, Interval, Chord, RomanNumeral, Progression } from 'tonal';
 import { getKeyContextForColumn } from '@state/selectors.ts';
-import type { AppState, PlacedNote } from '../../types/state.js';
+import type { AppState, PlacedNote } from '@app-types/state.js';
 
 interface DiatonicMapping {
   degree: number;

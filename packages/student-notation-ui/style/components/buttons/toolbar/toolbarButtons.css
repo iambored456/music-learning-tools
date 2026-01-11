@@ -1,0 +1,88 @@
+/* ==========================================================================
+   TOOLKIT BUTTON STYLES
+   ========================================================================= */
+
+/* --- General Toolkit Buttons --- */
+.toolkit-button { line-height: 1.2; padding: var(--space-025); }
+
+.toolkit-button--ghost {
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    transition: background-color 0.1s ease, border-color 0.1s ease, transform 0.1s ease;
+}
+
+.toolkit-button--ghost:hover,
+.toolkit-button--ghost:focus-visible {
+    background-color: var(--c-border);
+    border-color: var(--c-border-strong);
+    color: var(--c-text);
+    outline: none;
+}
+
+.toolkit-button--ghost:active {
+    background-color: var(--c-warning);
+    border-color: var(--c-warning);
+    transform: scale(0.95);
+}
+
+.toolkit-icon-button {
+    font-size: var(--font-size-sm);
+    inline-size: 100%;
+    block-size: 100%;
+    max-inline-size: 100%;
+    max-block-size: 100%;
+    aspect-ratio: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: var(--c-text-muted);
+    border-radius: 22%;
+    transition: background-color 0.2s ease, transform 0.1s ease, border-color 0.2s ease;
+    position: relative;
+    flex: 0 0 auto;
+}
+.toolkit-icon-button img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none; /* So the img doesn't interfere with button events */
+    transition: background-color 0.2s, transform 0.1s ease;
+}
+.toolkit-icon-button:hover {
+    background-color: var(--c-surface-muted);
+    border-color: transparent;
+}
+
+/* Override global button:focus for toolkit buttons */
+.toolkit-icon-button:focus {
+    background-color: var(--c-surface-muted); /* Same as hover */
+    border-color: transparent;
+    outline: none;
+}
+
+/* NEW: Feedback for the moment a button is clicked (for one-off actions like Zoom, Stop, etc.) */
+.toolkit-icon-button:active {
+    transform: scale(0.92);
+    transition-duration: 0.05s;
+    background-color: var(--c-warning);
+    border-color: transparent;
+}
+
+/* --- Undo/Redo Button Specific Styling --- */
+#undo-button:hover,
+#redo-button:hover,
+#undo-button:focus,
+#redo-button:focus {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* --- Playback Control Buttons --- */
+.playback-row {
+    display: grid;
+    grid-auto-flow: column;
+    gap: var(--space-050);
+}

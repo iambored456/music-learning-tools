@@ -13,7 +13,7 @@
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
   import logger from '@utils/logger.ts';
-  import type { CanvasSpaceColumn, PlacedNote } from '../../../../types/state.js';
+  import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
 
   // DOM element references
   let saveAsBtn: HTMLElement | null = null;

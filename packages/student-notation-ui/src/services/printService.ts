@@ -2,7 +2,7 @@
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import html2canvas from 'html2canvas';
-import type { PrintOptions } from '../../types/state.js';
+import type { PrintOptions } from '@app-types/state.js';
 
 type SnapshotKey = `${boolean}-${boolean}`;
 const buttonGridSnapshots: Partial<Record<SnapshotKey, HTMLCanvasElement | null>> = {};

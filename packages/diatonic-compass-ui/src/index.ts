@@ -13,7 +13,7 @@ export type DiatonicCompassInstance = {
   destroy: () => void;
 };
 
-const publicAssets = import.meta.glob('../public/**/*', { eager: true, as: 'url' }) as Record<string, string>;
+const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const publicPrefix = '../public/';
 
 function resolvePublicAsset(path: string): string {

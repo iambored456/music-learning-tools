@@ -1,4 +1,4 @@
-import type { AppState, MacrobeatBoundaryStyle, MacrobeatGrouping } from '../../../types/state.js';
+import type { AppState, MacrobeatBoundaryStyle, MacrobeatGrouping } from '@app-types/state.js';
 // js/state/initialState/rhythm.ts
 
 export const ANACRUSIS_ON_GROUPINGS: MacrobeatGrouping[] = new Array<MacrobeatGrouping>(19).fill(2);

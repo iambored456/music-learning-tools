@@ -1,0 +1,429 @@
+/* ==========================================================================
+   GRID & CANVAS STYLES
+   ========================================================================= */
+  
+/* Button Grid - horizontal toolbar above pitch/drum grids */
+#button-grid {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  pointer-events: none;
+  z-index: 2;
+  flex: 0 0 auto;
+  width: 100%;
+  /* Height will be set by JavaScript to match drum grid height */
+}
+
+#button-grid > * {
+  pointer-events: auto;
+}
+
+/* Three-cell structure for button grid (matches drum grid structure) */
+.button-grid-left-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  flex: 0 0 auto;
+  padding: 0;
+  background-color: var(--c-surface);
+  border-right: 2px solid var(--c-border-strong);
+  border-bottom: 2px solid var(--c-border-strong);
+  border-top: none;
+  border-left: none;
+  gap: 0;
+  min-height: 0;
+  /* Width and height will be set by JavaScript */
+}
+
+/* 2×2 button grid within the left cell */
+.left-cell-grid {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: stretch;
+  justify-items: stretch;
+  padding: var(--space-2);
+  min-height: 0;
+  width: 100%;
+}
+
+.button-grid-middle-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  background-color: var(--c-surface);
+  border-right: 2px solid var(--c-border-strong);
+  border-bottom: 2px solid var(--c-border-strong);
+  border-top: none;
+  border-left: none;
+  box-sizing: border-box;
+  /* Width will be set by JavaScript to match pitch grid content area (excludes legends) */
+  /* Height will be set by JavaScript to match drum grid height */
+}
+
+.button-grid-right-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background-color: transparent;
+  border-bottom: 2px solid var(--c-border-strong);
+  border-top: none;
+  border-right: none;
+  border-left: none;
+  /* Width and height will be set by JavaScript */
+  /* Intentionally empty for alignment */
+}
+
+#grids-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background-color: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#grids-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+#drum-grid-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  flex: 0 0 auto;
+  width: fit-content; /* Will be set by JavaScript to match pitch-grid-container */
+  min-width: fit-content;
+  min-height: 90px;
+  overflow-x: visible;
+  overflow-y: hidden;
+  position: relative;
+  background-color: transparent;
+  border-radius: 0 0 var(--border-radius-md) var(--border-radius-md);
+  border-top: 2px solid var(--c-border-strong);
+}
+
+#drum-grid-wrapper > * {
+  pointer-events: auto;
+}
+
+.drum-grid-left-cell,
+.drum-grid-middle-cell,
+.drum-grid-right-cell {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  flex: 0 0 auto;
+  padding: 0;
+  gap: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.drum-grid-left-cell {
+  background-color: var(--c-bg);
+  border-right: 2px solid var(--c-border-strong);
+  border-bottom: 2px solid var(--c-border-strong);
+  position: relative;
+  align-items: stretch;
+}
+
+.drum-grid-middle-cell {
+  background-color: var(--c-surface);
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  border-right: 2px solid var(--c-border-strong);
+  border-bottom: 2px solid var(--c-border-strong);
+}
+
+.drum-grid-right-cell {
+  background-color: transparent;
+  border-bottom: 2px solid var(--c-border-strong);
+}
+
+#drum-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.drum-volume-control {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-025) var(--space-035);
+  min-width: 140px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-md);
+  background-color: var(--c-surface);
+  box-shadow: var(--box-shadow-sm);
+  z-index: 1001;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.drum-volume-control.visible {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drum-volume-slider {
+  width: 120px;
+}
+
+.drum-left-content {
+  display: grid;
+  grid-template-columns: 3fr 1fr; /* second column = 1/4 of parent width */
+  grid-template-rows: repeat(3, 1fr);
+  align-items: center;
+  justify-items: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-2);
+  box-sizing: border-box;
+  gap: var(--space-1);
+}
+
+.drum-volume-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.drum-volume-button:hover {
+  background: var(--c-surface-muted);
+  border-color: var(--c-border-strong);
+}
+
+.drum-volume-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.drum-track-label {
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-size: 0.9rem;
+  color: var(--c-text-muted);
+  font-weight: 700;
+}
+
+#grid-scrollbar-proxy {
+  position: sticky;
+  left: 0;
+  flex: 0 0 auto;
+  width: 100%;
+  /* Inner element width set dynamically by layoutService.js to create scrollable area */
+  min-height: 20px;
+  margin: var(--space-1) 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 2px solid var(--c-border-strong);
+  border-bottom: 2px solid var(--c-border-strong);
+  background-color: var(--c-surface-overlay);
+  border-radius: var(--border-radius-sm);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  scrollbar-color: var(--c-accent) transparent;
+  z-index: 10;
+}
+
+#grid-scrollbar-proxy:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+#grid-scrollbar-proxy::-webkit-scrollbar {
+  height: 12px;
+}
+
+#grid-scrollbar-proxy::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#grid-scrollbar-proxy::-webkit-scrollbar-thumb {
+  background-color: var(--c-accent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.grid-scrollbar-inner {
+  display: block;
+  width: 100%;
+  min-height: 1px;
+  pointer-events: none;
+}
+
+/* Accidental buttons container in left cell of button grid */
+.accidental-buttons-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: var(--space-2);
+  height: 100%;
+  width: 100%;
+}
+
+/* Beat line button layer in middle cell of button grid */
+#beat-line-button-layer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  flex: 1 1 auto;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.beat-line-row {
+  position: relative;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+#time-signature-row,
+#grouping-buttons-row {
+  flex: 1 1 0;
+}
+
+#time-signature-row {
+  pointer-events: auto; /* allow interactions with the time signature dropdown trigger */
+}
+
+#grouping-buttons-row {
+  pointer-events: auto;
+  border-top: 2px solid var(--buttonGrid-boundary-color, #3a3a3a);
+}
+
+#boundary-buttons-row {
+  flex: 1 1 0;
+  align-items: center;
+  min-height: 0;
+  position: relative;
+  pointer-events: auto;
+}
+
+#beat-line-button-layer .time-signature-label {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-010) var(--space-040);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--c-surface-overlay);
+  color: var(--c-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  box-shadow: var(--box-shadow-sm);
+}
+
+#beat-line-button-layer .time-signature-label.anacrusis {
+  border-color: var(--c-anacrusis-border);
+  color: var(--c-anacrusis-accent);
+  background-color: var(--c-anacrusis-bg);
+}
+
+#pitch-grid-wrapper {
+  width: fit-content; /* Will be set by JavaScript to match pitch-grid-container */
+  min-width: fit-content; /* Allow shrinking below 100% viewport when JS sets smaller width */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 200px;
+  overflow-x: visible;
+  overflow-y: hidden;
+  position: relative;
+}
+
+#pitch-grid-container {
+  flex: 1;
+  position: relative;
+  width: fit-content; /* Primary width controller - set by JavaScript */
+  overflow-x: visible;
+  overflow-y: hidden;
+  min-height: 0;
+  background-color: var(--c-surface);
+}
+
+#pitch-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#notation-grid, #playhead-canvas, #hover-canvas, #legend-left-canvas, #legend-right-canvas {
+  position: absolute; top: 0; left: 0; display: block;
+}
+
+#playhead-canvas, #hover-canvas, #drum-hover-canvas {
+  pointer-events: none;
+  cursor: crosshair;
+}
+
+/* Legend canvases are positioned on the left and right edges */
+#legend-left-canvas {
+  left: 0;
+  pointer-events: none;
+  z-index: 10; /* Above main grid */
+}
+
+#legend-right-canvas {
+  left: auto;
+  right: 0;
+  pointer-events: none;
+  z-index: 10; /* Above main grid */
+}
+
+
+
+#drum-grid, #drum-playhead-canvas, #drum-hover-canvas {
+  display: block;
+  position: absolute; top: 0; left: 0;
+}
+
+#drum-playhead-canvas, #drum-hover-canvas {
+  pointer-events: none;
+}

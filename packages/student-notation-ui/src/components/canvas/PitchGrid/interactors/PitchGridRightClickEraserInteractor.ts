@@ -1,7 +1,7 @@
 // js/components/canvas/PitchGrid/interactors/PitchGridRightClickEraserInteractor.ts
 import store from '@state/initStore.ts';
 import domCache from '@services/domCache.ts';
-import type { CanvasSpaceColumn } from '../../../../../types/state.js';
+import type { CanvasSpaceColumn } from '@app-types/state.js';
 
 type AnnotationServiceLike = {
   eraseAtPoint: (canvasX: number, canvasY: number) => boolean;

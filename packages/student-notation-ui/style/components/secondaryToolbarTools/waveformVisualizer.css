@@ -1,0 +1,226 @@
+/* ===============================================
+   WAVEFORM VISUALIZER STYLES
+   =============================================== */
+
+.waveform-display-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+    margin-inline: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    border: 1px solid var(--c-border, #dee2e6);
+    border-radius: 6px;
+    background: var(--c-surface, #ffffff);
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    transform: translateZ(0); /* Enable hardware acceleration */
+}
+
+/* Enhance appearance when active */
+.waveform-display-wrapper.live-mode {
+    border-color: var(--c-accent, #4A90E2);
+    box-shadow: 
+        inset 0 1px 3px rgba(0, 0, 0, 0.1),
+        0 0 0 2px rgba(74, 144, 226, 0.1);
+}
+
+#static-waveform-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: default;
+}
+
+/* Add a small indicator for live mode */
+.waveform-display-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #28a745;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+.waveform-display-wrapper.live-mode::after {
+    opacity: 1;
+}
+
+/* Add subtle pulse animation during live playback */
+@keyframes waveform-pulse {
+    0%, 100% { 
+        box-shadow: 
+            inset 0 1px 3px rgba(0, 0, 0, 0.1),
+            0 0 0 2px rgba(74, 144, 226, 0.1);
+    }
+    50% { 
+        box-shadow: 
+            inset 0 1px 3px rgba(0, 0, 0, 0.1),
+            0 0 0 2px rgba(74, 144, 226, 0.2);
+    }
+}
+
+.waveform-display-wrapper.live-mode.pulsing {
+    animation: waveform-pulse 2s ease-in-out infinite;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+    .waveform-display-wrapper {
+        min-height: 80px;
+        height: 100%;
+    }
+}
+
+@supports (width: 1cqh) {
+    .waveform-display-wrapper {
+        max-width: min(100%, calc(200cqh));
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .waveform-display-wrapper {
+        background: var(--c-surface-dark, #2d3748);
+        border-color: var(--c-border-dark, #4a5568);
+    }
+
+    .waveform-display-wrapper.live-mode {
+        border-color: var(--c-accent, #4A90E2);
+        box-shadow: 
+            inset 0 1px 3px rgba(0, 0, 0, 0.2),
+            0 0 0 2px rgba(74, 144, 226, 0.15);
+    }
+}
+
+/* Optional: Add a subtle background pattern for the static mode */
+.waveform-display-wrapper:not(.live-mode) {
+    background-image: 
+        linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px),
+        linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px);
+    background-size: 20px 10px;
+    background-position: 0 0, 0 0;
+}
+
+/* Smooth transitions between modes */
+.waveform-display-wrapper * {
+    transition: opacity 0.2s ease;
+}
+
+/* Style for the canvas during initialization */
+#static-waveform-canvas.loading {
+    opacity: 0.5;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .waveform-display-wrapper {
+        border-width: 2px;
+        border-color: #000000;
+    }
+    
+    .waveform-display-wrapper.live-mode {
+        border-color: #0066cc;
+        box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.3);
+    }
+}
+
+/* Waveform Speed Controls */
+.waveform-speed-controls {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    display: flex;
+    gap: 2px;
+    z-index: 20;
+}
+
+.waveform-speed-btn {
+    padding: var(--space-005);
+    font-size: 0.6rem;
+    font-weight: 500;
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 24px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.waveform-speed-btn:hover {
+    background-color: var(--c-border);
+}
+
+.waveform-speed-btn.active {
+    background-color: var(--c-accent-neutral-light, #ffd54f) !important;
+    color: var(--c-text, #212529) !important;
+    border-color: var(--c-accent-neutral, #ffc107) !important;
+    font-weight: 600 !important;
+    box-shadow: 0 0 0 1px var(--c-accent-neutral, #ffc107) !important;
+    transform: scale(0.98) !important;
+}
+
+.waveform-speed-btn.active:hover {
+    background-color: var(--c-accent-neutral-light, #ffd54f) !important;
+    color: var(--c-text, #212529) !important;
+    border-color: var(--c-accent-neutral, #ffc107) !important;
+}
+
+
+/* Speed controls are always visible */
+.waveform-speed-controls {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Dark mode support for speed controls and toggle */
+@media (prefers-color-scheme: dark) {
+    .waveform-speed-btn,
+    .waveform-toggle-btn {
+        background-color: var(--c-surface-dark, #2d3748);
+        border-color: var(--c-border-dark, #4a5568);
+        color: var(--c-text-dark, #e2e8f0);
+    }
+
+    .waveform-speed-btn:hover,
+    .waveform-toggle-btn:hover {
+        background-color: var(--c-border-dark, #4a5568);
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .waveform-display-wrapper,
+    .waveform-display-wrapper::after,
+    .waveform-display-wrapper *,
+    .waveform-speed-btn {
+        transition: none;
+        animation: none;
+    }
+}

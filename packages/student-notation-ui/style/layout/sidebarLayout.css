@@ -1,0 +1,343 @@
+/* ==========================================================================
+   Sidebar, Overlay, and Popups Styles
+   ========================================================================= */
+
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 250px;
+  height: 100%;
+  background-color: var(--c-surface-overlay);
+  border-right: 1px solid var(--c-border-strong);
+  box-shadow: var(--box-shadow-md);
+  padding: var(--space-035);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-035);
+  z-index: 2000;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease-in-out;
+  backdrop-filter: blur(5px);
+  overflow: hidden;
+}
+
+body.sidebar-open #sidebar {
+  transform: translateX(0);
+}
+
+.sidebar-container {
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-025);
+  background-color: var(--c-surface);
+}
+
+.sidebar-container .app-title {
+  text-align: center;
+  font-weight: bold;
+  line-height: 1.2;
+  color: var(--c-text-muted);
+}
+
+.sidebar-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-025);
+  width: 100%;
+  padding: var(--space-025);
+  text-align: left;
+  margin-bottom: var(--space-025);
+}
+.sidebar-button:last-child {
+  margin-bottom: 0;
+}
+
+.sidebar-button img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.sidebar-button-text {
+  font-size: 1rem;
+  color: var(--c-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sidebar-legend-toggle-row {
+  display: flex;
+  gap: var(--space-025);
+}
+
+.sidebar-legend-toggle-row .sidebar-toggle-button {
+  flex: 1 1 0;
+  width: auto;
+  white-space: normal;
+}
+
+#sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 1999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+
+body.sidebar-open #sidebar-overlay {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- Vertical Volume Control --- */
+#volume-control-wrapper {
+  position: relative;
+}
+
+#volume-popup {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--space-025) var(--space-035);
+  margin-left: var(--space-025); 
+  box-shadow: var(--box-shadow-sm);
+  z-index: 1001;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+#volume-popup.visible {
+  visibility: visible;
+  opacity: 1;
+}
+
+input[type="range"][orient="vertical"] {
+  appearance: none;
+  -webkit-appearance: none;
+  writing-mode: initial;
+  direction: initial;
+  width: 120px;
+  height: 8px;
+  padding: 5px 0;
+}
+
+/* --- Sidebar Visualization Controls --- */
+.sidebar-viz-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-035);
+}
+
+.sidebar-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-015);
+}
+
+.sidebar-control-group label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  margin-bottom: var(--space-015);
+}
+
+.sidebar-range-input {
+  width: 100%;
+  height: 6px;
+  background: var(--c-gridline);
+  border-radius: 3px;
+  appearance: none;
+  outline: none;
+  transition: background 0.2s ease;
+}
+
+.sidebar-range-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--c-accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid var(--c-surface);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.sidebar-range-input::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-range-input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--c-accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid var(--c-surface);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.sidebar-range-input::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-value-display {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--c-accent);
+  text-align: center;
+  min-height: 1.2em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-toggle-button {
+  width: 100%;
+  padding: var(--space-025) var(--space-035);
+  background-color: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-sm);
+  font-family: var(--main-font);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.sidebar-toggle-button:hover {
+  background-color: var(--c-border);
+  border-color: var(--c-text-muted);
+}
+
+.sidebar-toggle-button:focus {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgba(var(--c-accent-rgb), 0.2);
+}
+
+.sidebar-toggle-button.extended {
+  background-color: var(--c-accent) !important;
+  color: var(--c-surface) !important;
+  border-color: var(--c-accent) !important;
+}
+
+/* Microphone device selector styling */
+.mic-device-selector {
+  width: 100%;
+  padding: var(--space-015) var(--space-025);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--c-surface);
+  color: var(--c-text);
+  font-family: var(--main-font);
+  font-size: 0.9rem;
+}
+
+.mic-device-selector:focus {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgba(var(--c-accent-rgb), 0.2);
+}
+
+/* ==========================================================================
+   KEYBOARD SHORTCUTS STYLES  
+   ========================================================================== */
+
+.keyboard-shortcuts-container {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--c-border-light, #e8ecf0);
+}
+
+.keyboard-shortcuts-container h4 {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--c-text-muted, #6c757d);
+}
+
+.shortcuts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.shortcut-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.125rem 0;
+    font-size: 0.75rem;
+}
+
+.shortcut-key {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    background-color: var(--c-surface, #f8f9fa);
+    color: var(--c-text, #212529);
+    padding: 0.125rem 0.25rem;
+    border-radius: 3px;
+    border: 1px solid var(--c-border, #dee2e6);
+    font-weight: 500;
+    min-width: 3rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.shortcut-desc {
+    color: var(--c-text-muted, #6c757d);
+    font-weight: 400;
+    text-align: right;
+    flex: 1;
+    margin-left: 0.5rem;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .keyboard-shortcuts-container {
+        border-top-color: var(--c-border-dark, #495057);
+    }
+    
+    .keyboard-shortcuts-container h4 {
+        color: var(--c-text-dark, #e2e8f0);
+    }
+    
+    .shortcut-key {
+        background-color: var(--c-surface-dark, #2d3748);
+        color: var(--c-text-dark, #e2e8f0);
+        border-color: var(--c-border-dark, #4a5568);
+    }
+    
+    .shortcut-desc {
+        color: var(--c-text-muted-dark, #a0aec0);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .shortcut-item {
+        font-size: 0.7rem;
+    }
+    
+    .shortcut-key {
+        font-size: 0.65rem;
+        padding: 0.1rem 0.2rem;
+        min-width: 2.5rem;
+    }
+}

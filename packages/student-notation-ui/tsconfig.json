@@ -2,19 +2,19 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "rootDir": "./src",
+    "rootDir": ".",
     "outDir": "./dist",
-    "baseUrl": "./src",
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@components/*": ["./components/*"],
-      "@services/*": ["./services/*"],
-      "@state/*": ["./state/*"],
-      "@utils/*": ["./utils/*"],
-      "@data/*": ["./data/*"],
-      "../../types/*": ["../../types/src/*"]
+      "@/*": ["./src/*"],
+      "@components/*": ["./src/components/*"],
+      "@services/*": ["./src/services/*"],
+      "@state/*": ["./src/state/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@data/*": ["./src/data/*"],
+      "@app-types/*": ["./types/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte"],
+  "include": ["src/**/*.ts", "src/**/*.svelte", "types/**/*.ts", "types/**/*.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

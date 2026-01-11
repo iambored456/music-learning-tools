@@ -3,7 +3,7 @@ import store from '@state/initStore.ts';
 import pitchGridViewportService from './pitchGridViewportService.ts';
 import { BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR } from '@/core/constants.ts';
 import { getColumnFromX } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import type { CanvasSpaceColumn } from '../../types/state.js';
+import type { CanvasSpaceColumn } from '@app-types/state.js';
 import { createCanvasSpaceColumn } from '@utils/coordinateTypes.ts';
 
 /**

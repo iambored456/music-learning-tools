@@ -12,7 +12,7 @@ import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDime
 import { assertRowIntegrity } from '@utils/rowCoordinates.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import CanvasContextService from '@services/canvasContextService.ts';
-import type { AppState, PlacedNote, TonicSign } from '../../../../../types/state.js';
+import type { AppState, PlacedNote, TonicSign } from '@app-types/state.js';
 
 const isDev = import.meta.env.DEV;
 

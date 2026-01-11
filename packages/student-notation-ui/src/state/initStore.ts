@@ -13,7 +13,7 @@ import {
   type ColumnMap
 } from '@mlt/student-notation-engine';
 
-import type { AppState, MacrobeatGrouping } from '../../types/state.js';
+import type { AppState, MacrobeatGrouping } from '@app-types/state.js';
 import logger from '@utils/logger.ts';
 
 logger.moduleLoaded('EngineStore', 'general');

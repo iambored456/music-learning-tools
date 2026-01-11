@@ -1,0 +1,144 @@
+/* style/components/_ui-states.css */
+
+/* --- Note Selection States --- */
+.note.selected {
+  background-color: var(--note-color, #000);
+}
+.note-pair.selected {
+  border-color: var(--note-color) !important;
+  box-shadow: 0 0 8px var(--note-color);
+}
+.note-pair[data-color="#4a90e2"].selected { --note-color: #4a90e2; }
+.note-pair[data-color="#2d2d2d"].selected { --note-color: #2d2d2d; }
+.note-pair[data-color="#d66573"].selected { --note-color: #d66573; }
+.note-pair[data-color="#68a03f"].selected { --note-color: #68a03f; }
+
+
+/*******************************************************************************
+* REFINED BUTTON STATES
+* These rules address the hover vs. active state issue.
+******************************************************************************/
+
+/* --- Generic Style for "Selected" or "Active" Tools (Excluding One-Off Actions) --- */
+/* This rule now uses :not() to exclude the buttons you specified, but INCLUDES loop button for toggle behavior. */
+.toolkit-icon-button.selected,
+.toolkit-icon-button.active:not(#grid-zoom-in):not(#grid-zoom-out):not(#clear-button):not(#undo-button):not(#redo-button):not(#stop-button):not(#play-button) {
+    background-color: var(--c-accent);
+    color: var(--c-surface); /* Icon color will be white */
+}
+/* Invert icon color on active buttons for visibility (also excluding the one-off actions, but INCLUDING loop button) */
+.toolkit-icon-button.selected img,
+.toolkit-icon-button.active:not(#grid-zoom-in):not(#grid-zoom-out):not(#clear-button):not(#undo-button):not(#redo-button):not(#stop-button):not(#play-button) img {
+    filter: invert(1) brightness(2);
+}
+
+
+/* --- Specific Override for Eraser --- */
+/* The eraser tool uses a "danger" color scheme when selected. */
+.eraser-button.selected { 
+  background-color: var(--c-danger);
+  color: var(--c-surface);
+  box-shadow: none; /* Clears any other shadows */
+}
+/* Ensure eraser icon inverts correctly on its red background */
+.eraser-button.selected img {
+    filter: invert(1) brightness(2);
+}
+
+
+/* --- Hovering Over an Already Active/Selected Button --- */
+/* This selector is more specific than the default :hover, so it takes precedence. */
+.toolkit-icon-button.selected:hover,
+.toolkit-icon-button.active:hover {
+    background-color: var(--c-accent-hover); /* Use a darker shade of the accent color */
+    transform: scale(1); /* Disable momentary click-down scale effect */
+}
+
+/* Specific hover state for the selected eraser button */
+.eraser-button.selected:hover {
+    background-color: #a72836; /* A darker, more saturated red */
+}
+
+/* This state is for when the user is actively right-click-dragging to erase */
+.eraser-button.erasing-active {
+    background-color: var(--c-danger);
+    color: var(--c-surface);
+    transform: scale(1);
+}
+.eraser-button.erasing-active img {
+    filter: invert(1) brightness(2);
+}
+
+
+/* --- Clear Button Flash Animation --- */
+.toolkit-icon-button.flash {
+    background-color: rgba(220, 53, 69, 0.3);
+    box-shadow: 0 0 8px var(--c-danger);
+    animation: clearFlash 0.3s ease-out;
+}
+
+@keyframes clearFlash {
+    0% {
+        background-color: rgba(220, 53, 69, 0.6);
+        box-shadow: 0 0 12px var(--c-danger);
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
+
+/* --- Preset and Other Active States --- */
+.preset-button.selected {
+  background-color: var(--c-accent);
+  color: var(--c-surface);
+  border: 1px solid var(--c-accent-hover);
+  box-shadow: 0 0 5px var(--c-accent);
+}
+.preset-button.selected:hover {
+    background-color: var(--c-accent-hover);
+}
+
+/* --- Volume Icon Button Override --- */
+/* Make volume icon active state use gray like other dropdown buttons */
+#volume-icon-button.active {
+    background-color: var(--c-border) !important;
+    color: var(--c-text) !important;
+}
+#volume-icon-button.active img {
+    filter: none !important; /* Don't invert the icon color */
+}
+#volume-icon-button.active:hover {
+    background-color: var(--c-gridline) !important;
+    color: var(--c-text) !important;
+}
+
+/* --- Clear Button Override --- */
+/* Make clear button use red when pressed to convey destructive action */
+#clear-button:active {
+    background-color: rgba(220, 53, 69, 0.3) !important; /* Red with transparency */
+    transform: scale(0.92);
+    transition-duration: 0.05s;
+}
+
+/* --- Eraser Button Override --- */
+/* Make eraser button use red when pressed to convey destructive action */
+#eraser-tool-button:active {
+    background-color: rgba(220, 53, 69, 0.3) !important; /* Red with transparency */
+    transform: scale(0.92);
+    transition-duration: 0.05s;
+}
+
+/* --- Loop Button Override --- */
+/* Make loop button use golden yellow like accidentals when active */
+#loop-button.active {
+    background-color: var(--c-warning) !important; /* Golden yellow */
+    color: var(--c-text) !important;
+}
+#loop-button.active img {
+    filter: none !important; /* Don't invert the icon color */
+}
+#loop-button.active:hover {
+    background-color: #e6ac00 !important; /* Slightly darker yellow on hover */
+    color: var(--c-text) !important;
+}

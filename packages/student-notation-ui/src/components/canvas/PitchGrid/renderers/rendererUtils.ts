@@ -3,7 +3,7 @@ import pitchGridViewportService from '../../../../services/pitchGridViewportServ
 import { createCoordinateMapping } from '../../../../rhythm/modulationMapping.js';
 import pixelMapService from '../../../../services/pixelMapService.ts';
 import store from '@state/initStore.ts';
-import type { AppState, ModulationMarker } from '../../../../../types/state.js';
+import type { AppState, ModulationMarker } from '@app-types/state.js';
 
 /**
  * COORDINATE SYSTEM NOTE:

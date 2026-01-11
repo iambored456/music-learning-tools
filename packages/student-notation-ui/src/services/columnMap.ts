@@ -13,7 +13,7 @@ import {
   timeToVisual as newTimeToVisual
 } from './columnMapService.ts';
 import { getPlacedTonicSigns } from '../state/selectors.ts';
-import type { AppState, TonicSign } from '../../types/state.js';
+import type { AppState, TonicSign } from '@app-types/state.js';
 
 interface ColumnEntry {
   visualIndex: number;

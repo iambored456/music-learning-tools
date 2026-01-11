@@ -2389,8 +2389,10 @@ function Dn(o) {
       await (s || (() => w.start()))();
       const D = Object.keys(f);
       if (D.length === 0) return;
-      const T = f[D[0]];
-      T && T.triggerAttackRelease(m, y, b);
+      const [T] = D;
+      if (!T) return;
+      const v = f[T];
+      v && v.triggerAttackRelease(m, y, b);
     },
     /**
      * Trigger note attack. Used by Transport scheduling with explicit time parameter.
@@ -3541,7 +3543,10 @@ function rn(o = {}) {
     if (u.length === 0) return 0;
     let M = 0;
     for (let I = 0; I < u.length; I++) {
-      const d = u[I], N = u[I + 1];
+      const d = u[I];
+      if (!d)
+        continue;
+      const N = u[I + 1];
       if (N)
         M += N.timeMs - d.timeMs;
       else {

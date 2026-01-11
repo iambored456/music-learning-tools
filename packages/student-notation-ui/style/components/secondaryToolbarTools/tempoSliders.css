@@ -1,0 +1,138 @@
+/* style/components/_tempo-display.css */
+
+.control-section:has(.tempo-container) {
+    width: auto;
+    min-width: max-content;
+}
+
+.tempo-content-box {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+    padding: var(--space-015);
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.tempo-container {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr;
+    gap: var(--space-035);
+    background-color: transparent;
+    border: none;
+    /* Tempo controls should use the neutral UI accent (yellow), not the note color accent. */
+    --c-accent: var(--c-accent-neutral);
+    --c-accent-light: var(--c-accent-neutral-light);
+    padding: 0 var(--space-015);
+    border-radius: 0;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    width: auto;
+    min-width: max-content;
+    align-items: stretch;
+}
+
+.tempo-boxes-container {
+    display: flex;
+    flex-direction: column;
+    /* Space rows evenly to fill available height */
+    justify-content: space-evenly;
+    gap: var(--space-020);
+    grid-column: 1;
+    grid-row: 1;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    padding: var(--space-010) 0;
+}
+
+.tempo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-015);
+    width: 100%;
+    /* Grow to fill available height equally */
+    flex: 1 1 0;
+    min-height: 0;
+    padding: var(--space-015);
+    background-color: var(--c-surface-muted);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    box-shadow: var(--box-shadow-sm);
+}
+
+.tempo-column-2 {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: var(--slider-thumb-total);
+    width: var(--slider-thumb-total);
+    min-height: clamp(60px, 12dvh, 150px);
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    padding: var(--space-010) 0;
+}
+
+.tempo-input-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-015);
+    width: 100%;
+    justify-content: space-between;
+}
+.tempo-label-icon {
+    height: 1.2rem;
+    width: auto;
+    user-select: none;
+    transform-origin: center;
+    transition: transform 0.08s ease-out;
+}
+
+/* Tempo number boxes (DraggableNumber components) */
+#eighth-note-tempo,
+#quarter-note-tempo, 
+#dotted-quarter-tempo {
+    transform-origin: center;
+    transition: transform 0.08s ease-out;
+}
+
+.tempo-input {
+    width: 45px;
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    text-align: center;
+    font-family: var(--main-font);
+}
+.tempo-input::-webkit-outer-spin-button,
+.tempo-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.draggable-number-input {
+  cursor: ns-resize;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.draggable-number-input:hover {
+  border-color: var(--c-accent);
+}
+
+.draggable-number-input:focus {
+  cursor: text;
+  box-shadow: 0 0 0 2px var(--c-accent-light);
+}

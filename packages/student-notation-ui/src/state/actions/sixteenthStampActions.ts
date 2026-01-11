@@ -2,7 +2,7 @@
 import logger from '@utils/logger.ts';
 import { isWithinTonicSpan, type TonicSign } from '@utils/tonicColumnUtils.ts';
 import { getPlacedTonicSigns } from '@state/selectors.ts';
-import type { Store, SixteenthStampPlacement, CanvasSpaceColumn } from '../../../types/state.js';
+import type { Store, SixteenthStampPlacement, CanvasSpaceColumn } from '@app-types/state.js';
 
 logger.moduleLoaded('SixteenthStampActions', 'stamps');
 

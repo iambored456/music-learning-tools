@@ -7,7 +7,7 @@ import { renderTimeSignatureDisplay } from '@components/canvas/macrobeatTools/ti
 import { getPitchNotes, getPlacedTonicSigns } from '@state/selectors.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import logger from '@utils/logger.ts';
-import type { AppState, PlacedNote, TonicSign } from '../../../../types/state.js';
+import type { AppState, PlacedNote, TonicSign } from '@app-types/state.js';
 
 logger.moduleLoaded('PitchGridController', 'grid');
 

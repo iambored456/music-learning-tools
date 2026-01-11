@@ -3,7 +3,7 @@ import { getColumnX, getRowY, getCurrentCoordinateMapping } from './rendererUtil
 import TonalService from '@services/tonalService.ts';
 import store from '@state/initStore.ts';
 import columnMapService from '@services/columnMapService.ts';
-import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '../../../../../types/state.js';
+import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '@app-types/state.js';
 import {
   OVAL_NOTE_FONT_RATIO,
   FILLED_NOTE_FONT_RATIO,

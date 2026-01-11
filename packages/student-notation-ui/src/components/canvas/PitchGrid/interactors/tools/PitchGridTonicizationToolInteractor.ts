@@ -3,7 +3,7 @@ import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import { drawTonicShape } from '../../renderers/notes.js';
-import type { CanvasSpaceColumn } from '../../../../../../types/state.js';
+import type { CanvasSpaceColumn } from '@app-types/state.js';
 
 type MeasureSnapPoint = { drawColumn: number; preMacrobeatIndex: number };
 

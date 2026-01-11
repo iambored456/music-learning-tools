@@ -7,7 +7,7 @@ import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo } from '@state/selectors.ts';
-import type { AppState, MacrobeatBoundaryStyle, ModulationMarker, PlacedNote, TonicSign } from '../../../../types/state.js';
+import type { AppState, MacrobeatBoundaryStyle, ModulationMarker, PlacedNote, TonicSign } from '@app-types/state.js';
 
 const DEFAULT_ANACRUSIS_COLORS = {
   stroke: '#c7cfd8',

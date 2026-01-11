@@ -4,7 +4,7 @@ import { shouldDrawVerticalLineAtColumn, isTonicColumn } from '../../../../utils
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
-import type { AppState } from '../../../../../types/state.js';
+import type { AppState } from '@app-types/state.js';
 
 type PlacedTonicSigns = ReturnType<typeof getPlacedTonicSigns>;
 

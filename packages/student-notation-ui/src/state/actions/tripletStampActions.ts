@@ -1,7 +1,7 @@
 // js/state/actions/tripletStampActions.ts
 import logger from '@utils/logger.ts';
 import { canvasToTime, timeToCanvas } from '@services/columnMapService.ts';
-import type { Store, TripletStampPlacement, CanvasSpaceColumn } from '../../../types/state.js';
+import type { Store, TripletStampPlacement, CanvasSpaceColumn } from '@app-types/state.js';
 
 logger.moduleLoaded('TripletStampActions', 'triplets');
 

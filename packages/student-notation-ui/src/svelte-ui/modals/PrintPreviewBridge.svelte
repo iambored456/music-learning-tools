@@ -14,7 +14,7 @@
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
   import PrintService from '@services/printService.ts';
-  import type { PrintOptions } from '../../../types/state.js';
+  import type { PrintOptions } from '@app-types/state.js';
 
   const CANVAS_FRAME_PADDING = 16;
 

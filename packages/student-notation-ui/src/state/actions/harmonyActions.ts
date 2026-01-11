@@ -1,5 +1,5 @@
 // js/state/actions/harmonyActions.ts
-import type { Store } from '../../../types/state.js';
+import type { Store } from '@app-types/state.js';
 
 export const harmonyActions = {
   setActiveChordIntervals(this: Store, intervals: string[]): void {

@@ -5,7 +5,7 @@ import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js
 import store from '@state/initStore.ts';
 import SynthEngine from './initAudio.js';
 import logger from '@utils/logger.ts';
-import type { SixteenthStampPlacement, TripletStampPlacement } from '../../types/state.js';
+import type { SixteenthStampPlacement, TripletStampPlacement } from '@app-types/state.js';
 
 logger.moduleLoaded('RhythmPlaybackService');
 

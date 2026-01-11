@@ -6,7 +6,7 @@ import store from '@state/initStore.ts';
 import logger from '../../../../utils/logger.js';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { canvasToTime, timeToCanvas } from '../../../../services/columnMapService.ts';
-import type { ModulationMarker, SixteenthStampPlacement } from '../../../../../types/state.js';
+import type { ModulationMarker, SixteenthStampPlacement } from '@app-types/state.js';
 import type { SixteenthStampShape } from '../../../../utils/sixteenthStampRenderer.ts';
 
 interface SixteenthStampRenderOptions {

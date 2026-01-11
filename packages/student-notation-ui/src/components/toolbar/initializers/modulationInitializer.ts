@@ -3,7 +3,7 @@
 import store from '@state/initStore.ts';
 import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.js';
 import logger from '@utils/logger.ts';
-import type { ModulationRatio } from '../../../../types/state.js';
+import type { ModulationRatio } from '@app-types/state.js';
 
 interface ToolChangeEvent {
   newTool?: string;

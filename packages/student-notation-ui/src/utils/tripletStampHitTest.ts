@@ -9,7 +9,7 @@ import { getTripletStampById, tripletCenterPercents } from '@/rhythm/tripletStam
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
 import { timeToCanvas } from '@services/columnMapService.ts';
 import store from '@state/initStore.ts';
-import type { TripletStampPlacement as StateTripletStampPlacement } from '../../types/state.js';
+import type { TripletStampPlacement as StateTripletStampPlacement } from '@app-types/state.js';
 
 export type TripletStampPlacement = StateTripletStampPlacement;
 

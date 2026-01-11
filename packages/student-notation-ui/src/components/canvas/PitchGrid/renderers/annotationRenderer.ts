@@ -2,7 +2,7 @@
 import store from '@state/initStore.ts';
 import annotationService from '../../../../services/annotationService.ts';
 import { getColumnX, getRowY } from './rendererUtils.js';
-import type { ModulationMarker } from '../../../../../types/state.js';
+import type { ModulationMarker } from '@app-types/state.js';
 
 interface AnnotationOptions {
   cellWidth: number;

@@ -1,0 +1,162 @@
+/* ==========================================================================
+   PRIMARY TOOLBAR LAYOUT
+   5x5 grid, note styling, playback controls
+   ========================================================================= */
+
+/* --- Toolbar Container Layout --- */
+#toolbar-primary,
+#toolbar-secondary {
+    display: flex;
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    background-color: var(--c-surface);
+}
+
+#toolbar .toolkit-button {
+    padding: clamp(var(--space-015), 0.9dvh, var(--space-025));
+    font-size: clamp(0.7rem, 1.4dvh, var(--font-size-sm));
+}
+
+#toolbar-primary {
+    flex: 0 0 auto;
+    padding: var(--toolbar-padding);
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+}
+
+/* Allow the volume slider popup to render outside the primary toolbar bounds */
+#toolbar-primary:has(#volume-popup.visible) {
+    overflow: visible;
+}
+
+/* Bubble the overflow permission up to the main toolbar when the popup is open */
+#toolbar:has(#volume-popup.visible) {
+    overflow-x: visible;
+    overflow-y: visible;
+}
+
+/* --- 5x5 Primary Toolbar Grid --- */
+.primary-toolbar-grid-5x5 {
+    --toolbar-note-stroke: clamp(2px, 0.55dvh, 4px);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-rows: repeat(5, minmax(0, 1fr));
+    gap: clamp(var(--space-010), 0.75dvh, var(--space-025));
+    height: 100%;
+    width: 100%;
+}
+
+/* Ensure all grid children fill their cells uniformly */
+.primary-toolbar-grid-5x5 > * {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Icon buttons in the 5x5 grid */
+.primary-toolbar-grid-5x5 > .toolkit-icon-button {
+    aspect-ratio: 1 / 1;
+}
+
+.primary-toolbar-grid-5x5 > .toolkit-icon-button img {
+    width: 100%;
+    height: 100%;
+}
+
+/* Volume control wrapper needs special handling */
+.primary-toolbar-grid-5x5 #volume-control-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* Note styling for flat grid structure */
+.primary-toolbar-grid-5x5 .note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    align-self: center;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    /* Constrain note size to fit within cell */
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* Color assignments via data-color attribute */
+.primary-toolbar-grid-5x5 .note[data-color="#4a90e2"] { --note-color: #4a90e2; }
+.primary-toolbar-grid-5x5 .note[data-color="#2d2d2d"] { --note-color: #2d2d2d; }
+.primary-toolbar-grid-5x5 .note[data-color="#d66573"] { --note-color: #d66573; }
+.primary-toolbar-grid-5x5 .note[data-color="#68a03f"] { --note-color: #68a03f; }
+
+/* Circle note */
+.primary-toolbar-grid-5x5 .circle-note {
+    aspect-ratio: 1 / 1;
+    height: 80%;
+    width: auto;
+    border-radius: 50%;
+    border: var(--toolbar-note-stroke) solid var(--note-color);
+    background-color: transparent;
+}
+
+/* Oval note */
+.primary-toolbar-grid-5x5 .oval-note {
+    aspect-ratio: 0.7 / 1;
+    height: 80%;
+    width: auto;
+    border-radius: 50%;
+    border: var(--toolbar-note-stroke) solid var(--note-color);
+    background-color: transparent;
+}
+
+/* Diamond note */
+.primary-toolbar-grid-5x5 .diamond-note {
+    aspect-ratio: 1 / 1;
+    height: 80%;
+    width: auto;
+    border: none;
+    border-radius: 0;
+    background: none;
+}
+
+.primary-toolbar-grid-5x5 .diamond-note .diamond-icon {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: var(--note-color);
+    stroke-width: calc(var(--toolbar-note-stroke) * 2);
+}
+
+/* Note hover effects */
+.primary-toolbar-grid-5x5 .note:hover {
+    transform: scale(1.05);
+}
+
+/* Note selected state */
+.primary-toolbar-grid-5x5 .note.selected {
+    background-color: var(--note-color);
+    box-shadow: 0 0 0 2px var(--c-surface), 0 0 0 4px var(--note-color);
+}
+
+.primary-toolbar-grid-5x5 .diamond-note.selected .diamond-icon {
+    fill: var(--note-color);
+}
+
+/* Lasso and marker shortcut buttons */
+#lasso-shortcut-button,
+#marker-shortcut-button {
+    border: 1px solid var(--c-border);
+}
+
+#lasso-shortcut-button svg,
+#marker-shortcut-button svg {
+    width: 60%;
+    height: 60%;
+}

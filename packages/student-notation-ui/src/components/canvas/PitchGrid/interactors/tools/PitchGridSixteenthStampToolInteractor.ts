@@ -5,7 +5,7 @@ import { placeSixteenthStamp } from '@/rhythm/sixteenthStampPlacements.js';
 import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
 import { hitTestAnySixteenthStampShape } from '@utils/sixteenthStampHitTest.ts';
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import type { SixteenthStampPlacement } from '../../../../../../types/state.js';
+import type { SixteenthStampPlacement } from '@app-types/state.js';
 
 interface DraggedStampShape {
   type: 'diamond' | 'oval';

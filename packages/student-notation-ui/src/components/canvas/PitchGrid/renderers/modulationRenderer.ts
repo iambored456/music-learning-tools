@@ -5,7 +5,7 @@ import { getColumnX } from './rendererUtils.js';
 import logger from '@utils/logger.ts';
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
-import type { AppState, ModulationMarker } from '../../../../../types/state.js';
+import type { AppState, ModulationMarker } from '@app-types/state.js';
 
 type RendererOptions = AppState & {
   columnWidths: number[];

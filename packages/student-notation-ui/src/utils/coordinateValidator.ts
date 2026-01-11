@@ -11,7 +11,7 @@
  *   window.__COORD_DEBUG__.validate()
  */
 
-import type { AppState, PlacedNote, SixteenthStampPlacement, TripletStampPlacement, TonicSign, ModulationMarker } from '../../types/state.js';
+import type { AppState, PlacedNote, SixteenthStampPlacement, TripletStampPlacement, TonicSign, ModulationMarker } from '@app-types/state.js';
 
 interface ValidationResult {
   passed: boolean;

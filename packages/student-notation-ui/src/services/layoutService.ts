@@ -24,7 +24,7 @@ import { calculateColumnWidths, getCanvasWidth as getCanvasWidthFromColumns } fr
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import { DEFAULT_MIN_VIEWPORT_ROWS, getAdaptiveZoomStep, getSpan, normalizeRange, setBottomEndpoint, setTopEndpoint, shiftRangeBy, zoomRange } from '@utils/pitchViewport.ts';
 import { calculateZoomToFitRowCount as calculateZoomToFitRowCountShared } from '@mlt/pitch-viewport';
-import type { PitchRange } from '../../types/state.js';
+import type { PitchRange } from '@app-types/state.js';
 
 // Import from extracted modules
 import {

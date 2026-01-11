@@ -1,0 +1,333 @@
+/* style/components/audio/harmonicsFilter.css */
+
+/* ==========================================================================
+   HARMONICS FILTER COMPONENT
+   Combined styling for harmonic bins and filter controls that work together
+   ========================================================================= */
+
+/* --- Container Styles --- */
+.filter-container {
+  display: grid;
+  grid-template-columns: auto auto; /* Left column: sliders/bins, Right column: M slider */
+  grid-template-rows: auto 1fr auto; /* Top: blend, Middle: bins (grows), Bottom: cutoff */
+  gap: 0;
+  flex: 1 1 auto;
+  margin-left: 0;
+  min-height: 0; /* Allow shrinking below content size */
+  height: 100%;
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-md);
+  padding: 0 0 0 5px; /* Only left padding */
+}
+
+/* --- Grid Positioning --- */
+.blend-slider-container {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    min-height: var(--slider-thumb-size);
+}
+
+.filter-bins-wrapper {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    min-height: 0;
+}
+
+.filter-vertical-blend-wrapper {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0; /* Allow shrinking with grid row */
+    min-width: var(--slider-thumb-size);
+}
+
+#filter-enable-toggle {
+    flex-shrink: 0;
+    background-color: var(--c-gridline);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-border);
+    display: none; /* Hidden by default */
+}
+
+#filter-enable-toggle .filter-icon { 
+    width: 24px; 
+    height: 24px; 
+}
+
+#filter-enable-toggle.active {
+    background-color: var(--c-accent);
+    color: var(--c-surface);
+    border-color: var(--c-accent-hover);
+}
+
+/* --- Horizontal Sliders --- */
+#blend-slider-container,
+#cutoff-slider-container {
+    position: relative;
+    width: 100%;
+    height: var(--slider-track-thickness);
+    min-height: var(--slider-thumb-size); /* Container height to accommodate thumb */
+    display: flex;
+    align-items: center; /* Center the thin rail vertically within the tall container */
+    flex-shrink: 0;
+}
+
+/* The actual slider rail (thin 10px bar) */
+#blend-slider-container::before,
+#cutoff-slider-container::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--slider-track-thickness); /* Rail is 10px thin */
+    border-radius: var(--border-radius-sm);
+    background: linear-gradient(
+      to right,
+      var(--c-accent) var(--progress, 0%),
+      var(--c-gridline) var(--progress, 0%)
+    );
+}
+
+#cutoff-slider-container {
+    grid-column: 1;
+    grid-row: 3;
+    transition: opacity 0.2s;
+    margin: 0;
+    padding: 0;
+}
+
+.filter-cutoff-thumb,
+.filter-blend-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: var(--slider-thumb-size);
+    height: var(--slider-thumb-size);
+    font-size: 12px;
+    background-color: var(--c-accent);
+    border-radius: 50%;
+    border: var(--slider-thumb-border) solid var(--c-surface);
+    box-shadow: var(--box-shadow-sm);
+    cursor: grab;
+    color: var(--c-surface);
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    z-index: 5;
+}
+
+.filter-cutoff-thumb:active,
+.filter-blend-thumb:active {
+    cursor: grabbing;
+    background-color: var(--c-accent-hover);
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* --- Vertical Blend Control --- */
+.vertical-blend-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    min-width: var(--slider-thumb-size);
+    height: 100%; /* Fill parent height */
+    margin: 0;
+    padding: 0;
+}
+
+#vertical-blend-track {
+    position: relative;
+    width: var(--slider-track-thickness);
+    height: 100%;
+    background: linear-gradient(
+        to top,
+        var(--c-accent) var(--blend-progress, 0%),
+        var(--c-gridline) var(--blend-progress, 0%)
+    );
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+}
+
+#vertical-blend-thumb {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    width: var(--slider-thumb-size);
+    height: var(--slider-thumb-size);
+    background-color: var(--c-accent);
+    border-radius: 50%;
+    border: var(--slider-thumb-border) solid var(--c-surface);
+    box-shadow: var(--box-shadow-sm);
+    cursor: ns-resize;
+    color: var(--c-surface);
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    z-index: 5;
+}
+
+#vertical-blend-thumb:active {
+    cursor: ns-resize;
+    background-color: var(--c-accent-hover);
+    transform: translate(-50%, 50%) scale(1.1);
+}
+
+/* --- Harmonic Bins Grid (Base Layer) --- */
+.harmonic-bins-grid {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  min-width: 11rem;
+  height: 100%;
+  min-height: 60px; /* Minimum usable height */
+  max-height: 100%;
+  position: relative;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* Individual slider columns */
+.slider-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+/* Harmonic labels (original - kept for backward compatibility) */
+.harmonic-label {
+  font-size: 0.7rem;
+  color: var(--c-text-muted);
+  text-align: center;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Internal harmonic labels (positioned inside bins at bottom) */
+.harmonic-label-internal {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  z-index: 3;
+  pointer-events: none;
+  transition: color 0.1s ease, text-shadow 0.1s ease;
+  user-select: none;
+}
+
+/* Slider track container */
+.slider-track {
+  flex-grow: 1;
+  width: 100%;
+  background-color: #ffffff;
+  border: none;
+  border-radius: 0;
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+/* Snap zone at bottom of slider */
+.slider-snap-zone {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 10%;
+  background-color: #f7f7f7;
+  border-top: 1px solid var(--c-border);
+}
+
+/* Slider fill (the colored bar) */
+.slider-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: transparent;
+  transition: height 0.1s ease;
+  border-radius: 0 0 1px 1px;
+}
+
+/* Phase buttons */
+.phase-button {
+  background-color: var(--c-gridline);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+  border-radius: 3px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.phase-button:hover {
+  background-color: var(--c-border);
+  color: var(--c-text);
+}
+
+.phase-button svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Filter Overlay --- */
+.filter-overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 24px); /* Reduced from 28px to account for space constraints */
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* --- Filter Disabled States --- */
+.multislider-container.filter-disabled #blend-slider-container,
+.multislider-container.filter-disabled #cutoff-slider-container {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.multislider-container.filter-disabled .filter-overlay-canvas {
+    display: none; 
+}

@@ -4,7 +4,7 @@
  * Shared type definitions for the layout service modules.
  */
 
-import type { PitchRange } from '../../../types/state.js';
+import type { PitchRange } from '@app-types/state.js';
 
 /**
  * Information about the current pitch viewport.

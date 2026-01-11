@@ -1,7 +1,7 @@
 // js/services/keyboardHandler.ts
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import type { PlacedNote, SixteenthStampPlacement, TripletStampPlacement } from '../../types/state.js';
+import type { PlacedNote, SixteenthStampPlacement, TripletStampPlacement } from '@app-types/state.js';
 
 logger.moduleLoaded('KeyboardHandler', 'keyboard');
 export function initKeyboardHandler(): void {

@@ -14,7 +14,7 @@ import type {
   SixteenthStampPlacement,
   Store,
   TripletStampPlacement
-} from '../../../types/state.js';
+} from '@app-types/state.js';
 
 function recomputeTonicColumns(state: Store['state']): void {
   const map = columnMapService.getColumnMap(state as any);

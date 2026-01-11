@@ -1,0 +1,155 @@
+/* style/components/_adsr.css */
+
+.adsr-container {
+    display: grid;
+    grid-template-columns: 1fr auto; /* Left column: graph/ADR slider, Right column: S slider */
+    grid-template-rows: 1fr auto; /* Top: graph (grows), Bottom: ADR slider */
+    gap: 0;
+    overflow: hidden;
+    padding: 5px 0 0 5px; /* Top and left padding only */
+    flex: 0 0 12.5rem;
+    min-height: 0;
+    width: 12.5rem; /* Override .control-section's width: fit-content */
+    min-width: 12.5rem; /* Override .control-section's min-width: fit-content */
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+}
+.adsr-graph-wrapper {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    overflow: visible;
+    min-height: 0;
+    min-width: 0;
+}
+#adsr-envelope {
+    position: relative; /* Establish positioning context for absolute children */
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+#adsr-envelope svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: var(--c-surface);
+}
+.sustain-slider-wrapper {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-inline: 0rem;
+    width: fit-content;
+    max-width: var(--slider-thumb-size);
+    min-width: var(--slider-thumb-size);
+}
+#sustain-slider-track {
+    position: relative;
+    width: var(--slider-track-thickness);
+    height: 100%;
+    background-color: var(--c-gridline);
+    border-radius: var(--border-radius-sm);
+}
+#sustain-slider-track::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: var(--sustain-progress, 0%);
+    background-color: var(--c-accent);
+    border-radius: var(--border-radius-sm);
+}
+
+/* Ineligible section overlay (dark gray area above normalized amplitude limit) */
+#sustain-slider-track::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--ineligible-height, 0%);
+    background-color: rgba(128, 128, 128, 0.4);
+    border-radius: var(--border-radius-sm);
+    pointer-events: none;
+}
+#sustain-slider-thumb {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 50%);
+    width: var(--slider-thumb-size);
+    height: var(--slider-thumb-size);
+    background-color: var(--c-accent);
+    border-radius: 50%;
+    border: var(--slider-thumb-border) solid var(--c-surface);
+    box-shadow: var(--box-shadow-sm);
+    cursor: grab;
+    color: var(--c-surface);
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+}
+#sustain-slider-thumb:active {
+    cursor: grabbing;
+    background-color: var(--c-accent-hover);
+    transform: translate(-50%, 50%) scale(1.1);
+}
+#multi-thumb-slider-container {
+    grid-column: 1;
+    grid-row: 2;
+    position: relative;
+    width: 100%;
+    height: var(--slider-track-thickness);
+    min-height: var(--slider-thumb-size); /* Container height to accommodate thumb */
+    min-width: 0;
+    display: flex;
+    align-items: center; /* Center the thin rail vertically within the tall container */
+}
+
+/* The actual slider rail (thin 10px bar) */
+#multi-thumb-slider-container::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: var(--slider-track-thickness); /* Rail is 10px thin */
+    border-radius: var(--border-radius-sm);
+    background: linear-gradient(
+      to right,
+      var(--c-accent) var(--adr-progress, 0%),
+      var(--c-gridline) var(--adr-progress, 0%)
+    );
+}
+.time-slider-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: var(--slider-thumb-size);
+    height: var(--slider-thumb-size);
+    background-color: var(--c-accent);
+    border-radius: 50%;
+    border: var(--slider-thumb-border) solid var(--c-surface);
+    box-shadow: var(--box-shadow-sm);
+    cursor: grab;
+    color: var(--c-surface);
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+}
+.time-slider-thumb:active {
+    cursor: grabbing;
+    background-color: var(--c-accent-hover);
+    transform: translate(-50%, -50%) scale(1.1);
+}

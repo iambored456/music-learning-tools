@@ -1,5 +1,5 @@
 import { getCanvasColumnWidths as newGetCanvasColumnWidths } from './columnMapService.ts';
-import type { AppState } from '../../types/state.js';
+import type { AppState } from '@app-types/state.js';
 
 export interface TonicSign {
   columnIndex: number;

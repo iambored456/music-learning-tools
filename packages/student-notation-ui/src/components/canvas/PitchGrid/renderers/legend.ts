@@ -11,7 +11,7 @@ import { getPlacedTonicSigns } from '@state/selectors.ts';
 import logger from '@utils/logger.ts';
 import { SIDE_COLUMN_WIDTH } from '../../../../core/constants.ts';
 import { getCanvasPixelRatio, getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
-import type { PitchRowData } from '../../../../../types/state.js';
+import type { PitchRowData } from '@app-types/state.js';
 
 type ExtendedPitchRow = PitchRowData & { isDummy?: boolean };
 

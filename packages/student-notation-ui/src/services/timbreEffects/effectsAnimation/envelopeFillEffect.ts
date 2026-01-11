@@ -2,7 +2,7 @@
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import * as Tone from 'tone';
-import type { AnimatableNote, TimbreState } from '../../../../types/state.js';
+import type { AnimatableNote, TimbreState } from '@app-types/state.js';
 
 logger.moduleLoaded('EnvelopeFillEffect');
 

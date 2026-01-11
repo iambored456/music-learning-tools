@@ -2,7 +2,7 @@
 import { getMacrobeatInfo } from '../selectors.js';
 import logger from '@utils/logger.ts';
 import TonalService from '@services/tonalService.ts';
-import type { CanvasSpaceColumn, PlacedNote, Store, TonicSign } from '../../../types/state.js';
+import type { CanvasSpaceColumn, PlacedNote, Store, TonicSign } from '@app-types/state.js';
 import { createCanvasSpaceColumn } from '@utils/coordinateTypes.ts';
 
 export function ensureCircleNoteSpan(note: PlacedNote): void {

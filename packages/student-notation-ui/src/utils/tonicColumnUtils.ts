@@ -8,7 +8,7 @@
  */
 
 import { getPlacedTonicSigns } from '@state/selectors.ts';
-import type { AppState, CanvasSpaceColumn } from '../../types/state.js';
+import type { AppState, CanvasSpaceColumn } from '@app-types/state.js';
 
 export interface TonicSign {
   columnIndex: CanvasSpaceColumn;

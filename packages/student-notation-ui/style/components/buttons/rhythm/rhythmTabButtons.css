@@ -1,0 +1,228 @@
+/* ==========================================================================
+   RHYTHM TAB BUTTON STYLES
+   ========================================================================= */
+
+/* --- Rhythm Tab Navigation Buttons (matching Pitch tab style) --- */
+.rhythm-tab-button {
+    padding: var(--space-015) var(--space-035);
+    background-color: var(--c-surface-muted);
+    border: 1px solid var(--c-border);
+    border-bottom: none;
+    color: var(--c-text-muted);
+    font-family: var(--main-font);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+    position: relative;
+    border-top-left-radius: var(--border-radius-md);
+    border-top-right-radius: var(--border-radius-md);
+    white-space: nowrap;
+}
+
+.rhythm-tab-button + .rhythm-tab-button {
+    margin-left: -1px;
+}
+
+.rhythm-tab-button:hover {
+    background-color: var(--c-surface);
+    color: var(--c-text);
+}
+
+.rhythm-tab-button.active {
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    font-weight: 600;
+    border-color: var(--c-border);
+    border-bottom-color: transparent;
+    z-index: 2;
+    margin-bottom: -1px;
+}
+
+/* --- Stamp Buttons --- */
+.sixteenth-stamp-button {
+    position: relative;
+    width: clamp(40px, 5dvw, 60px);
+    height: clamp(40px, 5dvh, 60px);
+    min-width: 0;
+    min-height: 0;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.sixteenth-stamp-button:hover {
+    background-color: var(--c-gridline);
+    transform: scale(1.05);
+    border-color: var(--c-accent);
+}
+
+.sixteenth-stamp-button.active {
+    background-color: var(--c-accent-light, #63a9fd) !important;
+    color: var(--c-text, #212529) !important;
+    border-color: var(--c-accent, #4A90E2) !important;
+    font-weight: 600 !important;
+    box-shadow: 0 0 0 1px var(--c-accent, #4A90E2) !important;
+    transform: scale(0.98) !important;
+    opacity: 1 !important;
+}
+
+.sixteenth-stamp-button svg {
+    flex-shrink: 0;
+}
+
+.sixteenth-stamp-number {
+    font-size: clamp(0.6rem, 1dvh, 0.7rem);
+    font-weight: 600;
+    color: var(--c-text-muted);
+    line-height: 1;
+}
+
+.sixteenth-stamp-button.active .sixteenth-stamp-number {
+    color: var(--c-text);
+}
+
+/* --- Triplet Buttons --- */
+.triplet-stamp-button {
+    position: relative;
+    width: clamp(32px, 4dvw, 48px);
+    height: clamp(32px, 4dvw, 48px);  /* Use dvw (not dvh) to match width */
+    min-width: 0;
+    min-height: 0;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.triplet-stamp-button:hover {
+    background-color: var(--c-gridline);
+    transform: scale(1.05);
+    border-color: var(--c-accent);
+}
+
+.triplet-stamp-button.active {
+    background-color: var(--c-accent-light, #63a9fd) !important;
+    color: var(--c-text, #212529) !important;
+    border-color: var(--c-accent, #4A90E2) !important;
+    font-weight: 600 !important;
+    box-shadow: 0 0 0 1px var(--c-accent, #4A90E2) !important;
+    transform: scale(0.98) !important;
+    opacity: 1 !important;
+}
+
+.triplet-stamp-button svg {
+    flex-shrink: 0;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.triplet-stamp-button-wide {
+    /* Quarter triplet buttons are wider to show their 2-cell span */
+    width: clamp(64px, 8dvw, 96px);
+    height: clamp(32px, 4dvw, 48px);  /* Maintain 2:1 aspect ratio (width is 2x height) */
+    min-width: 0;
+    position: relative;
+}
+
+.triplet-stamp-button-wide::after {
+    content: '';
+    position: absolute;
+    top: 10%;
+    bottom: 10%;
+    left: 50%;
+    width: 1px;
+    border-left: 1px dashed var(--c-border);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* --- Anacrusis and Macrobeat Buttons --- */
+.sidebar-toggle-button {
+    flex: 1; 
+    padding: var(--space-2); 
+    text-align: center;
+    background-color: var(--c-surface); 
+    color: var(--c-text); 
+    border: 1px solid var(--c-border);
+    opacity: 0.6;
+}
+
+.sidebar-toggle-button.active {
+    background-color: var(--c-warning); 
+    color: var(--c-text); 
+    border-color: var(--c-border);
+    opacity: 1.0;
+}
+
+.sidebar-toggle-button:not(.active):hover { 
+    background-color: var(--c-border); 
+}
+
+/* --- Macrobeat Structure Buttons --- */
+.macrobeat-adjust-group .toolkit-button {
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    color: var(--c-text);
+    transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.macrobeat-adjust-group .toolkit-button:hover {
+    background-color: var(--c-border);
+}
+
+.macrobeat-adjust-group .toolkit-button:active {
+    background-color: var(--c-warning);
+    transform: scale(0.95);
+    transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+/* --- Modulation Controls --- */
+.modulation-controls .toolkit-button {
+    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    background-color: var(--c-surface-muted);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    color: var(--c-text);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    min-width: 50px;
+}
+
+.modulation-controls .toolkit-button:hover {
+    background-color: var(--c-accent-neutral-light);
+    border-color: var(--c-accent-neutral);
+    color: var(--c-text);
+}
+
+.modulation-controls .toolkit-button.active {
+    background-color: var(--c-accent-neutral);
+    border-color: var(--c-accent-neutral);
+    color: var(--c-text);
+    font-weight: 600;
+}
+
+/* Ratio buttons: unified "default UI yellow" styling */
+.modulation-ratio-btn[data-ratio="2:3"]:hover,
+.modulation-ratio-btn[data-ratio="3:2"]:hover {
+    background-color: var(--c-accent-neutral-light);
+    border-color: var(--c-accent-neutral);
+    color: var(--c-text);
+}

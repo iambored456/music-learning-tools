@@ -5,7 +5,7 @@
 // before we physically move the underlying implementation.
 
 import LayoutService from './layoutService.js';
-import type { PitchRange } from '../../types/state.js';
+import type { PitchRange } from '@app-types/state.js';
 
 const pitchGridViewportService = {
   getViewportInfo: () => LayoutService.getViewportInfo(),

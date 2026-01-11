@@ -3,7 +3,7 @@ import store from '@state/initStore.ts';
 import SynthEngine from './initAudio.js';
 import GlobalService from './globalService.js';
 import { Note } from 'tonal';
-import type { PlacedNote } from '../../types/state.js';
+import type { PlacedNote } from '@app-types/state.js';
 
 interface TriggeredNotes {
   pitches: string[];

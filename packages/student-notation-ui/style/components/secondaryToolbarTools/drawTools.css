@@ -1,0 +1,390 @@
+/* ==========================================================================
+   DRAW TOOLS PANEL STYLES
+   ========================================================================= */
+
+/* Draw content box container */
+.draw-content-box {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-035));
+    padding: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    width: auto;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow: visible; /* allow popups to escape the card */
+    align-self: stretch;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+    position: relative;
+    z-index: 2;
+}
+
+/* Draw layout grid - 5 equal-width columns */
+.draw-layout-grid {
+    display: grid;
+    grid-template-columns: repeat(5, auto);
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-025));
+    /* Stretch items to fill available height */
+    align-items: stretch;
+    justify-content: start;
+    height: 100%;
+    min-height: 0;
+}
+
+/* Individual tool panel */
+.draw-tool-panel {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    transition: opacity 0.2s ease;
+    position: relative; /* allow stacking above neighbors when active */
+    z-index: 1;
+}
+
+/* Active tool panel highlight */
+.draw-tool-panel.active {
+    opacity: 1;
+}
+
+.draw-tool-panel:not(.active) {
+    opacity: 0.6;
+}
+
+/* Tool header (contains the tool icon button) */
+.draw-tool-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Individual draw tool button */
+.draw-tool-button {
+    width: clamp(1.4rem, 2.8dvh, 2rem);
+    height: clamp(1.4rem, 2.8dvh, 2rem);
+    padding: clamp(var(--space-005), 0.4dvh, var(--space-015));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--c-surface);
+    border: 2px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--c-text-muted);
+}
+
+.draw-tool-button:hover {
+    background-color: var(--c-gridline);
+    border-color: var(--c-text-muted);
+    transform: scale(1.05);
+}
+
+.draw-tool-button.active {
+    background-color: var(--c-accent, #4a90e2);
+    border-color: var(--c-accent, #4a90e2);
+    color: var(--c-surface);
+}
+
+.draw-tool-button svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Draw tool options container - appears below tool button in each panel */
+.draw-tool-options {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-025));
+    padding: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    background-color: var(--c-surface-muted);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    /* Fill remaining vertical space in tool panel */
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    max-height: 100%;
+    position: relative;
+    box-shadow: var(--box-shadow-sm);
+    min-width: clamp(140px, 18dvw, 180px);
+}
+
+.draw-tool-options:empty {
+    min-height: 2rem;
+}
+
+/* Toolbar row for compact button layout */
+.draw-toolbar-row {
+    display: flex;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    align-items: center;
+    justify-content: center;
+}
+
+/* Toolbar buttons (for arrow tool options) */
+.draw-toolbar-button {
+    width: clamp(1.2rem, 2.4dvh, 1.5rem);
+    height: clamp(1.2rem, 2.4dvh, 1.5rem);
+    padding: clamp(var(--space-005), 0.3dvh, var(--space-015));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--c-text);
+}
+
+.draw-toolbar-button:hover {
+    background-color: var(--c-gridline);
+    border-color: var(--c-text-muted);
+}
+
+.draw-toolbar-button svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Popup menu for tool options */
+.draw-popup-menu {
+    position: absolute;
+    display: none;
+    flex-direction: column;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    padding: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-md);
+    z-index: 3000;
+}
+
+.draw-popup-option {
+    padding: var(--space-015);
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.draw-popup-option:hover {
+    background-color: var(--c-gridline);
+    border-color: var(--c-text-muted);
+}
+
+.draw-popup-option.active {
+    background-color: var(--c-gridline);
+    border-color: var(--c-accent, #4a90e2);
+    border-width: 2px;
+    color: var(--c-text);
+}
+
+.draw-popup-trigger {
+    position: relative;
+}
+
+.draw-popup-trigger:focus-within .draw-popup-menu,
+.draw-popup-trigger:hover .draw-popup-menu {
+    display: flex;
+}
+
+/* Lift the active popup (and its panel) above adjacent panels */
+.draw-popup-trigger:focus-within,
+.draw-popup-trigger:hover {
+    z-index: 6;
+}
+
+.draw-tool-panel:focus-within,
+.draw-tool-panel:hover {
+    z-index: 5;
+}
+
+.draw-popup-option.active svg,
+.draw-popup-option.active svg * {
+    stroke: var(--c-accent, #4a90e2);
+}
+
+.draw-popup-option svg {
+    display: block;
+    stroke: var(--c-text);
+}
+
+.draw-popup-option svg * {
+    stroke: var(--c-text);
+}
+
+/* Option group styling */
+.draw-option-group {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+}
+
+/* Allow certain groups to sit in a horizontal row */
+.draw-option-group.draw-toolbar-row {
+    flex-direction: row;
+    align-items: center;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    flex-wrap: wrap;
+}
+
+.draw-option-label {
+    font-size: clamp(0.55rem, 1dvh, var(--font-size-sm));
+    font-weight: 600;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+/* Button group for line styles, arrowheads, etc. */
+.draw-button-group {
+    display: flex;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    flex-wrap: wrap;
+}
+
+.draw-option-button {
+    padding: clamp(var(--space-005), 0.4dvh, var(--space-015)) clamp(var(--space-010), 0.6dvh, var(--space-025));
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: clamp(0.6rem, 1.2dvh, var(--font-size-sm));
+    color: var(--c-text);
+    transition: all 0.2s ease;
+}
+
+.draw-option-button:hover {
+    background-color: var(--c-gridline);
+    border-color: var(--c-text-muted);
+}
+
+.draw-option-button.active {
+    background-color: var(--c-accent, #4a90e2);
+    border-color: var(--c-accent, #4a90e2);
+    color: var(--c-surface);
+}
+
+.text-style-rows {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--space-005), 0.5dvh, var(--space-010));
+}
+
+/* Swap button for arrow endpoints */
+.draw-swap-button {
+    padding: var(--space-015);
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.draw-swap-button:hover {
+    background-color: var(--c-gridline);
+}
+
+/* Color picker buttons */
+.draw-color-picker {
+    display: flex;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+}
+
+.draw-color-button {
+    width: clamp(1.4rem, 2.8dvh, 2rem);
+    height: clamp(1.4rem, 2.8dvh, 2rem);
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.draw-color-button:hover {
+    transform: scale(1.1);
+    border-color: var(--c-text-muted);
+}
+
+.draw-color-button.active {
+    border-color: var(--c-text);
+    border-width: 3px;
+    transform: scale(1.1);
+}
+
+/* Stroke size buttons */
+.draw-stroke-size-group {
+    display: flex;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+}
+
+.draw-stroke-size-button {
+    width: 3rem;
+    padding: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    transition: all 0.2s ease;
+}
+
+.draw-stroke-size-button:hover {
+    background-color: var(--c-gridline);
+    border-color: var(--c-text-muted);
+}
+
+.draw-stroke-size-button.active {
+    background-color: var(--c-accent, #4a90e2);
+    border-color: var(--c-accent, #4a90e2);
+    color: var(--c-surface);
+}
+
+/* Text input overlay */
+.annotation-text-input {
+    caret-color: #4a90e2;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
+
+.annotation-text-input::selection {
+    background-color: #4a90e2;
+    color: white;
+}
+
+.draw-option-help {
+    max-width: 200px;
+    max-height: 3.6em;
+    font-size: clamp(0.55rem, 1dvh, 0.7rem);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   DRAW PANEL WIDTH SYNCING
+   ========================================================================= */
+
+/*
+ * All draw tool panels sync to the same width (the widest panel's content width)
+ * This uses a CSS variable approach similar to the preset-effects syncing system
+ */

@@ -1,0 +1,344 @@
+﻿/* Clef content box inherits flex layout from parent */
+
+/* Option height variable - matches OPTION_HEIGHT in clefRangeController.ts */
+:root {
+    --clef-option-height: 40px;
+}
+
+.clef-content-box {
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-015);
+    box-shadow: var(--box-shadow-sm);
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.clef-picker-grid {
+    display: flex;
+    flex-direction: row;
+    gap: var(--space-025);
+    align-items: flex-start;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.clef-wheels-wrapper {
+    display: flex;
+    flex-direction: row;
+    gap: var(--space-025);
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.clef-picker-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-015);
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    height: 100%;
+}
+
+.clef-wheel {
+    position: relative;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,249,250,0.85) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    width: clamp(70px, 8dvw, 90px);
+    min-width: 0;
+    outline: none;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.clef-wheel:focus-visible {
+    border-color: var(--c-accent-neutral, #ffc107);
+    box-shadow: 0 0 0 3px rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.25), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+.clef-wheel:active {
+    cursor: grabbing;
+}
+
+.clef-wheel-viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+}
+
+.clef-wheel-options {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    transform: translateY(0);
+    transition: transform 0.18s ease-out;
+    will-change: transform;
+}
+
+.clef-wheel-option {
+    width: 100%;
+    text-align: center;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(33, 37, 41, 0.35);
+    user-select: none;
+    pointer-events: none;
+    transform-origin: center;
+    transition: color 0.18s ease-out, transform 0.18s ease-out, opacity 0.18s ease-out;
+    opacity: 0.3;
+}
+
+.clef-wheel-option[data-distance="0"] {
+    font-size: 0.95rem;
+    color: var(--text-strong, #212529);
+    opacity: 1;
+}
+
+.clef-wheel-option[data-distance="1"] {
+    opacity: 0.55;
+    transform: scale(0.95);
+}
+
+.clef-wheel-option[data-distance="2"] {
+    opacity: 0.4;
+    transform: scale(0.9);
+}
+
+.clef-wheel-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(248, 249, 250, 0.92) 0%, rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, 0) 80%, rgba(248, 249, 250, 0.92) 100%);
+    border-radius: 18px;
+}
+
+.clef-wheel-overlay::before {
+    content: '';
+    position: absolute;
+    left: 0%;
+    right: 0%;
+    top: 50%;
+    /* Height is 75% of option height to stay contained within cell */
+    height: calc(var(--clef-option-height) * 0.75);
+    border-radius: 16px;
+    border: 1px solid rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.35);
+    background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.12);
+    transform: translateY(-50%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4);
+}
+
+.clef-summary-column {
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-width: fit-content;
+    width: auto;
+    min-height: 0;
+}
+
+.clef-summary-card {
+    background: var(--c-surface);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-015);
+    border: 1px solid var(--c-border);
+    box-shadow: var(--box-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-015);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    font-size: 0.7rem;
+    width: fit-content;
+    min-width: 14ch;
+}
+
+.clef-summary-card h4 {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.clef-summary-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-strong, #212529);
+    min-height: 1.2em;
+    line-height: 1.2;
+    min-width: 12ch;
+}
+
+.clef-summary-metadata {
+    font-size: 0.65rem;
+    color: var(--text-muted, #6c757d);
+}
+
+.clef-snap-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.65rem;
+    color: var(--text-muted, #6c757d);
+    margin-top: 4px;
+    user-select: none;
+    cursor: pointer;
+}
+
+.clef-snap-toggle input[type="checkbox"] {
+    appearance: none;
+    width: 32px;
+    height: 16px;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.15);
+    position: relative;
+    transition: background 0.2s ease;
+    outline: none;
+    cursor: pointer;
+}
+
+.clef-snap-toggle input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    transition: transform 0.2s ease;
+}
+
+.clef-snap-toggle input[type="checkbox"]:checked {
+    background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.7);
+}
+
+.clef-snap-toggle input[type="checkbox"]:checked::after {
+    transform: translateX(16px);
+}
+
+.clef-presets-column {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    min-width: fit-content;
+    min-height: 0;
+    justify-content: center;
+    height: 100%;
+}
+
+.clef-preset-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-015);
+    flex-wrap: nowrap;
+    height: 100%;
+    align-items: stretch;
+}
+
+.clef-preset-button {
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 0;
+    padding: var(--space-015) var(--space-025);
+    font-size: 0.7rem;
+    white-space: nowrap;
+    background: var(--c-surface);
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    box-shadow: var(--box-shadow-sm);
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.clef-preset-button:not(.active) {
+    background: var(--c-surface);
+    color: var(--c-text);
+    border-color: var(--c-border);
+    box-shadow: var(--box-shadow-sm);
+}
+
+.clef-preset-button.active {
+    background: linear-gradient(180deg, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.9) 0%, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.75) 100%);
+    border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 1);
+    color: var(--c-surface);
+    box-shadow: var(--box-shadow-md);
+}
+
+.clef-preset-button.active:hover,
+.clef-preset-button.active:focus-visible {
+    background: linear-gradient(180deg, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 1) 0%, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.85) 100%);
+    border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 1);
+    color: var(--c-surface);
+}
+
+.clef-preset-button:hover,
+.clef-preset-button:focus-visible {
+    background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.18);
+    border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.5);
+    box-shadow: var(--box-shadow-md);
+}
+
+.clef-preset-button:active {
+    background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.32);
+    border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.65);
+    color: var(--c-text);
+}
+
+.clef-wheel[data-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+    .clef-picker-grid {
+        grid-template-columns: repeat(2, auto);
+        grid-auto-rows: auto;
+    }
+
+    .clef-summary-column {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 900px) {
+    .clef-picker-grid {
+        grid-template-columns: auto;
+    }
+
+    .clef-summary-column {
+        grid-column: span 1;
+    }
+}
+
+

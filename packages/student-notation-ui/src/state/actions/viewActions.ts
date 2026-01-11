@@ -1,7 +1,7 @@
 // js/state/actions/viewActions.ts
 import { fullRowData as masterRowData } from '../pitchData.js';
 import logger from '@utils/logger.ts';
-import type { Store, PrintOptions } from '../../../types/state.js';
+import type { Store, PrintOptions } from '@app-types/state.js';
 
 interface PitchRange {
   topIndex: number;

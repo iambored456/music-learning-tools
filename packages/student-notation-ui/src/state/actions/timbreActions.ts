@@ -2,7 +2,7 @@
 import { createDefaultFilterState } from '../initialState/timbres.js';
 import logger from '@utils/logger.ts';
 import { logAdsrFlow } from '@utils/adsrDebug.ts';
-import type { Store } from '../../../types/state.js';
+import type { Store } from '@app-types/state.js';
 
 interface ADSREnvelope {
   attack: number;

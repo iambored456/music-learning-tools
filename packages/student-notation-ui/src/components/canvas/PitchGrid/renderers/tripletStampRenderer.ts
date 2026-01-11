@@ -5,9 +5,9 @@ import store from '@state/initStore.ts';
 import logger from '../../../../utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { timeToCanvas } from '../../../../services/columnMapService.ts';
-import type { TripletStampPlacement } from '../../../../../types/state.js';
+import type { TripletStampPlacement } from '@app-types/state.js';
 import type { TripletStamp } from '../../../../rhythm/tripletStamps.js';
-import type { ModulationMarker } from '../../../../../types/state.js';
+import type { ModulationMarker } from '@app-types/state.js';
 
 interface TripletStampRenderOptions {
   columnWidths: number[];

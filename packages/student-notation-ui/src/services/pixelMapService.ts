@@ -6,7 +6,7 @@
 
 import columnMapService from './columnMapService.ts';
 import { createCoordinateMapping, type CoordinateMapping } from '../rhythm/modulationMapping.js';
-import type { AppState, ModulationMarker } from '../../types/state.js';
+import type { AppState, ModulationMarker } from '@app-types/state.js';
 
 /**
  * Pixel position information for a column

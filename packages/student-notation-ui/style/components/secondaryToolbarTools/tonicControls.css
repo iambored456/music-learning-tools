@@ -1,0 +1,235 @@
+/* ==========================================================================
+   RANGE CONTROLS - TONIC MODES, DEGREES, CLEF RANGE
+   ========================================================================= */
+
+/* --- Range Content Box --- */
+.range-content-box {
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-015);
+    box-shadow: var(--box-shadow-sm);
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* --- Range Layout --- */
+.range-layout {
+    display: flex;
+    flex-direction: row;
+    gap: var(--space-025);
+    align-items: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+}
+
+.range-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: flex-start;
+    min-height: 0;
+    height: 100%;
+}
+
+.range-panel-section.modes-section {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+
+.range-panel-section.degrees-section {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.range-panel-section.wheels-section {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.range-panel-section.summary-section {
+    flex: 0 0 auto;
+}
+
+.range-panel-section.presets-section {
+    flex: 0 0 auto;
+    height: 100%;
+}
+
+/* --- Tonic Modes Container --- */
+.tonic-modes-container {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    max-height: 100%;
+    height: 100%;
+}
+
+/* --- Tonic Modes Grid (2 columns with 7 buttons) --- */
+.tonic-modes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(0, 1fr);
+    gap: var(--space-015);
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    height: 100%;
+}
+
+/* --- Tonic Mode Button Styles (similar to harmony preset buttons) --- */
+.tonic-mode-button {
+    background-color: transparent;
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    padding: var(--space-005) var(--space-010);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-010);
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+}
+
+.tonic-mode-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.tonic-mode-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--c-text);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+}
+
+.tonic-mode-button:hover {
+    background-color: var(--c-border);
+}
+
+.tonic-mode-button:focus {
+    background-color: transparent;
+    color: var(--c-text);
+    outline: none;
+}
+
+.tonic-mode-button:focus:hover {
+    background-color: var(--c-border);
+}
+
+.tonic-mode-button.selected {
+    background-color: var(--c-accent-neutral-light, #ffd54f);
+    color: var(--c-text, #212529);
+    border-color: var(--c-accent-neutral, #ffc107);
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.45);
+}
+
+.tonic-mode-button.selected .tonic-mode-label {
+    color: var(--c-text);
+    font-weight: 700;
+}
+
+.tonic-mode-button.selected:focus {
+    background-color: var(--c-accent-neutral-light);
+    color: var(--c-text);
+}
+
+/* --- Tonic Degrees Container (right sidebar) --- */
+.tonic-degrees-container {
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-025);
+    min-width: 140px;
+    max-width: 160px;
+    align-items: stretch;
+    justify-content: flex-start;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* --- Degree Toggle Container --- */
+.degree-toggle-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-025);
+    align-items: stretch;
+    justify-content: center;
+    flex: 0 1 220px;
+}
+
+.degree-visibility-toggle-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-010);
+    justify-content: center;
+    width: 100%;
+}
+
+.degree-mode-toggle-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-010);
+    width: 100%;
+}
+
+.degree-mode-toggle-container.disabled {
+    opacity: 0.75;
+}
+
+/* --- Focus Colours Container --- */
+.focus-colours-container .checkbox-text {
+    font-size: 0.7em;
+}
+
+.focus-colours-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 1 140px;
+}
+
+@media (max-width: 900px) {
+    .tonic-tools-wrapper {
+        flex-direction: column;
+    }
+
+    #tonic-mode-grid,
+    .degree-toggle-container,
+    .focus-colours-container {
+        flex: 1 1 auto;
+    }
+}

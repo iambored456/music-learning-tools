@@ -1,5 +1,5 @@
 // js/state/pitchData.ts
-import type { PitchRowData } from '../../types/state.js';
+import type { PitchRowData } from '@app-types/state.js';
 
 /**
  * FULL PITCH GAMUT DATA

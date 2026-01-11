@@ -2,7 +2,7 @@
 import { getInitialRhythmState } from './rhythm.js';
 import { getInitialTimbresState } from './timbres.js';
 import { fullRowData as masterRowData } from '../pitchData.js';
-import type { AppState } from '../../../types/state.js';
+import type { AppState } from '@app-types/state.js';
 
 function resolvePitchRangeFromToneNotes(topToneNote: string, bottomToneNote: string) {
   const topIndex = masterRowData.findIndex(row => row.toneNote === topToneNote);

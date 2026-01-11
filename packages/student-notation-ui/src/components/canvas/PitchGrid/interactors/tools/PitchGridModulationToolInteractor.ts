@@ -2,7 +2,7 @@ import store from '@state/initStore.ts';
 import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.js';
 import { getModulationMarkerCursor, hitTestModulationMarker } from '../../renderers/modulationRenderer.js';
 import logger from '@utils/logger.ts';
-import type { ModulationMarker } from '../../../../../../types/state.js';
+import type { ModulationMarker } from '@app-types/state.js';
 
 interface MeasureBoundary {
   measureIndex: number;

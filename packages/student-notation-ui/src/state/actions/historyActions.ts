@@ -1,5 +1,5 @@
 // js/state/actions/historyActions.ts
-import type { Store, TimbreState } from '../../../types/state.js';
+import type { Store, TimbreState } from '@app-types/state.js';
 
 // Helper to safely restore timbres, ensuring coeffs are Float32Array
 function restoreTimbres(timbresSnapshot: Record<string, TimbreState>): Record<string, TimbreState> {

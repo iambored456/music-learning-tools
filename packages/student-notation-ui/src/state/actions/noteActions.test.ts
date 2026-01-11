@@ -34,7 +34,7 @@ vi.mock('@utils/coordinateTypes.ts', () => ({
 // Import the functions we're testing
 import { ensureCircleNoteSpan, noteActions } from './noteActions.ts';
 import { createCanvasSpaceColumn } from '@utils/coordinateTypes.ts';
-import type { PlacedNote, Store } from '../../../types/state.js';
+import type { PlacedNote, Store } from '@app-types/state.js';
 
 /**
  * Creates a mock note for testing

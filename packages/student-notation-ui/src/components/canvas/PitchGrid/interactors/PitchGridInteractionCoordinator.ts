@@ -1,5 +1,5 @@
 import store from '@state/initStore.ts';
-import type { CanvasSpaceColumn, PlacedNote } from '../../../../../types/state.js';
+import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
 import type { PitchGridNoteToolInteractor } from './tools/PitchGridNoteToolInteractor.ts';
 import type { PitchGridChordToolInteractor } from './tools/PitchGridChordToolInteractor.ts';
 import type { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolInteractor.ts';

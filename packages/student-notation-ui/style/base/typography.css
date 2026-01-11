@@ -1,0 +1,33 @@
+/* ==========================================================================
+   TYPOGRAPHY & FONT STYLES
+   ========================================================================= */
+
+:root {
+  /* Set the base font size. 100% = 16px by default. */
+  font-size: 100%;
+}
+
+/* Base element styles using our new font-size variables */
+body {
+  font-size: var(--font-size-base);
+}
+
+button {
+  font-size: var(--font-size-sm);
+}
+
+.slider-label {
+  font-size: var(--font-size-base);
+}
+
+.tempo-input {
+  font-size: var(--font-size-sm);
+}
+
+.app-title {
+  font-size: var(--font-size-base);
+}
+
+.tonic-sign-button {
+    font-size: var(--font-size-lg);
+}
