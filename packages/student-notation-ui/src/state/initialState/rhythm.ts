@@ -11,12 +11,12 @@ export const ANACRUSIS_OFF_STYLES: MacrobeatBoundaryStyle[] = [
   'dashed', 'dashed', 'dashed' // The last measure is completed by the "isLastBeat" logic
 ];
 
-export function getInitialRhythmState(): Pick<AppState, 'hasAnacrusis' | 'macrobeatGroupings' | 'macrobeatBoundaryStyles' | 'baseMicrobeatPx' | 'modulationMarkers'> {
+export function getInitialRhythmState(): Pick<AppState, 'hasAnacrusis' | 'macrobeatGroupings' | 'macrobeatBoundaryStyles' | 'baseMicrobeatPx' | 'tempoModulationMarkers'> {
   return {
     hasAnacrusis: false,
     macrobeatGroupings: [...ANACRUSIS_OFF_GROUPINGS],
     macrobeatBoundaryStyles: [...ANACRUSIS_OFF_STYLES],
     baseMicrobeatPx: 40, // Base pixels per microbeat (will be calculated from cellWidth)
-    modulationMarkers: [] // Array of ModulationMarker objects
+    tempoModulationMarkers: [] // Array of ModulationMarker objects
   };
 }

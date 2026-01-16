@@ -68,7 +68,7 @@ export function initModulationControls(): void {
 
   // Clear button click handler
   modulationClearBtn.addEventListener('click', () => {
-    const markerCount = (store.state.modulationMarkers || []).length;
+    const markerCount = (store.state.tempoModulationMarkers || []).length;
 
     if (markerCount === 0) {
       logger.info('ModulationInitializer', 'No modulation markers to clear', null, 'ui');
@@ -93,8 +93,8 @@ export function initModulationControls(): void {
   });
 
   // Listen for marker changes to update UI state
-  store.on('modulationMarkersChanged', () => {
-    const markerCount = (store.state.modulationMarkers || []).length;
+  store.on('tempoModulationMarkersChanged', () => {
+    const markerCount = (store.state.tempoModulationMarkers || []).length;
 
     // Update clear button state
     if (markerCount === 0) {
@@ -110,7 +110,7 @@ export function initModulationControls(): void {
   });
 
   // Initialize button states
-  const initialMarkerCount = (store.state.modulationMarkers || []).length;
+  const initialMarkerCount = (store.state.tempoModulationMarkers || []).length;
   if (initialMarkerCount === 0) {
     (modulationClearBtn as HTMLButtonElement).disabled = true;
     (modulationClearBtn).style.opacity = '0.5';

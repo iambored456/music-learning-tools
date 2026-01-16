@@ -25,7 +25,7 @@ interface ValidationReport {
   stamps: ValidationResult;
   triplets: ValidationResult;
   tonicSigns: ValidationResult;
-  modulationMarkers: ValidationResult;
+  tempoModulationMarkers: ValidationResult;
   columnWidths: ValidationResult;
 }
 
@@ -225,7 +225,7 @@ export function validateModulationMarkers(state: AppState): ValidationResult {
     warnings: []
   };
 
-  const markers = state.modulationMarkers || [];
+  const markers = state.tempoModulationMarkers || [];
   const maxColumn = (state.columnWidths || []).length;
 
   markers.forEach((marker: ModulationMarker, index: number) => {
@@ -307,7 +307,7 @@ export function runAllValidations(state: AppState): ValidationReport {
     stamps: validateStamps(state),
     triplets: validateTriplets(state),
     tonicSigns: validateTonicSigns(state),
-    modulationMarkers: validateModulationMarkers(state),
+    tempoModulationMarkers: validateModulationMarkers(state),
     columnWidths: validateColumnWidths(state)
   };
 

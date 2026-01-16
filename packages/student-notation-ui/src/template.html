@@ -167,7 +167,7 @@
                                     <div class="position-control-group">
                                         <h5 class="position-label">Delay</h5>
                                         <div class="position-component-wrapper">
-                                            <div class="position-component" id="delay-position"></div>
+                                            <div class="position-component" id="delay-position" data-svelte-component="effects-cartesian-slider" data-effect="delay"></div>
                                             <div id="delay-mix-wrapper"></div>
                                         </div>
                                         <div class="position-axis-labels" data-axis-x="Time" data-axis-y="Echoes"></div>
@@ -175,7 +175,7 @@
                                     <div class="position-control-group">
                                         <h5 class="position-label">Vibrato</h5>
                                         <div class="position-component-wrapper">
-                                            <div class="position-component" id="vibrato-position"></div>
+                                            <div class="position-component" id="vibrato-position" data-svelte-component="effects-cartesian-slider" data-effect="vibrato"></div>
                                             <div id="vibrato-mix-wrapper"></div>
                                         </div>
                                         <div class="position-axis-labels" data-axis-x="Speed" data-axis-y="Span"></div>
@@ -183,7 +183,7 @@
                                     <div class="position-control-group">
                                         <h5 class="position-label">Tremolo</h5>
                                         <div class="position-component-wrapper">
-                                            <div class="position-component" id="tremolo-position"></div>
+                                            <div class="position-component" id="tremolo-position" data-svelte-component="effects-cartesian-slider" data-effect="tremolo"></div>
                                             <div id="tremolo-mix-wrapper"></div>
                                         </div>
                                         <div class="position-axis-labels" data-axis-x="Speed" data-axis-y="Span"></div>
@@ -812,6 +812,7 @@
                         <div id="pitch-canvas-wrapper">
                             <canvas id="legend-left-canvas"></canvas>
                             <canvas id="notation-grid"></canvas>
+                            <canvas id="note-animation-canvas"></canvas>
                             <canvas id="legend-right-canvas"></canvas>
                             <canvas id="playhead-canvas"></canvas>
                             <canvas id="hover-canvas"></canvas>
@@ -925,3 +926,7 @@
 <div data-svelte-component="tab-management-bridge" style="display: none;"></div>
 <!-- Modal bridges -->
 <div data-svelte-component="print-preview-bridge" style="display: none;"></div>
+<!-- Phase 3: Modernized Svelte 5 components -->
+<div data-svelte-component="store-context" style="display: none;"></div>
+<div data-svelte-component="notification-modal"></div>
+<div data-svelte-component="zoom-indicator"></div>

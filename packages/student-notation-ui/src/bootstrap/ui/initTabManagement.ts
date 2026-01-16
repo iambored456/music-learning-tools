@@ -95,12 +95,12 @@ function restoreSavedPresetTab(): void {
     targetPanel.classList.add('active');
 
     // Handle harmonic bins visibility based on which tab is active
-    const harmonicBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
-    if (harmonicBinsContainer) {
+    const overtoneBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
+    if (overtoneBinsContainer) {
       if (savedTab === 'effects') {
-        harmonicBinsContainer.style.display = 'none';
+        overtoneBinsContainer.style.display = 'none';
       } else {
-        harmonicBinsContainer.style.display = 'flex';
+        overtoneBinsContainer.style.display = 'flex';
       }
     }
   } else {
@@ -134,12 +134,12 @@ export function initPresetTabs(): void {
       saveCurrentPresetTab(tabId);
 
       // Hide harmonic bins when effects tabs are selected
-      const harmonicBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
-      if (harmonicBinsContainer) {
+      const overtoneBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
+      if (overtoneBinsContainer) {
         if (tabId === 'effects') {
-          harmonicBinsContainer.style.display = 'none';
+          overtoneBinsContainer.style.display = 'none';
         } else {
-          harmonicBinsContainer.style.display = 'flex';
+          overtoneBinsContainer.style.display = 'flex';
         }
       }
     });

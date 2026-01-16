@@ -86,7 +86,7 @@
     columnWidths?: number[];
     macrobeatGroupings?: MacrobeatGrouping[];
     macrobeatBoundaryStyles?: MacrobeatBoundaryStyle[];
-    modulationMarkers?: ModulationMarker[];
+    tempoModulationMarkers?: ModulationMarker[];
     longNoteStyle?: LongNoteStyle;
 
     // Singing mode props
@@ -116,7 +116,7 @@
     columnWidths = [],
     macrobeatGroupings = [],
     macrobeatBoundaryStyles = [],
-    modulationMarkers,
+    tempoModulationMarkers,
     longNoteStyle = 'style1',
     singingConfig,
     highwayConfig,
@@ -163,7 +163,7 @@
         cellHeight,
         columnWidths,
         viewport,
-        modulationMarkers,
+        tempoModulationMarkers,
       });
     } else {
       const config = isHighwayMode ? highwayConfig : singingConfig;

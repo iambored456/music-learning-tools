@@ -9,6 +9,23 @@ export type StudentNotationInstance = {
 const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const publicPrefix = '../public/';
 
+const shouldInitDebug = (): boolean => {
+  if (typeof window === 'undefined') {return false;}
+  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
+  if (override === true) {return true;}
+  if (override === false) {return false;}
+  return import.meta.env.DEV;
+};
+
+const initDebug = (message: string, data?: unknown): void => {
+  if (!shouldInitDebug()) {return;}
+  if (data === undefined) {
+    console.log(message);
+    return;
+  }
+  console.log(message, data);
+};
+
 function resolvePublicAsset(path: string): string {
   const normalized = path.replace(/^\/+/, '');
   const key = `${publicPrefix}${normalized}`;
@@ -33,9 +50,20 @@ function rewriteAssetUrls(container: HTMLElement): void {
 }
 
 export function mountStudentNotation(container: HTMLElement): StudentNotationInstance {
+  initDebug('[StudentNotation] mount:start', {
+    hasTemplate: Boolean(template),
+    templateLength: template.length,
+    containerId: container.id || null,
+  });
+
   container.innerHTML = template;
+  initDebug('[StudentNotation] template injected');
+
   rewriteAssetUrls(container);
+  initDebug('[StudentNotation] assets rewritten');
+
   initStudentNotation();
+  initDebug('[StudentNotation] initStudentNotation:called');
 
   return {
     destroy: () => {

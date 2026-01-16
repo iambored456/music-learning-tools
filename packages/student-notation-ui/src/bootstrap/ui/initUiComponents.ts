@@ -12,7 +12,25 @@ import toolbar from '@components/toolbar/toolbar.ts';
 import { mountSvelteComponents } from '@/svelte-ui/index.ts';
 import logger from '@utils/logger.ts';
 
+const shouldInitDebug = (): boolean => {
+  if (typeof window === 'undefined') {return false;}
+  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
+  if (override === true) {return true;}
+  if (override === false) {return false;}
+  return import.meta.env.DEV;
+};
+
+const initDebug = (message: string, data?: unknown): void => {
+  if (!shouldInitDebug()) {return;}
+  if (data === undefined) {
+    console.log(`[InitUiComponents] ${message}`);
+    return;
+  }
+  console.log(`[InitUiComponents] ${message}`, data);
+};
+
 export function initUiComponents(): void {
+  initDebug('start');
   // toolbar.init() is still called but all its functionality has been migrated to Svelte bridge components
   // The init() method now just logs that Svelte manages everything
   toolbar.init();
@@ -31,7 +49,10 @@ export function initUiComponents(): void {
   // - Toolbar controls (playback, file actions, grid, modulation, sidebar, tool selector, audio)
   // - Tab management (main tabs, preset tabs, pitch tabs)
   // - Modals (print preview)
+  initDebug('mountSvelteComponents:start');
   mountSvelteComponents();
+  initDebug('mountSvelteComponents:done');
 
   logger.initSuccess('UiComponents');
+  initDebug('done');
 }

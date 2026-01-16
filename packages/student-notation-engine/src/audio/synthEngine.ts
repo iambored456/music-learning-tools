@@ -172,7 +172,12 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
           const result = originalTriggerAttack(...args);
 
           // Apply current settings to newly created voices
-          setTimeout(() => {
+          // Use Tone.Draw.schedule to sync with the audio timeline
+          // Schedule slightly after the attack time to ensure voice exists
+          const triggerTime = args[1] ?? Tone.now();
+          const effectApplicationTime = triggerTime + 0.005; // 5ms after attack in audio time
+
+          Tone.Draw.schedule(() => {
             const activeVoices = this._activeVoices;
 
             if (effectsManager) {
@@ -217,7 +222,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
                 });
               }
             }
-          }, 10);
+          }, effectApplicationTime);
 
           return result;
         };
@@ -371,12 +376,13 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
         synth.triggerAttack(pitch, time);
 
-        // Reset volume after a short delay
-        setTimeout(() => {
+        // Reset volume 100ms after the drum hit using audio-synchronized scheduling
+        // Tone.Draw.schedule syncs with the audio context for precise timing
+        Tone.Draw.schedule(() => {
           if (synth?.volume) {
             synth.volume.value = originalVolume;
           }
-        }, 100);
+        }, time + 0.1);
       } else {
         synth.triggerAttack(pitch, time);
       }

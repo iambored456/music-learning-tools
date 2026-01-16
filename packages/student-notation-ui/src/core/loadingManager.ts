@@ -101,12 +101,21 @@ class LoadingManager {
     }
   }
 
-  async nextFrame(): Promise<void> {
-    await new Promise<void>(resolve => {
+  async nextFrame(timeoutMs = 200): Promise<void> {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) {return;}
+        settled = true;
+        resolve();
+      };
+
       if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(() => resolve());
+        requestAnimationFrame(() => finish());
+        // Fallback in case rAF is throttled or blocked.
+        setTimeout(() => finish(), timeoutMs);
       } else {
-        setTimeout(resolve, 0);
+        setTimeout(() => finish(), 0);
       }
     });
   }

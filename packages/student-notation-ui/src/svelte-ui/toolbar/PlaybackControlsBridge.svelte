@@ -18,11 +18,11 @@
   import { getIconPath } from '@utils/assetPaths.ts';
 
   // Reactive state
-  let isPlaying = $state(store.state.isPlaying);
-  let isPaused = $state(store.state.isPaused);
-  let isLooping = $state(store.state.isLooping);
-  let canUndo = $state(store.state.historyIndex > 0);
-  let canRedo = $state(store.state.historyIndex < store.state.history.length - 1);
+  let isPlaying = store.state.isPlaying;
+  let isPaused = store.state.isPaused;
+  let isLooping = store.state.isLooping;
+  let canUndo = store.state.historyIndex > 0;
+  let canRedo = store.state.historyIndex < store.state.history.length - 1;
 
   // DOM element references
   let playBtn: HTMLElement | null = null;

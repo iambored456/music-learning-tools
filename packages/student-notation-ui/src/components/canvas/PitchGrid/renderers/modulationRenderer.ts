@@ -9,7 +9,7 @@ import type { AppState, ModulationMarker } from '@app-types/state.js';
 
 type RendererOptions = AppState & {
   columnWidths: number[];
-  modulationMarkers: ModulationMarker[];
+  tempoModulationMarkers: ModulationMarker[];
   /** Whether to show modulation marker labels (default: true). Student Notation hides PitchGrid labels. */
   showModulationLabel?: boolean;
 };
@@ -50,14 +50,14 @@ function measureIndexToCanvasX(measureIndex: number, options: RendererOptions): 
  * @param {Object} options - Render options containing modulation markers
  */
 export function renderModulationMarkers(ctx: CanvasRenderingContext2D, options: RendererOptions): void {
-  const { modulationMarkers } = options;
+  const { tempoModulationMarkers } = options;
 
-  if (!modulationMarkers || modulationMarkers.length === 0) {
+  if (!tempoModulationMarkers || tempoModulationMarkers.length === 0) {
     return;
   }
 
   // Convert measure-based markers to canvas positions
-  const markersWithCanvasX: MarkerWithCanvas[] = modulationMarkers
+  const markersWithCanvasX: MarkerWithCanvas[] = tempoModulationMarkers
     .filter(marker => marker.active)
     .map(marker => {
       let canvasX: number;

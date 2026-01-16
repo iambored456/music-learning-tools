@@ -1,6 +1,6 @@
-var it = Object.defineProperty;
-var at = (o, e, i) => e in o ? it(o, e, { enumerable: !0, configurable: !0, writable: !0, value: i }) : o[e] = i;
-var V = (o, e, i) => at(o, typeof e != "symbol" ? e + "" : e, i);
+var at = Object.defineProperty;
+var rt = (t, e, i) => e in t ? at(t, e, { enumerable: !0, configurable: !0, writable: !0, value: i }) : t[e] = i;
+var V = (t, e, i) => rt(t, typeof e != "symbol" ? e + "" : e, i);
 import * as w from "tone";
 const z = [
   // === AUDIBLE PITCH RANGE (C8 to A0) ===
@@ -92,48 +92,48 @@ const z = [
   { pitch: "B0", flatName: "B0", sharpName: "B0", toneNote: "B0", frequency: 30.87, column: "B", hex: "#41273f", isAccidental: !1, midi: 23, pitchClass: 11, octave: 0 },
   { pitch: "B♭/A♯0", flatName: "B♭0", sharpName: "A♯0", toneNote: "Bb0", frequency: 29.14, column: "A", hex: "#342a46", isAccidental: !0, midi: 22, pitchClass: 10, octave: 0 },
   { pitch: "A0", flatName: "A0", sharpName: "A0", toneNote: "A0", frequency: 27.5, column: "B", hex: "#242c48", isAccidental: !1, midi: 21, pitchClass: 9, octave: 0 }
-], fe = /* @__PURE__ */ new Map(), rt = /* @__PURE__ */ new Map();
-z.forEach((o, e) => {
-  fe.set(o.toneNote, e), o.midi !== void 0 && rt.set(o.midi, e);
+], fe = /* @__PURE__ */ new Map(), lt = /* @__PURE__ */ new Map();
+z.forEach((t, e) => {
+  fe.set(t.toneNote, e), t.midi !== void 0 && lt.set(t.midi, e);
 });
-function un(o) {
-  const e = fe.get(o);
+function gn(t) {
+  const e = fe.get(t);
   return e !== void 0 ? z[e] : void 0;
 }
-function hn(o) {
-  return z[o];
+function Sn(t) {
+  return z[t];
 }
-function Le(o) {
-  return fe.get(o) ?? -1;
+function _e(t) {
+  return fe.get(t) ?? -1;
 }
-function lt(o, e) {
-  const i = Le(o), g = Le(e);
+function ct(t, e) {
+  const i = _e(t), g = _e(e);
   return i === -1 || g === -1 ? null : {
     topIndex: Math.min(i, g),
     bottomIndex: Math.max(i, g)
   };
 }
-const ct = {
-  attack: 0.01,
-  decay: 0.1,
-  sustain: 0.7,
+const dt = {
+  attack: 0.1,
+  decay: 0.2,
+  sustain: 0.8,
   release: 0.3
-}, dt = {
+}, ut = {
   enabled: !1,
   blend: 0.5,
   cutoff: 0.5,
   resonance: 0,
   type: "lowpass",
   mix: 1
-}, ut = {
-  speed: 5,
-  span: 0
 }, ht = {
   speed: 5,
   span: 0
+}, mt = {
+  speed: 5,
+  span: 0
 };
-function mt() {
-  const o = [
+function ft() {
+  const t = [
     "#4a90e2",
     // Blue
     "#e24a4a",
@@ -151,41 +151,42 @@ function mt() {
     "#a04ae2"
     // Purple
   ], e = {};
-  return o.forEach((i) => {
+  return t.forEach((i) => {
     const g = new Float32Array(32);
     g[0] = 1;
-    const t = new Float32Array(32);
+    const n = new Float32Array(32);
     e[i] = {
       name: "Sine",
-      adsr: { ...ct },
+      adsr: { ...dt },
       coeffs: g,
-      phases: t,
-      filter: { ...dt },
+      phases: n,
+      filter: { ...ut },
       activePresetName: "sine",
       gain: 1,
-      vibrato: { ...ut },
-      tremelo: { ...ht }
+      vibrato: { ...ht },
+      tremelo: { ...mt }
     };
   }), e;
 }
-function ft() {
+function pt() {
+  const t = new Array(16).fill(2), e = t.slice(0, -1).map((i, g) => (g + 1) % 4 === 0 ? "solid" : "dashed");
   return {
-    macrobeatGroupings: [2, 2, 2, 2],
-    macrobeatBoundaryStyles: ["dashed", "dashed", "dashed", "dashed"],
+    macrobeatGroupings: t,
+    macrobeatBoundaryStyles: e,
     hasAnacrusis: !1,
     baseMicrobeatPx: 40,
-    modulationMarkers: []
+    tempoModulationMarkers: []
   };
 }
-function pt() {
-  const o = lt("G5", "C4");
-  return o || {
+function gt() {
+  const t = ct("G5", "C4");
+  return t || {
     topIndex: 0,
     bottomIndex: Math.max(0, z.length - 1)
   };
 }
-function gt() {
-  const o = mt();
+function St() {
+  const t = ft();
   return {
     // --- Data & History ---
     placedNotes: [],
@@ -202,7 +203,7 @@ function gt() {
     history: [{
       notes: [],
       tonicSignGroups: {},
-      timbres: JSON.parse(JSON.stringify(o)),
+      timbres: JSON.parse(JSON.stringify(t)),
       placedChords: [],
       sixteenthStampPlacements: [],
       tripletStampPlacements: [],
@@ -211,12 +212,12 @@ function gt() {
     }],
     historyIndex: 0,
     fullRowData: [...z],
-    pitchRange: pt(),
+    pitchRange: gt(),
     // --- Rhythm ---
-    ...ft(),
+    ...pt(),
     selectedModulationRatio: null,
     // --- Timbres & Colors ---
-    timbres: o,
+    timbres: t,
     colorPalette: {
       "#4a90e2": { primary: "#4a90e2", light: "#a8c8f0" },
       "#e24a4a": { primary: "#e24a4a", light: "#f0a8a8" },
@@ -287,62 +288,62 @@ function gt() {
     longNoteStyle: "style1"
   };
 }
-function _e(o) {
-  if (!(!o || o.isDrum) && o.shape === "circle" && typeof o.startColumnIndex == "number") {
-    const e = o.startColumnIndex + 1;
-    (typeof o.endColumnIndex != "number" || o.endColumnIndex < e) && (o.endColumnIndex = e);
+function Ve(t) {
+  if (!(!t || t.isDrum) && t.shape === "circle" && typeof t.startColumnIndex == "number") {
+    const e = t.startColumnIndex + 1;
+    (typeof t.endColumnIndex != "number" || t.endColumnIndex < e) && (t.endColumnIndex = e);
   }
 }
-function ce(o, e) {
-  if (typeof o.row != "number") return;
+function ce(t, e) {
+  if (typeof t.row != "number") return;
   const i = e.length > 0 ? e.length - 1 : -1;
   if (i < 0) return;
-  const g = typeof o.globalRow == "number" ? o.globalRow : o.row, t = Math.max(0, Math.min(i, Math.round(g)));
-  o.globalRow = t, o.row = t;
+  const g = typeof t.globalRow == "number" ? t.globalRow : t.row, n = Math.max(0, Math.min(i, Math.round(g)));
+  t.globalRow = n, t.row = n;
 }
 function de() {
   return `uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
-function St(o = {}) {
+function yt(t = {}) {
   const {
     getMacrobeatInfo: e,
     getDegreeForNote: i,
     hasAccidental: g,
-    log: t = () => {
+    log: n = () => {
     }
-  } = o;
+  } = t;
   return {
     /**
      * Adds a note to the state.
      * IMPORTANT: This function no longer records history. The calling function is responsible for that.
      */
-    addNote(r) {
+    addNote(d) {
       const s = this.state.placedNotes.find(
-        (f) => !f.isDrum && f.row === r.row && f.startColumnIndex === r.startColumnIndex && f.color === r.color
+        (p) => !p.isDrum && p.row === d.row && p.startColumnIndex === d.startColumnIndex && p.color === d.color
       );
       if (s) {
         if (this.state.degreeDisplayMode !== "off" && i && g) {
-          const f = i(s, this.state);
-          if (f && g(f))
-            return s.enharmonicPreference = !s.enharmonicPreference, t("debug", "[ENHARMONIC] Toggled enharmonic preference for note", {
+          const p = i(s, this.state);
+          if (p && g(p))
+            return s.enharmonicPreference = !s.enharmonicPreference, n("debug", "[ENHARMONIC] Toggled enharmonic preference for note", {
               noteUuid: s.uuid,
-              currentDegree: f,
+              currentDegree: p,
               enharmonicPreference: s.enharmonicPreference
             }), this.emit("notesChanged"), s;
         }
         return null;
       }
-      const h = { ...r, uuid: de() };
-      return _e(h), ce(h, this.state.fullRowData), this.state.placedNotes.push(h), this.emit("notesChanged"), h;
+      const h = { ...d, uuid: de() };
+      return Ve(h), ce(h, this.state.fullRowData), this.state.placedNotes.push(h), this.emit("notesChanged"), h;
     },
-    updateNoteTail(r, s) {
+    updateNoteTail(d, s) {
       let h = s;
-      r.shape === "circle" && (h = Math.max(r.startColumnIndex + 1, s)), r.endColumnIndex = h, this.emit("notesChanged");
+      d.shape === "circle" && (h = Math.max(d.startColumnIndex + 1, s)), d.endColumnIndex = h, this.emit("notesChanged");
     },
-    updateMultipleNoteTails(r, s) {
-      r.forEach((h) => {
-        let f = s;
-        h.shape === "circle" && (f = Math.max(h.startColumnIndex + 1, s)), h.endColumnIndex = f;
+    updateMultipleNoteTails(d, s) {
+      d.forEach((h) => {
+        let p = s;
+        h.shape === "circle" && (p = Math.max(h.startColumnIndex + 1, s)), h.endColumnIndex = p;
       }), this.emit("notesChanged");
     },
     /**
@@ -359,170 +360,170 @@ function St(o = {}) {
      * - `globalRow`: The row in global pitch data coordinates (survives view changes)
      * During interactive drag, these should always be kept in sync.
      */
-    updateNoteRow(r, s) {
-      r.row = s, r.globalRow = s, this.emit("notesChanged");
+    updateNoteRow(d, s) {
+      d.row = s, d.globalRow = s, this.emit("notesChanged");
     },
-    updateMultipleNoteRows(r, s) {
-      r.forEach((h, f) => {
-        const a = s[f];
+    updateMultipleNoteRows(d, s) {
+      d.forEach((h, p) => {
+        const a = s[p];
         a !== void 0 && (h.row = a, ce(h, this.state.fullRowData));
       }), this.emit("notesChanged");
     },
-    updateNotePosition(r, s) {
-      r.startColumnIndex = s, r.endColumnIndex = r.shape === "circle" ? s + 1 : s, this.emit("notesChanged");
+    updateNotePosition(d, s) {
+      d.startColumnIndex = s, d.endColumnIndex = d.shape === "circle" ? s + 1 : s, this.emit("notesChanged");
     },
-    updateMultipleNotePositions(r, s) {
-      r.forEach((h) => {
+    updateMultipleNotePositions(d, s) {
+      d.forEach((h) => {
         h.startColumnIndex = s, h.endColumnIndex = h.shape === "circle" ? s + 1 : s;
       }), this.emit("notesChanged");
     },
-    removeNote(r) {
-      const s = this.state.placedNotes.indexOf(r);
+    removeNote(d) {
+      const s = this.state.placedNotes.indexOf(d);
       s > -1 && (this.state.placedNotes.splice(s, 1), this.emit("notesChanged"));
     },
-    removeMultipleNotes(r) {
-      const s = new Set(r);
+    removeMultipleNotes(d) {
+      const s = new Set(d);
       this.state.placedNotes = this.state.placedNotes.filter((h) => !s.has(h)), this.emit("notesChanged");
     },
-    eraseInPitchArea(r, s, h = 1, f = !0) {
-      const a = r + h - 1, p = s - 1, c = s + 1;
-      let l = !1;
+    eraseInPitchArea(d, s, h = 1, p = !0) {
+      const a = d + h - 1, f = s - 1, l = s + 1;
+      let r = !1;
       const S = this.state.placedNotes.length;
-      return this.state.placedNotes = this.state.placedNotes.filter((n) => {
-        if (n.isDrum) return !0;
-        if (n.shape === "circle") {
-          const u = n.startColumnIndex + 1, M = typeof n.endColumnIndex == "number" ? Math.max(u, n.endColumnIndex) : u, I = n.startColumnIndex <= a && M >= r, d = n.row >= p && n.row <= c;
-          if (I && d)
+      return this.state.placedNotes = this.state.placedNotes.filter((o) => {
+        if (o.isDrum) return !0;
+        if (o.shape === "circle") {
+          const u = o.startColumnIndex + 1, v = typeof o.endColumnIndex == "number" ? Math.max(u, o.endColumnIndex) : u, I = o.startColumnIndex <= a && v >= d, c = o.row >= f && o.row <= l;
+          if (I && c)
             return !1;
-        } else if (n.row >= p && n.row <= c && n.startColumnIndex <= a && n.endColumnIndex >= r)
+        } else if (o.row >= f && o.row <= l && o.startColumnIndex <= a && o.endColumnIndex >= d)
           return !1;
         return !0;
-      }), this.state.placedNotes.length < S && (l = !0), l && (this.emit("notesChanged"), f && this.recordState()), l;
+      }), this.state.placedNotes.length < S && (r = !0), r && (this.emit("notesChanged"), p && this.recordState()), r;
     },
-    addTonicSignGroup(r) {
-      t("debug", "Starting addTonicSignGroup", { tonicSignGroup: r });
-      const s = r[0];
+    addTonicSignGroup(d) {
+      n("debug", "Starting addTonicSignGroup", { tonicSignGroup: d });
+      const s = d[0];
       if (!s) return;
       const { preMacrobeatIndex: h } = s;
-      if (t("debug", "preMacrobeatIndex", { preMacrobeatIndex: h }), Object.entries(this.state.tonicSignGroups).find(
-        ([, S]) => S.some((n) => n.preMacrobeatIndex === h)
+      if (n("debug", "preMacrobeatIndex", { preMacrobeatIndex: h }), Object.entries(this.state.tonicSignGroups).find(
+        ([, S]) => S.some((o) => o.preMacrobeatIndex === h)
       )) {
-        t("debug", "Existing tonic already present for measure, skipping", { preMacrobeatIndex: h });
+        n("debug", "Existing tonic already present for measure, skipping", { preMacrobeatIndex: h });
         return;
       }
       if (!e) {
-        t("error", "getMacrobeatInfo callback not provided");
+        n("error", "getMacrobeatInfo callback not provided");
         return;
       }
       const a = e(this.state, h + 1).startColumn;
-      t("debug", "Boundary column (canvas-space) for shifting notes", { boundaryColumn: a });
-      const p = this.state.placedNotes.filter((S) => S.startColumnIndex >= a);
-      t("debug", "Notes that will be shifted", {
-        noteRanges: p.map((S) => `${S.startColumnIndex}-${S.endColumnIndex}`)
+      n("debug", "Boundary column (canvas-space) for shifting notes", { boundaryColumn: a });
+      const f = this.state.placedNotes.filter((S) => S.startColumnIndex >= a);
+      n("debug", "Notes that will be shifted", {
+        noteRanges: f.map((S) => `${S.startColumnIndex}-${S.endColumnIndex}`)
       }), this.state.placedNotes.forEach((S) => {
         if (S.startColumnIndex >= a) {
-          const n = S.startColumnIndex, u = S.endColumnIndex;
-          S.startColumnIndex = S.startColumnIndex + 2, S.endColumnIndex = S.endColumnIndex + 2, t("debug", `Shifted note from ${n}-${u} to ${S.startColumnIndex}-${S.endColumnIndex}`);
+          const o = S.startColumnIndex, u = S.endColumnIndex;
+          S.startColumnIndex = S.startColumnIndex + 2, S.endColumnIndex = S.endColumnIndex + 2, n("debug", `Shifted note from ${o}-${u} to ${S.startColumnIndex}-${S.endColumnIndex}`);
         }
       });
-      const c = de(), l = r.map((S) => ({
+      const l = de(), r = d.map((S) => ({
         ...S,
-        uuid: c,
+        uuid: l,
         globalRow: typeof S.globalRow == "number" ? S.globalRow : S.row
       }));
-      this.state.tonicSignGroups[c] = l, t("debug", "Added tonic group", { uuid: c, columns: l.map((S) => S.columnIndex) }), t("debug", "Emitting events: notesChanged, rhythmStructureChanged"), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
+      this.state.tonicSignGroups[l] = r, n("debug", "Added tonic group", { uuid: l, columns: r.map((S) => S.columnIndex) }), n("debug", "Emitting events: notesChanged, rhythmStructureChanged"), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
     },
     /**
      * Erases tonic sign at the specified column index (canvas-space)
      */
-    eraseTonicSignAt(r, s = !0) {
+    eraseTonicSignAt(d, s = !0) {
       const h = Object.entries(this.state.tonicSignGroups).find(
-        ([, S]) => S.some((n) => n.columnIndex === r)
+        ([, S]) => S.some((o) => o.columnIndex === d)
       );
       if (!h)
         return !1;
       if (!e)
-        return t("error", "getMacrobeatInfo callback not provided"), !1;
-      const [f, a] = h, p = a[0];
-      if (!p) return !1;
-      const c = p.preMacrobeatIndex, l = e(this.state, c + 1).startColumn;
-      return delete this.state.tonicSignGroups[f], this.state.placedNotes.forEach((S) => {
-        S.startColumnIndex >= l && (S.startColumnIndex = S.startColumnIndex - 2, S.endColumnIndex = S.endColumnIndex - 2);
+        return n("error", "getMacrobeatInfo callback not provided"), !1;
+      const [p, a] = h, f = a[0];
+      if (!f) return !1;
+      const l = f.preMacrobeatIndex, r = e(this.state, l + 1).startColumn;
+      return delete this.state.tonicSignGroups[p], this.state.placedNotes.forEach((S) => {
+        S.startColumnIndex >= r && (S.startColumnIndex = S.startColumnIndex - 2, S.endColumnIndex = S.endColumnIndex - 2);
       }), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), s && this.recordState(), !0;
     },
     clearAllNotes() {
       this.state.placedNotes = [], this.state.tonicSignGroups = {}, this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
     },
-    loadNotes(r) {
-      const s = (r || []).map((h) => {
-        const f = {
+    loadNotes(d) {
+      const s = (d || []).map((h) => {
+        const p = {
           ...h,
           uuid: (h == null ? void 0 : h.uuid) ?? de()
         };
-        return _e(f), ce(f, this.state.fullRowData), f;
+        return Ve(p), ce(p, this.state.fullRowData), p;
       });
       this.state.placedNotes = s, this.emit("notesChanged"), this.recordState();
     }
   };
 }
-function yt() {
+function Ct() {
   return `sixteenth-stamp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
-function Ct(o = {}) {
+function Tt(t = {}) {
   const {
     getPlacedTonicSigns: e,
     isWithinTonicSpan: i,
     log: g = () => {
     }
-  } = o;
+  } = t;
   return {
     /**
      * Adds a stamp placement to the state
      * @param startColumn Canvas-space column index (0 = first musical beat)
      * @returns The placement if successful, null if blocked by tonic column
      */
-    addSixteenthStampPlacement(t, r, s, h = "#4a90e2") {
-      const f = r + 2;
+    addSixteenthStampPlacement(n, d, s, h = "#4a90e2") {
+      const p = d + 2;
       if (e && i) {
-        const l = e(this.state);
-        (i(r, l) || i(r + 1, l)) && g("debug", "Cannot place sixteenth stamp - overlaps tonic column", {
-          sixteenthStampId: t,
-          startColumn: r,
+        const r = e(this.state);
+        (i(d, r) || i(d + 1, r)) && g("debug", "Cannot place sixteenth stamp - overlaps tonic column", {
+          sixteenthStampId: n,
+          startColumn: d,
           row: s
         });
       }
       const a = this.state.sixteenthStampPlacements.find(
-        (l) => l.row === s && l.startColumn < f && l.endColumn > r
+        (r) => r.row === s && r.startColumn < p && r.endColumn > d
       );
       a && this.removeSixteenthStampPlacement(a.id);
-      const p = s, c = {
-        id: yt(),
-        sixteenthStampId: t,
-        startColumn: r,
-        endColumn: f,
+      const f = s, l = {
+        id: Ct(),
+        sixteenthStampId: n,
+        startColumn: d,
+        endColumn: p,
         row: s,
-        globalRow: p,
+        globalRow: f,
         color: h,
         timestamp: Date.now(),
         shapeOffsets: {}
       };
-      return this.state.sixteenthStampPlacements.push(c), this.emit("sixteenthStampPlacementsChanged"), g("debug", `Added sixteenth stamp ${t} at canvas-space ${r}-${f},${s}`, {
-        sixteenthStampId: t,
-        startColumn: r,
-        endColumn: f,
+      return this.state.sixteenthStampPlacements.push(l), this.emit("sixteenthStampPlacementsChanged"), g("debug", `Added sixteenth stamp ${n} at canvas-space ${d}-${p},${s}`, {
+        sixteenthStampId: n,
+        startColumn: d,
+        endColumn: p,
         row: s,
-        placementId: c.id
-      }), c;
+        placementId: l.id
+      }), l;
     },
     /**
      * Removes a stamp placement by ID
      */
-    removeSixteenthStampPlacement(t) {
-      const r = this.state.sixteenthStampPlacements.findIndex((h) => h.id === t);
-      if (r === -1) return !1;
-      const s = this.state.sixteenthStampPlacements.splice(r, 1)[0];
+    removeSixteenthStampPlacement(n) {
+      const d = this.state.sixteenthStampPlacements.findIndex((h) => h.id === n);
+      if (d === -1) return !1;
+      const s = this.state.sixteenthStampPlacements.splice(d, 1)[0];
       return s ? (this.emit("sixteenthStampPlacementsChanged"), g("debug", `Removed sixteenth stamp ${s.sixteenthStampId} at ${s.startColumn}-${s.endColumn},${s.row}`, {
-        placementId: t,
+        placementId: n,
         sixteenthStampId: s.sixteenthStampId,
         startColumn: s.startColumn,
         endColumn: s.endColumn,
@@ -534,15 +535,15 @@ function Ct(o = {}) {
      * @param eraseStartCol Canvas-space column index
      * @param eraseEndCol Canvas-space column index
      */
-    eraseSixteenthStampsInArea(t, r, s, h) {
-      const f = [];
-      for (const p of this.state.sixteenthStampPlacements) {
-        const c = p.startColumn <= r && p.endColumn >= t, l = p.row >= s && p.row <= h;
-        c && l && f.push(p.id);
+    eraseSixteenthStampsInArea(n, d, s, h) {
+      const p = [];
+      for (const f of this.state.sixteenthStampPlacements) {
+        const l = f.startColumn <= d && f.endColumn >= n, r = f.row >= s && f.row <= h;
+        l && r && p.push(f.id);
       }
       let a = !1;
-      return f.forEach((p) => {
-        this.removeSixteenthStampPlacement(p) && (a = !0);
+      return p.forEach((f) => {
+        this.removeSixteenthStampPlacement(f) && (a = !0);
       }), a;
     },
     /**
@@ -555,120 +556,120 @@ function Ct(o = {}) {
      * Gets stamp placement at specific position
      * @param column Canvas-space column index (0 = first musical beat)
      */
-    getSixteenthStampAt(t, r) {
+    getSixteenthStampAt(n, d) {
       return this.state.sixteenthStampPlacements.find(
-        (s) => s.row === r && t >= s.startColumn && t < s.endColumn
+        (s) => s.row === d && n >= s.startColumn && n < s.endColumn
       ) || null;
     },
     /**
      * Clears all stamp placements
      */
     clearAllSixteenthStamps() {
-      const t = this.state.sixteenthStampPlacements.length > 0;
-      this.state.sixteenthStampPlacements = [], t && (this.emit("sixteenthStampPlacementsChanged"), g("info", "Cleared all sixteenth stamp placements"));
+      const n = this.state.sixteenthStampPlacements.length > 0;
+      this.state.sixteenthStampPlacements = [], n && (this.emit("sixteenthStampPlacementsChanged"), g("info", "Cleared all sixteenth stamp placements"));
     },
     /**
      * Gets stamp placements for playback scheduling
      */
     getSixteenthStampPlaybackData() {
-      return this.state.sixteenthStampPlacements.map((t) => {
-        const r = this.state.fullRowData[t.row];
+      return this.state.sixteenthStampPlacements.map((n) => {
+        const d = this.state.fullRowData[n.row];
         return {
-          sixteenthStampId: t.sixteenthStampId,
-          column: t.startColumn,
-          startColumn: t.startColumn,
-          endColumn: t.endColumn,
-          row: t.row,
-          pitch: (r == null ? void 0 : r.toneNote) || "",
-          color: t.color,
-          placement: t
+          sixteenthStampId: n.sixteenthStampId,
+          column: n.startColumn,
+          startColumn: n.startColumn,
+          endColumn: n.endColumn,
+          row: n.row,
+          pitch: (d == null ? void 0 : d.toneNote) || "",
+          color: n.color,
+          placement: n
           // Include full placement object with shapeOffsets
         };
-      }).filter((t) => t.pitch);
+      }).filter((n) => n.pitch);
     },
     /**
      * Updates the pitch offset for an individual shape within a stamp
      */
-    updateSixteenthStampShapeOffset(t, r, s) {
-      const h = this.state.sixteenthStampPlacements.find((f) => f.id === t);
+    updateSixteenthStampShapeOffset(n, d, s) {
+      const h = this.state.sixteenthStampPlacements.find((p) => p.id === n);
       if (!h) {
-        g("warn", "[SIXTEENTH STAMP SHAPE OFFSET] Placement not found", { placementId: t });
+        g("warn", "[SIXTEENTH STAMP SHAPE OFFSET] Placement not found", { placementId: n });
         return;
       }
       h.shapeOffsets || (h.shapeOffsets = {}), g("debug", "[SIXTEENTH STAMP SHAPE OFFSET] Updating shape offset", {
-        placementId: t,
-        shapeKey: r,
-        oldOffset: h.shapeOffsets[r] || 0,
+        placementId: n,
+        shapeKey: d,
+        oldOffset: h.shapeOffsets[d] || 0,
         newOffset: s,
         baseRow: h.row,
         targetRow: h.row + s
-      }), h.shapeOffsets[r] = s, this.emit("sixteenthStampPlacementsChanged");
+      }), h.shapeOffsets[d] = s, this.emit("sixteenthStampPlacementsChanged");
     },
     /**
      * Gets the effective row for a specific shape within a stamp
      */
-    getSixteenthStampShapeRow(t, r) {
+    getSixteenthStampShapeRow(n, d) {
       var h;
-      const s = ((h = t.shapeOffsets) == null ? void 0 : h[r]) || 0;
-      return t.row + s;
+      const s = ((h = n.shapeOffsets) == null ? void 0 : h[d]) || 0;
+      return n.row + s;
     }
   };
 }
-function Tt() {
+function Nt() {
   return `triplet-stamp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
-function Nt(o = {}) {
+function At(t = {}) {
   const {
     canvasToTime: e,
     timeToCanvas: i,
     getColumnMap: g,
-    log: t = () => {
+    log: n = () => {
     }
-  } = o;
+  } = t;
   return {
     /**
      * Adds a triplet placement to the state
      * @param placement - The triplet placement object
      * @returns The placed triplet or null if invalid
      */
-    addTripletStampPlacement(r) {
+    addTripletStampPlacement(d) {
       this.state.tripletStampPlacements || (this.state.tripletStampPlacements = []);
-      const s = r.startTimeIndex + r.span * 2, h = this.state.tripletStampPlacements.find((a) => a.row !== r.row ? !1 : !(a.startTimeIndex + a.span * 2 <= r.startTimeIndex || s <= a.startTimeIndex));
+      const s = d.startTimeIndex + d.span * 2, h = this.state.tripletStampPlacements.find((a) => a.row !== d.row ? !1 : !(a.startTimeIndex + a.span * 2 <= d.startTimeIndex || s <= a.startTimeIndex));
       if (h && this.removeTripletStampPlacement(h.id), this.state.sixteenthStampPlacements && e && g) {
         const a = g(this.state);
-        this.state.sixteenthStampPlacements.filter((c) => {
-          if (c.row !== r.row) return !1;
-          const l = e(c.startColumn, a);
-          return l === null ? !0 : !(l + 2 <= r.startTimeIndex || l >= s);
-        }).forEach((c) => {
-          this.removeSixteenthStampPlacement && this.removeSixteenthStampPlacement(c.id);
+        this.state.sixteenthStampPlacements.filter((l) => {
+          if (l.row !== d.row) return !1;
+          const r = e(l.startColumn, a);
+          return r === null ? !0 : !(r + 2 <= d.startTimeIndex || r >= s);
+        }).forEach((l) => {
+          this.removeSixteenthStampPlacement && this.removeSixteenthStampPlacement(l.id);
         });
       }
-      const f = {
-        id: Tt(),
-        ...r,
-        shapeOffsets: r.shapeOffsets || {}
+      const p = {
+        id: Nt(),
+        ...d,
+        shapeOffsets: d.shapeOffsets || {}
       };
-      return this.state.tripletStampPlacements.push(f), this.emit("tripletStampPlacementsChanged"), this.emit("rhythmStructureChanged"), t("debug", `Added triplet stamp ${r.tripletStampId} at time ${r.startTimeIndex}, row ${r.row}`, {
-        tripletStampId: r.tripletStampId,
-        startTimeIndex: r.startTimeIndex,
-        span: r.span,
-        row: r.row,
-        placementId: f.id
-      }), f;
+      return this.state.tripletStampPlacements.push(p), this.emit("tripletStampPlacementsChanged"), this.emit("rhythmStructureChanged"), n("debug", `Added triplet stamp ${d.tripletStampId} at time ${d.startTimeIndex}, row ${d.row}`, {
+        tripletStampId: d.tripletStampId,
+        startTimeIndex: d.startTimeIndex,
+        span: d.span,
+        row: d.row,
+        placementId: p.id
+      }), p;
     },
     /**
      * Removes a triplet placement by ID
      * @param placementId - The placement ID to remove
      * @returns True if a triplet was removed
      */
-    removeTripletStampPlacement(r) {
+    removeTripletStampPlacement(d) {
       if (!this.state.tripletStampPlacements) return !1;
-      const s = this.state.tripletStampPlacements.findIndex((f) => f.id === r);
+      const s = this.state.tripletStampPlacements.findIndex((p) => p.id === d);
       if (s === -1) return !1;
       const h = this.state.tripletStampPlacements.splice(s, 1)[0];
-      return h ? (this.emit("tripletStampPlacementsChanged"), t("debug", `Removed triplet stamp ${h.tripletStampId} at time ${h.startTimeIndex}, row ${h.row}`, {
-        placementId: r,
+      return h ? (this.emit("tripletStampPlacementsChanged"), n("debug", `Removed triplet stamp ${h.tripletStampId} at time ${h.startTimeIndex}, row ${h.row}`, {
+        placementId: d,
         tripletStampId: h.tripletStampId,
         startTimeIndex: h.startTimeIndex,
         span: h.span,
@@ -683,18 +684,18 @@ function Nt(o = {}) {
      * @param eraseEndRow - End row of eraser
      * @returns True if any triplets were removed
      */
-    eraseTripletStampsInArea(r, s, h, f) {
+    eraseTripletStampsInArea(d, s, h, p) {
       if (!this.state.tripletStampPlacements || !i || !g) return !1;
-      const a = g(this.state), p = [];
-      for (const l of this.state.tripletStampPlacements)
-        if (l.row >= h && l.row <= f) {
-          const S = l.span * 2, n = i(l.startTimeIndex, a);
-          n + S - 1 < r || n > s || p.push(l.id);
+      const a = g(this.state), f = [];
+      for (const r of this.state.tripletStampPlacements)
+        if (r.row >= h && r.row <= p) {
+          const S = r.span * 2, o = i(r.startTimeIndex, a);
+          o + S - 1 < d || o > s || f.push(r.id);
         }
-      let c = !1;
-      return p.forEach((l) => {
-        this.removeTripletStampPlacement(l) && (c = !0);
-      }), c;
+      let l = !1;
+      return f.forEach((r) => {
+        this.removeTripletStampPlacement(r) && (l = !0);
+      }), l;
     },
     /**
      * Gets all triplet placements
@@ -709,9 +710,9 @@ function Nt(o = {}) {
      * @param row - Grid row index
      * @returns The triplet at this position or null
      */
-    getTripletStampAt(r, s) {
+    getTripletStampAt(d, s) {
       return this.state.tripletStampPlacements && this.state.tripletStampPlacements.find(
-        (h) => h.row === s && r >= h.startTimeIndex && r < h.startTimeIndex + h.span * 2
+        (h) => h.row === s && d >= h.startTimeIndex && d < h.startTimeIndex + h.span * 2
       ) || null;
     },
     /**
@@ -719,27 +720,27 @@ function Nt(o = {}) {
      */
     clearAllTripletStamps() {
       if (!this.state.tripletStampPlacements) return;
-      const r = this.state.tripletStampPlacements.length > 0;
-      this.state.tripletStampPlacements = [], r && (this.emit("tripletStampPlacementsChanged"), t("info", "Cleared all triplet stamp placements"));
+      const d = this.state.tripletStampPlacements.length > 0;
+      this.state.tripletStampPlacements = [], d && (this.emit("tripletStampPlacementsChanged"), n("info", "Cleared all triplet stamp placements"));
     },
     /**
      * Gets triplet placements for playback scheduling
      * @returns Array of playback data for triplets
      */
     getTripletStampPlaybackData() {
-      return this.state.tripletStampPlacements ? this.state.tripletStampPlacements.map((r) => {
-        const s = this.state.fullRowData[r.row];
+      return this.state.tripletStampPlacements ? this.state.tripletStampPlacements.map((d) => {
+        const s = this.state.fullRowData[d.row];
         return {
-          startTimeIndex: r.startTimeIndex,
-          tripletStampId: r.tripletStampId,
-          row: r.row,
+          startTimeIndex: d.startTimeIndex,
+          tripletStampId: d.tripletStampId,
+          row: d.row,
           pitch: (s == null ? void 0 : s.toneNote) ?? "",
-          color: r.color,
-          span: r.span,
-          placement: r
+          color: d.color,
+          span: d.span,
+          placement: d
           // Include full placement object with shapeOffsets
         };
-      }).filter((r) => r.pitch) : [];
+      }).filter((d) => d.pitch) : [];
     },
     /**
      * Updates the pitch offset for an individual shape within a triplet group
@@ -747,21 +748,21 @@ function Nt(o = {}) {
      * @param shapeKey - The shape identifier (e.g., "triplet_0", "triplet_1", "triplet_2")
      * @param rowOffset - The pitch offset in rows (can be negative)
      */
-    updateTripletStampShapeOffset(r, s, h) {
+    updateTripletStampShapeOffset(d, s, h) {
       var a;
-      const f = (a = this.state.tripletStampPlacements) == null ? void 0 : a.find((p) => p.id === r);
-      if (!f) {
-        t("warn", "[TRIPLET STAMP SHAPE OFFSET] Placement not found", { placementId: r });
+      const p = (a = this.state.tripletStampPlacements) == null ? void 0 : a.find((f) => f.id === d);
+      if (!p) {
+        n("warn", "[TRIPLET STAMP SHAPE OFFSET] Placement not found", { placementId: d });
         return;
       }
-      f.shapeOffsets || (f.shapeOffsets = {}), t("debug", "[TRIPLET STAMP SHAPE OFFSET] Updating shape offset", {
-        placementId: r,
+      p.shapeOffsets || (p.shapeOffsets = {}), n("debug", "[TRIPLET STAMP SHAPE OFFSET] Updating shape offset", {
+        placementId: d,
         shapeKey: s,
-        oldOffset: f.shapeOffsets[s] || 0,
+        oldOffset: p.shapeOffsets[s] || 0,
         newOffset: h,
-        baseRow: f.row,
-        targetRow: f.row + h
-      }), f.shapeOffsets[s] = h, this.emit("tripletStampPlacementsChanged");
+        baseRow: p.row,
+        targetRow: p.row + h
+      }), p.shapeOffsets[s] = h, this.emit("tripletStampPlacementsChanged");
     },
     /**
      * Gets the effective row for a specific shape within a triplet group
@@ -769,74 +770,74 @@ function Nt(o = {}) {
      * @param shapeKey - The shape identifier
      * @returns The effective row index
      */
-    getTripletStampShapeRow(r, s) {
-      var f;
-      const h = ((f = r.shapeOffsets) == null ? void 0 : f[s]) || 0;
-      return r.row + h;
+    getTripletStampShapeRow(d, s) {
+      var p;
+      const h = ((p = d.shapeOffsets) == null ? void 0 : p[s]) || 0;
+      return d.row + h;
     }
   };
 }
-const Q = {
+const K = {
   COMPRESSION_2_3: 2 / 3,
   // 0.6666666667
   EXPANSION_3_2: 3 / 2
   // 1.5
 };
-function At(o, e, i) {
-  const { getMacrobeatInfo: g, log: t = () => {
+function bt(t, e, i) {
+  const { getMacrobeatInfo: g, log: n = () => {
   } } = i;
-  if (t("debug", "[MODULATION] measureIndexToColumnIndex called", {
-    measureIndex: o,
+  if (n("debug", "[MODULATION] measureIndexToColumnIndex called", {
+    measureIndex: t,
     hasState: !!e
   }), !e || !e.macrobeatGroupings) {
-    t("warn", "[MODULATION] No state or macrobeatGroupings provided for measure conversion");
-    const f = o * 4;
-    return t("debug", "[MODULATION] Using fallback calculation", f), f;
+    n("warn", "[MODULATION] No state or macrobeatGroupings provided for measure conversion");
+    const p = t * 4;
+    return n("debug", "[MODULATION] Using fallback calculation", p), p;
   }
-  if (o === 0)
-    return t("debug", "[MODULATION] Measure 0 at canvas-space column 0"), 0;
+  if (t === 0)
+    return n("debug", "[MODULATION] Measure 0 at canvas-space column 0"), 0;
   if (!g)
-    return t("warn", "[MODULATION] getMacrobeatInfo callback not provided"), o * 4;
-  const r = o - 1;
-  t("debug", `[MODULATION] Converting measureIndex ${o} to macrobeatIndex: ${r}`);
-  const s = g(e, r);
-  if (t("debug", "[MODULATION] getMacrobeatInfo result", s), s) {
-    const f = s.endColumn + 1;
-    return t("debug", `[MODULATION] Found measure info, canvas-space endColumn: ${s.endColumn}, first column after: ${f}`), f;
+    return n("warn", "[MODULATION] getMacrobeatInfo callback not provided"), t * 4;
+  const d = t - 1;
+  n("debug", `[MODULATION] Converting measureIndex ${t} to macrobeatIndex: ${d}`);
+  const s = g(e, d);
+  if (n("debug", "[MODULATION] getMacrobeatInfo result", s), s) {
+    const p = s.endColumn + 1;
+    return n("debug", `[MODULATION] Found measure info, canvas-space endColumn: ${s.endColumn}, first column after: ${p}`), p;
   }
-  t("warn", `[MODULATION] Could not find measure info for index: ${o}`);
-  const h = o * 4;
-  return t("debug", "[MODULATION] Using improved fallback calculation", h), h;
+  n("warn", `[MODULATION] Could not find measure info for index: ${t}`);
+  const h = t * 4;
+  return n("debug", "[MODULATION] Using improved fallback calculation", h), h;
 }
-function bt(o, e, i = null, g = null, t = null) {
+function Mt(t, e, i = null, g = null, n = null) {
   return {
     id: `mod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    measureIndex: o,
+    measureIndex: t,
     ratio: e,
     active: !0,
     xPosition: i,
     // Store the actual boundary position if provided
     columnIndex: g,
     // Store column index for stable positioning
-    macrobeatIndex: t
+    macrobeatIndex: n
     // Store macrobeat index for stable positioning
   };
 }
-function mn(o) {
-  return Math.abs(o - Q.COMPRESSION_2_3) < 1e-3 ? "2:3" : Math.abs(o - Q.EXPANSION_3_2) < 1e-3 ? "3:2" : `${o}`;
+function yn(t) {
+  return Math.abs(t - K.COMPRESSION_2_3) < 1e-3 ? "2:3" : Math.abs(t - K.EXPANSION_3_2) < 1e-3 ? "3:2" : `${t}`;
 }
-function fn(o) {
+function Cn(t) {
   const e = "#ffc107";
-  return Math.abs(o - Q.COMPRESSION_2_3) < 1e-3 || Math.abs(o - Q.EXPANSION_3_2) < 1e-3, e;
+  return Math.abs(t - K.COMPRESSION_2_3) < 1e-3 || Math.abs(t - K.EXPANSION_3_2) < 1e-3, e;
 }
-function Ve() {
-  const o = [{
+function $e() {
+  const t = [{
     startColumn: 0,
     endColumn: 1 / 0,
     scale: 1
   }];
   return {
-    segments: o,
+    segments: t,
     getScaleForColumn(e) {
       return 1;
     },
@@ -847,52 +848,52 @@ function Ve() {
       return 0;
     },
     getSegmentAtX() {
-      return o[0] || null;
+      return t[0] || null;
     },
     getGhostGridPositions() {
       return [];
     }
   };
 }
-function pn(o, e, i = null, g = {}) {
-  const { log: t = () => {
+function Tn(t, e, i = null, g = {}) {
+  const { log: n = () => {
   } } = g;
-  if (!o || o.length === 0)
-    return Ve();
-  const r = [...o.filter((c) => c.active)].sort((c, l) => c.measureIndex - l.measureIndex);
-  if (r.length === 0)
-    return Ve();
-  t("debug", "[MODULATION] Creating coordinate mapping for markers", r);
-  const s = r.map((c) => {
-    const l = At(c.measureIndex, i, g);
-    return t("debug", `[MODULATION] Marker at measure ${c.measureIndex} calculated column=${l}`), t("debug", "[MODULATION] Full marker data", c), t("debug", "[MODULATION] Final marker position", {
-      id: c.id,
-      measureIndex: c.measureIndex,
-      columnIndex: l
+  if (!t || t.length === 0)
+    return $e();
+  const d = [...t.filter((l) => l.active)].sort((l, r) => l.measureIndex - r.measureIndex);
+  if (d.length === 0)
+    return $e();
+  n("debug", "[MODULATION] Creating coordinate mapping for markers", d);
+  const s = d.map((l) => {
+    const r = bt(l.measureIndex, i, g);
+    return n("debug", `[MODULATION] Marker at measure ${l.measureIndex} calculated column=${r}`), n("debug", "[MODULATION] Full marker data", l), n("debug", "[MODULATION] Final marker position", {
+      id: l.id,
+      measureIndex: l.measureIndex,
+      columnIndex: r
     }), {
-      ...c,
-      columnIndex: l
+      ...l,
+      columnIndex: r
     };
   }), h = [];
-  let f = 1;
+  let p = 1;
   const a = s[0];
   if (s.length === 0 || a && a.columnIndex > 0) {
-    const c = a ? a.columnIndex : 1 / 0;
+    const l = a ? a.columnIndex : 1 / 0;
     h.push({
       startColumn: 0,
-      endColumn: c,
+      endColumn: l,
       scale: 1
     });
   }
-  for (let c = 0; c < s.length; c++) {
-    const l = s[c], S = s[c + 1], n = S ? S.columnIndex : 1 / 0;
-    f *= l.ratio, h.push({
-      startColumn: l.columnIndex,
+  for (let l = 0; l < s.length; l++) {
+    const r = s[l], S = s[l + 1], o = S ? S.columnIndex : 1 / 0;
+    p *= r.ratio, h.push({
+      startColumn: r.columnIndex,
       // Canvas-space
-      endColumn: n,
+      endColumn: o,
       // Canvas-space
-      scale: f,
-      marker: l
+      scale: p,
+      marker: r
     });
   }
   return {
@@ -902,57 +903,57 @@ function pn(o, e, i = null, g = {}) {
      * @param columnIndex - Column index in musical space
      * @returns Scale factor (1.0 = no modulation, 0.667 = compressed, 1.5 = expanded)
      */
-    getScaleForColumn(c) {
-      for (const l of h)
-        if (c >= l.startColumn && c < l.endColumn)
-          return l.scale;
+    getScaleForColumn(l) {
+      for (const r of h)
+        if (l >= r.startColumn && l < r.endColumn)
+          return r.scale;
       return 1;
     },
     /**
      * Converts microbeat index to canvas x position
      * NOTE: This method is deprecated - getColumnX in rendererUtils now handles modulation directly
      */
-    microbeatToCanvasX(c) {
+    microbeatToCanvasX(l) {
       return 0;
     },
     /**
      * Converts canvas x position to microbeat index
      * NOTE: This method is deprecated - coordinate conversion now handled by getColumnFromX
      */
-    canvasXToMicrobeat(c) {
+    canvasXToMicrobeat(l) {
       return 0;
     },
     /**
      * Gets the segment containing a given canvas x position
      * NOTE: This method is deprecated - not used in new column-based approach
      */
-    getSegmentAtX(c) {
+    getSegmentAtX(l) {
       return h[0] || null;
     },
     /**
      * Gets all ghost grid positions for a segment
      * NOTE: This method is deprecated - ghost grid now handled differently
      */
-    getGhostGridPositions(c, l) {
+    getGhostGridPositions(l, r) {
       return [];
     }
   };
 }
-function gn(o, e) {
-  if (o >= 0 && o < e.length) {
-    const i = e[o];
+function Nn(t, e) {
+  if (t >= 0 && t < e.length) {
+    const i = e[t];
     if (i !== void 0)
       return i;
   }
-  return o * 0.333;
+  return t * 0.333;
 }
-function Sn(o, e, i) {
+function An(t, e, i) {
   return 0;
 }
-function yn(o, e, i) {
+function bn(t, e, i) {
   return 0;
 }
-const $e = new Array(19).fill(2), vt = [
+const We = new Array(19).fill(2), vt = [
   "anacrusis",
   "anacrusis",
   "solid",
@@ -972,7 +973,7 @@ const $e = new Array(19).fill(2), vt = [
   "dashed",
   "dashed",
   "solid"
-], We = new Array(16).fill(2), Mt = [
+], qe = new Array(16).fill(2), wt = [
   "dashed",
   "dashed",
   "dashed",
@@ -990,18 +991,18 @@ const $e = new Array(19).fill(2), vt = [
   "dashed"
   // Last measure completed by isLastBeat logic
 ];
-function qe(o, e) {
-  const i = e(o), g = /* @__PURE__ */ new Map();
-  i.entries.forEach((t) => {
-    t.type === "tonic" && t.tonicSignUuid && typeof t.canvasIndex == "number" && g.set(t.tonicSignUuid, t.canvasIndex);
-  }), Object.entries(o.tonicSignGroups || {}).forEach(([t, r]) => {
-    const s = g.get(t);
-    s !== void 0 && r.forEach((h) => {
+function He(t, e) {
+  const i = e(t), g = /* @__PURE__ */ new Map();
+  i.entries.forEach((n) => {
+    n.type === "tonic" && n.tonicSignUuid && typeof n.canvasIndex == "number" && g.set(n.tonicSignUuid, n.canvasIndex);
+  }), Object.entries(t.tonicSignGroups || {}).forEach(([n, d]) => {
+    const s = g.get(n);
+    s !== void 0 && d.forEach((h) => {
       h.columnIndex = s;
     });
   });
 }
-const wt = {
+const It = {
   entries: [],
   visualToCanvas: /* @__PURE__ */ new Map(),
   visualToTime: /* @__PURE__ */ new Map(),
@@ -1015,88 +1016,88 @@ const wt = {
   totalTimeColumns: 0,
   totalWidthUnmodulated: 0
 };
-function It(o = {}) {
+function xt(t = {}) {
   const {
-    getColumnMap: e = () => wt,
+    getColumnMap: e = () => It,
     visualToTimeIndex: i = () => null,
     timeIndexToVisualColumn: g = () => null,
-    getTimeBoundaryAfterMacrobeat: t = () => 0,
-    log: r = () => {
+    getTimeBoundaryAfterMacrobeat: n = () => 0,
+    log: d = () => {
     }
-  } = o;
+  } = t;
   return {
     setAnacrusis(s) {
-      var n, u, M;
+      var o, u, v;
       if (this.state.hasAnacrusis === s)
         return;
-      const h = [...this.state.macrobeatGroupings], f = [...this.state.macrobeatBoundaryStyles], a = h.reduce((I, d) => I + d, 0);
-      let p, c;
+      const h = [...this.state.macrobeatGroupings], p = [...this.state.macrobeatBoundaryStyles], a = h.reduce((I, c) => I + c, 0);
+      let f, l;
       if (s) {
-        const I = this._anacrusisCache, d = $e.length - We.length, N = $e.slice(0, d), A = vt.slice(0, d), C = (n = I == null ? void 0 : I.groupings) != null && n.length ? [...I.groupings] : [...N], m = (u = I == null ? void 0 : I.boundaryStyles) != null && u.length ? [...I.boundaryStyles] : [...A];
-        if (p = [...C, ...h], c = [...m, ...f], !((M = I == null ? void 0 : I.boundaryStyles) != null && M.length))
+        const I = this._anacrusisCache, c = We.length - qe.length, N = We.slice(0, c), A = vt.slice(0, c), C = (o = I == null ? void 0 : I.groupings) != null && o.length ? [...I.groupings] : [...N], m = (u = I == null ? void 0 : I.boundaryStyles) != null && u.length ? [...I.boundaryStyles] : [...A];
+        if (f = [...C, ...h], l = [...m, ...p], !((v = I == null ? void 0 : I.boundaryStyles) != null && v.length))
           for (let y = 0; y < m.length; y++)
-            c[y] = y < m.length - 1 ? "anacrusis" : "solid";
-        this._anacrusisCache = null, r("debug", "rhythmActions", "Enabled anacrusis", {
+            l[y] = y < m.length - 1 ? "anacrusis" : "solid";
+        this._anacrusisCache = null, d("debug", "rhythmActions", "Enabled anacrusis", {
           insertedCount: C.length,
           insertedColumns: C.reduce((y, b) => y + b, 0)
         }, "state");
       } else {
-        const I = f.findIndex((C) => C === "solid");
-        let d = 0;
+        const I = p.findIndex((C) => C === "solid");
+        let c = 0;
         if (I !== -1)
-          d = I + 1;
+          c = I + 1;
         else
-          for (; d < f.length && f[d] === "anacrusis"; )
-            d++;
-        d = Math.min(d, h.length);
-        const N = h.slice(0, d), A = f.slice(0, d);
-        d > 0 ? this._anacrusisCache = {
+          for (; c < p.length && p[c] === "anacrusis"; )
+            c++;
+        c = Math.min(c, h.length);
+        const N = h.slice(0, c), A = p.slice(0, c);
+        c > 0 ? this._anacrusisCache = {
           groupings: N,
           boundaryStyles: A
-        } : this._anacrusisCache = null, p = h.slice(d), c = f.slice(d).map((C) => C === "anacrusis" ? "dashed" : C), p.length === 0 && (p = [...We], c = [...Mt]), r("debug", "rhythmActions", "Disabled anacrusis", {
-          removalCount: d,
+        } : this._anacrusisCache = null, f = h.slice(c), l = p.slice(c).map((C) => C === "anacrusis" ? "dashed" : C), f.length === 0 && (f = [...qe], l = [...wt]), d("debug", "rhythmActions", "Disabled anacrusis", {
+          removalCount: c,
           removedColumns: N.reduce((C, m) => C + m, 0)
         }, "state");
       }
-      const S = p.reduce((I, d) => I + d, 0) - a;
-      if (this.state.hasAnacrusis = s, this.state.macrobeatGroupings = [...p], this.state.macrobeatBoundaryStyles = [...c], qe(this.state, e), S !== 0) {
+      const S = f.reduce((I, c) => I + c, 0) - a;
+      if (this.state.hasAnacrusis = s, this.state.macrobeatGroupings = [...f], this.state.macrobeatBoundaryStyles = [...l], He(this.state, e), S !== 0) {
         const I = [];
         this.state.placedNotes.forEach((m) => {
           const y = i(this.state, m.startColumnIndex, h), b = i(this.state, m.endColumnIndex, h);
           if (y === null || b === null)
             return;
-          const x = y + S, D = b + S;
+          const x = y + S, O = b + S;
           if (x < 0) {
             I.push(m);
             return;
           }
-          const T = g(this.state, x, p), v = g(this.state, D, p);
-          if (T === null || v === null) {
+          const T = g(this.state, x, f), M = g(this.state, O, f);
+          if (T === null || M === null) {
             I.push(m);
             return;
           }
-          m.startColumnIndex = T, m.endColumnIndex = v;
+          m.startColumnIndex = T, m.endColumnIndex = M;
         }), I.forEach((m) => {
           const y = this.state.placedNotes.indexOf(m);
           y > -1 && this.state.placedNotes.splice(y, 1);
         });
-        const d = [];
+        const c = [];
         this.state.sixteenthStampPlacements.forEach((m) => {
           const y = i(this.state, m.startColumn, h), b = i(this.state, m.endColumn, h);
           if (y === null || b === null)
             return;
-          const x = y + S, D = b + S;
+          const x = y + S, O = b + S;
           if (x < 0) {
-            d.push(m);
+            c.push(m);
             return;
           }
-          const T = g(this.state, x, p), v = g(this.state, D, p);
-          if (T === null || v === null) {
-            d.push(m);
+          const T = g(this.state, x, f), M = g(this.state, O, f);
+          if (T === null || M === null) {
+            c.push(m);
             return;
           }
-          m.startColumn = T, m.endColumn = v;
-        }), d.forEach((m) => {
+          m.startColumn = T, m.endColumn = M;
+        }), c.forEach((m) => {
           const y = this.state.sixteenthStampPlacements.indexOf(m);
           y > -1 && this.state.sixteenthStampPlacements.splice(y, 1);
         });
@@ -1108,8 +1109,8 @@ function It(o = {}) {
           const y = this.state.tripletStampPlacements.indexOf(m);
           y > -1 && this.state.tripletStampPlacements.splice(y, 1);
         }));
-        const A = [], C = s ? p.length - h.length : -(h.length - p.length);
-        this.state.modulationMarkers.forEach((m) => {
+        const A = [], C = s ? f.length - h.length : -(h.length - f.length);
+        this.state.tempoModulationMarkers.forEach((m) => {
           const y = m.measureIndex + C;
           if (y < 0) {
             A.push(m);
@@ -1117,41 +1118,41 @@ function It(o = {}) {
           }
           m.measureIndex = y, m.columnIndex = null, m.xPosition = null, m.macrobeatIndex = null;
         }), A.forEach((m) => {
-          const y = this.state.modulationMarkers.indexOf(m);
-          y > -1 && this.state.modulationMarkers.splice(y, 1);
+          const y = this.state.tempoModulationMarkers.indexOf(m);
+          y > -1 && this.state.tempoModulationMarkers.splice(y, 1);
         });
       }
-      this.emit("anacrusisChanged", s), this.emit("notesChanged"), this.emit("sixteenthStampPlacementsChanged"), this.emit("tripletStampPlacementsChanged"), this.emit("modulationMarkersChanged"), this.emit("rhythmStructureChanged"), this.recordState();
+      this.emit("anacrusisChanged", s), this.emit("notesChanged"), this.emit("sixteenthStampPlacementsChanged"), this.emit("tripletStampPlacementsChanged"), this.emit("tempoModulationMarkersChanged"), this.emit("rhythmStructureChanged"), this.recordState();
     },
     toggleMacrobeatGrouping(s) {
       if (s === void 0 || s < 0 || s >= this.state.macrobeatGroupings.length) {
-        r("error", "rhythmActions", `Invalid index for toggleMacrobeatGrouping: ${s}`, null, "state");
+        d("error", "rhythmActions", `Invalid index for toggleMacrobeatGrouping: ${s}`, null, "state");
         return;
       }
-      const h = [...this.state.macrobeatGroupings], f = h[s], a = f === 2 ? 3 : 2, p = a - f, c = [...h];
-      c[s] = a;
-      const l = t(this.state, s, h), S = [];
-      this.state.placedNotes.forEach((n) => {
-        const u = i(this.state, n.startColumnIndex, h), M = i(this.state, n.endColumnIndex, h);
-        if (!(u === null || M === null) && u >= l) {
-          const I = u + p, d = M + p, N = g(this.state, I, c), A = g(this.state, d, c);
-          N !== null && A !== null ? (n.startColumnIndex = N, n.endColumnIndex = A) : S.push(n);
+      const h = [...this.state.macrobeatGroupings], p = h[s], a = p === 2 ? 3 : 2, f = a - p, l = [...h];
+      l[s] = a;
+      const r = n(this.state, s, h), S = [];
+      this.state.placedNotes.forEach((o) => {
+        const u = i(this.state, o.startColumnIndex, h), v = i(this.state, o.endColumnIndex, h);
+        if (!(u === null || v === null) && u >= r) {
+          const I = u + f, c = v + f, N = g(this.state, I, l), A = g(this.state, c, l);
+          N !== null && A !== null ? (o.startColumnIndex = N, o.endColumnIndex = A) : S.push(o);
         }
-      }), S.length && S.forEach((n) => {
-        const u = this.state.placedNotes.indexOf(n);
+      }), S.length && S.forEach((o) => {
+        const u = this.state.placedNotes.indexOf(o);
         u > -1 && this.state.placedNotes.splice(u, 1);
-      }), this.state.macrobeatGroupings = c, qe(this.state, e), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
+      }), this.state.macrobeatGroupings = l, He(this.state, e), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
     },
     cycleMacrobeatBoundaryStyle(s) {
       if (s === void 0 || s < 0 || s >= this.state.macrobeatBoundaryStyles.length) {
-        r("error", "rhythmActions", `Invalid index for cycleMacrobeatBoundaryStyle: ${s}`, null, "state");
+        d("error", "rhythmActions", `Invalid index for cycleMacrobeatBoundaryStyle: ${s}`, null, "state");
         return;
       }
       const h = this._isBoundaryInAnacrusis(s);
-      let f;
-      h ? f = ["dashed", "solid", "anacrusis"] : f = ["dashed", "solid"];
-      const a = this.state.macrobeatBoundaryStyles[s] ?? "dashed", p = f.indexOf(a), c = p === -1 ? 0 : (p + 1) % f.length, l = f[c] ?? "dashed";
-      this.state.macrobeatBoundaryStyles[s] = l, this.emit("rhythmStructureChanged"), this.recordState();
+      let p;
+      h ? p = ["dashed", "solid", "anacrusis"] : p = ["dashed", "solid"];
+      const a = this.state.macrobeatBoundaryStyles[s] ?? "dashed", f = p.indexOf(a), l = f === -1 ? 0 : (f + 1) % p.length, r = p[l] ?? "dashed";
+      this.state.macrobeatBoundaryStyles[s] = r, this.emit("rhythmStructureChanged"), this.recordState();
     },
     _isBoundaryInAnacrusis(s) {
       if (!this.state.hasAnacrusis)
@@ -1166,246 +1167,242 @@ function It(o = {}) {
     },
     decreaseMacrobeatCount() {
       if (this.state.macrobeatGroupings.length > 1) {
-        const s = this.state.macrobeatGroupings.length - 1, h = t(
+        const s = this.state.macrobeatGroupings.length - 1, h = n(
           this.state,
           s - 1,
           this.state.macrobeatGroupings
-        ), f = [];
-        this.state.placedNotes.forEach((c) => {
-          const l = i(this.state, c.startColumnIndex, this.state.macrobeatGroupings);
-          l !== null && l >= h && f.push(c);
-        }), f.forEach((c) => {
-          const l = this.state.placedNotes.indexOf(c);
-          l > -1 && this.state.placedNotes.splice(l, 1);
+        ), p = [];
+        this.state.placedNotes.forEach((l) => {
+          const r = i(this.state, l.startColumnIndex, this.state.macrobeatGroupings);
+          r !== null && r >= h && p.push(l);
+        }), p.forEach((l) => {
+          const r = this.state.placedNotes.indexOf(l);
+          r > -1 && this.state.placedNotes.splice(r, 1);
         });
         const a = [];
-        this.state.sixteenthStampPlacements.forEach((c) => {
-          const l = i(this.state, c.startColumn, this.state.macrobeatGroupings);
-          l !== null && l >= h && a.push(c);
-        }), a.forEach((c) => {
-          const l = this.state.sixteenthStampPlacements.indexOf(c);
-          l > -1 && this.state.sixteenthStampPlacements.splice(l, 1);
+        this.state.sixteenthStampPlacements.forEach((l) => {
+          const r = i(this.state, l.startColumn, this.state.macrobeatGroupings);
+          r !== null && r >= h && a.push(l);
+        }), a.forEach((l) => {
+          const r = this.state.sixteenthStampPlacements.indexOf(l);
+          r > -1 && this.state.sixteenthStampPlacements.splice(r, 1);
         });
-        const p = [];
-        this.state.tripletStampPlacements && (this.state.tripletStampPlacements.forEach((c) => {
-          c.startTimeIndex >= h && p.push(c);
-        }), p.forEach((c) => {
-          const l = this.state.tripletStampPlacements.indexOf(c);
-          l > -1 && this.state.tripletStampPlacements.splice(l, 1);
-        })), this.state.macrobeatGroupings.pop(), this.state.macrobeatBoundaryStyles.pop(), f.length > 0 && this.emit("notesChanged"), a.length > 0 && this.emit("sixteenthStampPlacementsChanged"), p.length > 0 && this.emit("tripletStampPlacementsChanged"), this.emit("rhythmStructureChanged"), this.recordState();
+        const f = [];
+        this.state.tripletStampPlacements && (this.state.tripletStampPlacements.forEach((l) => {
+          l.startTimeIndex >= h && f.push(l);
+        }), f.forEach((l) => {
+          const r = this.state.tripletStampPlacements.indexOf(l);
+          r > -1 && this.state.tripletStampPlacements.splice(r, 1);
+        })), this.state.macrobeatGroupings.pop(), this.state.macrobeatBoundaryStyles.pop(), p.length > 0 && this.emit("notesChanged"), a.length > 0 && this.emit("sixteenthStampPlacementsChanged"), f.length > 0 && this.emit("tripletStampPlacementsChanged"), this.emit("rhythmStructureChanged"), this.recordState();
       }
     },
     updateTimeSignature(s, h) {
       if (!Array.isArray(h) || h.length === 0) {
-        r("error", "rhythmActions", "Invalid groupings provided to updateTimeSignature", null, "state");
+        d("error", "rhythmActions", "Invalid groupings provided to updateTimeSignature", null, "state");
         return;
       }
-      let f = 0, a = 0, p = 0;
+      let p = 0, a = 0, f = 0;
       for (let N = 0; N < this.state.macrobeatGroupings.length; N++) {
-        if (p === s) {
-          f = N;
+        if (f === s) {
+          p = N;
           break;
         }
         const A = N === this.state.macrobeatGroupings.length - 1;
-        (this.state.macrobeatBoundaryStyles[N] === "solid" || A) && p++;
+        (this.state.macrobeatBoundaryStyles[N] === "solid" || A) && f++;
       }
-      p = 0;
+      f = 0;
       for (let N = 0; N < this.state.macrobeatGroupings.length; N++)
-        if (p === s) {
+        if (f === s) {
           const A = N === this.state.macrobeatGroupings.length - 1;
           if (this.state.macrobeatBoundaryStyles[N] === "solid" || A) {
             a = N;
             break;
           }
-        } else if (p < s) {
+        } else if (f < s) {
           const A = N === this.state.macrobeatGroupings.length - 1;
-          (this.state.macrobeatBoundaryStyles[N] === "solid" || A) && p++;
+          (this.state.macrobeatBoundaryStyles[N] === "solid" || A) && f++;
         }
-      const c = a - f + 1, l = h.length, S = this.state.macrobeatGroupings.slice(f, a + 1).reduce((N, A) => N + A, 0), u = h.reduce((N, A) => N + A, 0) - S, M = t(this.state, a, this.state.macrobeatGroupings);
+      const l = a - p + 1, r = h.length, S = this.state.macrobeatGroupings.slice(p, a + 1).reduce((N, A) => N + A, 0), u = h.reduce((N, A) => N + A, 0) - S, v = n(this.state, a, this.state.macrobeatGroupings);
       if (u !== 0) {
         const N = (() => {
           const C = [...this.state.macrobeatGroupings];
-          return C.splice(f, c, ...h), C;
+          return C.splice(p, l, ...h), C;
         })(), A = [];
         this.state.placedNotes.forEach((C) => {
           const m = i(this.state, C.startColumnIndex, this.state.macrobeatGroupings), y = i(this.state, C.endColumnIndex, this.state.macrobeatGroupings);
-          if (!(m === null || y === null) && m >= M) {
-            const b = m + u, x = y + u, D = g(this.state, b, N), T = g(this.state, x, N);
-            D !== null && T !== null ? (C.startColumnIndex = D, C.endColumnIndex = T) : A.push(C);
+          if (!(m === null || y === null) && m >= v) {
+            const b = m + u, x = y + u, O = g(this.state, b, N), T = g(this.state, x, N);
+            O !== null && T !== null ? (C.startColumnIndex = O, C.endColumnIndex = T) : A.push(C);
           }
         }), A.length && A.forEach((C) => {
           const m = this.state.placedNotes.indexOf(C);
           m > -1 && this.state.placedNotes.splice(m, 1);
         });
       }
-      const I = [...h], d = new Array(Math.max(l - 1, 0)).fill("dashed");
+      const I = [...h], c = new Array(Math.max(r - 1, 0)).fill("dashed");
       if (a < this.state.macrobeatBoundaryStyles.length) {
         const N = this.state.macrobeatBoundaryStyles[a] ?? "dashed";
-        d.push(N);
+        c.push(N);
       }
-      this.state.macrobeatGroupings.splice(f, c, ...I), this.state.macrobeatBoundaryStyles.splice(f, c - 1, ...d), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
+      this.state.macrobeatGroupings.splice(p, l, ...I), this.state.macrobeatBoundaryStyles.splice(p, l - 1, ...c), this.emit("notesChanged"), this.emit("rhythmStructureChanged"), this.recordState();
     },
-    addModulationMarker(s, h, f = null, a = null, p = null) {
-      if (!Object.values(Q).includes(h))
-        return r("error", "rhythmActions", `Invalid modulation ratio: ${h}`, null, "state"), null;
-      const c = this.state.modulationMarkers.findIndex((S) => S.measureIndex === s || p !== null && S.macrobeatIndex === p || a !== null && S.columnIndex === a);
-      if (c !== -1) {
-        const S = this.state.modulationMarkers[c];
-        return r("info", "rhythmActions", `Replacing existing modulation marker ${S.id} at measure ${s} (old ratio: ${S.ratio}, new ratio: ${h})`, null, "state"), S.ratio = h, S.xPosition = f, a !== null && (S.columnIndex = a), p !== null && (S.macrobeatIndex = p), this.emit("modulationMarkersChanged"), this.recordState(), S.id;
+    addModulationMarker(s, h, p = null, a = null, f = null) {
+      if (!Object.values(K).includes(h))
+        return d("error", "rhythmActions", `Invalid modulation ratio: ${h}`, null, "state"), null;
+      const l = this.state.tempoModulationMarkers.findIndex((S) => S.measureIndex === s || f !== null && S.macrobeatIndex === f || a !== null && S.columnIndex === a);
+      if (l !== -1) {
+        const S = this.state.tempoModulationMarkers[l];
+        return d("info", "rhythmActions", `Replacing existing modulation marker ${S.id} at measure ${s} (old ratio: ${S.ratio}, new ratio: ${h})`, null, "state"), S.ratio = h, S.xPosition = p, a !== null && (S.columnIndex = a), f !== null && (S.macrobeatIndex = f), this.emit("tempoModulationMarkersChanged"), this.recordState(), S.id;
       }
-      const l = bt(s, h, f, a, p);
-      return this.state.modulationMarkers.push(l), this.state.modulationMarkers.sort((S, n) => S.measureIndex - n.measureIndex), this.emit("modulationMarkersChanged"), this.recordState(), r("info", "rhythmActions", `Added modulation marker ${l.id} at measure ${s} with ratio=${h}, columnIndex=${a}`, null, "state"), l.id;
+      const r = Mt(s, h, p, a, f);
+      return this.state.tempoModulationMarkers.push(r), this.state.tempoModulationMarkers.sort((S, o) => S.measureIndex - o.measureIndex), this.emit("tempoModulationMarkersChanged"), this.recordState(), d("info", "rhythmActions", `Added modulation marker ${r.id} at measure ${s} with ratio=${h}, columnIndex=${a}`, null, "state"), r.id;
     },
     removeModulationMarker(s) {
-      const h = this.state.modulationMarkers.findIndex((f) => f.id === s);
+      const h = this.state.tempoModulationMarkers.findIndex((p) => p.id === s);
       if (h === -1) {
-        r("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
+        d("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
         return;
       }
-      this.state.modulationMarkers.splice(h, 1), this.emit("modulationMarkersChanged"), this.recordState(), r("info", "rhythmActions", `Removed modulation marker ${s}`, null, "state");
+      this.state.tempoModulationMarkers.splice(h, 1), this.emit("tempoModulationMarkersChanged"), this.recordState(), d("info", "rhythmActions", `Removed modulation marker ${s}`, null, "state");
     },
     setModulationRatio(s, h) {
-      if (!Object.values(Q).includes(h)) {
-        r("error", "rhythmActions", `Invalid modulation ratio: ${h}`, null, "state");
+      if (!Object.values(K).includes(h)) {
+        d("error", "rhythmActions", `Invalid modulation ratio: ${h}`, null, "state");
         return;
       }
-      const f = this.state.modulationMarkers.find((a) => a.id === s);
-      if (!f) {
-        r("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
+      const p = this.state.tempoModulationMarkers.find((a) => a.id === s);
+      if (!p) {
+        d("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
         return;
       }
-      f.ratio = h, this.emit("modulationMarkersChanged"), this.recordState(), r("info", "rhythmActions", `Updated modulation marker ${s} ratio to ${h}`, null, "state");
+      p.ratio = h, this.emit("tempoModulationMarkersChanged"), this.recordState(), d("info", "rhythmActions", `Updated modulation marker ${s} ratio to ${h}`, null, "state");
     },
     moveModulationMarker(s, h) {
-      const f = this.state.modulationMarkers.find((a) => a.id === s);
-      if (!f) {
-        r("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
+      const p = this.state.tempoModulationMarkers.find((a) => a.id === s);
+      if (!p) {
+        d("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
         return;
       }
-      f.measureIndex = h, this.state.modulationMarkers.sort((a, p) => a.measureIndex - p.measureIndex), this.emit("modulationMarkersChanged"), this.recordState(), r("info", "rhythmActions", `Moved modulation marker ${s} to measure ${h}`, null, "state");
+      p.measureIndex = h, this.state.tempoModulationMarkers.sort((a, f) => a.measureIndex - f.measureIndex), this.emit("tempoModulationMarkersChanged"), this.recordState(), d("info", "rhythmActions", `Moved modulation marker ${s} to measure ${h}`, null, "state");
     },
     toggleModulationMarker(s) {
-      const h = this.state.modulationMarkers.find((f) => f.id === s);
+      const h = this.state.tempoModulationMarkers.find((p) => p.id === s);
       if (!h) {
-        r("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
+        d("warn", "rhythmActions", `Modulation marker not found: ${s}`, null, "state");
         return;
       }
-      h.active = !h.active, this.emit("modulationMarkersChanged"), this.recordState(), r("info", "rhythmActions", `Toggled modulation marker ${s} active state to ${h.active}`, null, "state");
+      h.active = !h.active, this.emit("tempoModulationMarkersChanged"), this.recordState(), d("info", "rhythmActions", `Toggled modulation marker ${s} active state to ${h.active}`, null, "state");
     },
     clearModulationMarkers() {
-      const s = this.state.modulationMarkers.length;
-      this.state.modulationMarkers = [], this.emit("modulationMarkersChanged"), this.recordState(), r("info", "rhythmActions", `Cleared ${s} modulation markers`, null, "state");
+      const s = this.state.tempoModulationMarkers.length;
+      this.state.tempoModulationMarkers = [], this.emit("tempoModulationMarkersChanged"), this.recordState(), d("info", "rhythmActions", `Cleared ${s} modulation markers`, null, "state");
     }
   };
 }
-function He(o) {
-  const e = JSON.parse(JSON.stringify(o));
+function Ue(t) {
+  const e = JSON.parse(JSON.stringify(t));
   for (const i in e) {
     const g = e[i];
     g.coeffs && typeof g.coeffs == "object" && !Array.isArray(g.coeffs) ? g.coeffs = new Float32Array(Object.values(g.coeffs)) : Array.isArray(g.coeffs) && (g.coeffs = new Float32Array(g.coeffs)), g.phases && typeof g.phases == "object" && !Array.isArray(g.phases) ? g.phases = new Float32Array(Object.values(g.phases)) : Array.isArray(g.phases) && (g.phases = new Float32Array(g.phases));
   }
   return e;
 }
-function xt(o, e) {
-  if (o)
+const Pt = /* @__PURE__ */ new Set(["dashed", "solid", "anacrusis"]);
+function Et(t) {
+  return Array.isArray(t) && t.length > 0 && t.every((e) => e === 2 || e === 3);
+}
+function Ot(t, e) {
+  return Array.isArray(t) && t.length === Math.max(e - 1, 0) && t.every((i) => Pt.has(i));
+}
+function Dt(t, e) {
+  if (t)
     try {
-      const i = o.getItem(e);
+      const i = t.getItem(e);
       if (i === null)
         return;
-      const g = JSON.parse(i);
-      if (g.timbres)
-        for (const t in g.timbres) {
-          const r = g.timbres[t];
-          if (r.coeffs && typeof r.coeffs == "object") {
-            const s = Array.isArray(r.coeffs) ? r.coeffs : Object.values(r.coeffs);
-            r.coeffs = new Float32Array(s);
-          }
-          if (r.phases && typeof r.phases == "object") {
-            const s = Array.isArray(r.phases) ? r.phases : Object.values(r.phases);
-            r.phases = new Float32Array(s);
-          }
-        }
-      if (g.pitchRange) {
-        const t = z.length, r = Math.max(0, t - 1), s = Math.max(0, Math.min(r, g.pitchRange.topIndex ?? 0)), h = Math.max(s, Math.min(r, g.pitchRange.bottomIndex ?? r));
-        g.pitchRange = { topIndex: s, bottomIndex: h };
+      const g = JSON.parse(i), n = g.macrobeatGroupings;
+      if (!Et(n)) {
+        t.removeItem(e);
+        return;
+      }
+      if (!Ot(g.macrobeatBoundaryStyles, n.length)) {
+        t.removeItem(e);
+        return;
+      }
+      if (delete g.timbres, g.pitchRange) {
+        const d = z.length, s = Math.max(0, d - 1), h = Math.max(0, Math.min(s, g.pitchRange.topIndex ?? 0)), p = Math.max(h, Math.min(s, g.pitchRange.bottomIndex ?? s));
+        g.pitchRange = { topIndex: h, bottomIndex: p };
       }
       if ("playheadMode" in g) {
-        const t = g.playheadMode;
-        t !== "cursor" && t !== "microbeat" && t !== "macrobeat" && delete g.playheadMode;
+        const d = g.playheadMode;
+        d !== "cursor" && d !== "microbeat" && d !== "macrobeat" && delete g.playheadMode;
       }
       return g.fullRowData = [...z], g;
     } catch {
       return;
     }
 }
-function Pt(o, e, i) {
-  var g;
+function Ft(t, e, i) {
   if (e)
     try {
-      const t = JSON.parse(JSON.stringify({
-        placedNotes: o.placedNotes,
-        placedChords: o.placedChords,
-        tonicSignGroups: o.tonicSignGroups,
-        sixteenthStampPlacements: o.sixteenthStampPlacements,
-        tripletStampPlacements: o.tripletStampPlacements,
-        timbres: o.timbres,
-        macrobeatGroupings: o.macrobeatGroupings,
-        macrobeatBoundaryStyles: o.macrobeatBoundaryStyles,
-        hasAnacrusis: o.hasAnacrusis,
-        baseMicrobeatPx: o.baseMicrobeatPx,
-        modulationMarkers: o.modulationMarkers,
-        tempo: o.tempo,
-        activeChordIntervals: o.activeChordIntervals,
-        selectedNote: o.selectedNote,
-        annotations: o.annotations,
-        pitchRange: o.pitchRange,
-        degreeDisplayMode: o.degreeDisplayMode,
-        showOctaveLabels: o.showOctaveLabels,
-        longNoteStyle: o.longNoteStyle,
-        playheadMode: o.playheadMode
-      }));
-      if (o.timbres)
-        for (const s in o.timbres) {
-          const h = o.timbres[s], f = (g = t.timbres) == null ? void 0 : g[s];
-          h != null && h.coeffs && f && (f.coeffs = Array.from(h.coeffs)), h != null && h.phases && f && (f.phases = Array.from(h.phases));
-        }
-      const r = JSON.stringify(t);
-      e.setItem(i, r);
+      const g = JSON.parse(JSON.stringify({
+        placedNotes: t.placedNotes,
+        placedChords: t.placedChords,
+        tonicSignGroups: t.tonicSignGroups,
+        sixteenthStampPlacements: t.sixteenthStampPlacements,
+        tripletStampPlacements: t.tripletStampPlacements,
+        // timbres: state.timbres, // Removed - always use default Sine preset
+        macrobeatGroupings: t.macrobeatGroupings,
+        macrobeatBoundaryStyles: t.macrobeatBoundaryStyles,
+        hasAnacrusis: t.hasAnacrusis,
+        baseMicrobeatPx: t.baseMicrobeatPx,
+        tempoModulationMarkers: t.tempoModulationMarkers,
+        tempo: t.tempo,
+        activeChordIntervals: t.activeChordIntervals,
+        selectedNote: t.selectedNote,
+        annotations: t.annotations,
+        pitchRange: t.pitchRange,
+        degreeDisplayMode: t.degreeDisplayMode,
+        showOctaveLabels: t.showOctaveLabels,
+        longNoteStyle: t.longNoteStyle,
+        playheadMode: t.playheadMode
+      })), n = JSON.stringify(g);
+      e.setItem(i, n);
     } catch {
     }
 }
-function Et(o = {}) {
+function Bt(t = {}) {
   const {
     storageKey: e = "studentNotationState",
     storage: i,
     initialState: g,
-    onClearState: t,
-    noteActionCallbacks: r = {},
+    onClearState: n,
+    noteActionCallbacks: d = {},
     sixteenthStampActionCallbacks: s = {},
     tripletStampActionCallbacks: h = {},
-    rhythmActionCallbacks: f = {}
-  } = o, a = {}, p = xt(i, e), c = !p, n = {
+    rhythmActionCallbacks: p = {}
+  } = t, a = {}, f = Dt(i, e), l = !f, o = {
     state: {
-      ...gt(),
-      ...p,
+      ...St(),
+      ...f,
       ...g
     },
-    isColdStart: c,
-    on(u, M) {
-      a[u] || (a[u] = []), a[u].push(M);
+    isColdStart: l,
+    on(u, v) {
+      a[u] || (a[u] = []), a[u].push(v);
     },
-    off(u, M) {
+    off(u, v) {
       if (a[u]) {
-        const I = a[u].indexOf(M);
+        const I = a[u].indexOf(v);
         I > -1 && a[u].splice(I, 1);
       }
     },
-    emit(u, M) {
+    emit(u, v) {
       a[u] && a[u].forEach((I) => {
         try {
-          I(M);
-        } catch (d) {
-          console.error(`Error in listener for event "${u}"`, d);
+          I(v);
+        } catch (c) {
+          console.error(`Error in listener for event "${u}"`, c);
         }
       });
     },
@@ -1414,107 +1411,107 @@ function Et(o = {}) {
         delete a[u];
     },
     saveState() {
-      Pt(n.state, i, e);
+      Ft(o.state, i, e);
     },
     // ========== HISTORY ACTIONS ==========
     recordState() {
-      n.state.history = n.state.history.slice(0, n.state.historyIndex + 1);
-      const u = JSON.parse(JSON.stringify(n.state.timbres)), M = {
-        notes: JSON.parse(JSON.stringify(n.state.placedNotes)),
-        tonicSignGroups: JSON.parse(JSON.stringify(n.state.tonicSignGroups)),
-        placedChords: JSON.parse(JSON.stringify(n.state.placedChords)),
-        sixteenthStampPlacements: JSON.parse(JSON.stringify(n.state.sixteenthStampPlacements)),
-        tripletStampPlacements: JSON.parse(JSON.stringify(n.state.tripletStampPlacements || [])),
+      o.state.history = o.state.history.slice(0, o.state.historyIndex + 1);
+      const u = JSON.parse(JSON.stringify(o.state.timbres)), v = {
+        notes: JSON.parse(JSON.stringify(o.state.placedNotes)),
+        tonicSignGroups: JSON.parse(JSON.stringify(o.state.tonicSignGroups)),
+        placedChords: JSON.parse(JSON.stringify(o.state.placedChords)),
+        sixteenthStampPlacements: JSON.parse(JSON.stringify(o.state.sixteenthStampPlacements)),
+        tripletStampPlacements: JSON.parse(JSON.stringify(o.state.tripletStampPlacements || [])),
         timbres: u,
-        annotations: n.state.annotations ? JSON.parse(JSON.stringify(n.state.annotations)) : [],
-        lassoSelection: JSON.parse(JSON.stringify(n.state.lassoSelection))
+        annotations: o.state.annotations ? JSON.parse(JSON.stringify(o.state.annotations)) : [],
+        lassoSelection: JSON.parse(JSON.stringify(o.state.lassoSelection))
       };
-      n.state.history.push(M), n.state.historyIndex++, n.emit("historyChanged"), n.saveState();
+      o.state.history.push(v), o.state.historyIndex++, o.emit("historyChanged"), o.saveState();
     },
     undo() {
       var u;
-      if (n.state.historyIndex > 0) {
-        n.state.historyIndex--;
-        const M = n.state.history[n.state.historyIndex];
-        if (!M) return;
-        n.state.placedNotes = JSON.parse(JSON.stringify(M.notes)), n.state.tonicSignGroups = JSON.parse(JSON.stringify(M.tonicSignGroups)), n.state.sixteenthStampPlacements = JSON.parse(JSON.stringify(M.sixteenthStampPlacements || [])), n.state.tripletStampPlacements = JSON.parse(JSON.stringify(M.tripletStampPlacements || [])), n.state.timbres = He(M.timbres), n.state.annotations = M.annotations ? JSON.parse(JSON.stringify(M.annotations)) : [], n.emit("notesChanged"), n.emit("sixteenthStampPlacementsChanged"), n.emit("tripletStampPlacementsChanged"), n.emit("rhythmStructureChanged"), (u = n.state.selectedNote) != null && u.color && n.emit("timbreChanged", n.state.selectedNote.color), n.emit("annotationsChanged"), n.emit("historyChanged");
+      if (o.state.historyIndex > 0) {
+        o.state.historyIndex--;
+        const v = o.state.history[o.state.historyIndex];
+        if (!v) return;
+        o.state.placedNotes = JSON.parse(JSON.stringify(v.notes)), o.state.tonicSignGroups = JSON.parse(JSON.stringify(v.tonicSignGroups)), o.state.sixteenthStampPlacements = JSON.parse(JSON.stringify(v.sixteenthStampPlacements || [])), o.state.tripletStampPlacements = JSON.parse(JSON.stringify(v.tripletStampPlacements || [])), o.state.timbres = Ue(v.timbres), o.state.annotations = v.annotations ? JSON.parse(JSON.stringify(v.annotations)) : [], o.emit("notesChanged"), o.emit("sixteenthStampPlacementsChanged"), o.emit("tripletStampPlacementsChanged"), o.emit("rhythmStructureChanged"), (u = o.state.selectedNote) != null && u.color && o.emit("timbreChanged", o.state.selectedNote.color), o.emit("annotationsChanged"), o.emit("historyChanged");
       }
     },
     redo() {
       var u;
-      if (n.state.historyIndex < n.state.history.length - 1) {
-        n.state.historyIndex++;
-        const M = n.state.history[n.state.historyIndex];
-        if (!M) return;
-        n.state.placedNotes = JSON.parse(JSON.stringify(M.notes)), n.state.tonicSignGroups = JSON.parse(JSON.stringify(M.tonicSignGroups)), n.state.sixteenthStampPlacements = JSON.parse(JSON.stringify(M.sixteenthStampPlacements || [])), n.state.tripletStampPlacements = JSON.parse(JSON.stringify(M.tripletStampPlacements || [])), n.state.timbres = He(M.timbres), n.state.annotations = M.annotations ? JSON.parse(JSON.stringify(M.annotations)) : [], n.emit("notesChanged"), n.emit("sixteenthStampPlacementsChanged"), n.emit("tripletStampPlacementsChanged"), n.emit("rhythmStructureChanged"), (u = n.state.selectedNote) != null && u.color && n.emit("timbreChanged", n.state.selectedNote.color), n.emit("annotationsChanged"), n.emit("historyChanged");
+      if (o.state.historyIndex < o.state.history.length - 1) {
+        o.state.historyIndex++;
+        const v = o.state.history[o.state.historyIndex];
+        if (!v) return;
+        o.state.placedNotes = JSON.parse(JSON.stringify(v.notes)), o.state.tonicSignGroups = JSON.parse(JSON.stringify(v.tonicSignGroups)), o.state.sixteenthStampPlacements = JSON.parse(JSON.stringify(v.sixteenthStampPlacements || [])), o.state.tripletStampPlacements = JSON.parse(JSON.stringify(v.tripletStampPlacements || [])), o.state.timbres = Ue(v.timbres), o.state.annotations = v.annotations ? JSON.parse(JSON.stringify(v.annotations)) : [], o.emit("notesChanged"), o.emit("sixteenthStampPlacementsChanged"), o.emit("tripletStampPlacementsChanged"), o.emit("rhythmStructureChanged"), (u = o.state.selectedNote) != null && u.color && o.emit("timbreChanged", o.state.selectedNote.color), o.emit("annotationsChanged"), o.emit("historyChanged");
       }
     },
     clearSavedState() {
-      i && (i.removeItem(e), i.removeItem("effectDialValues")), t && t();
+      i && (i.removeItem(e), i.removeItem("effectDialValues")), n && n();
     },
     // ========== VIEW ACTIONS ==========
-    setPlaybackState(u, M) {
-      n.state.isPlaying = u, n.state.isPaused = M, n.emit("playbackStateChanged", { isPlaying: u, isPaused: M });
+    setPlaybackState(u, v) {
+      o.state.isPlaying = u, o.state.isPaused = v, o.emit("playbackStateChanged", { isPlaying: u, isPaused: v });
     },
     setLooping(u) {
-      n.state.isLooping = u, n.emit("loopingChanged", u);
+      o.state.isLooping = u, o.emit("loopingChanged", u);
     },
     setTempo(u) {
-      n.state.tempo = u, n.emit("tempoChanged", u);
+      o.state.tempo = u, o.emit("tempoChanged", u);
     },
     setPlayheadMode(u) {
-      n.state.playheadMode = u, n.emit("playheadModeChanged", u);
+      o.state.playheadMode = u, o.emit("playheadModeChanged", u);
     },
-    setSelectedTool(u, M) {
-      const I = n.state.selectedTool;
-      if (n.state.previousTool = I, n.state.selectedTool = u, M !== void 0) {
-        const d = typeof M == "string" ? parseInt(M, 10) : M;
-        isNaN(d) || (n.state.selectedToolTonicNumber = d);
+    setSelectedTool(u, v) {
+      const I = o.state.selectedTool;
+      if (o.state.previousTool = I, o.state.selectedTool = u, v !== void 0) {
+        const c = typeof v == "string" ? parseInt(v, 10) : v;
+        isNaN(c) || (o.state.selectedToolTonicNumber = c);
       }
-      n.emit("toolChanged", { newTool: u, oldTool: I });
+      o.emit("toolChanged", { newTool: u, oldTool: I });
     },
-    setSelectedNote(u, M) {
-      const I = { ...n.state.selectedNote };
-      n.state.selectedNote = { shape: u, color: M }, n.emit("noteChanged", { newNote: n.state.selectedNote, oldNote: I });
+    setSelectedNote(u, v) {
+      const I = { ...o.state.selectedNote };
+      o.state.selectedNote = { shape: u, color: v }, o.emit("noteChanged", { newNote: o.state.selectedNote, oldNote: I });
     },
     setPitchRange(u) {
-      n.state.pitchRange = { ...n.state.pitchRange, ...u }, n.emit("pitchRangeChanged", n.state.pitchRange);
+      o.state.pitchRange = { ...o.state.pitchRange, ...u }, o.emit("pitchRangeChanged", o.state.pitchRange);
     },
     setDegreeDisplayMode(u) {
-      n.state.degreeDisplayMode = u, n.emit("degreeDisplayModeChanged", u);
+      o.state.degreeDisplayMode = u, o.emit("degreeDisplayModeChanged", u);
     },
     setLongNoteStyle(u) {
-      n.state.longNoteStyle = u, n.emit("longNoteStyleChanged", u);
+      o.state.longNoteStyle = u, o.emit("longNoteStyleChanged", u);
     },
     toggleAccidentalMode(u) {
-      n.state.accidentalMode[u] = !n.state.accidentalMode[u], n.emit("accidentalModeChanged", n.state.accidentalMode);
+      o.state.accidentalMode[u] = !o.state.accidentalMode[u], o.emit("accidentalModeChanged", o.state.accidentalMode);
     },
     toggleFrequencyLabels() {
-      n.state.showFrequencyLabels = !n.state.showFrequencyLabels, n.emit("frequencyLabelsChanged", n.state.showFrequencyLabels);
+      o.state.showFrequencyLabels = !o.state.showFrequencyLabels, o.emit("frequencyLabelsChanged", o.state.showFrequencyLabels);
     },
     toggleOctaveLabels() {
-      n.state.showOctaveLabels = !n.state.showOctaveLabels, n.emit("octaveLabelsChanged", n.state.showOctaveLabels);
+      o.state.showOctaveLabels = !o.state.showOctaveLabels, o.emit("octaveLabelsChanged", o.state.showOctaveLabels);
     },
     toggleFocusColours() {
-      n.state.focusColours = !n.state.focusColours, n.emit("focusColoursChanged", n.state.focusColours);
+      o.state.focusColours = !o.state.focusColours, o.emit("focusColoursChanged", o.state.focusColours);
     },
     toggleWaveformExtendedView() {
-      n.state.waveformExtendedView = !n.state.waveformExtendedView, n.emit("waveformExtendedViewChanged", n.state.waveformExtendedView);
+      o.state.waveformExtendedView = !o.state.waveformExtendedView, o.emit("waveformExtendedViewChanged", o.state.waveformExtendedView);
     },
     setLayoutConfig(u) {
-      u.cellWidth !== void 0 && (n.state.cellWidth = u.cellWidth), u.cellHeight !== void 0 && (n.state.cellHeight = u.cellHeight), u.columnWidths !== void 0 && (n.state.columnWidths = u.columnWidths), n.emit("layoutConfigChanged", u);
+      u.cellWidth !== void 0 && (o.state.cellWidth = u.cellWidth), u.cellHeight !== void 0 && (o.state.cellHeight = u.cellHeight), u.columnWidths !== void 0 && (o.state.columnWidths = u.columnWidths), o.emit("layoutConfigChanged", u);
     },
     setDeviceProfile(u) {
-      n.state.deviceProfile = { ...n.state.deviceProfile, ...u }, n.emit("deviceProfileChanged", n.state.deviceProfile);
+      o.state.deviceProfile = { ...o.state.deviceProfile, ...u }, o.emit("deviceProfileChanged", o.state.deviceProfile);
     },
     setPrintPreviewActive(u) {
-      n.state.isPrintPreviewActive = u, n.emit("printPreviewStateChanged", u);
+      o.state.isPrintPreviewActive = u, o.emit("printPreviewStateChanged", u);
     },
     setPrintOptions(u) {
-      n.state.printOptions = { ...n.state.printOptions, ...u }, n.emit("printOptionsChanged", n.state.printOptions);
+      o.state.printOptions = { ...o.state.printOptions, ...u }, o.emit("printOptionsChanged", o.state.printOptions);
     },
     setAdsrTimeAxisScale(u) {
-      n.state.adsrTimeAxisScale = u, n.emit("adsrTimeAxisScaleChanged", u);
+      o.state.adsrTimeAxisScale = u, o.emit("adsrTimeAxisScaleChanged", u);
     },
     setAdsrComponentWidth() {
     },
@@ -1525,79 +1522,79 @@ function Et(o = {}) {
     setGridPosition() {
     },
     setKeySignature(u) {
-      n.state.keySignature = u, n.emit("keySignatureChanged", u);
+      o.state.keySignature = u, o.emit("keySignatureChanged", u);
     },
     // ========== HARMONY ACTIONS ==========
     setActiveChordIntervals(u) {
-      n.state.activeChordIntervals = u, n.emit("activeChordIntervalsChanged", u);
+      o.state.activeChordIntervals = u, o.emit("activeChordIntervalsChanged", u);
     },
     setIntervalsInversion(u) {
-      n.state.isIntervalsInverted = u, n.emit("intervalsInversionChanged", u);
+      o.state.isIntervalsInverted = u, o.emit("intervalsInversionChanged", u);
     },
     setChordPosition(u) {
-      n.state.chordPositionState = u, n.emit("chordPositionChanged", u);
+      o.state.chordPositionState = u, o.emit("chordPositionChanged", u);
     },
     // ========== TIMBRE ACTIONS ==========
-    setADSR(u, M) {
-      n.state.timbres[u] && (n.state.timbres[u].adsr = { ...n.state.timbres[u].adsr, ...M }, n.emit("timbreChanged", u));
+    setADSR(u, v) {
+      o.state.timbres[u] && (o.state.timbres[u].adsr = { ...o.state.timbres[u].adsr, ...v }, o.emit("timbreChanged", u));
     },
-    setHarmonicCoefficients(u, M) {
-      n.state.timbres[u] && (n.state.timbres[u].coeffs = M, n.emit("timbreChanged", u));
+    setHarmonicCoefficients(u, v) {
+      o.state.timbres[u] && (o.state.timbres[u].coeffs = v, o.emit("timbreChanged", u));
     },
-    setHarmonicPhases(u, M) {
-      n.state.timbres[u] && (n.state.timbres[u].phases = M, n.emit("timbreChanged", u));
+    setHarmonicPhases(u, v) {
+      o.state.timbres[u] && (o.state.timbres[u].phases = v, o.emit("timbreChanged", u));
     },
-    setFilterSettings(u, M) {
-      n.state.timbres[u] && (n.state.timbres[u].filter = { ...n.state.timbres[u].filter, ...M }, n.emit("timbreChanged", u));
+    setFilterSettings(u, v) {
+      o.state.timbres[u] && (o.state.timbres[u].filter = { ...o.state.timbres[u].filter, ...v }, o.emit("timbreChanged", u));
     },
-    applyPreset(u, M) {
-      n.state.timbres[u] && (Object.assign(n.state.timbres[u], M), n.emit("timbreChanged", u));
+    applyPreset(u, v) {
+      o.state.timbres[u] && (Object.assign(o.state.timbres[u], v), o.emit("timbreChanged", u));
     },
     // ========== NOTE ACTIONS ==========
     // Extracted from note actions module
-    ...St(r),
+    ...yt(d),
     // ========== SIXTEENTH STAMP ACTIONS ==========
     // Extracted from sixteenth stamp actions module
-    ...Ct(s),
+    ...Tt(s),
     // ========== TRIPLET STAMP ACTIONS ==========
     // Extracted from triplet stamp actions module
-    ...Nt(h),
+    ...At(h),
     // ========== RHYTHM ACTIONS ==========
     // Extracted from rhythm actions module
-    ...It(f)
+    ...xt(p)
   };
-  return i && (n.on("tempoChanged", () => n.saveState()), n.on("degreeDisplayModeChanged", () => n.saveState()), n.on("longNoteStyleChanged", () => n.saveState()), n.on("playheadModeChanged", () => n.saveState())), c && i && n.saveState(), n;
+  return i && (o.on("tempoChanged", () => o.saveState()), o.on("degreeDisplayModeChanged", () => o.saveState()), o.on("longNoteStyleChanged", () => o.saveState()), o.on("playheadModeChanged", () => o.saveState())), l && i && o.saveState(), o;
 }
-function Ot(o = {}) {
+function Rt(t = {}) {
   const {
     getPlacedTonicSigns: e = () => [],
     sideColumnWidth: i = 0.25,
     beatColumnWidth: g = 1
-  } = o;
-  let t = null, r = null;
-  function s(c) {
-    const S = e(c).map((n) => `${n.columnIndex}:${n.preMacrobeatIndex}:${n.uuid || ""}`).sort().join("|");
+  } = t;
+  let n = null, d = null;
+  function s(l) {
+    const S = e(l).map((o) => `${o.columnIndex}:${o.preMacrobeatIndex}:${o.uuid || ""}`).sort().join("|");
     return {
-      macrobeatGroupings: [...c.macrobeatGroupings],
+      macrobeatGroupings: [...l.macrobeatGroupings],
       tonicSignsHash: S,
-      macrobeatBoundaryStyles: [...c.macrobeatBoundaryStyles]
+      macrobeatBoundaryStyles: [...l.macrobeatBoundaryStyles]
     };
   }
-  function h(c) {
-    return r ? r.tonicSignsHash === c.tonicSignsHash && JSON.stringify(r.macrobeatGroupings) === JSON.stringify(c.macrobeatGroupings) && JSON.stringify(r.macrobeatBoundaryStyles) === JSON.stringify(c.macrobeatBoundaryStyles) : !1;
+  function h(l) {
+    return d ? d.tonicSignsHash === l.tonicSignsHash && JSON.stringify(d.macrobeatGroupings) === JSON.stringify(l.macrobeatGroupings) && JSON.stringify(d.macrobeatBoundaryStyles) === JSON.stringify(l.macrobeatBoundaryStyles) : !1;
   }
-  function f(c) {
-    const { macrobeatGroupings: l, macrobeatBoundaryStyles: S } = c, u = [...e(c)].sort((P, F) => P.preMacrobeatIndex - F.preMacrobeatIndex), M = [], I = [];
-    let d = 0, N = 0, A = 0, C = 0, m = 0;
+  function p(l) {
+    const { macrobeatGroupings: r, macrobeatBoundaryStyles: S } = l, u = [...e(l)].sort((P, B) => P.preMacrobeatIndex - B.preMacrobeatIndex), v = [], I = [];
+    let c = 0, N = 0, A = 0, C = 0, m = 0;
     const y = (P) => {
-      var F;
+      var B;
       for (; m < u.length; ) {
-        const E = u[m];
-        if (!E || E.preMacrobeatIndex !== P) break;
-        const G = E.uuid || "";
-        for (let B = 0; B < 2; B++)
-          M.push({
-            visualIndex: d,
+        const L = u[m];
+        if (!L || L.preMacrobeatIndex !== P) break;
+        const R = L.uuid || "";
+        for (let F = 0; F < 2; F++)
+          v.push({
+            visualIndex: c,
             canvasIndex: N,
             timeIndex: null,
             type: "tonic",
@@ -1608,18 +1605,18 @@ function Ot(o = {}) {
             isMacrobeatStart: !1,
             isMacrobeatEnd: !1,
             isPlayable: !1,
-            tonicSignUuid: B === 0 ? G : null
+            tonicSignUuid: F === 0 ? R : null
             // Only first column stores UUID
-          }), d++, N++, C += g;
-        const L = G;
+          }), c++, N++, C += g;
+        const D = R;
         do
           m++;
-        while (m < u.length && (((F = u[m]) == null ? void 0 : F.uuid) || "") === L);
+        while (m < u.length && (((B = u[m]) == null ? void 0 : B.uuid) || "") === D);
       }
     };
     for (let P = 0; P < 2; P++)
-      M.push({
-        visualIndex: d,
+      v.push({
+        visualIndex: c,
         canvasIndex: null,
         timeIndex: null,
         type: "legend-left",
@@ -1631,36 +1628,36 @@ function Ot(o = {}) {
         isMacrobeatEnd: !1,
         isPlayable: !1,
         tonicSignUuid: null
-      }), d++, C += i;
-    y(-1), l.forEach((P, F) => {
-      for (let G = 0; G < P; G++)
-        M.push({
-          visualIndex: d,
+      }), c++, C += i;
+    y(-1), r.forEach((P, B) => {
+      for (let R = 0; R < P; R++)
+        v.push({
+          visualIndex: c,
           canvasIndex: N,
           timeIndex: A,
           type: "beat",
           widthMultiplier: g,
           xOffsetUnmodulated: C,
-          macrobeatIndex: F,
-          beatInMacrobeat: G,
-          isMacrobeatStart: G === 0,
-          isMacrobeatEnd: G === P - 1,
+          macrobeatIndex: B,
+          beatInMacrobeat: R,
+          isMacrobeatStart: R === 0,
+          isMacrobeatEnd: R === P - 1,
           isPlayable: !0,
           tonicSignUuid: null
-        }), d++, N++, A++, C += g;
-      const E = S[F] || "dashed";
+        }), c++, N++, A++, C += g;
+      const L = S[B] || "dashed";
       I.push({
-        macrobeatIndex: F,
-        visualColumn: d - 1,
+        macrobeatIndex: B,
+        visualColumn: c - 1,
         canvasColumn: N - 1,
         timeColumn: A - 1,
-        boundaryType: E,
-        isMeasureStart: E === "solid"
-      }), y(F);
+        boundaryType: L,
+        isMeasureStart: L === "solid"
+      }), y(B);
     });
     for (let P = 0; P < 2; P++)
-      M.push({
-        visualIndex: d,
+      v.push({
+        visualIndex: c,
         canvasIndex: null,
         timeIndex: null,
         type: "legend-right",
@@ -1672,147 +1669,147 @@ function Ot(o = {}) {
         isMacrobeatEnd: !1,
         isPlayable: !1,
         tonicSignUuid: null
-      }), d++, C += i;
-    const b = /* @__PURE__ */ new Map(), x = /* @__PURE__ */ new Map(), D = /* @__PURE__ */ new Map(), T = /* @__PURE__ */ new Map(), v = /* @__PURE__ */ new Map(), O = /* @__PURE__ */ new Map();
-    return M.forEach((P) => {
-      b.set(P.visualIndex, P.canvasIndex), x.set(P.visualIndex, P.timeIndex), P.canvasIndex !== null && (D.set(P.canvasIndex, P.visualIndex), T.set(P.canvasIndex, P.timeIndex)), P.timeIndex !== null && (P.canvasIndex !== null && v.set(P.timeIndex, P.canvasIndex), O.set(P.timeIndex, P.visualIndex));
+      }), c++, C += i;
+    const b = /* @__PURE__ */ new Map(), x = /* @__PURE__ */ new Map(), O = /* @__PURE__ */ new Map(), T = /* @__PURE__ */ new Map(), M = /* @__PURE__ */ new Map(), E = /* @__PURE__ */ new Map();
+    return v.forEach((P) => {
+      b.set(P.visualIndex, P.canvasIndex), x.set(P.visualIndex, P.timeIndex), P.canvasIndex !== null && (O.set(P.canvasIndex, P.visualIndex), T.set(P.canvasIndex, P.timeIndex)), P.timeIndex !== null && (P.canvasIndex !== null && M.set(P.timeIndex, P.canvasIndex), E.set(P.timeIndex, P.visualIndex));
     }), {
-      entries: M,
+      entries: v,
       visualToCanvas: b,
       visualToTime: x,
-      canvasToVisual: D,
+      canvasToVisual: O,
       canvasToTime: T,
-      timeToCanvas: v,
-      timeToVisual: O,
+      timeToCanvas: M,
+      timeToVisual: E,
       macrobeatBoundaries: I,
-      totalVisualColumns: d,
+      totalVisualColumns: c,
       totalCanvasColumns: N,
       totalTimeColumns: A,
       totalWidthUnmodulated: C
     };
   }
-  function a(c) {
-    const l = s(c);
-    return t && h(l) || (t = f(c), r = l), t;
+  function a(l) {
+    const r = s(l);
+    return n && h(r) || (n = p(l), d = r), n;
   }
-  function p() {
-    t = null, r = null;
+  function f() {
+    n = null, d = null;
   }
   return {
     getColumnMap: a,
-    invalidate: p,
-    buildColumnMap: f
+    invalidate: f,
+    buildColumnMap: p
   };
 }
-function Cn(o, e) {
-  return e.visualToCanvas.get(o) ?? null;
+function Mn(t, e) {
+  return e.visualToCanvas.get(t) ?? null;
 }
-function Dt(o, e) {
-  return e.visualToTime.get(o) ?? null;
+function Gt(t, e) {
+  return e.visualToTime.get(t) ?? null;
 }
-function Tn(o, e) {
-  const i = e.canvasToVisual.get(o);
-  return i !== void 0 ? i : o + 2;
+function vn(t, e) {
+  const i = e.canvasToVisual.get(t);
+  return i !== void 0 ? i : t + 2;
 }
-function Nn(o, e) {
-  return e.canvasToTime.get(o) ?? null;
+function wn(t, e) {
+  return e.canvasToTime.get(t) ?? null;
 }
-function An(o, e) {
-  const i = e.timeToCanvas.get(o);
-  return i !== void 0 ? i : o;
+function In(t, e) {
+  const i = e.timeToCanvas.get(t);
+  return i !== void 0 ? i : t;
 }
-function Ft(o, e) {
-  const i = e.timeToVisual.get(o);
-  return i !== void 0 ? i : o + 2;
+function Lt(t, e) {
+  const i = e.timeToVisual.get(t);
+  return i !== void 0 ? i : t + 2;
 }
-function Bt(o, e) {
-  if (o == null) return 0;
+function _t(t, e) {
+  if (t == null) return 0;
   let i = 0;
-  for (let g = 0; g <= o && g < e.length; g++) {
-    const t = e[g];
-    typeof t == "number" && (i += t);
+  for (let g = 0; g <= t && g < e.length; g++) {
+    const n = e[g];
+    typeof n == "number" && (i += n);
   }
   return i;
 }
-function bn(o, e) {
-  return e.entries[o] || null;
+function xn(t, e) {
+  return e.entries[t] || null;
 }
-function Ye(o, e) {
-  const i = e.canvasToVisual.get(o);
+function Ke(t, e) {
+  const i = e.canvasToVisual.get(t);
   return i !== void 0 && e.entries[i] || null;
 }
-function vn(o, e) {
-  const i = Ye(o, e);
+function Pn(t, e) {
+  const i = Ke(t, e);
   return (i == null ? void 0 : i.isPlayable) ?? !1;
 }
-function Mn(o, e) {
-  const i = Ye(o, e);
+function En(t, e) {
+  const i = Ke(t, e);
   return (i == null ? void 0 : i.type) ?? null;
 }
-function wn(o, e) {
-  return e.macrobeatBoundaries.find((i) => i.macrobeatIndex === o) || null;
+function On(t, e) {
+  return e.macrobeatBoundaries.find((i) => i.macrobeatIndex === t) || null;
 }
-function In(o) {
+function Dn(t) {
   const e = [];
-  for (const i of o.entries)
+  for (const i of t.entries)
     i.canvasIndex !== null && (e[i.canvasIndex] = i.widthMultiplier);
   return e;
 }
-function xn(o) {
+function Fn(t) {
   let e = 0;
-  for (const i of o.entries)
+  for (const i of t.entries)
     i.canvasIndex !== null && (e += i.widthMultiplier);
   return e;
 }
-function Pn() {
-  let o = !1, e = null, i = null, g = null, t = null, r = !1;
-  const s = (a, p, c, l, S) => {
-    if (!r && a === "debug") return;
-    const n = `[engine:${p}]`;
-    console[a](n, c, l || "");
-  }, h = (a, p, c) => {
-    s(a, "controller", p, c);
+function Bn() {
+  let t = !1, e = null, i = null, g = null, n = null, d = !1;
+  const s = (a, f, l, r, S) => {
+    if (!d && a === "debug") return;
+    const o = `[engine:${f}]`;
+    console[a](o, l, r || "");
+  }, h = (a, f, l) => {
+    s(a, "controller", f, l);
   };
   return {
     // ============================================================================
     // INITIALIZATION
     // ============================================================================
     init(a) {
-      if (o) {
+      if (t) {
         s("warn", "controller", "Engine already initialized");
         return;
       }
-      r = a.debug || !1, s("info", "controller", "Initializing engine"), g = a.pitchGridContext || null, t = a.drumGridContext || null, i = Ot({
-        getPlacedTonicSigns: (c) => {
+      d = a.debug || !1, s("info", "controller", "Initializing engine"), g = a.pitchGridContext || null, n = a.drumGridContext || null, i = Rt({
+        getPlacedTonicSigns: (l) => {
           if (!e) return [];
-          const l = [];
-          for (const S of Object.values(c.tonicSignGroups || {}))
-            l.push(...S);
-          return l;
+          const r = [];
+          for (const S of Object.values(l.tonicSignGroups || {}))
+            r.push(...S);
+          return r;
         }
       });
-      let p = a.storage;
-      !p && typeof window < "u" && window.localStorage && (p = window.localStorage), e = Et({
+      let f = a.storage;
+      !f && typeof window < "u" && window.localStorage && (f = window.localStorage), e = Bt({
         storageKey: a.storageKey || "studentNotationState",
-        storage: p,
+        storage: f,
         initialState: a.initialState,
         noteActionCallbacks: {
           log: h
         },
         rhythmActionCallbacks: {
-          getColumnMap: (c) => i.getColumnMap(c),
-          visualToTimeIndex: (c, l, S) => Dt(l, i.getColumnMap(c)),
-          timeIndexToVisualColumn: (c, l, S) => Ft(l, i.getColumnMap(c)),
-          getTimeBoundaryAfterMacrobeat: (c, l, S) => Bt(l, S),
+          getColumnMap: (l) => i.getColumnMap(l),
+          visualToTimeIndex: (l, r, S) => Gt(r, i.getColumnMap(l)),
+          timeIndexToVisualColumn: (l, r, S) => Lt(r, i.getColumnMap(l)),
+          getTimeBoundaryAfterMacrobeat: (l, r, S) => _t(r, S),
           log: h
         },
         sixteenthStampActionCallbacks: {
           log: h
         },
         tripletStampActionCallbacks: {
-          canvasToTime: (c, l) => l.canvasToTime.get(c) ?? null,
-          timeToCanvas: (c, l) => l.timeToCanvas.get(c) ?? 0,
-          getColumnMap: (c) => i.getColumnMap(c),
+          canvasToTime: (l, r) => r.canvasToTime.get(l) ?? null,
+          timeToCanvas: (l, r) => r.timeToCanvas.get(l) ?? 0,
+          getColumnMap: (l) => i.getColumnMap(l),
           log: h
         }
       }), e.on("rhythmStructureChanged", () => {
@@ -1823,13 +1820,13 @@ function Pn() {
         this.renderDrumGrid();
       }), e.on("tripletStampPlacementsChanged", () => {
         this.renderDrumGrid();
-      }), o = !0, s("info", "controller", "Engine initialized successfully"), (g || t) && this.render();
+      }), t = !0, s("info", "controller", "Engine initialized successfully"), (g || n) && this.render();
     },
     dispose() {
-      o && (s("info", "controller", "Disposing engine"), e && (e.dispose(), e = null), i = null, g = null, t = null, o = !1);
+      t && (s("info", "controller", "Disposing engine"), e && (e.dispose(), e = null), i = null, g = null, n = null, t = !1);
     },
     isInitialized() {
-      return o;
+      return t;
     },
     // ============================================================================
     // TOOL SELECTION
@@ -1842,49 +1839,49 @@ function Pn() {
     },
     setNoteShape(a) {
       if (!e) return;
-      const p = e.state.selectedNote.color;
-      e.setSelectedNote(a, p);
+      const f = e.state.selectedNote.color;
+      e.setSelectedNote(a, f);
     },
     setNoteColor(a) {
       if (!e) return;
-      const p = e.state.selectedNote.shape;
-      e.setSelectedNote(p, a);
+      const f = e.state.selectedNote.shape;
+      e.setSelectedNote(f, a);
     },
     // ============================================================================
     // NOTE MANIPULATION
     // ============================================================================
-    insertNote(a, p, c) {
+    insertNote(a, f, l) {
       if (!e) return null;
-      const l = {
+      const r = {
         row: a,
-        startColumnIndex: p,
-        endColumnIndex: c ?? p,
+        startColumnIndex: f,
+        endColumnIndex: l ?? f,
         shape: e.state.selectedNote.shape,
         color: e.state.selectedNote.color
       };
-      return e.addNote(l);
+      return e.addNote(r);
     },
     deleteNote(a) {
       if (!e) return !1;
-      const p = e.state.placedNotes.find((c) => c.uuid === a);
-      return p ? (e.removeNote(p), !0) : !1;
+      const f = e.state.placedNotes.find((l) => l.uuid === a);
+      return f ? (e.removeNote(f), !0) : !1;
     },
     deleteSelection() {
       if (!e) return;
       const a = e.state.lassoSelection;
       if (!a.isActive || a.selectedItems.length === 0) return;
-      const p = a.selectedItems.filter((c) => c.type === "note").map((c) => e.state.placedNotes.find((l) => l.uuid === c.id)).filter((c) => c !== void 0);
-      p.length > 0 && e.removeMultipleNotes(p), this.clearSelection();
+      const f = a.selectedItems.filter((l) => l.type === "note").map((l) => e.state.placedNotes.find((r) => r.uuid === l.id)).filter((l) => l !== void 0);
+      f.length > 0 && e.removeMultipleNotes(f), this.clearSelection();
     },
-    moveNote(a, p, c) {
+    moveNote(a, f, l) {
       if (!e) return;
-      const l = e.state.placedNotes.find((S) => S.uuid === a);
-      l && (e.updateNoteRow(l, p), e.updateNotePosition(l, c));
+      const r = e.state.placedNotes.find((S) => S.uuid === a);
+      r && (e.updateNoteRow(r, f), e.updateNotePosition(r, l));
     },
-    setNoteTail(a, p) {
+    setNoteTail(a, f) {
       if (!e) return;
-      const c = e.state.placedNotes.find((l) => l.uuid === a);
-      c && e.updateNoteTail(c, p);
+      const l = e.state.placedNotes.find((r) => r.uuid === a);
+      l && e.updateNoteTail(l, f);
     },
     clearAllNotes() {
       e && e.clearAllNotes();
@@ -1894,22 +1891,22 @@ function Pn() {
     // ============================================================================
     setSelection(a) {
       if (!e) return;
-      const p = a.map((c) => {
-        if (c.type === "note") {
-          const l = e.state.placedNotes.find((S) => S.uuid === c.id);
-          return l ? { type: "note", id: c.id, data: l } : null;
-        } else if (c.type === "sixteenthStamp") {
-          const l = e.state.sixteenthStampPlacements.find((S) => S.id === c.id);
-          return l ? { type: "sixteenthStamp", id: c.id, data: l } : null;
-        } else if (c.type === "tripletStamp") {
-          const l = e.state.tripletStampPlacements.find((S) => S.id === c.id);
-          return l ? { type: "tripletStamp", id: c.id, data: l } : null;
+      const f = a.map((l) => {
+        if (l.type === "note") {
+          const r = e.state.placedNotes.find((S) => S.uuid === l.id);
+          return r ? { type: "note", id: l.id, data: r } : null;
+        } else if (l.type === "sixteenthStamp") {
+          const r = e.state.sixteenthStampPlacements.find((S) => S.id === l.id);
+          return r ? { type: "sixteenthStamp", id: l.id, data: r } : null;
+        } else if (l.type === "tripletStamp") {
+          const r = e.state.tripletStampPlacements.find((S) => S.id === l.id);
+          return r ? { type: "tripletStamp", id: l.id, data: r } : null;
         }
         return null;
-      }).filter((c) => c !== null);
+      }).filter((l) => l !== null);
       e.state.lassoSelection = {
-        isActive: p.length > 0,
-        selectedItems: p,
+        isActive: f.length > 0,
+        selectedItems: f,
         convexHull: []
         // Would need to calculate from note positions
       }, e.emit("selectionChanged", e.state.lassoSelection);
@@ -1923,10 +1920,10 @@ function Pn() {
     },
     selectAll() {
       if (!e) return;
-      const a = e.state.placedNotes.map((p) => ({
+      const a = e.state.placedNotes.map((f) => ({
         type: "note",
-        id: p.uuid,
-        data: p
+        id: f.uuid,
+        data: f
       }));
       e.state.lassoSelection = {
         isActive: a.length > 0,
@@ -2003,15 +2000,15 @@ function Pn() {
     removeMacrobeat() {
       e && e.decreaseMacrobeatCount();
     },
-    setMacrobeatGrouping(a, p) {
+    setMacrobeatGrouping(a, f) {
       if (!e) return;
-      e.state.macrobeatGroupings[a] !== p && e.toggleMacrobeatGrouping(a);
+      e.state.macrobeatGroupings[a] !== f && e.toggleMacrobeatGrouping(a);
     },
     toggleAnacrusis() {
       e && e.setAnacrusis(!e.state.hasAnacrusis);
     },
-    addModulationMarker(a, p) {
-      return e ? e.addModulationMarker(a, p) : null;
+    addModulationMarker(a, f) {
+      return e ? e.addModulationMarker(a, f) : null;
     },
     removeModulationMarker(a) {
       e && e.removeModulationMarker(a);
@@ -2019,8 +2016,8 @@ function Pn() {
     // ============================================================================
     // VIEW
     // ============================================================================
-    setPitchRange(a, p) {
-      e && e.setPitchRange({ topIndex: a, bottomIndex: p });
+    setPitchRange(a, f) {
+      e && e.setPitchRange({ topIndex: a, bottomIndex: f });
     },
     getPitchRange() {
       return (e == null ? void 0 : e.state.pitchRange) || { topIndex: 0, bottomIndex: 87 };
@@ -2034,14 +2031,14 @@ function Pn() {
     // ============================================================================
     // TIMBRE
     // ============================================================================
-    setTimbreADSR(a, p) {
-      e && e.setADSR(a, p);
+    setTimbreADSR(a, f) {
+      e && e.setADSR(a, f);
     },
-    setTimbreHarmonics(a, p) {
-      e && e.setHarmonicCoefficients(a, new Float32Array(p));
+    setTimbreHarmonics(a, f) {
+      e && e.setHarmonicCoefficients(a, new Float32Array(f));
     },
-    setTimbreFilter(a, p) {
-      e && e.setFilterSettings(a, p);
+    setTimbreFilter(a, f) {
+      e && e.setFilterSettings(a, f);
     },
     // ============================================================================
     // STATE ACCESS
@@ -2054,9 +2051,9 @@ function Pn() {
     getNotes() {
       return (e == null ? void 0 : e.state.placedNotes) || [];
     },
-    getNoteAt(a, p) {
+    getNoteAt(a, f) {
       return e && e.state.placedNotes.find(
-        (c) => c.row === a && c.startColumnIndex <= p && c.endColumnIndex >= p
+        (l) => l.row === a && l.startColumnIndex <= f && l.endColumnIndex >= f
       ) || null;
     },
     getSixteenthStamps() {
@@ -2070,29 +2067,29 @@ function Pn() {
     // ============================================================================
     exportCSV() {
       if (!e) return "";
-      const a = "uuid,row,startColumn,endColumn,color,shape", p = e.state.placedNotes.map(
-        (c) => `${c.uuid},${c.row},${c.startColumnIndex},${c.endColumnIndex},${c.color},${c.shape}`
+      const a = "uuid,row,startColumn,endColumn,color,shape", f = e.state.placedNotes.map(
+        (l) => `${l.uuid},${l.row},${l.startColumnIndex},${l.endColumnIndex},${l.color},${l.shape}`
       );
-      return [a, ...p].join(`
+      return [a, ...f].join(`
 `);
     },
     importCSV(a) {
       if (!e) return;
-      const p = a.split(`
+      const f = a.split(`
 `).filter((S) => S.trim());
-      if (p.length === 0) return;
-      const l = p.slice(1).map((S) => {
-        const [n, u, M, I, d, N] = S.split(",");
+      if (f.length === 0) return;
+      const r = f.slice(1).map((S) => {
+        const [o, u, v, I, c, N] = S.split(",");
         return {
-          uuid: n,
+          uuid: o,
           row: parseInt(u || "0", 10),
-          startColumnIndex: parseInt(M || "0", 10),
+          startColumnIndex: parseInt(v || "0", 10),
           endColumnIndex: parseInt(I || "0", 10),
-          color: d || "blue",
+          color: c || "blue",
           shape: N || "circle"
         };
       });
-      e.loadNotes(l);
+      e.loadNotes(r);
     },
     exportState() {
       return e ? JSON.stringify(e.state, null, 2) : "{}";
@@ -2100,20 +2097,20 @@ function Pn() {
     importState(a) {
       if (e)
         try {
-          const p = JSON.parse(a);
-          Object.assign(e.state, p), e.emit("stateImported", p), this.render();
-        } catch (p) {
-          s("error", "import", "Failed to import state", p);
+          const f = JSON.parse(a);
+          Object.assign(e.state, f), e.emit("stateImported", f), this.render();
+        } catch (f) {
+          s("error", "import", "Failed to import state", f);
         }
     },
     // ============================================================================
     // EVENTS
     // ============================================================================
-    on(a, p) {
-      e && e.on(a, p);
+    on(a, f) {
+      e && e.on(a, f);
     },
-    off(a, p) {
-      e && e.off(a, p);
+    off(a, f) {
+      e && e.off(a, f);
     },
     // ============================================================================
     // RENDERING
@@ -2125,18 +2122,18 @@ function Pn() {
       !g || !e || !i || s("debug", "controller", "renderPitchGrid called - canvas rendering not yet wired");
     },
     renderDrumGrid() {
-      !t || !e || !i || s("debug", "controller", "renderDrumGrid called - canvas rendering not yet wired");
+      !n || !e || !i || s("debug", "controller", "renderDrumGrid called - canvas rendering not yet wired");
     }
   };
 }
-function En(o) {
+function Rn(t) {
   throw new Error("Not yet implemented - will be in @mlt/tutorial-runtime package");
 }
-let oe = null;
-function On(o) {
-  oe = o;
+let ne = null;
+function Gn(t) {
+  ne = t;
 }
-class Rt extends w.Synth {
+class Vt extends w.Synth {
   constructor(i) {
     super(i);
     // Audio effect nodes
@@ -2165,47 +2162,47 @@ class Rt extends w.Synth {
     this.presetGain && (this.presetGain.gain.value = i);
   }
   _setVibrato(i, g = w.now()) {
-    var S, n;
+    var S, o;
     if (!this.vibratoLFO || !this.vibratoGain) return;
-    const t = i.speed / 100 * 16, s = (((n = (S = w.getContext()) == null ? void 0 : S.rawContext) == null ? void 0 : n.state) ?? w.context.state) === "running";
+    const n = i.speed / 100 * 16, s = (((o = (S = w.getContext()) == null ? void 0 : S.rawContext) == null ? void 0 : o.state) ?? w.context.state) === "running";
     if (i.speed === 0 || i.span === 0) {
       s && this.vibratoLFO.state === "started" && this.vibratoLFO.stop(g), this.vibratoLFO.frequency.value = 0, this.vibratoGain.gain.value = 0;
       return;
     }
-    s && this.vibratoLFO.state !== "started" && this.vibratoLFO.start(g), this.vibratoLFO.frequency.value = t;
-    const f = i.span / 100 * 50, a = f / 1200, l = 440 * (Math.pow(2, a) - 1);
-    this.vibratoGain.gain.value = l, oe == null || oe.debug("FilteredVoice", "Vibrato gain set", { hzDeviation: l, centsAmplitude: f }, "audio");
+    s && this.vibratoLFO.state !== "started" && this.vibratoLFO.start(g), this.vibratoLFO.frequency.value = n;
+    const p = i.span / 100 * 50, a = p / 1200, r = 440 * (Math.pow(2, a) - 1);
+    this.vibratoGain.gain.value = r, ne == null || ne.debug("FilteredVoice", "Vibrato gain set", { hzDeviation: r, centsAmplitude: p }, "audio");
   }
   _setTremolo(i, g = w.now()) {
-    var p, c;
+    var f, l;
     if (!this.tremoloLFO || !this.tremoloGain) return;
-    const t = i.speed / 100 * 16, s = (((c = (p = w.getContext()) == null ? void 0 : p.rawContext) == null ? void 0 : c.state) ?? w.context.state) === "running";
+    const n = i.speed / 100 * 16, s = (((l = (f = w.getContext()) == null ? void 0 : f.rawContext) == null ? void 0 : l.state) ?? w.context.state) === "running";
     if (i.speed === 0 || i.span === 0) {
       s && this.tremoloLFO.state === "started" && this.tremoloLFO.stop(g), this.tremoloLFO.frequency.value = 0, this.tremoloGain.gain.cancelScheduledValues(g), this.tremoloGain.gain.value = 1;
       return;
     }
-    s && this.tremoloLFO.state !== "started" && this.tremoloLFO.start(g), this.tremoloLFO.frequency.value = t;
-    const h = i.span / 100, f = Math.max(0, 1 - h), a = 1;
-    this.tremoloDepth.min = f, this.tremoloDepth.max = a;
+    s && this.tremoloLFO.state !== "started" && this.tremoloLFO.start(g), this.tremoloLFO.frequency.value = n;
+    const h = i.span / 100, p = Math.max(0, 1 - h), a = 1;
+    this.tremoloDepth.min = p, this.tremoloDepth.max = a;
   }
   _setFilter(i) {
     this.wetDryFade.fade.value = i.enabled ? 1 : 0;
-    const g = w.Midi(i.cutoff + 35).toFrequency(), t = i.resonance / 100 * 12 + 0.1;
-    this.hpFilter.set({ frequency: g, Q: t }), this.lpFilterForBP.set({ frequency: g, Q: t }), this.lpFilterSolo.set({ frequency: g, Q: t });
-    const r = i.blend;
-    r <= 1 ? (this.main_fade.fade.value = 0, this.hp_bp_fade.fade.value = r) : (this.main_fade.fade.value = r - 1, this.hp_bp_fade.fade.value = 1);
+    const g = w.Midi(i.cutoff + 35).toFrequency(), n = i.resonance / 100 * 12 + 0.1;
+    this.hpFilter.set({ frequency: g, Q: n }), this.lpFilterForBP.set({ frequency: g, Q: n }), this.lpFilterSolo.set({ frequency: g, Q: n });
+    const d = i.blend;
+    d <= 1 ? (this.main_fade.fade.value = 0, this.hp_bp_fade.fade.value = d) : (this.main_fade.fade.value = d - 1, this.hp_bp_fade.fade.value = 1);
   }
 }
-const Ke = {
+const Qe = {
   polyphonyReference: 32,
   smoothingTauMs: 200,
   masterGainRampMs: 50,
   gainUpdateIntervalMs: 16
 };
-function Qe(o = Ke.polyphonyReference) {
-  return 1 / Math.sqrt(o);
+function Ze(t = Qe.polyphonyReference) {
+  return 1 / Math.sqrt(t);
 }
-class Gt {
+class $t {
   constructor(e, i = {}) {
     V(this, "masterGain");
     V(this, "options");
@@ -2213,7 +2210,7 @@ class Gt {
     V(this, "activeVoiceCount", 0);
     V(this, "smoothedVoiceCount");
     V(this, "gainUpdateLoopId", null);
-    this.masterGain = e, this.options = { ...Ke, ...i }, this.perVoiceBaselineGain = Qe(this.options.polyphonyReference), this.smoothedVoiceCount = this.options.polyphonyReference;
+    this.masterGain = e, this.options = { ...Qe, ...i }, this.perVoiceBaselineGain = Ze(this.options.polyphonyReference), this.smoothedVoiceCount = this.options.polyphonyReference;
   }
   start() {
     this.stop(), this.gainUpdateLoopId = setInterval(() => this.updateMasterGain(), this.options.gainUpdateIntervalMs);
@@ -2237,56 +2234,56 @@ class Gt {
     return this.activeVoiceCount;
   }
   updateMasterGain() {
-    const { polyphonyReference: e, smoothingTauMs: i, masterGainRampMs: g, gainUpdateIntervalMs: t } = this.options, r = w.now();
+    const { polyphonyReference: e, smoothingTauMs: i, masterGainRampMs: g, gainUpdateIntervalMs: n } = this.options, d = w.now();
     if (this.activeVoiceCount === 0) {
       this.smoothedVoiceCount = 0.01 * e + (1 - 0.01) * this.smoothedVoiceCount;
       return;
     }
-    const s = t / 1e3, h = 1 - Math.exp(-s / (i / 1e3)), f = Math.max(1, this.activeVoiceCount);
-    this.smoothedVoiceCount = h * f + (1 - h) * this.smoothedVoiceCount;
-    const a = Math.sqrt(e / this.smoothedVoiceCount), p = this.perVoiceBaselineGain * a;
-    this.masterGain.gain.rampTo(p, g / 1e3, r);
+    const s = n / 1e3, h = 1 - Math.exp(-s / (i / 1e3)), p = Math.max(1, this.activeVoiceCount);
+    this.smoothedVoiceCount = h * p + (1 - h) * this.smoothedVoiceCount;
+    const a = Math.sqrt(e / this.smoothedVoiceCount), f = this.perVoiceBaselineGain * a;
+    this.masterGain.gain.rampTo(f, g / 1e3, d);
   }
 }
-const Lt = {
+const Wt = {
   clippingWarningThresholdDb: -3,
   clippingMonitorIntervalMs: 500,
   clippingWarningCooldownMs: 2e3
 };
-class _t {
+class qt {
   constructor(e, i = {}) {
     V(this, "meter");
     V(this, "options");
     V(this, "clippingMonitorId", null);
     V(this, "lastClippingWarningAt", 0);
-    this.meter = e, this.options = { ...Lt, ...i };
+    this.meter = e, this.options = { ...Wt, ...i };
   }
   start() {
     this.stop(), this.lastClippingWarningAt = 0, this.clippingMonitorId = setInterval(() => {
-      var t, r;
+      var n, d;
       const e = this.meter.getValue(), i = Array.isArray(e) ? e[0] : e;
       if (i === void 0 || i <= this.options.clippingWarningThresholdDb)
         return;
       const g = Date.now();
-      g - this.lastClippingWarningAt < this.options.clippingWarningCooldownMs || (this.lastClippingWarningAt = g, (r = (t = this.options).onWarning) == null || r.call(t, i));
+      g - this.lastClippingWarningAt < this.options.clippingWarningCooldownMs || (this.lastClippingWarningAt = g, (d = (n = this.options).onWarning) == null || d.call(n, i));
     }, this.options.clippingMonitorIntervalMs);
   }
   stop() {
     this.clippingMonitorId !== null && (clearInterval(this.clippingMonitorId), this.clippingMonitorId = null);
   }
 }
-function Dn(o) {
+function Ln(t) {
   const {
     timbres: e,
     masterVolume: i = 0,
     effectsManager: g,
-    harmonicFilter: t,
-    logger: r,
+    harmonicFilter: n,
+    logger: d,
     audioInit: s,
     getDrumVolume: h
-  } = o, f = {};
-  let a = null, p = null, c = null, l = null, S = null, n = {}, u = null, M = null;
-  const I = { ...e }, d = r ?? {
+  } = t, p = {};
+  let a = null, f = null, l = null, r = null, S = null, o = {}, u = null, v = null;
+  const I = { ...e }, c = d ?? {
     debug: () => {
     },
     info: () => {
@@ -2295,8 +2292,8 @@ function Dn(o) {
     }
   };
   function N(m) {
-    if (t)
-      return t.getFilteredCoefficients(m);
+    if (n)
+      return n.getFilteredCoefficients(m);
     const y = I[m];
     return y != null && y.coeffs ? y.coeffs : new Float32Array([0, 1]);
   }
@@ -2306,108 +2303,108 @@ function Dn(o) {
   }
   const C = {
     init() {
-      this.stopBackgroundMonitors(), a = new w.Gain(Qe()), u = new Gt(a), u.start(), p = new w.Volume(i), c = new w.Compressor({
+      this.stopBackgroundMonitors(), a = new w.Gain(Ze()), u = new $t(a), u.start(), f = new w.Volume(i), l = new w.Compressor({
         threshold: -12,
         ratio: 3,
         attack: 0.01,
         release: 0.1,
         knee: 6
-      }), l = new w.Limiter(-3), S = new w.Meter(), a.connect(p), p.connect(c), c.connect(l), l.toDestination(), l.connect(S), S && (M = new _t(S, {
+      }), r = new w.Limiter(-3), S = new w.Meter(), a.connect(f), f.connect(l), l.connect(r), r.toDestination(), r.connect(S), S && (v = new qt(S, {
         onWarning: (m) => {
-          d.warn("SynthEngine", "Limiter input approaching clipping threshold", { level: m }, "audio");
+          c.warn("SynthEngine", "Limiter input approaching clipping threshold", { level: m }, "audio");
         }
-      }), M.start());
+      }), v.start());
       for (const m in I) {
         const y = I[m];
         if (!y) continue;
         y.vibrato || (y.vibrato = { speed: 0, span: 0 }), y.tremelo || (y.tremelo = { speed: 0, span: 0 });
-        const b = N(m), x = A(b), D = y.gain || 1, T = new w.PolySynth({
-          voice: Rt,
+        const b = N(m), x = A(b), O = y.gain || 1, T = new w.PolySynth({
+          voice: Vt,
           options: {
             oscillator: { type: "custom", partials: x },
             envelope: y.adsr,
             filter: y.filter,
             vibrato: y.vibrato,
             tremelo: y.tremelo,
-            gain: D
+            gain: O
           }
         }).connect(a);
         g && a && g.applySynthEffects(T, m, a);
-        const v = T.triggerAttack.bind(T);
-        T.triggerAttack = function(...O) {
-          const P = v(...O);
-          return setTimeout(() => {
-            const F = this._activeVoices;
-            g ? F && F.size > 0 ? F.forEach((E) => {
-              E.effectsApplied || (g.applyEffectsToVoice(E, m), E.effectsApplied = !0);
-            }) : this._voices && Array.isArray(this._voices) && this._voices.forEach((E) => {
-              E && !E.effectsApplied && (g.applyEffectsToVoice(E, m), E.effectsApplied = !0);
-            }) : F && F.size > 0 ? F.forEach((E) => {
-              E._setVibrato && E.vibratoApplied !== !0 && (E._setVibrato(this._currentVibrato), E.vibratoApplied = !0), E._setTremolo && E.tremoloApplied !== !0 && (E._setTremolo(this._currentTremolo), E.tremoloApplied = !0);
-            }) : this._voices && Array.isArray(this._voices) && this._voices.forEach((E) => {
-              E != null && E._setVibrato && E.vibratoApplied !== !0 && (E._setVibrato(this._currentVibrato), E.vibratoApplied = !0), E != null && E._setTremolo && E.tremoloApplied !== !0 && (E._setTremolo(this._currentTremolo), E.tremoloApplied = !0);
+        const M = T.triggerAttack.bind(T);
+        T.triggerAttack = function(...E) {
+          const P = M(...E), L = (E[1] ?? w.now()) + 5e-3;
+          return w.Draw.schedule(() => {
+            const R = this._activeVoices;
+            g ? R && R.size > 0 ? R.forEach((D) => {
+              D.effectsApplied || (g.applyEffectsToVoice(D, m), D.effectsApplied = !0);
+            }) : this._voices && Array.isArray(this._voices) && this._voices.forEach((D) => {
+              D && !D.effectsApplied && (g.applyEffectsToVoice(D, m), D.effectsApplied = !0);
+            }) : R && R.size > 0 ? R.forEach((D) => {
+              D._setVibrato && D.vibratoApplied !== !0 && (D._setVibrato(this._currentVibrato), D.vibratoApplied = !0), D._setTremolo && D.tremoloApplied !== !0 && (D._setTremolo(this._currentTremolo), D.tremoloApplied = !0);
+            }) : this._voices && Array.isArray(this._voices) && this._voices.forEach((D) => {
+              D != null && D._setVibrato && D.vibratoApplied !== !0 && (D._setVibrato(this._currentVibrato), D.vibratoApplied = !0), D != null && D._setTremolo && D.tremoloApplied !== !0 && (D._setTremolo(this._currentTremolo), D.tremoloApplied = !0);
             });
-          }, 10), P;
-        }, T._currentVibrato = y.vibrato, T._currentTremolo = y.tremelo, T._currentFilter = y.filter, f[m] = T, d.debug("SynthEngine", `Created filtered synth for color: ${m}`, null, "audio");
+          }, L), P;
+        }, T._currentVibrato = y.vibrato, T._currentTremolo = y.tremelo, T._currentFilter = y.filter, p[m] = T, c.debug("SynthEngine", `Created filtered synth for color: ${m}`, null, "audio");
       }
-      d.info("SynthEngine", "Initialized with multi-timbral support", null, "audio");
+      c.info("SynthEngine", "Initialized with multi-timbral support", null, "audio");
     },
     updateSynthForColor(m) {
-      const y = I[m], b = f[m];
+      const y = I[m], b = p[m];
       if (!b || !y) return;
-      y.vibrato || (y.vibrato = { speed: 0, span: 0 }), y.tremelo || (y.tremelo = { speed: 0, span: 0 }), d.debug("SynthEngine", `Updating timbre for color ${m}`, null, "audio");
-      const x = N(m), D = A(x);
+      y.vibrato || (y.vibrato = { speed: 0, span: 0 }), y.tremelo || (y.tremelo = { speed: 0, span: 0 }), c.debug("SynthEngine", `Updating timbre for color ${m}`, null, "audio");
+      const x = N(m), O = A(x);
       b.set({
-        oscillator: { partials: D },
+        oscillator: { partials: O },
         envelope: y.adsr
       }), g && a && g.applySynthEffects(b, m, a), b._currentVibrato = y.vibrato, b._currentTremolo = y.tremelo, b._currentFilter = y.filter;
       const T = b._activeVoices;
-      T && T.size > 0 ? T.forEach((v) => {
-        if (v._setFilter && v._setFilter(y.filter), v._setVibrato && (v._setVibrato(y.vibrato), v.vibratoApplied = !0), v._setTremolo && (v._setTremolo(y.tremelo), v.tremoloApplied = !0), v._setPresetGain) {
-          const O = y.gain || 1;
-          v._setPresetGain(O);
+      T && T.size > 0 ? T.forEach((M) => {
+        if (M._setFilter && M._setFilter(y.filter), M._setVibrato && (M._setVibrato(y.vibrato), M.vibratoApplied = !0), M._setTremolo && (M._setTremolo(y.tremelo), M.tremoloApplied = !0), M._setPresetGain) {
+          const E = y.gain || 1;
+          M._setPresetGain(E);
         }
-      }) : b._voices && Array.isArray(b._voices) && b._voices.forEach((v) => {
-        if (v != null && v._setVibrato && (v._setVibrato(y.vibrato), v.vibratoApplied = !0), v != null && v._setTremolo && (v._setTremolo(y.tremelo), v.tremoloApplied = !0), v != null && v._setFilter && v._setFilter(y.filter), v != null && v._setPresetGain) {
-          const O = y.gain || 1;
-          v._setPresetGain(O);
+      }) : b._voices && Array.isArray(b._voices) && b._voices.forEach((M) => {
+        if (M != null && M._setVibrato && (M._setVibrato(y.vibrato), M.vibratoApplied = !0), M != null && M._setTremolo && (M._setTremolo(y.tremelo), M.tremoloApplied = !0), M != null && M._setFilter && M._setFilter(y.filter), M != null && M._setPresetGain) {
+          const E = y.gain || 1;
+          M._setPresetGain(E);
         }
       });
     },
     setBpm(m) {
       var y;
       try {
-        (y = w == null ? void 0 : w.Transport) != null && y.bpm && (w.Transport.bpm.value = m, d.debug("SynthEngine", `Tone.Transport BPM updated to ${m}`, null, "audio"));
+        (y = w == null ? void 0 : w.Transport) != null && y.bpm && (w.Transport.bpm.value = m, c.debug("SynthEngine", `Tone.Transport BPM updated to ${m}`, null, "audio"));
       } catch (b) {
-        d.warn("SynthEngine", "Unable to update BPM on Tone.Transport", { tempo: m, error: b }, "audio");
+        c.warn("SynthEngine", "Unable to update BPM on Tone.Transport", { tempo: m, error: b }, "audio");
       }
     },
     setVolume(m) {
-      p && (p.volume.value = m);
+      f && (f.volume.value = m);
     },
     async playNote(m, y, b = w.now()) {
       await (s || (() => w.start()))();
-      const D = Object.keys(f);
-      if (D.length === 0) return;
-      const [T] = D;
+      const O = Object.keys(p);
+      if (O.length === 0) return;
+      const [T] = O;
       if (!T) return;
-      const v = f[T];
-      v && v.triggerAttackRelease(m, y, b);
+      const M = p[T];
+      M && M.triggerAttackRelease(m, y, b);
     },
     /**
      * Trigger note attack. Used by Transport scheduling with explicit time parameter.
      * For interactive (user-initiated) triggers, use triggerAttackInteractive instead.
      */
     triggerAttack(m, y, b = w.now(), x = !1) {
-      const D = f[y];
-      if (D)
+      const O = p[y];
+      if (O)
         if (u == null || u.noteOn(1), x && h) {
-          const T = h(), v = D.volume.value, O = v + 20 * Math.log10(T);
-          D.volume.value = O, D.triggerAttack(m, b), setTimeout(() => {
-            D != null && D.volume && (D.volume.value = v);
-          }, 100);
+          const T = h(), M = O.volume.value, E = M + 20 * Math.log10(T);
+          O.volume.value = E, O.triggerAttack(m, b), w.Draw.schedule(() => {
+            O != null && O.volume && (O.volume.value = M);
+          }, b + 0.1);
         } else
-          D.triggerAttack(m, b);
+          O.triggerAttack(m, b);
     },
     /**
      * Trigger note attack for interactive (user-initiated) events.
@@ -2420,19 +2417,19 @@ function Dn(o) {
       C.triggerAttack(m, y, w.now() + 0.02);
     },
     quickReleasePitches(m, y) {
-      var D, T, v;
-      const b = f[y];
+      var O, T, M;
+      const b = p[y];
       if (!b || !m || m.length === 0) return;
       let x;
       try {
-        const O = typeof b.get == "function" ? b.get() : null, P = (D = O == null ? void 0 : O.envelope) == null ? void 0 : D.release;
-        x = typeof P == "number" ? P : void 0, b.set({ envelope: { release: 0.01 } }), m.forEach((E) => {
-          b.triggerRelease(E, w.now());
+        const E = typeof b.get == "function" ? b.get() : null, P = (O = E == null ? void 0 : E.envelope) == null ? void 0 : O.release;
+        x = typeof P == "number" ? P : void 0, b.set({ envelope: { release: 0.01 } }), m.forEach((L) => {
+          b.triggerRelease(L, w.now());
         });
-        const F = ((T = b._activeVoices) == null ? void 0 : T.size) ?? ((v = b._voices) == null ? void 0 : v.length) ?? (u == null ? void 0 : u.getActiveVoiceCount()) ?? 0;
-        u == null || u.clampActiveVoiceCountToAtMost(F);
-      } catch (O) {
-        d.warn("SynthEngine", "quickReleasePitches failed", { err: O, color: y, pitches: m }, "audio");
+        const B = ((T = b._activeVoices) == null ? void 0 : T.size) ?? ((M = b._voices) == null ? void 0 : M.length) ?? (u == null ? void 0 : u.getActiveVoiceCount()) ?? 0;
+        u == null || u.clampActiveVoiceCountToAtMost(B);
+      } catch (E) {
+        c.warn("SynthEngine", "quickReleasePitches failed", { err: E, color: y, pitches: m }, "audio");
       } finally {
         if (x !== void 0)
           try {
@@ -2442,139 +2439,139 @@ function Dn(o) {
       }
     },
     triggerRelease(m, y, b = w.now()) {
-      var T, v;
-      const x = f[y];
+      var T, M;
+      const x = p[y];
       if (!x) return;
       x.triggerRelease(m, b), u == null || u.noteOff(1);
-      const D = ((T = x._activeVoices) == null ? void 0 : T.size) ?? ((v = x._voices) == null ? void 0 : v.length) ?? (u == null ? void 0 : u.getActiveVoiceCount()) ?? 0;
-      u == null || u.clampActiveVoiceCountToAtMost(D);
+      const O = ((T = x._activeVoices) == null ? void 0 : T.size) ?? ((M = x._voices) == null ? void 0 : M.length) ?? (u == null ? void 0 : u.getActiveVoiceCount()) ?? 0;
+      u == null || u.clampActiveVoiceCountToAtMost(O);
     },
     releaseAll() {
       var m;
-      for (const y in f)
-        (m = f[y]) == null || m.releaseAll();
+      for (const y in p)
+        (m = p[y]) == null || m.releaseAll();
       u == null || u.resetActiveVoiceCount();
     },
     // === Waveform Visualization ===
     createWaveformAnalyzer(m) {
-      const y = f[m];
-      return y ? (n[m] || (n[m] = new w.Analyser("waveform", 1024), y.connect(n[m]), d.debug("SynthEngine", `Created waveform analyzer for color: ${m}`, null, "waveform")), n[m]) : (d.warn("SynthEngine", `No synth found for color: ${m}`, null, "audio"), null);
+      const y = p[m];
+      return y ? (o[m] || (o[m] = new w.Analyser("waveform", 1024), y.connect(o[m]), c.debug("SynthEngine", `Created waveform analyzer for color: ${m}`, null, "waveform")), o[m]) : (c.warn("SynthEngine", `No synth found for color: ${m}`, null, "audio"), null);
     },
     getWaveformAnalyzer(m) {
-      return n[m] || null;
+      return o[m] || null;
     },
     getAllWaveformAnalyzers() {
       const m = /* @__PURE__ */ new Map();
-      for (const y in n)
-        n[y] && m.set(y, n[y]);
+      for (const y in o)
+        o[y] && m.set(y, o[y]);
       return m;
     },
     removeWaveformAnalyzer(m) {
-      n[m] && (n[m].dispose(), delete n[m], d.debug("SynthEngine", `Removed waveform analyzer for color: ${m}`, null, "waveform"));
+      o[m] && (o[m].dispose(), delete o[m], c.debug("SynthEngine", `Removed waveform analyzer for color: ${m}`, null, "waveform"));
     },
     disposeAllWaveformAnalyzers() {
-      for (const m in n)
-        n[m] && n[m].dispose();
-      n = {}, d.debug("SynthEngine", "Disposed all waveform analyzers", null, "waveform");
+      for (const m in o)
+        o[m] && o[m].dispose();
+      o = {}, c.debug("SynthEngine", "Disposed all waveform analyzers", null, "waveform");
     },
     // === Node Access ===
     getSynth(m) {
-      return f[m] || null;
+      return p[m] || null;
     },
     getAllSynths() {
-      return { ...f };
+      return { ...p };
     },
     getMainVolumeNode() {
-      return p || null;
+      return f || null;
     },
     getMasterGainNode() {
       return a || null;
     },
     // === Cleanup ===
     stopBackgroundMonitors() {
-      M == null || M.stop(), u == null || u.stop();
+      v == null || v.stop(), u == null || u.stop();
     },
     dispose() {
       var m;
       this.stopBackgroundMonitors(), this.disposeAllWaveformAnalyzers();
-      for (const y in f)
-        (m = f[y]) == null || m.dispose();
-      a == null || a.dispose(), p == null || p.dispose(), c == null || c.dispose(), l == null || l.dispose(), S == null || S.dispose(), d.debug("SynthEngine", "Disposed SynthEngine", null, "audio");
+      for (const y in p)
+        (m = p[y]) == null || m.dispose();
+      a == null || a.dispose(), f == null || f.dispose(), l == null || l.dispose(), r == null || r.dispose(), S == null || S.dispose(), c.debug("SynthEngine", "Disposed SynthEngine", null, "audio");
     }
   };
   return C;
 }
-const Ue = 1e-4;
-function Vt(o) {
+const Xe = 1e-4;
+function Ht(t) {
   const {
     getMacrobeatInfo: e,
     getPlacedTonicSigns: i,
     getTonicSpanColumnIndices: g,
-    updatePlayheadModel: t,
-    logger: r
-  } = o;
-  let s = [], h = 0, f = 0, a = 0;
-  const p = r ?? {
+    updatePlayheadModel: n,
+    logger: d
+  } = t;
+  let s = [], h = 0, p = 0, a = 0;
+  const f = d ?? {
     debug: () => {
     }
   };
-  function c(n) {
-    return 60 / (n * 2);
+  function l(o) {
+    return 60 / (o * 2);
   }
-  function l(n, u, M) {
+  function r(o, u, v) {
     let I = 0;
-    p.debug("TimeMapCalculator", "[TIMEMAP] Building timeMap", {
+    f.debug("TimeMapCalculator", "[TIMEMAP] Building timeMap", {
       columnCount: u.length,
-      tonicSignCount: M.length,
-      microbeatDuration: n
+      tonicSignCount: v.length,
+      microbeatDuration: o
     });
-    const d = u.length, N = g(M);
-    for (let A = 0; A < d; A++) {
+    const c = u.length, N = g(v);
+    for (let A = 0; A < c; A++) {
       s[A] = I;
       const C = N.has(A);
-      if (C ? p.debug("TimeMapCalculator", `[TIMEMAP] Column ${A} is tonic, not advancing time`) : I += (u[A] || 0) * n, A < 5) {
+      if (C ? f.debug("TimeMapCalculator", `[TIMEMAP] Column ${A} is tonic, not advancing time`) : I += (u[A] || 0) * o, A < 5) {
         const m = s[A];
-        m !== void 0 && p.debug("TimeMapCalculator", `[TIMEMAP] timeMap[${A}] = ${m.toFixed(3)}s (isTonic: ${C})`);
+        m !== void 0 && f.debug("TimeMapCalculator", `[TIMEMAP] timeMap[${A}] = ${m.toFixed(3)}s (isTonic: ${C})`);
       }
     }
-    d > 0 && (s[d] = I), p.debug("TimeMapCalculator", `[TIMEMAP] Complete. Total columns: ${d}, Final time: ${I.toFixed(3)}s`);
+    c > 0 && (s[c] = I), f.debug("TimeMapCalculator", `[TIMEMAP] Complete. Total columns: ${c}, Final time: ${I.toFixed(3)}s`);
   }
-  function S(n) {
+  function S(o) {
     var N;
     const u = s.length > 0 ? s[s.length - 1] ?? 0 : 0;
     if (!Number.isFinite(u) || u === 0) {
       h = 0;
       return;
     }
-    const M = ((N = n.modulationMarkers) == null ? void 0 : N.filter((A) => A.active)) || [];
-    if (M.length === 0) {
+    const v = ((N = o.tempoModulationMarkers) == null ? void 0 : N.filter((A) => A.active)) || [];
+    if (v.length === 0) {
       h = u;
       return;
     }
-    const I = [...M].sort((A, C) => A.measureIndex - C.measureIndex);
-    let d = u;
+    const I = [...v].sort((A, C) => A.measureIndex - C.measureIndex);
+    let c = u;
     for (const A of I) {
       const C = e(A.measureIndex);
       if (C) {
         const m = C.endColumn - 1, y = s[m] ?? u, b = u - y, x = b * A.ratio;
-        d = d - b + x;
+        c = c - b + x;
       }
     }
-    h = d;
+    h = c;
   }
   return {
-    getMicrobeatDuration: c,
-    calculate(n) {
+    getMicrobeatDuration: l,
+    calculate(o) {
       var N, A;
-      p.debug("TimeMapCalculator", "calculate", { tempo: `${n.tempo} BPM` }), s = [];
-      const u = c(n.tempo), { columnWidths: M } = n, I = i();
-      l(u, M, I), (A = p.timing) == null || A.call(p, "TimeMapCalculator", "calculate", { totalDuration: `${(N = s[s.length - 1]) == null ? void 0 : N.toFixed(2)}s` }), S(n);
-      const d = h;
-      t == null || t({
+      f.debug("TimeMapCalculator", "calculate", { tempo: `${o.tempo} BPM` }), s = [];
+      const u = l(o.tempo), { columnWidths: v } = o, I = i();
+      r(u, v, I), (A = f.timing) == null || A.call(f, "TimeMapCalculator", "calculate", { totalDuration: `${(N = s[s.length - 1]) == null ? void 0 : N.toFixed(2)}s` }), S(o);
+      const c = h;
+      n == null || n({
         timeMap: s,
-        musicalEndTime: d,
-        columnWidths: n.columnWidths,
-        cellWidth: n.cellWidth
+        musicalEndTime: c,
+        columnWidths: o.columnWidths,
+        cellWidth: o.cellWidth
       });
     },
     getTimeMap() {
@@ -2583,122 +2580,133 @@ function Vt(o) {
     getMusicalEndTime() {
       return h;
     },
-    findNonAnacrusisStart(n) {
-      if (!n.hasAnacrusis)
-        return p.debug("TimeMapCalculator", "[ANACRUSIS] No anacrusis, starting from time 0"), 0;
-      for (let u = 0; u < n.macrobeatBoundaryStyles.length; u++)
-        if (n.macrobeatBoundaryStyles[u] === "solid") {
-          const M = e(u + 1);
-          if (M) {
-            const I = s[M.startColumn] || 0;
-            return p.debug("TimeMapCalculator", `[ANACRUSIS] Found solid boundary at macrobeat ${u}, non-anacrusis starts at column ${M.startColumn}, time ${I.toFixed(3)}s`), I;
+    findNonAnacrusisStart(o) {
+      if (!o.hasAnacrusis)
+        return f.debug("TimeMapCalculator", "[ANACRUSIS] No anacrusis, starting from time 0"), 0;
+      for (let u = 0; u < o.macrobeatBoundaryStyles.length; u++)
+        if (o.macrobeatBoundaryStyles[u] === "solid") {
+          const v = e(u + 1);
+          if (v) {
+            const I = s[v.startColumn] || 0;
+            return f.debug("TimeMapCalculator", `[ANACRUSIS] Found solid boundary at macrobeat ${u}, non-anacrusis starts at column ${v.startColumn}, time ${I.toFixed(3)}s`), I;
           }
         }
-      return p.debug("TimeMapCalculator", "[ANACRUSIS] No solid boundary found, starting from time 0"), 0;
+      return f.debug("TimeMapCalculator", "[ANACRUSIS] No solid boundary found, starting from time 0"), 0;
     },
-    applyModulationToTime(n, u, M) {
+    applyModulationToTime(o, u, v) {
       var A;
-      const I = ((A = M.modulationMarkers) == null ? void 0 : A.filter((C) => C.active)) || [];
+      const I = ((A = v.tempoModulationMarkers) == null ? void 0 : A.filter((C) => C.active)) || [];
       if (I.length === 0)
-        return n;
-      const d = [...I].sort((C, m) => C.measureIndex - m.measureIndex);
-      let N = n;
-      u < 5 && p.debug("TimeMapCalculator", `[MODULATION] Column ${u}: baseTime ${n.toFixed(3)}s, ${d.length} active markers`);
-      for (const C of d) {
+        return o;
+      const c = [...I].sort((C, m) => C.measureIndex - m.measureIndex);
+      let N = o;
+      u < 5 && f.debug("TimeMapCalculator", `[MODULATION] Column ${u}: baseTime ${o.toFixed(3)}s, ${c.length} active markers`);
+      for (const C of c) {
         const m = e(C.measureIndex);
         if (m) {
           const y = m.endColumn;
           if (u > y) {
-            const b = s[y] !== void 0 ? s[y] : 0, x = n - b, D = x * C.ratio;
-            N = N - x + D, u < 5 && p.debug("TimeMapCalculator", `[MODULATION] Column ${u}: Applied marker at measure ${C.measureIndex} (col ${y}), ratio ${C.ratio}, adjustedTime ${N.toFixed(3)}s`);
+            const b = s[y] !== void 0 ? s[y] : 0, x = o - b, O = x * C.ratio;
+            N = N - x + O, u < 5 && f.debug("TimeMapCalculator", `[MODULATION] Column ${u}: Applied marker at measure ${C.measureIndex} (col ${y}), ratio ${C.ratio}, adjustedTime ${N.toFixed(3)}s`);
           }
         }
       }
       return N;
     },
-    setLoopBounds(n, u, M) {
-      const I = c(M), d = Math.max(I, 1e-3), N = Number.isFinite(n) ? n : 0;
-      let A = Number.isFinite(u) ? u : N + d;
-      A <= N && (A = N + d), f = N, a = A, w != null && w.Transport && (w.Transport.loopStart = N, w.Transport.loopEnd = A);
+    setLoopBounds(o, u, v) {
+      const I = l(v), c = Math.max(I, 1e-3), N = Number.isFinite(o) ? o : 0;
+      let A = Number.isFinite(u) ? u : N + c;
+      A <= N && (A = N + c), p = N, a = A, w != null && w.Transport && (w.Transport.loopStart = N, w.Transport.loopEnd = A);
     },
     getConfiguredLoopBounds() {
-      return { loopStart: f, loopEnd: a };
+      return { loopStart: p, loopEnd: a };
     },
-    setConfiguredLoopBounds(n, u) {
-      f = n, a = u;
+    setConfiguredLoopBounds(o, u) {
+      p = o, a = u;
     },
     clearConfiguredLoopBounds() {
-      f = 0, a = 0;
+      p = 0, a = 0;
     },
-    reapplyConfiguredLoopBounds(n) {
-      if (a > f) {
-        const u = w.Time(w.Transport.loopStart).toSeconds(), M = w.Time(w.Transport.loopEnd).toSeconds(), I = Math.abs(u - f), d = Math.abs(M - a);
-        (I > Ue || d > Ue) && (w.Transport.loopStart = f, w.Transport.loopEnd = a), w.Transport.loop !== n && (w.Transport.loop = n);
+    reapplyConfiguredLoopBounds(o) {
+      if (a > p) {
+        const u = w.Time(w.Transport.loopStart).toSeconds(), v = w.Time(w.Transport.loopEnd).toSeconds(), I = Math.abs(u - p), c = Math.abs(v - a);
+        (I > Xe || c > Xe) && (w.Transport.loopStart = p, w.Transport.loopEnd = a), w.Transport.loop !== o && (w.Transport.loop = o);
       }
     },
-    updateLoopBoundsFromTimeline(n) {
-      const u = this.findNonAnacrusisStart(n), M = h;
-      this.setLoopBounds(u, M, n.tempo);
+    updateLoopBoundsFromTimeline(o) {
+      const u = this.findNonAnacrusisStart(o), v = h;
+      this.setLoopBounds(u, v, o.tempo);
     }
   };
 }
-const $t = {
+const Ut = {
   H: "https://tonejs.github.io/audio/drum-samples/CR78/hihat.mp3",
   M: "https://tonejs.github.io/audio/drum-samples/CR78/snare.mp3",
   L: "https://tonejs.github.io/audio/drum-samples/CR78/kick.mp3"
-}, Wt = 1e-4;
-function qt(o = {}) {
-  var f;
+}, Xt = 1e-4;
+function Jt(t = {}) {
+  var p;
   const {
-    samples: e = $t,
+    samples: e = Ut,
     synthEngine: i,
     initialVolume: g = 0
-  } = o;
-  let t = null, r = null;
+  } = t;
+  let n = null, d = null;
   const s = /* @__PURE__ */ new Map();
-  function h(a, p) {
-    let c = Number.isFinite(p) ? p : w.now();
-    const l = s.get(a) ?? -1 / 0;
-    return c > l || (c = l + Wt), s.set(a, c), c;
+  function h(a, f) {
+    let l = Number.isFinite(f) ? f : w.now();
+    const r = s.get(a) ?? -1 / 0;
+    return l > r || (l = r + Xt), s.set(a, l), l;
   }
-  if (r = new w.Volume(g), t = new w.Players(e).connect(r), i) {
-    const a = (f = i.getMainVolumeNode) == null ? void 0 : f.call(i);
-    a ? r.connect(a) : r.toDestination();
+  if (d = new w.Volume(g), n = new w.Players(e).connect(d), i) {
+    const a = (p = i.getMainVolumeNode) == null ? void 0 : p.call(i);
+    a ? d.connect(a) : d.toDestination();
   } else
-    r.toDestination();
+    d.toDestination();
   return {
     getPlayers() {
-      return t;
+      return n;
     },
     getVolumeNode() {
-      return r;
+      return d;
     },
-    trigger(a, p) {
-      var l;
-      if (!t) return;
-      const c = h(a, p);
-      (l = t.player(a)) == null || l.start(c);
+    trigger(a, f) {
+      var r;
+      if (!n) return;
+      const l = h(a, f);
+      (r = n.player(a)) == null || r.start(l);
     },
     reset() {
       s.clear();
     },
     dispose() {
-      t == null || t.dispose(), r == null || r.dispose(), t = null, r = null, s.clear();
+      n == null || n.dispose(), d == null || d.dispose(), n = null, d = null, s.clear();
     }
   };
 }
-const Xe = "♭", Je = "♯";
-function Fn(o) {
+const Je = "♭", ze = "♯";
+function zt(t, e) {
+  if (t.length < 2 || e < t[0] || e >= t[t.length - 1]) return -1;
+  let i = 0, g = t.length - 2;
+  for (; i <= g; ) {
+    const n = i + g >>> 1, d = t[n], s = t[n + 1];
+    if (e >= d && e < s)
+      return n;
+    e < d ? g = n - 1 : i = n + 1;
+  }
+  return -1;
+}
+function _n(t) {
   const {
     synthEngine: e,
     stateCallbacks: i,
     eventCallbacks: g,
-    visualCallbacks: t,
-    logger: r,
+    visualCallbacks: n,
+    logger: d,
     audioInit: s,
     playbackMode: h = "standard",
-    highwayService: f
-  } = o, a = r ?? {
+    highwayService: p
+  } = t, a = d ?? {
     debug: () => {
     },
     info: () => {
@@ -2706,185 +2714,183 @@ function Fn(o) {
     warn: () => {
     }
   };
-  let p = null, c = !1, l = null, S = null, n = 1;
+  let f = null, l = !1, r = null, S = null, o = 1;
   const u = [];
-  function M(T, v) {
-    const O = v.fullRowData[T];
-    return O ? O.toneNote.replace(Xe, "b").replace(Je, "#") : "C4";
+  function v(T, M) {
+    const E = M.fullRowData[T];
+    return E ? E.toneNote.replace(Je, "b").replace(ze, "#") : "C4";
   }
-  function I(T, v) {
-    const O = T.globalRow ?? T.row, P = v.fullRowData[O];
-    return P ? P.toneNote.replace(Xe, "b").replace(Je, "#") : "C4";
+  function I(T, M) {
+    const E = T.globalRow ?? T.row, P = M.fullRowData[E];
+    return P ? P.toneNote.replace(Je, "b").replace(ze, "#") : "C4";
   }
-  function d() {
-    var G, L, B;
-    if (!l) return;
+  function c() {
+    var R, D, F;
+    if (!r) return;
     const T = i.getState();
-    a.debug("TransportService", "scheduleNotes", "Clearing previous transport events and rescheduling all notes"), w.Transport.cancel(), S == null || S.reset(), l.calculate(T), (G = t == null ? void 0 : t.clearAdsrVisuals) == null || G.call(t);
-    const v = l.getTimeMap(), { loopEnd: O } = l.getConfiguredLoopBounds(), P = l.findNonAnacrusisStart(T);
-    a.debug("TransportService", `[ANACRUSIS] hasAnacrusis: ${T.hasAnacrusis}, anacrusisOffset: ${P.toFixed(3)}s`), T.placedNotes.forEach((R, _) => {
-      const $ = R.startColumnIndex, W = R.endColumnIndex, H = v[$];
+    a.debug("TransportService", "scheduleNotes", "Clearing previous transport events and rescheduling all notes"), w.Transport.cancel(), S == null || S.reset(), r.calculate(T), (R = n == null ? void 0 : n.clearAdsrVisuals) == null || R.call(n);
+    const M = r.getTimeMap(), { loopEnd: E } = r.getConfiguredLoopBounds(), P = r.findNonAnacrusisStart(T);
+    a.debug("TransportService", `[ANACRUSIS] hasAnacrusis: ${T.hasAnacrusis}, anacrusisOffset: ${P.toFixed(3)}s`), T.placedNotes.forEach((G, _) => {
+      const $ = G.startColumnIndex, W = G.endColumnIndex, H = M[$];
       if (H === void 0) {
         a.warn("TransportService", `[NOTE SCHEDULE] Note ${_}: timeMap[${$}] undefined, skipping`);
         return;
       }
-      const q = l.applyModulationToTime(H, $, T), X = v[W + 1];
-      if (X === void 0) {
-        a.warn("TransportService", `Skipping note with invalid endColumnIndex: ${R.endColumnIndex + 1}`);
+      const q = r.applyModulationToTime(H, $, T), U = M[W + 1];
+      if (U === void 0) {
+        a.warn("TransportService", `Skipping note with invalid endColumnIndex: ${G.endColumnIndex + 1}`);
         return;
       }
-      const j = l.applyModulationToTime(X, W + 1, T) - q;
-      R.isDrum ? N(R, q) : A(R, q, j, O, T);
+      const j = r.applyModulationToTime(U, W + 1, T) - q;
+      G.isDrum ? N(G, q) : A(G, q, j, E, T);
     });
-    const F = ((L = i.getStampPlaybackData) == null ? void 0 : L.call(i)) ?? [];
-    F.forEach((R) => {
-      C(R, v, T);
+    const B = ((D = i.getStampPlaybackData) == null ? void 0 : D.call(i)) ?? [];
+    B.forEach((G) => {
+      C(G, M, T);
     });
-    const E = ((B = i.getTripletPlaybackData) == null ? void 0 : B.call(i)) ?? [];
-    E.forEach((R) => {
-      m(R, v, T);
-    }), a.debug("TransportService", "scheduleNotes", `Finished scheduling ${T.placedNotes.length} notes, ${F.length} stamps, and ${E.length} triplets`);
+    const L = ((F = i.getTripletPlaybackData) == null ? void 0 : F.call(i)) ?? [];
+    L.forEach((G) => {
+      m(G, M, T);
+    }), a.debug("TransportService", "scheduleNotes", `Finished scheduling ${T.placedNotes.length} notes, ${B.length} stamps, and ${L.length} triplets`);
   }
-  function N(T, v) {
-    const O = i.getState();
+  function N(T, M) {
+    const E = i.getState();
     w.Transport.schedule((P) => {
-      if (O.isPaused) return;
-      const F = T.drumTrack;
-      if (F == null) return;
-      const E = String(F);
-      S == null || S.trigger(E, P), w.Draw.schedule(() => {
-        var G;
-        (G = t == null ? void 0 : t.triggerDrumNotePop) == null || G.call(t, T.startColumnIndex, F);
+      if (E.isPaused) return;
+      const B = T.drumTrack;
+      if (B == null) return;
+      const L = String(B);
+      S == null || S.trigger(L, P), w.Draw.schedule(() => {
+        var R;
+        (R = n == null ? void 0 : n.triggerDrumNotePop) == null || R.call(n, T.startColumnIndex, B);
       }, P);
-    }, v);
+    }, M);
   }
-  function A(T, v, O, P, F) {
+  function A(T, M, E, P, B) {
     var q;
-    const E = I(T, F), G = T.color, L = T.globalRow ?? T.row, B = ((q = F.fullRowData[L]) == null ? void 0 : q.hex) || "#888888", R = T.uuid, _ = F.timbres[G];
+    const L = I(T, B), R = T.color, D = T.globalRow ?? T.row, F = ((q = B.fullRowData[D]) == null ? void 0 : q.hex) || "#888888", G = T.uuid, _ = B.timbres[R];
     if (!_) {
-      a.warn("TransportService", `Timbre not found for color ${G}. Skipping note ${R}`);
+      a.warn("TransportService", `Timbre not found for color ${R}. Skipping note ${G}`);
       return;
     }
-    let $ = v + O;
+    let $ = M + E;
     const H = P - 1e-3;
-    $ >= P && ($ = Math.max(v + 1e-3, H)), w.Transport.schedule((X) => {
-      i.getState().isPaused || (e.triggerAttack(E, G, X), w.Draw.schedule(() => {
-        var U;
-        (U = t == null ? void 0 : t.triggerAdsrVisual) == null || U.call(t, R, "attack", B, _.adsr), g.emit("noteAttack", { noteId: R, color: G });
-      }, X));
-    }, v), w.Transport.schedule((X) => {
-      e.triggerRelease(E, G, X), w.Draw.schedule(() => {
-        var U;
-        (U = t == null ? void 0 : t.triggerAdsrVisual) == null || U.call(t, R, "release", B, _.adsr), g.emit("noteRelease", { noteId: R, color: G });
-      }, X);
+    $ >= P && ($ = Math.max(M + 1e-3, H)), w.Transport.schedule((U) => {
+      i.getState().isPaused || (e.triggerAttack(L, R, U), w.Draw.schedule(() => {
+        var J;
+        (J = n == null ? void 0 : n.triggerAdsrVisual) == null || J.call(n, G, "attack", F, _.adsr), g.emit("noteAttack", { noteId: G, color: R });
+      }, U));
+    }, M), w.Transport.schedule((U) => {
+      e.triggerRelease(L, R, U), w.Draw.schedule(() => {
+        var J;
+        (J = n == null ? void 0 : n.triggerAdsrVisual) == null || J.call(n, G, "release", F, _.adsr), g.emit("noteRelease", { noteId: G, color: R });
+      }, U);
     }, $);
   }
-  function C(T, v, O) {
-    var G;
-    const P = T.column, F = v[P];
-    if (F === void 0) return;
-    (((G = i.getStampScheduleEvents) == null ? void 0 : G.call(i, T.sixteenthStampId, T.placement)) ?? []).forEach((L) => {
-      y(L, F, T.row, T.color, O);
+  function C(T, M, E) {
+    var R;
+    const P = T.column, B = M[P];
+    if (B === void 0) return;
+    (((R = i.getStampScheduleEvents) == null ? void 0 : R.call(i, T.sixteenthStampId, T.placement)) ?? []).forEach((D) => {
+      y(D, B, T.row, T.color, E);
     });
   }
-  function m(T, v, O) {
-    var G, L;
-    const P = ((G = i.timeToCanvas) == null ? void 0 : G.call(i, T.startTimeIndex, O)) ?? T.startTimeIndex, F = v[P];
-    if (F === void 0) return;
-    (((L = i.getTripletScheduleEvents) == null ? void 0 : L.call(i, T.tripletStampId, T.placement)) ?? []).forEach((B) => {
-      y(B, F, T.row, T.color, O);
+  function m(T, M, E) {
+    var R, D;
+    const P = ((R = i.timeToCanvas) == null ? void 0 : R.call(i, T.startTimeIndex, E)) ?? T.startTimeIndex, B = M[P];
+    if (B === void 0) return;
+    (((D = i.getTripletScheduleEvents) == null ? void 0 : D.call(i, T.tripletStampId, T.placement)) ?? []).forEach((F) => {
+      y(F, B, T.row, T.color, E);
     });
   }
-  function y(T, v, O, P, F) {
-    const E = w.Time(T.offset).toSeconds(), G = w.Time(T.duration).toSeconds(), L = v + E, B = L + G, R = O + T.rowOffset, _ = M(R, F);
+  function y(T, M, E, P, B) {
+    const L = w.Time(T.offset).toSeconds(), R = w.Time(T.duration).toSeconds(), D = M + L, F = D + R, G = E + T.rowOffset, _ = v(G, B);
     w.Transport.schedule(($) => {
       i.getState().isPaused || e.triggerAttack(_, P, $);
-    }, L), w.Transport.schedule(($) => {
+    }, D), w.Transport.schedule(($) => {
       i.getState().isPaused || e.triggerRelease(_, P, $);
-    }, B);
+    }, F);
   }
   function b() {
-    var L, B;
-    const v = i.getState().tempo, O = 1e-4, P = 0.5, F = (R) => (R == null ? void 0 : R.xPosition) ?? 477.5, E = typeof ((B = (L = w.Transport) == null ? void 0 : L.bpm) == null ? void 0 : B.value) == "number" ? w.Transport.bpm.value : v;
-    n = v !== 0 ? E / v : 1, c = !0;
-    function G() {
-      var Te, Ne, Ae, be, ve, Me, we, Ie, xe, Pe, Ee, Oe, De, Fe, Be;
-      if (!c || !l)
+    var D, F;
+    const M = i.getState().tempo, E = 1e-4, P = 0.5, B = (G) => (G == null ? void 0 : G.xPosition) ?? 477.5, L = typeof ((F = (D = w.Transport) == null ? void 0 : D.bpm) == null ? void 0 : F.value) == "number" ? w.Transport.bpm.value : M;
+    o = M !== 0 ? L / M : 1, l = !0;
+    function R() {
+      var Te, Ne, Ae, be, Me, ve, we, Ie, xe, Pe, Ee, Oe, De, Fe, Be;
+      if (!l || !r)
         return;
       if (w.Transport.state === "stopped") {
-        p = requestAnimationFrame(G);
+        f = requestAnimationFrame(R);
         return;
       }
-      const R = i.getState(), _ = w.Time(w.Transport.loopEnd).toSeconds(), $ = R.isLooping, W = l.getMusicalEndTime(), H = $ && _ > 0 ? _ : W, q = w.Transport.seconds, X = q >= H - 1e-3;
-      if (!$ && X) {
-        a.info("TransportService", "Playback reached end. Stopping playhead."), D.stop();
+      const G = i.getState(), _ = w.Time(w.Transport.loopEnd).toSeconds(), $ = G.isLooping, W = r.getMusicalEndTime(), H = $ && _ > 0 ? _ : W, q = w.Transport.seconds, U = q * 1e3, J = q >= H - 1e-3;
+      if (!$ && J) {
+        a.info("TransportService", "Playback reached end. Stopping playhead."), O.stop();
         return;
       }
-      if (R.isPaused) {
-        p = requestAnimationFrame(G);
+      if (G.isPaused) {
+        f = requestAnimationFrame(R);
         return;
       }
-      const U = l.getTimeMap();
-      (Te = t == null ? void 0 : t.clearPlayheadCanvas) == null || Te.call(t), (Ne = t == null ? void 0 : t.clearDrumPlayheadCanvas) == null || Ne.call(t);
-      let j = q;
+      const j = r.getTimeMap();
+      (Te = n == null ? void 0 : n.clearPlayheadCanvas) == null || Te.call(n), (Ne = n == null ? void 0 : n.clearDrumPlayheadCanvas) == null || Ne.call(n);
+      let oe = q;
       if ($) {
-        const J = w.Time(w.Transport.loopStart).toSeconds(), Y = w.Time(w.Transport.loopEnd).toSeconds() - J;
-        Y > 0 && (j = (q - J) % Y + J);
+        const Y = w.Time(w.Transport.loopStart).toSeconds(), X = w.Time(w.Transport.loopEnd).toSeconds() - Y;
+        X > 0 && (oe = (q - Y) % X + Y);
       }
-      const et = ((Ae = i.getCanvasWidth) == null ? void 0 : Ae.call(i)) ?? 1e3, tt = ((be = i.getPlacedTonicSigns) == null ? void 0 : be.call(i)) ?? [], pe = ((ve = i.getTonicSpanColumnIndices) == null ? void 0 : ve.call(i, tt)) ?? /* @__PURE__ */ new Set();
+      const tt = ((Ae = i.getCanvasWidth) == null ? void 0 : Ae.call(i)) ?? 1e3, nt = ((be = i.getPlacedTonicSigns) == null ? void 0 : be.call(i)) ?? [], pe = ((Me = i.getTonicSpanColumnIndices) == null ? void 0 : Me.call(i, nt)) ?? /* @__PURE__ */ new Set();
       let se = 0, ge = 0, Se = 0, ie = -1;
-      for (let J = 0; J < U.length - 1; J++) {
-        const Z = U[J], Y = U[J + 1];
-        if (!(Z === void 0 || Y === void 0) && j >= Z && j < Y) {
-          let K = J;
-          for (; pe.has(K) && K < U.length - 1; )
-            K++;
-          const le = ((Me = i.getColumnStartX) == null ? void 0 : Me.call(i, K)) ?? 0, Re = ((we = i.getColumnWidth) == null ? void 0 : we.call(i, K)) ?? 10;
-          if (ge = le, Se = Re, ie = K, pe.has(J))
-            se = le;
-          else {
-            const Ge = Y - Z, ot = j - Z, st = Ge > 0 ? ot / Ge : 0;
-            se = le + st * Re;
-          }
-          break;
+      const Q = zt(j, oe);
+      if (Q >= 0) {
+        const Y = j[Q], Re = j[Q + 1];
+        let X = Q;
+        for (; pe.has(X) && X < j.length - 1; )
+          X++;
+        const le = ((ve = i.getColumnStartX) == null ? void 0 : ve.call(i, X)) ?? 0, Ge = ((we = i.getColumnWidth) == null ? void 0 : we.call(i, X)) ?? 10;
+        if (ge = le, Se = Ge, ie = X, pe.has(Q))
+          se = le;
+        else {
+          const Le = Re - Y, st = oe - Y, it = Le > 0 ? st / Le : 0;
+          se = le + it * Ge;
         }
       }
-      const te = Math.min(se, et);
-      x(R, te, v, F, O, P);
-      const ye = ((Ie = t == null ? void 0 : t.getPlayheadCanvasHeight) == null ? void 0 : Ie.call(t)) ?? 500, Ce = ((xe = t == null ? void 0 : t.getDrumCanvasHeight) == null ? void 0 : xe.call(t)) ?? 100, k = R.playheadMode === "macrobeat" && ie >= 0 ? (Pe = i.getMacrobeatHighlightRect) == null ? void 0 : Pe.call(i, ie) : null, ae = (k == null ? void 0 : k.x) ?? ge, re = (k == null ? void 0 : k.width) ?? Se;
-      te >= 0 && (R.playheadMode === "macrobeat" || R.playheadMode === "microbeat" ? ((Ee = t == null ? void 0 : t.drawPlayheadHighlight) == null || Ee.call(t, ae, re, ye, performance.now()), (Oe = t == null ? void 0 : t.drawDrumPlayheadHighlight) == null || Oe.call(t, ae, re, Ce, performance.now())) : ((De = t == null ? void 0 : t.drawPlayheadLine) == null || De.call(t, te, ye), (Fe = t == null ? void 0 : t.drawDrumPlayheadLine) == null || Fe.call(t, te, Ce)));
-      const nt = R.playheadMode === "macrobeat" || R.playheadMode === "microbeat";
-      (Be = t == null ? void 0 : t.updateBeatLineHighlight) == null || Be.call(t, ae, re, nt), p = requestAnimationFrame(G);
+      const ee = Math.min(se, tt);
+      x(G, ee, M, B, E, P);
+      const ye = ((Ie = n == null ? void 0 : n.getPlayheadCanvasHeight) == null ? void 0 : Ie.call(n)) ?? 500, Ce = ((xe = n == null ? void 0 : n.getDrumCanvasHeight) == null ? void 0 : xe.call(n)) ?? 100, k = G.playheadMode === "macrobeat" && ie >= 0 ? (Pe = i.getMacrobeatHighlightRect) == null ? void 0 : Pe.call(i, ie) : null, ae = (k == null ? void 0 : k.x) ?? ge, re = (k == null ? void 0 : k.width) ?? Se;
+      ee >= 0 && (G.playheadMode === "macrobeat" || G.playheadMode === "microbeat" ? ((Ee = n == null ? void 0 : n.drawPlayheadHighlight) == null || Ee.call(n, ae, re, ye, U), (Oe = n == null ? void 0 : n.drawDrumPlayheadHighlight) == null || Oe.call(n, ae, re, Ce, U)) : ((De = n == null ? void 0 : n.drawPlayheadLine) == null || De.call(n, ee, ye), (Fe = n == null ? void 0 : n.drawDrumPlayheadLine) == null || Fe.call(n, ee, Ce)));
+      const ot = G.playheadMode === "macrobeat" || G.playheadMode === "microbeat";
+      (Be = n == null ? void 0 : n.updateBeatLineHighlight) == null || Be.call(n, ae, re, ot), f = requestAnimationFrame(R);
     }
-    G();
+    R();
   }
-  function x(T, v, O, P, F, E) {
-    if (!l) return;
-    const L = (Array.isArray(T.modulationMarkers) ? T.modulationMarkers : []).filter((B) => (B == null ? void 0 : B.active) && typeof B.ratio == "number" && B.ratio !== 0).sort((B, R) => P(B) - P(R));
-    if (L.length > 0) {
-      let B = 1;
-      for (const R of L) {
-        const _ = P(R);
-        if (v + E >= _)
-          B *= 1 / R.ratio;
+  function x(T, M, E, P, B, L) {
+    if (!r) return;
+    const D = (Array.isArray(T.tempoModulationMarkers) ? T.tempoModulationMarkers : []).filter((F) => (F == null ? void 0 : F.active) && typeof F.ratio == "number" && F.ratio !== 0).sort((F, G) => P(F) - P(G));
+    if (D.length > 0) {
+      let F = 1;
+      for (const G of D) {
+        const _ = P(G);
+        if (M + L >= _)
+          F *= 1 / G.ratio;
         else
           break;
       }
-      if ((!Number.isFinite(B) || B <= 0) && (B = 1), Math.abs(B - n) > F) {
-        const R = O * B;
-        w.Transport.bpm.value = R, l.reapplyConfiguredLoopBounds(T.isLooping), n = B, a.debug("TransportService", `Tempo multiplier updated to ${B.toFixed(3)} (${R.toFixed(2)} BPM)`);
+      if ((!Number.isFinite(F) || F <= 0) && (F = 1), Math.abs(F - o) > B) {
+        const G = E * F;
+        w.Transport.bpm.value = G, r.reapplyConfiguredLoopBounds(T.isLooping), o = F, a.debug("TransportService", `Tempo multiplier updated to ${F.toFixed(3)} (${G.toFixed(2)} BPM)`);
       }
-    } else Math.abs(n - 1) > F && (w.Transport.bpm.value = O, l.reapplyConfiguredLoopBounds(T.isLooping), n = 1, a.debug("TransportService", `Tempo reset to base ${O} BPM`));
+    } else Math.abs(o - 1) > B && (w.Transport.bpm.value = E, r.reapplyConfiguredLoopBounds(T.isLooping), o = 1, a.debug("TransportService", `Tempo reset to base ${E} BPM`));
   }
-  const D = {
+  const O = {
     init() {
       const T = i.getState();
-      l = Vt({
+      r = Ht({
         getMacrobeatInfo: i.getMacrobeatInfo ?? (() => null),
         getPlacedTonicSigns: i.getPlacedTonicSigns ?? (() => []),
         getTonicSpanColumnIndices: i.getTonicSpanColumnIndices ?? (() => /* @__PURE__ */ new Set()),
         logger: a
-      }), S = qt({
+      }), S = Jt({
         samples: {
           H: "/audio/drums/hi.mp3",
           M: "/audio/drums/mid.mp3",
@@ -2894,56 +2900,56 @@ function Fn(o) {
           getMainVolumeNode: () => e.getMainVolumeNode()
         }
       }), w.Transport.bpm.value = T.tempo;
-      const v = () => this.handleStateChange(), O = () => this.handleStateChange(), P = () => this.handleStateChange(), F = () => {
-        if (l && l.getTimeMap().length > 0) {
-          const B = i.getState();
-          l.calculate(B);
+      const M = () => this.handleStateChange(), E = () => this.handleStateChange(), P = () => this.handleStateChange(), B = () => {
+        if (r && r.getTimeMap().length > 0) {
+          const F = i.getState();
+          r.calculate(F);
         }
         this.handleStateChange();
-      }, E = (B) => {
+      }, L = (F) => {
         var $, W;
-        const R = (($ = B == null ? void 0 : B.oldConfig) == null ? void 0 : $.columnWidths) || [], _ = ((W = B == null ? void 0 : B.newConfig) == null ? void 0 : W.columnWidths) || [];
-        R.length !== _.length && l && l.calculate(i.getState());
-      }, G = (B) => {
-        if (a.info("TransportService", `tempoChanged triggered with new value: ${B} BPM`), w.Transport.state === "started") {
-          const R = w.Transport.position;
-          w.Transport.pause(), p && (cancelAnimationFrame(p), p = null), w.Transport.bpm.value = B, l == null || l.reapplyConfiguredLoopBounds(i.getState().isLooping), d(), w.Transport.start(void 0, R), h === "standard" && b();
+        const G = (($ = F == null ? void 0 : F.oldConfig) == null ? void 0 : $.columnWidths) || [], _ = ((W = F == null ? void 0 : F.newConfig) == null ? void 0 : W.columnWidths) || [];
+        G.length !== _.length && r && r.calculate(i.getState());
+      }, R = (F) => {
+        if (a.info("TransportService", `tempoChanged triggered with new value: ${F} BPM`), w.Transport.state === "started") {
+          const G = w.Transport.position;
+          w.Transport.pause(), f && (cancelAnimationFrame(f), f = null), w.Transport.bpm.value = F, r == null || r.reapplyConfiguredLoopBounds(i.getState().isLooping), c(), w.Transport.start(void 0, G), h === "standard" && b();
         } else
-          w.Transport.bpm.value = B, l == null || l.reapplyConfiguredLoopBounds(i.getState().isLooping), l == null || l.calculate(i.getState());
-      }, L = (B) => {
-        w.Transport.loop = B;
-        const R = w.Time(w.Transport.loopStart).toSeconds(), _ = w.Time(w.Transport.loopEnd).toSeconds();
-        B && _ <= R && l && (w.Transport.loopEnd = R + Math.max(l.getMicrobeatDuration(i.getState().tempo), 1e-3)), B && l ? l.setConfiguredLoopBounds(
+          w.Transport.bpm.value = F, r == null || r.reapplyConfiguredLoopBounds(i.getState().isLooping), r == null || r.calculate(i.getState());
+      }, D = (F) => {
+        w.Transport.loop = F;
+        const G = w.Time(w.Transport.loopStart).toSeconds(), _ = w.Time(w.Transport.loopEnd).toSeconds();
+        F && _ <= G && r && (w.Transport.loopEnd = G + Math.max(r.getMicrobeatDuration(i.getState().tempo), 1e-3)), F && r ? r.setConfiguredLoopBounds(
           w.Time(w.Transport.loopStart).toSeconds(),
           w.Time(w.Transport.loopEnd).toSeconds()
-        ) : l == null || l.clearConfiguredLoopBounds();
+        ) : r == null || r.clearConfiguredLoopBounds();
       };
-      g.on("rhythmStructureChanged", v), g.on("notesChanged", O), g.on("sixteenthStampPlacementsChanged", P), g.on("modulationMarkersChanged", F), g.on("layoutConfigChanged", E), g.on("tempoChanged", G), g.on("loopingChanged", L), u.push(
+      g.on("rhythmStructureChanged", M), g.on("notesChanged", E), g.on("sixteenthStampPlacementsChanged", P), g.on("tempoModulationMarkersChanged", B), g.on("layoutConfigChanged", L), g.on("tempoChanged", R), g.on("loopingChanged", D), u.push(
         () => {
         }
         // These would be off() calls if the event system supports them
       ), w.Transport.on("stop", () => {
-        var B, R;
-        a.info("TransportService", "Tone.Transport 'stop' fired. Resetting playback state"), (B = g.setPlaybackState) == null || B.call(g, !1, !1), (R = t == null ? void 0 : t.clearAdsrVisuals) == null || R.call(t), p && (cancelAnimationFrame(p), p = null);
+        var F, G;
+        a.info("TransportService", "Tone.Transport 'stop' fired. Resetting playback state"), (F = g.setPlaybackState) == null || F.call(g, !1, !1), (G = n == null ? void 0 : n.clearAdsrVisuals) == null || G.call(n), f && (cancelAnimationFrame(f), f = null);
       }), a.info("TransportService", "Initialized");
     },
     handleStateChange() {
       if (w.Transport.state === "started") {
         a.debug("TransportService", "handleStateChange: Notes or rhythm changed during playback. Rescheduling");
-        const v = w.Transport.position;
-        w.Transport.pause(), d(), w.Transport.start(void 0, v);
+        const M = w.Transport.position;
+        w.Transport.pause(), c(), w.Transport.start(void 0, M);
       } else
-        l == null || l.calculate(i.getState());
+        r == null || r.calculate(i.getState());
     },
     start() {
       a.info("TransportService", "Starting playback"), (s || (() => w.start()))().then(() => {
-        d();
-        const v = i.getState();
-        l == null || l.getTimeMap();
-        const O = (l == null ? void 0 : l.getMusicalEndTime()) ?? 0, P = (l == null ? void 0 : l.findNonAnacrusisStart(v)) ?? 0;
-        l == null || l.setLoopBounds(P, O, v.tempo), w.Transport.bpm.value = v.tempo;
-        const F = w.now() + 0.1;
-        w.Transport.start(F, 0), h === "standard" && b(), g.emit("playbackStarted");
+        c();
+        const M = i.getState();
+        r == null || r.getTimeMap();
+        const E = (r == null ? void 0 : r.getMusicalEndTime()) ?? 0, P = (r == null ? void 0 : r.findNonAnacrusisStart(M)) ?? 0;
+        r == null || r.setLoopBounds(P, E, M.tempo), w.Transport.bpm.value = M.tempo;
+        const B = w.now() + 0.1;
+        w.Transport.start(B, 0), h === "standard" && b(), g.emit("playbackStarted");
       });
     },
     resume() {
@@ -2952,39 +2958,39 @@ function Fn(o) {
       });
     },
     pause() {
-      a.info("TransportService", "Pausing playback"), w.Transport.pause(), p && (cancelAnimationFrame(p), p = null), g.emit("playbackPaused");
+      a.info("TransportService", "Pausing playback"), w.Transport.pause(), f && (cancelAnimationFrame(f), f = null), g.emit("playbackPaused");
     },
     stop() {
-      var v, O, P;
-      a.info("TransportService", "Stopping playback and clearing visuals"), c = !1, p && (cancelAnimationFrame(p), p = null), w.Transport.stop(), w.Transport.cancel(), S == null || S.reset();
+      var M, E, P;
+      a.info("TransportService", "Stopping playback and clearing visuals"), l = !1, f && (cancelAnimationFrame(f), f = null), w.Transport.stop(), w.Transport.cancel(), S == null || S.reset();
       const T = i.getState();
-      w.Transport.bpm.value = T.tempo, l == null || l.reapplyConfiguredLoopBounds(T.isLooping), e.releaseAll(), (v = t == null ? void 0 : t.clearPlayheadCanvas) == null || v.call(t), (O = t == null ? void 0 : t.clearDrumPlayheadCanvas) == null || O.call(t), (P = t == null ? void 0 : t.updateBeatLineHighlight) == null || P.call(t, 0, 0, !1), g.emit("playbackStopped");
+      w.Transport.bpm.value = T.tempo, r == null || r.reapplyConfiguredLoopBounds(T.isLooping), e.releaseAll(), (M = n == null ? void 0 : n.clearPlayheadCanvas) == null || M.call(n), (E = n == null ? void 0 : n.clearDrumPlayheadCanvas) == null || E.call(n), (P = n == null ? void 0 : n.updateBeatLineHighlight) == null || P.call(n, 0, 0, !1), g.emit("playbackStopped");
     },
     dispose() {
       this.stop(), S == null || S.dispose(), u.forEach((T) => T()), a.debug("TransportService", "Disposed");
     }
   };
-  return D;
+  return O;
 }
-const Ht = {
+const jt = {
   latencyHint: "playback",
   lookAhead: 0.1
 };
-function Bn(o = {}) {
-  const { latencyHint: e, lookAhead: i } = { ...Ht, ...o };
+function Vn(t = {}) {
+  const { latencyHint: e, lookAhead: i } = { ...jt, ...t };
   let g = !1;
   if (w.context.state === "suspended")
     try {
       w.setContext(new w.Context({
         latencyHint: e
       })), g = !0;
-    } catch (t) {
-      console.warn("Failed to create new AudioContext, using default:", t);
+    } catch (n) {
+      console.warn("Failed to create new AudioContext, using default:", n);
     }
   return i !== void 0 && (w.context.lookAhead = i), g;
 }
-function Rn() {
-  const o = w.context.rawContext, e = o && "baseLatency" in o ? o.baseLatency : void 0;
+function $n() {
+  const t = w.context.rawContext, e = t && "baseLatency" in t ? t.baseLatency : void 0;
   return {
     state: w.context.state,
     sampleRate: w.context.sampleRate,
@@ -2992,55 +2998,55 @@ function Rn() {
     lookAhead: w.context.lookAhead
   };
 }
-function Ut(o) {
+function kt(t) {
   let e = null, i = null;
   function g() {
-    const l = typeof performance < "u" ? performance.now() : Date.now();
-    return (!e || !i || l - i > 1) && (e = o.getViewportInfo(), i = l), e;
+    const r = typeof performance < "u" ? performance.now() : Date.now();
+    return (!e || !i || r - i > 1) && (e = t.getViewportInfo(), i = r), e;
   }
-  function t() {
+  function n() {
     e = null, i = null;
   }
-  function r(l, S) {
-    if (o.columnToPixelX)
-      return o.columnToPixelX(l, S);
-    const { columnWidths: n, cellWidth: u } = S;
-    let M = 0;
-    for (let I = 0; I < l && I < n.length; I++)
-      M += (n[I] ?? 1) * u;
-    return M;
+  function d(r, S) {
+    if (t.columnToPixelX)
+      return t.columnToPixelX(r, S);
+    const { columnWidths: o, cellWidth: u } = S;
+    let v = 0;
+    for (let I = 0; I < r && I < o.length; I++)
+      v += (o[I] ?? 1) * u;
+    return v;
   }
-  function s(l, S) {
-    const n = g(), u = l - n.startRank, M = S.cellHeight / 2;
-    return (u + 1) * M;
+  function s(r, S) {
+    const o = g(), u = r - o.startRank, v = S.cellHeight / 2;
+    return (u + 1) * v;
   }
-  function h(l, S) {
-    if (o.pixelXToColumn)
-      return o.pixelXToColumn(l, S);
-    const { columnWidths: n, cellWidth: u } = S;
-    let M = 0;
-    for (let I = 0; I < n.length; I++) {
-      const d = (n[I] ?? 1) * u;
-      if (l < M + d)
+  function h(r, S) {
+    if (t.pixelXToColumn)
+      return t.pixelXToColumn(r, S);
+    const { columnWidths: o, cellWidth: u } = S;
+    let v = 0;
+    for (let I = 0; I < o.length; I++) {
+      const c = (o[I] ?? 1) * u;
+      if (r < v + c)
         return I;
-      M += d;
+      v += c;
     }
-    return n.length - 1;
+    return o.length - 1;
   }
-  function f(l, S) {
-    const n = g(), u = S.cellHeight / 2;
-    return l / u - 1 + n.startRank;
+  function p(r, S) {
+    const o = g(), u = S.cellHeight / 2;
+    return r / u - 1 + o.startRank;
   }
   function a() {
-    const l = g(), { startRank: S, endRank: n } = l, u = Math.max(S, n - 1);
+    const r = g(), { startRank: S, endRank: o } = r, u = Math.max(S, o - 1);
     return { startRow: S, endRow: u };
   }
-  function p(l) {
-    let S = (l || "").replace(/\d/g, "").trim();
+  function f(r) {
+    let S = (r || "").replace(/\d/g, "").trim();
     return S = S.replace(/b/g, "b-").replace(/#/g, "b_"), S;
   }
-  function c(l) {
-    switch (l) {
+  function l(r) {
+    switch (r) {
       case "C":
         return { lineWidth: 3.33, dash: [], color: "#adb5bd" };
       case "E":
@@ -3058,245 +3064,245 @@ function Ut(o) {
     }
   }
   return {
-    getColumnX: r,
+    getColumnX: d,
     getRowY: s,
     getColumnFromX: h,
-    getRowFromY: f,
+    getRowFromY: p,
     getVisibleRowRange: a,
-    getPitchClass: p,
-    getLineStyleFromPitchClass: c,
-    invalidateViewportCache: t,
+    getPitchClass: f,
+    getLineStyleFromPitchClass: l,
+    invalidateViewportCache: n,
     getCachedViewportInfo: g
   };
 }
-const ue = "♯", he = "♭", ne = "/", Xt = 0.35, Jt = 0.5, zt = 6, jt = 1, kt = 0.08, Yt = 0.04, Kt = 1, ee = 4;
-function Qt(o) {
-  const { coords: e } = o;
-  function i(d) {
-    const N = d == null ? void 0 : d.split("-")[1];
+const ue = "♯", he = "♭", te = "/", Yt = 0.35, Kt = 0.5, Qt = 6, Zt = 1, en = 0.08, tn = 0.04, nn = 1, Z = 4;
+function on(t) {
+  const { coords: e } = t;
+  function i(c) {
+    const N = c == null ? void 0 : c.split("-")[1];
     return Number.parseInt(N ?? "0", 10);
   }
-  function g(d) {
-    if (!d || typeof d.startColumnIndex != "number" || typeof d.endColumnIndex != "number")
+  function g(c) {
+    if (!c || typeof c.startColumnIndex != "number" || typeof c.endColumnIndex != "number")
       return !1;
-    const N = d.shape === "circle" ? d.startColumnIndex + 1 : d.startColumnIndex;
-    return d.endColumnIndex > N;
+    const N = c.shape === "circle" ? c.startColumnIndex + 1 : c.startColumnIndex;
+    return c.endColumnIndex > N;
   }
-  function t(d, N) {
-    return Number.isFinite(d) && d > 0 && Number.isFinite(N) && N > 0;
+  function n(c, N) {
+    return Number.isFinite(c) && c > 0 && Number.isFinite(N) && N > 0;
   }
-  function r(d, N, A) {
-    const { cellWidth: C } = A, m = C * 0.25, y = d.uuid;
+  function d(c, N, A) {
+    const { cellWidth: C } = A, m = C * 0.25, y = c.uuid;
     if (!y) return 0;
     const b = N.filter(
-      (T) => !T.isDrum && T.row === d.row && T.startColumnIndex === d.startColumnIndex && T.uuid && T.uuid !== y
+      (T) => !T.isDrum && T.row === c.row && T.startColumnIndex === c.startColumnIndex && T.uuid && T.uuid !== y
     );
     if (b.length === 0) return 0;
-    const x = [d, ...b];
-    return x.sort((T, v) => i(T.uuid) - i(v.uuid)), x.findIndex((T) => T.uuid === y) * m;
+    const x = [c, ...b];
+    return x.sort((T, M) => i(T.uuid) - i(M.uuid)), x.findIndex((T) => T.uuid === y) * m;
   }
-  function s(d, N) {
+  function s(c, N) {
     var y, b, x;
-    const { cellHeight: A } = N, C = (y = o.getAnimationEffectsManager) == null ? void 0 : y.call(o);
-    return (b = C == null ? void 0 : C.shouldAnimateNote) != null && b.call(C, d) ? (((x = C.getVibratoYOffset) == null ? void 0 : x.call(C, d.color)) ?? 0) * A : 0;
+    const { cellHeight: A } = N, C = (y = t.getAnimationEffectsManager) == null ? void 0 : y.call(t);
+    return (b = C == null ? void 0 : C.shouldAnimateNote) != null && b.call(C, c) ? (((x = C.getVibratoYOffset) == null ? void 0 : x.call(C, c.color)) ?? 0) * A : 0;
   }
-  function h(d, N, A) {
-    const { cellHeight: C } = A, m = C / 2 * 0.12, y = d.uuid;
+  function h(c, N, A) {
+    const { cellHeight: C } = A, m = C / 2 * 0.12, y = c.uuid;
     if (!y) return 0;
     const b = N.filter(
-      (T) => !T.isDrum && T.row === d.row && T.startColumnIndex === d.startColumnIndex && T.uuid && T.uuid !== y && g(T)
+      (T) => !T.isDrum && T.row === c.row && T.startColumnIndex === c.startColumnIndex && T.uuid && T.uuid !== y && g(T)
     );
     if (b.length === 0) return 0;
-    const x = [d, ...b];
-    return x.sort((T, v) => i(T.uuid) - i(v.uuid)), x.findIndex((T) => T.uuid === y) * m;
+    const x = [c, ...b];
+    return x.sort((T, M) => i(T.uuid) - i(M.uuid)), x.findIndex((T) => T.uuid === y) * m;
   }
-  function f(d, N) {
-    var O, P, F;
-    const A = (O = o.getDegreeForNote) == null ? void 0 : O.call(o, d);
+  function p(c, N) {
+    var E, P, B;
+    const A = (E = t.getDegreeForNote) == null ? void 0 : E.call(t, c);
     if (!A) return { label: null, isAccidental: !1 };
-    if (!(((P = o.hasAccidental) == null ? void 0 : P.call(o, A)) ?? !1)) return { label: A, isAccidental: !1 };
+    if (!(((P = t.hasAccidental) == null ? void 0 : P.call(t, A)) ?? !1)) return { label: A, isAccidental: !1 };
     const m = N.accidentalMode || {}, y = m.sharp ?? !0, b = m.flat ?? !0;
     if (!y && !b) return { label: null, isAccidental: !0 };
-    let x = A.includes(ue) ? A : null, D = A.includes(he) ? A : null;
-    const T = (F = o.getEnharmonicDegree) == null ? void 0 : F.call(o, A);
-    T && (T.includes(ue) && !x && (x = T), T.includes(he) && !D && (D = T));
-    let v = null;
+    let x = A.includes(ue) ? A : null, O = A.includes(he) ? A : null;
+    const T = (B = t.getEnharmonicDegree) == null ? void 0 : B.call(t, A);
+    T && (T.includes(ue) && !x && (x = T), T.includes(he) && !O && (O = T));
+    let M = null;
     if (y && b) {
-      const E = [];
-      x && E.push(x), D && (!x || D !== x) && E.push(D), v = E.join(ne), v || (v = A);
-    } else y ? v = x || A : b && (v = D || A);
-    return { label: v, isAccidental: !0 };
+      const L = [];
+      x && L.push(x), O && (!x || O !== x) && L.push(O), M = L.join(te), M || (M = A);
+    } else y ? M = x || A : b && (M = O || A);
+    return { label: M, isAccidental: !0 };
   }
-  function a(d) {
-    if (!d) return { multiplier: 1, category: "natural" };
-    const N = d.includes(he), A = d.includes(ue), C = d.includes(ne);
+  function a(c) {
+    if (!c) return { multiplier: 1, category: "natural" };
+    const N = c.includes(he), A = c.includes(ue), C = c.includes(te);
     return !N && !A ? { multiplier: 1, category: "natural" } : C ? { multiplier: 0.75, category: "both-accidentals" } : { multiplier: 0.88, category: "single-accidental" };
   }
-  function p(d, N, A, C, m, y) {
-    const { label: b } = f(N, A);
+  function f(c, N, A, C, m, y) {
+    const { label: b } = p(N, A);
     if (!b) return;
-    const { multiplier: x, category: D } = a(b);
+    const { multiplier: x, category: O } = a(b);
     let T;
     if (N.shape === "circle") {
-      const v = y * 2 * Jt;
-      switch (D) {
+      const M = y * 2 * Kt;
+      switch (O) {
         case "natural":
-          T = v;
+          T = M;
           break;
         case "single-accidental":
-          T = v * 0.8;
+          T = M * 0.8;
           break;
         case "both-accidentals":
-          T = v * 0.4;
+          T = M * 0.4;
           break;
         default:
-          T = v * x;
+          T = M * x;
       }
     } else {
-      const v = y * 2 * Xt;
-      switch (D) {
+      const M = y * 2 * Yt;
+      switch (O) {
         case "natural":
-          T = v * 1.5;
+          T = M * 1.5;
           break;
         case "single-accidental":
-          T = v * 1.2;
+          T = M * 1.2;
           break;
         case "both-accidentals":
-          T = v;
+          T = M;
           break;
         default:
-          T = v * x;
+          T = M * x;
       }
     }
-    if (!(T < zt))
-      if (d.fillStyle = "#212529", d.font = `bold ${T}px 'Atkinson Hyperlegible', sans-serif`, d.textAlign = "center", d.textBaseline = "middle", N.shape === "oval" && D === "both-accidentals" && b.includes(ne)) {
-        const v = b.split(ne), O = T * 1.1, P = O * (v.length - 1), F = m - P / 2;
-        v.forEach((E, G) => {
-          const L = F + G * O, B = T * 0.08;
-          d.fillText(E.trim(), C, L + B);
+    if (!(T < Qt))
+      if (c.fillStyle = "#212529", c.font = `bold ${T}px 'Atkinson Hyperlegible', sans-serif`, c.textAlign = "center", c.textBaseline = "middle", N.shape === "oval" && O === "both-accidentals" && b.includes(te)) {
+        const M = b.split(te), E = T * 1.1, P = E * (M.length - 1), B = m - P / 2;
+        M.forEach((L, R) => {
+          const D = B + R * E, F = T * 0.08;
+          c.fillText(L.trim(), C, D + F);
         });
       } else {
-        const v = T * 0.08;
-        d.fillText(b, C, m + v);
+        const M = T * 0.08;
+        c.fillText(b, C, m + M);
       }
   }
-  function c(d, N, A) {
-    var v, O;
-    const C = (v = o.getAnimationEffectsManager) == null ? void 0 : v.call(o), m = C == null ? void 0 : C.hasReverbEffect;
+  function l(c, N, A) {
+    var M, E;
+    const C = (M = t.getAnimationEffectsManager) == null ? void 0 : M.call(t), m = C == null ? void 0 : C.hasReverbEffect;
     if (!(typeof m == "function" ? m(N.color) : !!m)) return { shouldApply: !1, blur: 0, spread: 0 };
-    const { cellWidth: b } = A, x = (O = C == null ? void 0 : C.getReverbEffect) == null ? void 0 : O.call(C, N.color);
+    const { cellWidth: b } = A, x = (E = C == null ? void 0 : C.getReverbEffect) == null ? void 0 : E.call(C, N.color);
     if (!x) return { shouldApply: !1, blur: 0, spread: 0 };
-    const D = x.blur * (b / 2), T = x.spread * (b / 3);
-    return { shouldApply: D > 0 || T > 0, blur: D, spread: T };
+    const O = x.blur * (b / 2), T = x.spread * (b / 3);
+    return { shouldApply: O > 0 || T > 0, blur: O, spread: T };
   }
-  function l(d, N, A, C, m, y, b) {
-    var v, O, P;
-    const x = (v = o.getAnimationEffectsManager) == null ? void 0 : v.call(o);
-    if (!((O = x == null ? void 0 : x.hasDelayEffect) != null && O.call(x, N.color))) return;
-    const { cellWidth: D } = A, T = (P = x.getDelayEffects) == null ? void 0 : P.call(x, N.color);
-    !T || T.length === 0 || T.forEach((F) => {
-      const E = F.delay / 500 * D * 2, G = C + E, L = y * F.scale, B = b * F.scale;
-      d.save(), d.globalAlpha = F.opacity * 0.6, d.beginPath(), d.ellipse(G, m, L, B, 0, 0, 2 * Math.PI), d.strokeStyle = N.color, d.lineWidth = Math.max(0.5, L * 0.1), d.setLineDash([2, 2]), d.stroke(), d.restore();
+  function r(c, N, A, C, m, y, b) {
+    var M, E, P;
+    const x = (M = t.getAnimationEffectsManager) == null ? void 0 : M.call(t);
+    if (!((E = x == null ? void 0 : x.hasDelayEffect) != null && E.call(x, N.color))) return;
+    const { cellWidth: O } = A, T = (P = x.getDelayEffects) == null ? void 0 : P.call(x, N.color);
+    !T || T.length === 0 || T.forEach((B) => {
+      const L = B.delay / 500 * O * 2, R = C + L, D = y * B.scale, F = b * B.scale;
+      c.save(), c.globalAlpha = B.opacity * 0.6, c.beginPath(), c.ellipse(R, m, D, F, 0, 0, 2 * Math.PI), c.strokeStyle = N.color, c.lineWidth = Math.max(0.5, D * 0.1), c.setLineDash([2, 2]), c.stroke(), c.restore();
     });
   }
-  function S(d, N, A, C, m, y) {
-    var v, O, P;
-    const b = (v = o.getAnimationEffectsManager) == null ? void 0 : v.call(o);
-    if (!((O = b == null ? void 0 : b.shouldFillNote) != null && O.call(b, N))) return;
+  function S(c, N, A, C, m, y) {
+    var M, E, P;
+    const b = (M = t.getAnimationEffectsManager) == null ? void 0 : M.call(t);
+    if (!((E = b == null ? void 0 : b.shouldFillNote) != null && E.call(b, N))) return;
     const x = ((P = b.getFillLevel) == null ? void 0 : P.call(b, N)) ?? 0;
     if (x <= 0) return;
-    d.save();
-    const D = 1 - x, T = d.createRadialGradient(A, C, 0, A, C, Math.max(m, y));
-    T.addColorStop(0, "transparent"), T.addColorStop(Math.max(0, D - 0.05), "transparent"), T.addColorStop(D, `${N.color}1F`), T.addColorStop(1, `${N.color}BF`), d.beginPath(), d.ellipse(A, C, m, y, 0, 0, 2 * Math.PI), d.clip(), d.fillStyle = T, d.fillRect(A - m - 10, C - y - 10, (m + 10) * 2, (y + 10) * 2), d.restore();
+    c.save();
+    const O = 1 - x, T = c.createRadialGradient(A, C, 0, A, C, Math.max(m, y));
+    T.addColorStop(0, "transparent"), T.addColorStop(Math.max(0, O - 0.05), "transparent"), T.addColorStop(O, `${N.color}1F`), T.addColorStop(1, `${N.color}BF`), c.beginPath(), c.ellipse(A, C, m, y, 0, 0, 2 * Math.PI), c.clip(), c.fillStyle = T, c.fillRect(A - m - 10, C - y - 10, (m + 10) * 2, (y + 10) * 2), c.restore();
   }
-  function n(d, N, A, C, m, y) {
-    var F, E, G;
-    const b = (F = o.getAnimationEffectsManager) == null ? void 0 : F.call(o);
-    if (!((E = b == null ? void 0 : b.shouldFillNote) != null && E.call(b, N))) return;
-    const x = ((G = b.getFillLevel) == null ? void 0 : G.call(b, N)) ?? 0;
+  function o(c, N, A, C, m, y) {
+    var B, L, R;
+    const b = (B = t.getAnimationEffectsManager) == null ? void 0 : B.call(t);
+    if (!((L = b == null ? void 0 : b.shouldFillNote) != null && L.call(b, N))) return;
+    const x = ((R = b.getFillLevel) == null ? void 0 : R.call(b, N)) ?? 0;
     if (x <= 0) return;
-    d.save(), d.beginPath(), d.arc(A, m, y, Math.PI / 2, -Math.PI / 2, !1), d.lineTo(C, m - y), d.arc(C, m, y, -Math.PI / 2, Math.PI / 2, !1), d.lineTo(A, m + y), d.closePath(), d.clip();
-    const D = (A + C) / 2, T = C - A, v = Math.max(T / 2 + y, y), O = 1 - x, P = d.createRadialGradient(D, m, 0, D, m, v);
-    P.addColorStop(0, "transparent"), P.addColorStop(Math.max(0, O - 0.05), "transparent"), P.addColorStop(O, `${N.color}1F`), P.addColorStop(1, `${N.color}BF`), d.fillStyle = P, d.fillRect(A - y - 10, m - y - 10, T + (y + 10) * 2, (y + 10) * 2), d.restore();
+    c.save(), c.beginPath(), c.arc(A, m, y, Math.PI / 2, -Math.PI / 2, !1), c.lineTo(C, m - y), c.arc(C, m, y, -Math.PI / 2, Math.PI / 2, !1), c.lineTo(A, m + y), c.closePath(), c.clip();
+    const O = (A + C) / 2, T = C - A, M = Math.max(T / 2 + y, y), E = 1 - x, P = c.createRadialGradient(O, m, 0, O, m, M);
+    P.addColorStop(0, "transparent"), P.addColorStop(Math.max(0, E - 0.05), "transparent"), P.addColorStop(E, `${N.color}1F`), P.addColorStop(1, `${N.color}BF`), c.fillStyle = P, c.fillRect(A - y - 10, m - y - 10, T + (y + 10) * 2, (y + 10) * 2), c.restore();
   }
-  function u(d, N, A, C, m, y, b, x) {
-    if (n(d, N, C, m, y, b), d.save(), d.beginPath(), d.arc(C, y, b, Math.PI / 2, -Math.PI / 2, !1), d.lineTo(m, y - b), d.arc(m, y, b, -Math.PI / 2, Math.PI / 2, !1), d.lineTo(C, y + b), d.closePath(), d.strokeStyle = N.color, d.lineWidth = x, d.shadowColor = N.color, d.shadowBlur = ee, d.stroke(), d.shadowBlur = 0, d.shadowColor = "transparent", d.restore(), A.degreeDisplayMode !== "off") {
-      const D = (C + m) / 2;
-      p(d, N, A, D, y, b);
+  function u(c, N, A, C, m, y, b, x) {
+    if (o(c, N, C, m, y, b), c.save(), c.beginPath(), c.arc(C, y, b, Math.PI / 2, -Math.PI / 2, !1), c.lineTo(m, y - b), c.arc(m, y, b, -Math.PI / 2, Math.PI / 2, !1), c.lineTo(C, y + b), c.closePath(), c.strokeStyle = N.color, c.lineWidth = x, c.shadowColor = N.color, c.shadowBlur = Z, c.stroke(), c.shadowBlur = 0, c.shadowColor = "transparent", c.restore(), A.degreeDisplayMode !== "off") {
+      const O = (C + m) / 2;
+      f(c, N, A, O, y, b);
     }
   }
-  function M(d, N, A, C) {
-    const { cellWidth: m, cellHeight: y, modulationMarkers: b, placedNotes: x } = N, D = e.getRowY(C, N), T = s(A, N), v = D + T, O = e.getColumnX(A.startColumnIndex, N);
+  function v(c, N, A, C) {
+    const { cellWidth: m, cellHeight: y, tempoModulationMarkers: b, placedNotes: x } = N, O = e.getRowY(C, N), T = s(A, N), M = O + T, E = e.getColumnX(A.startColumnIndex, N);
     let P;
-    if (b && b.length > 0 ? P = e.getColumnX(A.startColumnIndex + 1, N) - O : P = m, !t(P, y)) return;
-    const F = r(A, x, N), E = O + P + F, G = Math.max(jt, P * kt), L = y / 2 - G / 2, B = g(A), R = N.longNoteStyle || "style1";
-    if (B && R === "style2") {
-      const W = E, H = e.getColumnX(A.endColumnIndex, N);
-      if (!t(H - W, L)) return;
-      u(d, A, N, W, H, v, L, G);
+    if (b && b.length > 0 ? P = e.getColumnX(A.startColumnIndex + 1, N) - E : P = m, !n(P, y)) return;
+    const B = d(A, x, N), L = E + P + B, R = Math.max(Zt, P * en), D = y / 2 - R / 2, F = g(A), G = N.longNoteStyle || "style1";
+    if (F && G === "style2") {
+      const W = L, H = e.getColumnX(A.endColumnIndex, N);
+      if (!n(H - W, D)) return;
+      u(c, A, N, W, H, M, D, R);
       return;
     }
-    if (B) {
-      const W = e.getColumnX(A.endColumnIndex + 1, N), H = h(A, x, N), q = v + H;
-      d.beginPath(), d.moveTo(E, q), d.lineTo(W, q), d.strokeStyle = A.color, d.lineWidth = Math.max(Kt, P * Yt), d.stroke();
+    if (F) {
+      const W = e.getColumnX(A.endColumnIndex + 1, N), H = h(A, x, N), q = M + H;
+      c.beginPath(), c.moveTo(L, q), c.lineTo(W, q), c.strokeStyle = A.color, c.lineWidth = Math.max(nn, P * tn), c.stroke();
     }
-    const _ = P - G / 2;
-    if (!t(_, L)) return;
-    l(d, A, N, E, v, _, L), d.save(), S(d, A, E, v, _, L);
-    const $ = c(d, A, N);
-    $.shouldApply && (d.shadowColor = A.color, d.shadowBlur = ee + $.blur, d.shadowOffsetX = $.spread), d.beginPath(), d.ellipse(E, v, _, L, 0, 0, 2 * Math.PI), d.strokeStyle = A.color, d.lineWidth = G, $.shouldApply || (d.shadowColor = A.color, d.shadowBlur = ee), d.stroke(), d.shadowBlur = 0, d.shadowColor = "transparent", d.shadowOffsetX = 0, d.restore(), N.degreeDisplayMode !== "off" && p(d, A, N, E, v, _);
+    const _ = P - R / 2;
+    if (!n(_, D)) return;
+    r(c, A, N, L, M, _, D), c.save(), S(c, A, L, M, _, D);
+    const $ = l(c, A, N);
+    $.shouldApply && (c.shadowColor = A.color, c.shadowBlur = Z + $.blur, c.shadowOffsetX = $.spread), c.beginPath(), c.ellipse(L, M, _, D, 0, 0, 2 * Math.PI), c.strokeStyle = A.color, c.lineWidth = R, $.shouldApply || (c.shadowColor = A.color, c.shadowBlur = Z), c.stroke(), c.shadowBlur = 0, c.shadowColor = "transparent", c.shadowOffsetX = 0, c.restore(), N.degreeDisplayMode !== "off" && f(c, A, N, L, M, _);
   }
-  function I(d, N, A, C) {
-    const { columnWidths: m, cellWidth: y, cellHeight: b, modulationMarkers: x, placedNotes: D } = N, T = e.getRowY(C, N), v = s(A, N), O = T + v, P = e.getColumnX(A.startColumnIndex, N);
-    let F;
-    if (x && x.length > 0 ? F = e.getColumnX(A.startColumnIndex + 1, N) - P : F = (m[A.startColumnIndex] ?? 1) * y, !t(F, b)) return;
-    const E = r(A, D, N), G = Math.max(0.5, F * 0.15), L = P + F / 2 + E, B = F / 2 - G / 2, R = b / 2 - G / 2;
-    if (!t(B, R)) return;
-    l(d, A, N, L, O, B, R), d.save(), S(d, A, L, O, B, R);
-    const _ = c(d, A, N);
-    _.shouldApply && (d.shadowColor = A.color, d.shadowBlur = ee + _.blur, d.shadowOffsetX = _.spread), d.beginPath(), d.ellipse(L, O, B, R, 0, 0, 2 * Math.PI), d.strokeStyle = A.color, d.lineWidth = G, _.shouldApply || (d.shadowColor = A.color, d.shadowBlur = ee), d.stroke(), d.shadowBlur = 0, d.shadowColor = "transparent", d.shadowOffsetX = 0, d.restore(), N.degreeDisplayMode !== "off" && p(d, A, N, L, O, B);
+  function I(c, N, A, C) {
+    const { columnWidths: m, cellWidth: y, cellHeight: b, tempoModulationMarkers: x, placedNotes: O } = N, T = e.getRowY(C, N), M = s(A, N), E = T + M, P = e.getColumnX(A.startColumnIndex, N);
+    let B;
+    if (x && x.length > 0 ? B = e.getColumnX(A.startColumnIndex + 1, N) - P : B = (m[A.startColumnIndex] ?? 1) * y, !n(B, b)) return;
+    const L = d(A, O, N), R = Math.max(0.5, B * 0.15), D = P + B / 2 + L, F = B / 2 - R / 2, G = b / 2 - R / 2;
+    if (!n(F, G)) return;
+    r(c, A, N, D, E, F, G), c.save(), S(c, A, D, E, F, G);
+    const _ = l(c, A, N);
+    _.shouldApply && (c.shadowColor = A.color, c.shadowBlur = Z + _.blur, c.shadowOffsetX = _.spread), c.beginPath(), c.ellipse(D, E, F, G, 0, 0, 2 * Math.PI), c.strokeStyle = A.color, c.lineWidth = R, _.shouldApply || (c.shadowColor = A.color, c.shadowBlur = Z), c.stroke(), c.shadowBlur = 0, c.shadowColor = "transparent", c.shadowOffsetX = 0, c.restore(), N.degreeDisplayMode !== "off" && f(c, A, N, D, E, F);
   }
   return {
-    drawTwoColumnOvalNote: M,
+    drawTwoColumnOvalNote: v,
     drawSingleColumnOvalNote: I,
     hasVisibleTail: g
   };
 }
-function Zt(o) {
-  const { coords: e } = o;
-  function i(t, r) {
-    const { fullRowData: s, canvasWidth: h, cellHeight: f } = r, { startRow: a, endRow: p } = e.getVisibleRowRange();
-    for (let c = a; c <= p; c++) {
-      const l = s[c];
-      if (!l) continue;
-      const S = e.getRowY(c, r), n = e.getPitchClass(l.toneNote), u = e.getLineStyleFromPitchClass(n);
-      if (t.beginPath(), t.moveTo(0, S), t.lineTo(h, S), t.strokeStyle = u.color, t.lineWidth = u.lineWidth, t.setLineDash(u.dash), t.stroke(), t.setLineDash([]), n === "G") {
-        const M = f / 2;
-        t.fillStyle = "#f8f9fa", t.fillRect(0, S - M, h, M);
+function sn(t) {
+  const { coords: e } = t;
+  function i(n, d) {
+    const { fullRowData: s, canvasWidth: h, cellHeight: p } = d, { startRow: a, endRow: f } = e.getVisibleRowRange();
+    for (let l = a; l <= f; l++) {
+      const r = s[l];
+      if (!r) continue;
+      const S = e.getRowY(l, d), o = e.getPitchClass(r.toneNote), u = e.getLineStyleFromPitchClass(o);
+      if (n.beginPath(), n.moveTo(0, S), n.lineTo(h, S), n.strokeStyle = u.color, n.lineWidth = u.lineWidth, n.setLineDash(u.dash), n.stroke(), n.setLineDash([]), o === "G") {
+        const v = p / 2;
+        n.fillStyle = "#f8f9fa", n.fillRect(0, S - v, h, v);
       }
     }
   }
-  function g(t, r) {
-    var M, I, d, N;
+  function g(n, d) {
+    var v, I, c, N;
     const {
       columnWidths: s,
       macrobeatBoundaryStyles: h,
-      hasAnacrusis: f,
+      hasAnacrusis: p,
       canvasHeight: a
-    } = r, p = ((M = o.getPlacedTonicSigns) == null ? void 0 : M.call(o)) ?? [], c = ((I = o.getTonicSpanColumnIndices) == null ? void 0 : I.call(o, p)) ?? /* @__PURE__ */ new Set(), l = ((d = o.getAnacrusisColors) == null ? void 0 : d.call(o)) ?? {
+    } = d, f = ((v = t.getPlacedTonicSigns) == null ? void 0 : v.call(t)) ?? [], l = ((I = t.getTonicSpanColumnIndices) == null ? void 0 : I.call(t, f)) ?? /* @__PURE__ */ new Set(), r = ((c = t.getAnacrusisColors) == null ? void 0 : c.call(t)) ?? {
       background: "rgba(173, 181, 189, 0.15)",
       border: "rgba(173, 181, 189, 0.3)"
     };
-    let S = f, n = 0, u = 0;
+    let S = p, o = 0, u = 0;
     for (let A = 0; A <= s.length; A++) {
-      const C = e.getColumnX(A, r), m = (N = o.getMacrobeatInfo) == null ? void 0 : N.call(o, u);
+      const C = e.getColumnX(A, d), m = (N = t.getMacrobeatInfo) == null ? void 0 : N.call(t, u);
       if (m && m.startColumn === A) {
         const b = h[u] ?? "solid";
-        S && b === "solid" && (t.fillStyle = l.background, t.fillRect(n, 0, C - n, a), S = !1), t.beginPath(), t.moveTo(C, 0), t.lineTo(C, a), b === "anacrusis" ? (t.strokeStyle = l.border, t.setLineDash([5, 5]), t.lineWidth = 1) : b === "dashed" ? (t.strokeStyle = "#adb5bd", t.setLineDash([5, 5]), t.lineWidth = 1) : (t.strokeStyle = "#adb5bd", t.setLineDash([]), t.lineWidth = 2), t.stroke(), t.setLineDash([]), u++;
-      } else A > 0 && !c.has(A - 1) && (t.beginPath(), t.moveTo(C, 0), t.lineTo(C, a), t.strokeStyle = "#dee2e6", t.lineWidth = 1, t.stroke());
-      if (c.has(A)) {
-        const b = (s[A] ?? 1) * r.cellWidth;
-        t.fillStyle = "rgba(255, 193, 7, 0.1)", t.fillRect(C, 0, b, a);
+        S && b === "solid" && (n.fillStyle = r.background, n.fillRect(o, 0, C - o, a), S = !1), n.beginPath(), n.moveTo(C, 0), n.lineTo(C, a), b === "anacrusis" ? (n.strokeStyle = r.border, n.setLineDash([5, 5]), n.lineWidth = 1) : b === "dashed" ? (n.strokeStyle = "#adb5bd", n.setLineDash([5, 5]), n.lineWidth = 1) : (n.strokeStyle = "#adb5bd", n.setLineDash([]), n.lineWidth = 2), n.stroke(), n.setLineDash([]), u++;
+      } else A > 0 && !l.has(A - 1) && (n.beginPath(), n.moveTo(C, 0), n.lineTo(C, a), n.strokeStyle = "#dee2e6", n.lineWidth = 1, n.stroke());
+      if (l.has(A)) {
+        const b = (s[A] ?? 1) * d.cellWidth;
+        n.fillStyle = "rgba(255, 193, 7, 0.1)", n.fillRect(C, 0, b, a);
       }
     }
   }
@@ -3305,207 +3311,207 @@ function Zt(o) {
     drawVerticalLines: g
   };
 }
-function Gn(o, e, i) {
-  const g = o.canvas.width, t = o.canvas.height;
-  o.clearRect(0, 0, g, t);
-  const r = Ut({
+function Wn(t, e, i) {
+  const g = t.canvas.width, n = t.canvas.height;
+  t.clearRect(0, 0, g, n);
+  const d = kt({
     getViewportInfo: i.getViewportInfo,
-    columnToPixelX: i.columnToPixelX ? (S, n) => i.columnToPixelX(S, e) : void 0,
-    pixelXToColumn: i.pixelXToColumn ? (S, n) => i.pixelXToColumn(S, e) : void 0
-  }), s = Zt({
-    coords: r,
+    columnToPixelX: i.columnToPixelX ? (S, o) => i.columnToPixelX(S, e) : void 0,
+    pixelXToColumn: i.pixelXToColumn ? (S, o) => i.pixelXToColumn(S, e) : void 0
+  }), s = sn({
+    coords: d,
     getMacrobeatInfo: i.getMacrobeatInfo,
     getPlacedTonicSigns: () => e.placedTonicSigns,
     getTonicSpanColumnIndices: i.getTonicSpanColumnIndices,
     getAnacrusisColors: i.getAnacrusisColors
-  }), h = Qt({
-    coords: r,
+  }), h = on({
+    coords: d,
     getDegreeForNote: i.getDegreeForNote,
     hasAccidental: i.hasAccidental,
     getEnharmonicDegree: i.getEnharmonicDegree,
     getAnimationEffectsManager: i.getAnimationEffectsManager
-  }), f = {
+  }), p = {
     ...e,
     canvasWidth: g,
-    canvasHeight: t
+    canvasHeight: n
   }, a = {
     ...e,
     placedNotes: e.placedNotes
   };
-  s.drawHorizontalLines(o, f), s.drawVerticalLines(o, f);
-  const { startRow: p, endRow: c } = r.getVisibleRowRange(), l = e.placedNotes.filter((S) => {
+  s.drawHorizontalLines(t, p), s.drawVerticalLines(t, p);
+  const { startRow: f, endRow: l } = d.getVisibleRowRange(), r = e.placedNotes.filter((S) => {
     if (S.isDrum) return !1;
-    const n = S.globalRow ?? S.row;
-    return n >= p && n <= c;
+    const o = S.globalRow ?? S.row;
+    return o >= f && o <= l;
   });
-  for (const S of l) {
-    const n = S.globalRow ?? S.row;
-    S.shape === "circle" ? h.drawTwoColumnOvalNote(o, a, S, n) : h.drawSingleColumnOvalNote(o, a, S, n);
+  for (const S of r) {
+    const o = S.globalRow ?? S.row;
+    S.shape === "circle" ? h.drawTwoColumnOvalNote(t, a, S, o) : h.drawSingleColumnOvalNote(t, a, S, o);
   }
   for (const S of e.placedTonicSigns) {
-    const n = S.globalRow ?? S.row;
-    n >= p && n <= c && en(o, e, S, r);
+    const o = S.globalRow ?? S.row;
+    o >= f && o <= l && an(t, e, S, d);
   }
 }
-function en(o, e, i, g) {
-  const { cellWidth: t, cellHeight: r } = e, s = g.getRowY(i.globalRow ?? i.row, e), h = g.getColumnX(i.columnIndex, e), f = t * 2, a = h + f / 2, p = Math.min(f, r) / 2 * 0.9;
-  if (p < 2 || (o.beginPath(), o.arc(a, s, p, 0, 2 * Math.PI), o.strokeStyle = "#212529", o.lineWidth = Math.max(0.5, t * 0.05), o.stroke(), i.tonicNumber == null)) return;
-  const c = i.tonicNumber.toString(), l = p * 1.5;
-  l < 6 || (o.fillStyle = "#212529", o.font = `bold ${l}px 'Atkinson Hyperlegible', sans-serif`, o.textAlign = "center", o.textBaseline = "middle", o.fillText(c, a, s));
+function an(t, e, i, g) {
+  const { cellWidth: n, cellHeight: d } = e, s = g.getRowY(i.globalRow ?? i.row, e), h = g.getColumnX(i.columnIndex, e), p = n * 2, a = h + p / 2, f = Math.min(p, d) / 2 * 0.9;
+  if (f < 2 || (t.beginPath(), t.arc(a, s, f, 0, 2 * Math.PI), t.strokeStyle = "#212529", t.lineWidth = Math.max(0.5, n * 0.05), t.stroke(), i.tonicNumber == null)) return;
+  const l = i.tonicNumber.toString(), r = f * 1.5;
+  r < 6 || (t.fillStyle = "#212529", t.font = `bold ${r}px 'Atkinson Hyperlegible', sans-serif`, t.textAlign = "center", t.textBaseline = "middle", t.fillText(l, a, s));
 }
-const tn = ["H", "M", "L"];
-function nn(o) {
-  if (o.length === 0) return [];
-  const e = [...o].sort((g, t) => g.start - t.start), i = [];
+const rn = ["H", "M", "L"];
+function ln(t) {
+  if (t.length === 0) return [];
+  const e = [...t].sort((g, n) => g.start - n.start), i = [];
   for (const g of e) {
     if (i.length === 0) {
       i.push({ ...g });
       continue;
     }
-    const t = i[i.length - 1];
-    g.start <= t.end ? t.end = Math.max(t.end, g.end) : i.push({ ...g });
+    const n = i[i.length - 1];
+    g.start <= n.end ? n.end = Math.max(n.end, g.end) : i.push({ ...g });
   }
   return i;
 }
-function on(o, e, i) {
-  const g = /* @__PURE__ */ new Set([o, e]);
+function cn(t, e, i) {
+  const g = /* @__PURE__ */ new Set([t, e]);
   i.forEach((s) => {
-    const h = Math.max(o, Math.min(e, s.start)), f = Math.max(o, Math.min(e, s.end));
-    f > h && (g.add(h), g.add(f));
+    const h = Math.max(t, Math.min(e, s.start)), p = Math.max(t, Math.min(e, s.end));
+    p > h && (g.add(h), g.add(p));
   });
-  const t = Array.from(g).sort((s, h) => s - h), r = [];
-  for (let s = 0; s < t.length - 1; s++) {
-    const h = t[s], f = t[s + 1], a = (h + f) / 2, p = i.some((c) => a >= c.start && a < c.end);
-    f > h && r.push({ from: h, to: f, light: p });
+  const n = Array.from(g).sort((s, h) => s - h), d = [];
+  for (let s = 0; s < n.length - 1; s++) {
+    const h = n[s], p = n[s + 1], a = (h + p) / 2, f = i.some((l) => a >= l.start && a < l.end);
+    p > h && d.push({ from: h, to: p, light: f });
   }
-  return r;
+  return d;
 }
-function ze(o, e) {
+function je(t, e) {
   return e.some(
-    (i) => o === i.columnIndex || o === i.columnIndex + 1
+    (i) => t === i.columnIndex || t === i.columnIndex + 1
   );
 }
-function sn(o, e) {
-  return !e.some((i) => o === i.columnIndex + 1);
+function dn(t, e) {
+  return !e.some((i) => t === i.columnIndex + 1);
 }
-function je(o, e, i, g, t, r, s = 1) {
-  const h = i + t / 2, f = g + r / 2, a = Math.min(t, r) * 0.4 * s;
-  if (o.beginPath(), e === 0)
-    o.moveTo(h, f - a), o.lineTo(h - a, f + a), o.lineTo(h + a, f + a), o.closePath();
+function ke(t, e, i, g, n, d, s = 1) {
+  const h = i + n / 2, p = g + d / 2, a = Math.min(n, d) * 0.4 * s;
+  if (t.beginPath(), e === 0)
+    t.moveTo(h, p - a), t.lineTo(h - a, p + a), t.lineTo(h + a, p + a), t.closePath();
   else if (e === 1)
-    o.moveTo(h, f - a), o.lineTo(h + a, f), o.lineTo(h, f + a), o.lineTo(h - a, f), o.closePath();
+    t.moveTo(h, p - a), t.lineTo(h + a, p), t.lineTo(h, p + a), t.lineTo(h - a, p), t.closePath();
   else {
-    for (let c = 0; c < 5; c++) {
-      const l = 2 * Math.PI / 5 * c - Math.PI / 2, S = h + a * Math.cos(l), n = f + a * Math.sin(l);
-      c === 0 ? o.moveTo(S, n) : o.lineTo(S, n);
+    for (let l = 0; l < 5; l++) {
+      const r = 2 * Math.PI / 5 * l - Math.PI / 2, S = h + a * Math.cos(r), o = p + a * Math.sin(r);
+      l === 0 ? t.moveTo(S, o) : t.lineTo(S, o);
     }
-    o.closePath();
+    t.closePath();
   }
-  o.fill();
+  t.fill();
 }
-function an(o) {
-  const { coords: e } = o, i = {
+function un(t) {
+  const { coords: e } = t, i = {
     stroke: "#c7cfd8"
   };
-  function g(f, a) {
-    const p = [];
-    return a !== null && a > 0 && p.push({
-      start: e.getColumnX(0, f),
-      end: e.getColumnX(a, f)
-    }), f.placedTonicSigns.forEach((c) => {
-      const l = e.getColumnX(c.columnIndex, f), S = e.getColumnX(c.columnIndex + 2, f);
-      p.push({ start: l, end: S });
-    }), nn(p);
+  function g(p, a) {
+    const f = [];
+    return a !== null && a > 0 && f.push({
+      start: e.getColumnX(0, p),
+      end: e.getColumnX(a, p)
+    }), p.placedTonicSigns.forEach((l) => {
+      const r = e.getColumnX(l.columnIndex, p), S = e.getColumnX(l.columnIndex + 2, p);
+      f.push({ start: r, end: S });
+    }), ln(f);
   }
-  function t(f) {
-    if (!f.hasAnacrusis || !o.getMacrobeatInfo) return null;
-    const a = f.macrobeatBoundaryStyles.findIndex(
-      (c) => c === "solid"
+  function n(p) {
+    if (!p.hasAnacrusis || !t.getMacrobeatInfo) return null;
+    const a = p.macrobeatBoundaryStyles.findIndex(
+      (l) => l === "solid"
     );
     if (a < 0) return null;
-    const p = o.getMacrobeatInfo(a);
-    return p ? p.endColumn + 1 : null;
+    const f = t.getMacrobeatInfo(a);
+    return f ? f.endColumn + 1 : null;
   }
-  function r(f, a, p) {
+  function d(p, a, f) {
     var A, C;
     const {
-      columnWidths: c,
-      musicalColumnWidths: l,
+      columnWidths: l,
+      musicalColumnWidths: r,
       macrobeatGroupings: S,
-      macrobeatBoundaryStyles: n,
+      macrobeatBoundaryStyles: o,
       placedTonicSigns: u
-    } = a, I = (l && l.length > 0 ? l : c).length, d = [];
+    } = a, I = (r && r.length > 0 ? r : l).length, c = [];
     for (let m = 0; m < S.length; m++) {
-      const y = (A = o.getMacrobeatInfo) == null ? void 0 : A.call(o, m);
-      y && d.push(y.endColumn + 1);
+      const y = (A = t.getMacrobeatInfo) == null ? void 0 : A.call(t, m);
+      y && c.push(y.endColumn + 1);
     }
-    const N = ((C = o.getAnacrusisColors) == null ? void 0 : C.call(o)) ?? i;
+    const N = ((C = t.getAnacrusisColors) == null ? void 0 : C.call(t)) ?? i;
     for (let m = 0; m <= I; m++) {
-      const y = m === 0 || m === I, b = ze(m, u), x = u.some((P) => m === P.columnIndex + 2), D = d.includes(m);
-      if (!sn(m, u)) continue;
-      let v = null;
+      const y = m === 0 || m === I, b = je(m, u), x = u.some((P) => m === P.columnIndex + 2), O = c.includes(m);
+      if (!dn(m, u)) continue;
+      let M = null;
       if (y || b || x)
-        v = { lineWidth: 2, strokeStyle: "#adb5bd", dash: [] };
-      else if (D) {
-        const P = d.indexOf(m), F = n[P];
-        F === "anacrusis" ? v = { lineWidth: 1, strokeStyle: N.stroke, dash: [4, 4] } : v = {
+        M = { lineWidth: 2, strokeStyle: "#adb5bd", dash: [] };
+      else if (O) {
+        const P = c.indexOf(m), B = o[P];
+        B === "anacrusis" ? M = { lineWidth: 1, strokeStyle: N.stroke, dash: [4, 4] } : M = {
           lineWidth: 1,
           strokeStyle: "#adb5bd",
-          dash: F === "solid" ? [] : [5, 5]
+          dash: B === "solid" ? [] : [5, 5]
         };
       }
-      if (!v) continue;
-      const O = e.getColumnX(m, a);
-      f.beginPath(), f.moveTo(O, 0), f.lineTo(O, p), f.lineWidth = v.lineWidth, f.strokeStyle = v.strokeStyle, f.setLineDash(v.dash), f.stroke();
+      if (!M) continue;
+      const E = e.getColumnX(m, a);
+      p.beginPath(), p.moveTo(E, 0), p.lineTo(E, f), p.lineWidth = M.lineWidth, p.strokeStyle = M.strokeStyle, p.setLineDash(M.dash), p.stroke();
     }
-    f.setLineDash([]);
+    p.setLineDash([]);
   }
-  function s(f, a, p, c) {
-    var M;
-    const l = t(a), S = g(a, l), n = on(0, c, S), u = ((M = o.getAnacrusisColors) == null ? void 0 : M.call(o)) ?? i;
+  function s(p, a, f, l) {
+    var v;
+    const r = n(a), S = g(a, r), o = cn(0, l, S), u = ((v = t.getAnacrusisColors) == null ? void 0 : v.call(t)) ?? i;
     for (let I = 0; I < 4; I++) {
-      const d = I * p;
-      n.forEach((N) => {
-        N.to <= N.from || (f.beginPath(), f.moveTo(N.from, d), f.lineTo(N.to, d), f.strokeStyle = N.light ? u.stroke : "#ced4da", f.lineWidth = 1, f.globalAlpha = N.light ? 0.6 : 1, f.stroke(), f.globalAlpha = 1);
+      const c = I * f;
+      o.forEach((N) => {
+        N.to <= N.from || (p.beginPath(), p.moveTo(N.from, c), p.lineTo(N.to, c), p.strokeStyle = N.light ? u.stroke : "#ced4da", p.lineWidth = 1, p.globalAlpha = N.light ? 0.6 : 1, p.stroke(), p.globalAlpha = 1);
       });
     }
   }
-  function h(f, a, p) {
+  function h(p, a, f) {
     var I;
-    const { placedNotes: c, columnWidths: l, cellWidth: S, placedTonicSigns: n, modulationMarkers: u } = a, M = l.length + 4;
-    for (let d = 0; d < M; d++) {
-      if (ze(d, n)) continue;
-      const N = e.getColumnX(d, a);
+    const { placedNotes: l, columnWidths: r, cellWidth: S, placedTonicSigns: o, tempoModulationMarkers: u } = a, v = r.length + 4;
+    for (let c = 0; c < v; c++) {
+      if (je(c, o)) continue;
+      const N = e.getColumnX(c, a);
       let A;
-      u && u.length > 0 ? A = e.getColumnX(d + 1, a) - N : A = (l[d] ?? 0) * S;
+      u && u.length > 0 ? A = e.getColumnX(c + 1, a) - N : A = (r[c] ?? 0) * S;
       for (let C = 0; C < 3; C++) {
-        const m = C * p, y = tn[C], b = c.find(
-          (x) => x.isDrum && (typeof x.drumTrack == "number" ? String(x.drumTrack) : x.drumTrack) === y && x.startColumnIndex === d
+        const m = C * f, y = rn[C], b = l.find(
+          (x) => x.isDrum && (typeof x.drumTrack == "number" ? String(x.drumTrack) : x.drumTrack) === y && x.startColumnIndex === c
         );
         if (b) {
-          f.fillStyle = b.color;
-          const x = ((I = o.getAnimationScale) == null ? void 0 : I.call(o, d, y)) ?? 1;
-          je(f, C, N, m, A, p, x);
+          p.fillStyle = b.color;
+          const x = ((I = t.getAnimationScale) == null ? void 0 : I.call(t, c, y)) ?? 1;
+          ke(p, C, N, m, A, f, x);
         } else
-          f.fillStyle = "#ced4da", f.beginPath(), f.arc(N + A / 2, m + p / 2, 2, 0, Math.PI * 2), f.fill();
+          p.fillStyle = "#ced4da", p.beginPath(), p.arc(N + A / 2, m + f / 2, 2, 0, Math.PI * 2), p.fill();
       }
     }
   }
   return {
-    drawVerticalLines: r,
+    drawVerticalLines: d,
     drawHorizontalLines: s,
     drawDrumNotes: h,
-    drawDrumShape: je,
+    drawDrumShape: ke,
     buildLightRanges: g,
-    getAnacrusisEndColumn: t
+    getAnacrusisEndColumn: n
   };
 }
-function Ln(o, e, i) {
+function qn(t, e, i) {
   var a;
-  const g = o.canvas.width, t = o.canvas.height;
-  o.clearRect(0, 0, g, t);
-  const r = e.baseDrumRowHeight ?? 30, s = e.drumHeightScaleFactor ?? 1.5, h = Math.max(r, s * e.cellHeight), f = an(i);
-  f.drawHorizontalLines(o, e, h, g), f.drawVerticalLines(o, e, t), f.drawDrumNotes(o, e, h), i.renderModulationMarkers && ((a = e.modulationMarkers) != null && a.length) && i.renderModulationMarkers(o, e);
+  const g = t.canvas.width, n = t.canvas.height;
+  t.clearRect(0, 0, g, n);
+  const d = e.baseDrumRowHeight ?? 30, s = e.drumHeightScaleFactor ?? 1.5, h = Math.max(d, s * e.cellHeight), p = un(i);
+  p.drawHorizontalLines(t, e, h, g), p.drawVerticalLines(t, e, n), p.drawDrumNotes(t, e, h), i.renderModulationMarkers && ((a = e.tempoModulationMarkers) != null && a.length) && i.renderModulationMarkers(t, e);
 }
 const me = {
   onsetToleranceMs: 100,
@@ -3519,69 +3525,69 @@ const me = {
     okay: { onsetMs: 150, pitchCents: 50, coverage: 70 }
   }
 };
-function rn(o = {}) {
+function hn(t = {}) {
   const e = {
     ...me,
-    ...o,
-    accuracyTiers: o.accuracyTiers ? {
+    ...t,
+    accuracyTiers: t.accuracyTiers ? {
       ...me.accuracyTiers,
-      ...o.accuracyTiers
+      ...t.accuracyTiers
     } : me.accuracyTiers
   }, i = /* @__PURE__ */ new Map(), g = /* @__PURE__ */ new Map();
-  function t(c, l) {
-    return (c - l) * 100;
+  function n(l, r) {
+    return (l - r) * 100;
   }
-  function r(c, l) {
-    return Math.abs(t(c.midi, l)) <= e.pitchToleranceCents;
+  function d(l, r) {
+    return Math.abs(n(l.midi, r)) <= e.pitchToleranceCents;
   }
-  function s(c, l) {
-    return c.length === 0 ? 0 : c.reduce((n, u) => n + Math.abs(t(u.midi, l)), 0) / c.length;
+  function s(l, r) {
+    return l.length === 0 ? 0 : l.reduce((o, u) => o + Math.abs(n(u.midi, r)), 0) / l.length;
   }
-  function h(c, l, S, n) {
-    if (c.length === 0) return 0;
-    const u = c.filter((I) => r(I, l));
+  function h(l, r, S, o) {
+    if (l.length === 0) return 0;
+    const u = l.filter((I) => d(I, r));
     if (u.length === 0) return 0;
-    let M = 0;
+    let v = 0;
     for (let I = 0; I < u.length; I++) {
-      const d = u[I];
-      if (!d)
+      const c = u[I];
+      if (!c)
         continue;
       const N = u[I + 1];
       if (N)
-        M += N.timeMs - d.timeMs;
+        v += N.timeMs - c.timeMs;
       else {
-        const A = S + n, C = Math.min(50, A - d.timeMs);
-        M += C;
+        const A = S + o, C = Math.min(50, A - c.timeMs);
+        v += C;
       }
     }
-    return M / n * 100;
+    return v / o * 100;
   }
-  function f(c, l, S) {
-    const n = e.accuracyTiers;
-    if (!n) return "okay";
-    const u = Math.abs(c);
-    return u <= n.perfect.onsetMs && l <= n.perfect.pitchCents && S >= n.perfect.coverage ? "perfect" : u <= n.good.onsetMs && l <= n.good.pitchCents && S >= n.good.coverage ? "good" : u <= n.okay.onsetMs && l <= n.okay.pitchCents && S >= n.okay.coverage ? "okay" : "miss";
+  function p(l, r, S) {
+    const o = e.accuracyTiers;
+    if (!o) return "okay";
+    const u = Math.abs(l);
+    return u <= o.perfect.onsetMs && r <= o.perfect.pitchCents && S >= o.perfect.coverage ? "perfect" : u <= o.good.onsetMs && r <= o.good.pitchCents && S >= o.good.coverage ? "good" : u <= o.okay.onsetMs && r <= o.okay.pitchCents && S >= o.okay.coverage ? "okay" : "miss";
   }
-  function a(c) {
-    const { note: l, samples: S, onsetSample: n, releaseSample: u } = c;
-    let M = 0;
-    n ? M = n.timeMs - l.startTimeMs : M = e.onsetToleranceMs * 2;
+  function a(l) {
+    const { note: r, samples: S, onsetSample: o, releaseSample: u } = l;
+    let v = 0;
+    o ? v = o.timeMs - r.startTimeMs : v = e.onsetToleranceMs * 2;
     let I = 0;
-    const d = l.startTimeMs + l.durationMs;
-    u ? I = u.timeMs - d : I = e.releaseToleranceMs * 2;
-    const N = s(S, l.midi), A = h(
+    const c = r.startTimeMs + r.durationMs;
+    u ? I = u.timeMs - c : I = e.releaseToleranceMs * 2;
+    const N = s(S, r.midi), A = h(
       S,
-      l.midi,
-      l.startTimeMs,
-      l.durationMs
-    ), C = Math.abs(M) <= e.onsetToleranceMs, m = Math.abs(I) <= e.releaseToleranceMs, y = A >= e.hitThreshold, b = C && m && y ? "hit" : "miss", x = f(
-      M,
+      r.midi,
+      r.startTimeMs,
+      r.durationMs
+    ), C = Math.abs(v) <= e.onsetToleranceMs, m = Math.abs(I) <= e.releaseToleranceMs, y = A >= e.hitThreshold, b = C && m && y ? "hit" : "miss", x = p(
+      v,
       N,
       A
     );
     return {
       hitStatus: b,
-      onsetAccuracyMs: M,
+      onsetAccuracyMs: v,
       releaseAccuracyMs: I,
       pitchAccuracyCents: N,
       pitchCoverage: A,
@@ -3590,44 +3596,44 @@ function rn(o = {}) {
     };
   }
   return {
-    startNote(c, l) {
-      i.set(c, {
-        note: l,
+    startNote(l, r) {
+      i.set(l, {
+        note: r,
         samples: [],
         onsetSample: null,
         releaseSample: null,
         startedAt: performance.now()
       });
     },
-    recordPitchSample(c) {
-      for (const [l, S] of i) {
-        const { note: n } = S, u = n.startTimeMs + n.durationMs, M = e.onsetToleranceMs, I = e.releaseToleranceMs;
-        c.timeMs >= n.startTimeMs - M && c.timeMs <= u + I && (S.samples.push(c), !S.onsetSample && c.timeMs >= n.startTimeMs - M && c.timeMs <= n.startTimeMs + M && r(c, n.midi) && (S.onsetSample = c), c.timeMs >= u - I && c.timeMs <= u + I && (S.releaseSample = c));
+    recordPitchSample(l) {
+      for (const [r, S] of i) {
+        const { note: o } = S, u = o.startTimeMs + o.durationMs, v = e.onsetToleranceMs, I = e.releaseToleranceMs;
+        l.timeMs >= o.startTimeMs - v && l.timeMs <= u + I && (S.samples.push(l), !S.onsetSample && l.timeMs >= o.startTimeMs - v && l.timeMs <= o.startTimeMs + v && d(l, o.midi) && (S.onsetSample = l), l.timeMs >= u - I && l.timeMs <= u + I && (S.releaseSample = l));
       }
     },
-    endNote(c) {
-      const l = i.get(c);
-      if (!l) return null;
-      const S = a(l);
-      return g.set(c, S), i.delete(c), S;
+    endNote(l) {
+      const r = i.get(l);
+      if (!r) return null;
+      const S = a(r);
+      return g.set(l, S), i.delete(l), S;
     },
-    getCurrentPerformance(c) {
-      const l = i.get(c);
-      if (!l) return null;
-      const { note: S, samples: n, onsetSample: u } = l;
-      let M = 0;
-      u && (M = u.timeMs - S.startTimeMs);
-      const I = s(n, S.midi), d = h(
-        n,
+    getCurrentPerformance(l) {
+      const r = i.get(l);
+      if (!r) return null;
+      const { note: S, samples: o, onsetSample: u } = r;
+      let v = 0;
+      u && (v = u.timeMs - S.startTimeMs);
+      const I = s(o, S.midi), c = h(
+        o,
         S.midi,
         S.startTimeMs,
         S.durationMs
       );
       return {
-        onsetAccuracyMs: M,
+        onsetAccuracyMs: v,
         pitchAccuracyCents: I,
-        pitchCoverage: d,
-        pitchSamples: [...n]
+        pitchCoverage: c,
+        pitchSamples: [...o]
       };
     },
     getAllPerformances() {
@@ -3641,7 +3647,7 @@ function rn(o = {}) {
     }
   };
 }
-const ke = {
+const Ye = {
   judgmentLinePosition: 0.12,
   pixelsPerSecond: 200,
   lookAheadMs: 3e3,
@@ -3658,15 +3664,15 @@ const ke = {
     hitThreshold: 70
   }
 };
-function _n(o) {
+function Hn(t) {
   const e = {
-    ...ke,
-    ...o,
+    ...Ye,
+    ...t,
     feedbackConfig: {
-      ...ke.feedbackConfig,
-      ...o.feedbackConfig
+      ...Ye.feedbackConfig,
+      ...t.feedbackConfig
     }
-  }, { stateCallbacks: i, eventCallbacks: g, visualCallbacks: t, logger: r } = e, s = {
+  }, { stateCallbacks: i, eventCallbacks: g, visualCallbacks: n, logger: d } = e, s = {
     isPlaying: !1,
     isPaused: !1,
     currentTimeMs: 0,
@@ -3675,37 +3681,37 @@ function _n(o) {
     targetNotes: [],
     activeNotes: /* @__PURE__ */ new Set(),
     startTime: null
-  }, h = rn(e.feedbackConfig);
-  let f = null;
+  }, h = hn(e.feedbackConfig);
+  let p = null;
   const a = /* @__PURE__ */ new Set();
-  function p() {
+  function f() {
     const m = 60 / i.getTempo() * 1e3;
     return e.leadInBeats * m;
   }
-  function c() {
+  function l() {
     return i.getViewportWidth() * e.judgmentLinePosition;
   }
-  function l(C) {
-    const m = e.pixelsPerSecond / 1e3, y = c(), b = p();
+  function r(C) {
+    const m = e.pixelsPerSecond / 1e3, y = l(), b = f();
     return (C + b) * m - y;
   }
   function S(C) {
-    const m = c(), y = i.getCellWidth(), b = C.startColumn * y - s.scrollOffset, x = C.endColumn * y - s.scrollOffset, T = e.feedbackConfig.onsetToleranceMs / 1e3 * e.pixelsPerSecond;
+    const m = l(), y = i.getCellWidth(), b = C.startColumn * y - s.scrollOffset, x = C.endColumn * y - s.scrollOffset, T = e.feedbackConfig.onsetToleranceMs / 1e3 * e.pixelsPerSecond;
     return b <= m + T && x >= m - T;
   }
-  function n() {
+  function o() {
     var m, y;
     const C = /* @__PURE__ */ new Set();
     for (const b of s.targetNotes) {
-      const x = b.startTimeMs + b.durationMs, D = e.feedbackConfig.onsetToleranceMs;
-      if (s.currentTimeMs >= b.startTimeMs - D && s.currentTimeMs <= x + D)
-        C.add(b.id), s.activeNotes.has(b.id) || (h.startNote(b.id, b), r == null || r.debug("NoteHighway", `Note ${b.id} became active`, { note: b }));
+      const x = b.startTimeMs + b.durationMs, O = e.feedbackConfig.onsetToleranceMs;
+      if (s.currentTimeMs >= b.startTimeMs - O && s.currentTimeMs <= x + O)
+        C.add(b.id), s.activeNotes.has(b.id) || (h.startNote(b.id, b), d == null || d.debug("NoteHighway", `Note ${b.id} became active`, { note: b }));
       else if (s.activeNotes.has(b.id)) {
         const T = h.endNote(b.id);
         if (T) {
           b.performance = T;
-          const v = { noteId: b.id, note: b, performance: T };
-          T.hitStatus === "hit" ? (g.emit("noteHit", v), (m = t == null ? void 0 : t.onNoteHit) == null || m.call(t, b.id, T.accuracyTier || "okay"), r == null || r.info("NoteHighway", `Note hit: ${b.id}`, T)) : (g.emit("noteMissed", v), (y = t == null ? void 0 : t.onNoteMiss) == null || y.call(t, b.id), r == null || r.info("NoteHighway", `Note missed: ${b.id}`, T));
+          const M = { noteId: b.id, note: b, performance: T };
+          T.hitStatus === "hit" ? (g.emit("noteHit", M), (m = n == null ? void 0 : n.onNoteHit) == null || m.call(n, b.id, T.accuracyTier || "okay"), d == null || d.info("NoteHighway", `Note hit: ${b.id}`, T)) : (g.emit("noteMissed", M), (y = n == null ? void 0 : n.onNoteMiss) == null || y.call(n, b.id), d == null || d.info("NoteHighway", `Note missed: ${b.id}`, T));
         }
       }
     }
@@ -3717,56 +3723,56 @@ function _n(o) {
       m && !y ? (a.add(C.id), g.emit("noteEntered", { noteId: C.id, note: C })) : !m && y && (a.delete(C.id), g.emit("noteExited", { noteId: C.id, note: C }));
     }
   }
-  function M() {
+  function v() {
     var C, m;
     if (!s.onrampComplete)
       if (s.currentTimeMs >= 0)
-        s.onrampComplete = !0, g.emit("onrampComplete"), (C = t == null ? void 0 : t.clearOnrampCountdown) == null || C.call(t), r == null || r.info("NoteHighway", "Onramp complete", null);
+        s.onrampComplete = !0, g.emit("onrampComplete"), (C = n == null ? void 0 : n.clearOnrampCountdown) == null || C.call(n), d == null || d.info("NoteHighway", "Onramp complete", null);
       else {
-        const b = 60 / i.getTempo() * 1e3, x = Math.abs(s.currentTimeMs), D = Math.ceil(x / b);
-        (m = t == null ? void 0 : t.updateOnrampCountdown) == null || m.call(t, D);
+        const b = 60 / i.getTempo() * 1e3, x = Math.abs(s.currentTimeMs), O = Math.ceil(x / b);
+        (m = n == null ? void 0 : n.updateOnrampCountdown) == null || m.call(n, O);
       }
   }
   function I() {
     if (!s.isPlaying || s.isPaused || !s.startTime) {
-      f = null;
+      p = null;
       return;
     }
-    const C = performance.now(), m = p();
-    s.currentTimeMs = C - s.startTime - m, s.scrollOffset = l(s.currentTimeMs), M(), n(), u(), f = requestAnimationFrame(I);
+    const C = performance.now(), m = f();
+    s.currentTimeMs = C - s.startTime - m, s.scrollOffset = r(s.currentTimeMs), v(), o(), u(), p = requestAnimationFrame(I);
   }
-  function d() {
-    f || (f = requestAnimationFrame(I));
+  function c() {
+    p || (p = requestAnimationFrame(I));
   }
   function N() {
-    f && (cancelAnimationFrame(f), f = null);
+    p && (cancelAnimationFrame(p), p = null);
   }
   return {
     init(C) {
-      s.targetNotes = C, r == null || r.info("NoteHighway", `Initialized with ${C.length} notes`, null);
+      s.targetNotes = C, d == null || d.info("NoteHighway", `Initialized with ${C.length} notes`, null);
     },
     start() {
-      s.isPlaying || (s.isPlaying = !0, s.isPaused = !1, s.currentTimeMs = -p(), s.scrollOffset = l(s.currentTimeMs), s.onrampComplete = !1, s.activeNotes.clear(), s.startTime = performance.now(), a.clear(), h.reset(), d(), g.emit("playbackStarted"), r == null || r.info("NoteHighway", "Playback started", { onrampDurationMs: p() }));
+      s.isPlaying || (s.isPlaying = !0, s.isPaused = !1, s.currentTimeMs = -f(), s.scrollOffset = r(s.currentTimeMs), s.onrampComplete = !1, s.activeNotes.clear(), s.startTime = performance.now(), a.clear(), h.reset(), c(), g.emit("playbackStarted"), d == null || d.info("NoteHighway", "Playback started", { onrampDurationMs: f() }));
     },
     pause() {
-      !s.isPlaying || s.isPaused || (s.isPaused = !0, N(), g.emit("playbackPaused"), r == null || r.info("NoteHighway", "Playback paused", { currentTimeMs: s.currentTimeMs }));
+      !s.isPlaying || s.isPaused || (s.isPaused = !0, N(), g.emit("playbackPaused"), d == null || d.info("NoteHighway", "Playback paused", { currentTimeMs: s.currentTimeMs }));
     },
     resume() {
       if (!s.isPlaying || !s.isPaused || !s.startTime) return;
-      const C = performance.now() - (s.startTime + s.currentTimeMs + p());
-      s.startTime += C, s.isPaused = !1, d(), g.emit("playbackResumed"), r == null || r.info("NoteHighway", "Playback resumed", null);
+      const C = performance.now() - (s.startTime + s.currentTimeMs + f());
+      s.startTime += C, s.isPaused = !1, c(), g.emit("playbackResumed"), d == null || d.info("NoteHighway", "Playback resumed", null);
     },
     stop() {
       var m, y;
       if (!s.isPlaying) return;
-      s.isPlaying = !1, s.isPaused = !1, s.currentTimeMs = 0, s.scrollOffset = 0, s.onrampComplete = !1, s.activeNotes.clear(), s.startTime = null, a.clear(), N(), (m = t == null ? void 0 : t.clearCanvas) == null || m.call(t), (y = t == null ? void 0 : t.clearOnrampCountdown) == null || y.call(t), g.emit("playbackStopped"), s.targetNotes.every((b) => b.performance !== void 0) && g.emit("performanceComplete"), r == null || r.info("NoteHighway", "Playback stopped", null);
+      s.isPlaying = !1, s.isPaused = !1, s.currentTimeMs = 0, s.scrollOffset = 0, s.onrampComplete = !1, s.activeNotes.clear(), s.startTime = null, a.clear(), N(), (m = n == null ? void 0 : n.clearCanvas) == null || m.call(n), (y = n == null ? void 0 : n.clearOnrampCountdown) == null || y.call(n), g.emit("playbackStopped"), s.targetNotes.every((b) => b.performance !== void 0) && g.emit("performanceComplete"), d == null || d.info("NoteHighway", "Playback stopped", null);
     },
     setScrollOffset(C) {
-      if (s.currentTimeMs = C, s.scrollOffset = l(C), s.isPlaying) {
-        const m = p();
+      if (s.currentTimeMs = C, s.scrollOffset = r(C), s.isPlaying) {
+        const m = f();
         s.startTime = performance.now() - (C + m);
       }
-      r == null || r.debug("NoteHighway", "Scroll offset set", { timeMs: C, scrollOffset: s.scrollOffset });
+      d == null || d.debug("NoteHighway", "Scroll offset set", { timeMs: C, scrollOffset: s.scrollOffset });
     },
     recordPitchInput(C, m, y) {
       if (!s.isPlaying || s.isPaused || !e.inputSources.includes(y)) return;
@@ -3782,7 +3788,7 @@ function _n(o) {
       return s;
     },
     getVisibleNotes() {
-      c();
+      l();
       const C = i.getViewportWidth(), m = i.getCellWidth();
       return s.targetNotes.filter((y) => {
         const b = y.startColumn * m - s.scrollOffset;
@@ -3796,113 +3802,113 @@ function _n(o) {
       return h;
     },
     dispose() {
-      N(), h.dispose(), s.targetNotes = [], s.activeNotes.clear(), a.clear(), r == null || r.info("NoteHighway", "Service disposed", null);
+      N(), h.dispose(), s.targetNotes = [], s.activeNotes.clear(), a.clear(), d == null || d.info("NoteHighway", "Service disposed", null);
     }
   };
 }
-function Ze(o) {
-  return 60 / o / 2;
+function et(t) {
+  return 60 / t / 2;
 }
-function ln(o, e) {
-  const { timeMap: i, tempo: g, cellWidth: t } = e;
-  let r, s;
+function mn(t, e) {
+  const { timeMap: i, tempo: g, cellWidth: n } = e;
+  let d, s;
   if (i && i.length > 0) {
-    const a = i[o.startColumnIndex] ?? 0, p = i[o.endColumnIndex] ?? a;
-    r = a * 1e3, s = p * 1e3;
+    const a = i[t.startColumnIndex] ?? 0, f = i[t.endColumnIndex] ?? a;
+    d = a * 1e3, s = f * 1e3;
   } else {
-    const a = e.microbeatDurationSec ?? Ze(g);
-    r = o.startColumnIndex * a * 1e3, s = o.endColumnIndex * a * 1e3;
+    const a = e.microbeatDurationSec ?? et(g);
+    d = t.startColumnIndex * a * 1e3, s = t.endColumnIndex * a * 1e3;
   }
-  const h = s - r, f = o.globalRow !== void 0 ? 108 - o.globalRow : 60;
+  const h = s - d, p = t.globalRow !== void 0 ? 108 - t.globalRow : 60;
   return {
-    id: o.uuid ?? `note-${o.startColumnIndex}-${o.row}`,
-    midi: f,
-    startTimeMs: r,
+    id: t.uuid ?? `note-${t.startColumnIndex}-${t.row}`,
+    midi: p,
+    startTimeMs: d,
     durationMs: h,
-    startColumn: o.startColumnIndex,
-    endColumn: o.endColumnIndex,
-    color: o.color,
-    shape: o.shape,
-    globalRow: o.globalRow ?? o.row
+    startColumn: t.startColumnIndex,
+    endColumn: t.endColumnIndex,
+    color: t.color,
+    shape: t.shape,
+    globalRow: t.globalRow ?? t.row
   };
 }
-function cn(o, e) {
-  return o.filter((g) => !g.isDrum).map((g) => ln(g, e));
+function fn(t, e) {
+  return t.filter((g) => !g.isDrum).map((g) => mn(g, e));
 }
-function Vn(o, e) {
+function Un(t, e) {
   const i = [0];
   let g = 0;
-  for (let t = 0; t < o.length; t++) {
-    const r = o[t] ?? 1;
-    g += r * e, i.push(g);
+  for (let n = 0; n < t.length; n++) {
+    const d = t[n] ?? 1;
+    g += d * e, i.push(g);
   }
   return i;
 }
-function $n(o, e) {
-  const i = Ze(o.tempo), g = {
-    tempo: o.tempo,
-    cellWidth: o.cellWidth,
+function Xn(t, e) {
+  const i = et(t.tempo), g = {
+    tempo: t.tempo,
+    cellWidth: t.cellWidth,
     timeMap: e,
     microbeatDurationSec: i
   };
-  return cn(o.placedNotes, g);
+  return fn(t.placedNotes, g);
 }
-const Wn = "0.1.0";
+const Jn = "0.1.0";
 export {
-  _t as ClippingMonitor,
-  Ht as DEFAULT_CONTEXT_OPTIONS,
-  $t as DEFAULT_DRUM_SAMPLES,
-  Rt as FilteredVoice,
-  Gt as GainManager,
-  Q as MODULATION_RATIOS,
-  Wn as VERSION,
-  Ze as calculateMicrobeatDuration,
-  Nn as canvasToTime,
-  Tn as canvasToVisual,
-  Sn as canvasXToSeconds,
-  gn as columnToRegularTime,
-  Bn as configureAudioContext,
-  ln as convertNoteToHighway,
-  cn as convertNotesToHighway,
-  $n as convertStateToHighway,
-  Ot as createColumnMapService,
-  pn as createCoordinateMapping,
-  qt as createDrumManager,
-  Pn as createEngineController,
-  rn as createFeedbackCollector,
-  En as createLessonMode,
-  bt as createModulationMarker,
-  _n as createNoteHighwayService,
-  Vn as createSimpleTimeMap,
-  Et as createStore,
-  Dn as createSynthEngine,
-  Vt as createTimeMapCalculator,
-  Fn as createTransportService,
+  qt as ClippingMonitor,
+  jt as DEFAULT_CONTEXT_OPTIONS,
+  Ut as DEFAULT_DRUM_SAMPLES,
+  Vt as FilteredVoice,
+  $t as GainManager,
+  K as MODULATION_RATIOS,
+  Jn as VERSION,
+  et as calculateMicrobeatDuration,
+  wn as canvasToTime,
+  vn as canvasToVisual,
+  An as canvasXToSeconds,
+  Nn as columnToRegularTime,
+  Vn as configureAudioContext,
+  mn as convertNoteToHighway,
+  fn as convertNotesToHighway,
+  Xn as convertStateToHighway,
+  Rt as createColumnMapService,
+  Tn as createCoordinateMapping,
+  Jt as createDrumManager,
+  Bn as createEngineController,
+  hn as createFeedbackCollector,
+  Rn as createLessonMode,
+  Mt as createModulationMarker,
+  Hn as createNoteHighwayService,
+  Un as createSimpleTimeMap,
+  Bt as createStore,
+  Ln as createSynthEngine,
+  Ht as createTimeMapCalculator,
+  _n as createTransportService,
   z as fullRowData,
-  In as getCanvasColumnWidths,
-  bn as getColumnEntry,
-  Ye as getColumnEntryByCanvas,
-  Mn as getColumnType,
-  Rn as getContextInfo,
-  gt as getInitialState,
-  wn as getMacrobeatBoundary,
-  fn as getModulationColor,
-  mn as getModulationDisplayText,
-  Qe as getPerVoiceBaselineGain,
-  hn as getPitchByIndex,
-  un as getPitchByToneNote,
-  Le as getPitchIndex,
-  Bt as getTimeBoundaryAfterMacrobeat,
-  xn as getTotalCanvasWidth,
-  vn as isPlayableColumn,
-  Ln as renderDrumGrid,
-  Gn as renderPitchGrid,
-  lt as resolvePitchRange,
-  yn as secondsToCanvasX,
-  On as setVoiceLogger,
-  An as timeToCanvas,
-  Ft as timeToVisual,
-  Cn as visualToCanvas,
-  Dt as visualToTime
+  Dn as getCanvasColumnWidths,
+  xn as getColumnEntry,
+  Ke as getColumnEntryByCanvas,
+  En as getColumnType,
+  $n as getContextInfo,
+  St as getInitialState,
+  On as getMacrobeatBoundary,
+  Cn as getModulationColor,
+  yn as getModulationDisplayText,
+  Ze as getPerVoiceBaselineGain,
+  Sn as getPitchByIndex,
+  gn as getPitchByToneNote,
+  _e as getPitchIndex,
+  _t as getTimeBoundaryAfterMacrobeat,
+  Fn as getTotalCanvasWidth,
+  Pn as isPlayableColumn,
+  qn as renderDrumGrid,
+  Wn as renderPitchGrid,
+  ct as resolvePitchRange,
+  bn as secondsToCanvasX,
+  Gn as setVoiceLogger,
+  In as timeToCanvas,
+  Lt as timeToVisual,
+  Mn as visualToCanvas,
+  Gt as visualToTime
 };
 //# sourceMappingURL=index.js.map

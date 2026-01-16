@@ -19,7 +19,7 @@ type RenderOptions = Pick<AppState,
   | 'macrobeatGroupings'
   | 'macrobeatBoundaryStyles'
   | 'degreeDisplayMode'
-  | 'modulationMarkers'
+  | 'tempoModulationMarkers'
   | 'accidentalMode'
   | 'showFrequencyLabels'
   | 'showOctaveLabels'
@@ -60,7 +60,7 @@ function renderPitchGrid() {
     degreeDisplayMode: store.state.degreeDisplayMode,
     zoomLevel: viewportInfo.zoomLevel,
     viewportHeight: viewportInfo.containerHeight,
-    modulationMarkers: store.state.modulationMarkers,
+    tempoModulationMarkers: store.state.tempoModulationMarkers,
     // Hide modulation labels on PitchGrid - DrumGrid shows them for timing context
     showModulationLabel: false
   };

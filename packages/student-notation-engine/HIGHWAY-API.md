@@ -266,7 +266,7 @@ interface ScrollingGridData {
   columnWidths: number[];
   macrobeatGroupings: MacrobeatGrouping[];
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   drumNotes?: PlacedNote[];
   tonicSigns?: TonicSign[];
 }

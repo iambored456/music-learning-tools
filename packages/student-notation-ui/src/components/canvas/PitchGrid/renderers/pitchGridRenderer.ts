@@ -77,7 +77,7 @@ type PitchGridRenderOptions = {
   | 'macrobeatGroupings'
   | 'macrobeatBoundaryStyles'
   | 'degreeDisplayMode'
-  | 'modulationMarkers'
+  | 'tempoModulationMarkers'
   | 'accidentalMode'
   | 'showFrequencyLabels'
   | 'showOctaveLabels'

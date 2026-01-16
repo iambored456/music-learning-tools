@@ -108,11 +108,12 @@ function animationLoop(): void {
 
     pitchState.setStablePitch({
       pitchClass: midiToPitchClass(nearestMidi),
+      midi: nearestMidi,
       opacity,
       size: HIGHLIGHT_DEFAULT_SIZE,
     });
   } else {
-    pitchState.setStablePitch({ pitchClass: null, opacity: 0, size: HIGHLIGHT_DEFAULT_SIZE });
+    pitchState.setStablePitch({ pitchClass: null, midi: null, opacity: 0, size: HIGHLIGHT_DEFAULT_SIZE });
   }
 
   // Request next frame
@@ -173,7 +174,7 @@ function cleanup(): void {
   analyser = null;
   detector = null;
 
-  pitchState.setStablePitch({ pitchClass: null, opacity: 0, size: HIGHLIGHT_DEFAULT_SIZE });
+  pitchState.setStablePitch({ pitchClass: null, midi: null, opacity: 0, size: HIGHLIGHT_DEFAULT_SIZE });
   pitchState.setCurrentPitch(null);
 }
 

@@ -271,7 +271,7 @@ export interface AppState {
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
   hasAnacrusis: boolean;
   baseMicrobeatPx: number;
-  modulationMarkers: ModulationMarker[];
+  tempoModulationMarkers: ModulationMarker[];
   selectedModulationRatio: ModulationRatio | null;
 
   // Timbres & Colors

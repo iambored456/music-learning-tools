@@ -20,7 +20,7 @@ const GridCoordsService = {
    * @returns Canvas-space column index (0 = first musical beat)
    */
   getColumnIndex(x: number): CanvasSpaceColumn {
-    const { cellWidth, modulationMarkers, cellHeight, musicalColumnWidths } = store.state;
+    const { cellWidth, tempoModulationMarkers, cellHeight, musicalColumnWidths } = store.state;
     const columnWidths = store.state.columnWidths || [];
 
     // Handle case where cellWidth might be zero during initial load
@@ -31,7 +31,7 @@ const GridCoordsService = {
     // Use the proper inverse conversion that handles modulation
     const renderOptions = {
       ...store.state,
-      modulationMarkers,
+      tempoModulationMarkers,
       cellWidth,
       cellHeight,
       columnWidths,

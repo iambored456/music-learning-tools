@@ -12,9 +12,9 @@ import { fullRowData, resolvePitchRange } from './pitchData.js';
  * Default ADSR envelope settings
  */
 const DEFAULT_ADSR = {
-  attack: 0.01,
-  decay: 0.1,
-  sustain: 0.7,
+  attack: 0.1,
+  decay: 0.2,
+  sustain: 0.8,
   release: 0.3
 };
 
@@ -91,12 +91,17 @@ function createDefaultTimbres(): TimbresMap {
  * Default rhythm configuration
  */
 function getDefaultRhythm() {
+  const macrobeatGroupings = new Array<2 | 3>(16).fill(2);
+  const macrobeatBoundaryStyles = macrobeatGroupings
+    .slice(0, -1)
+    .map((_, index) => ((index + 1) % 4 === 0 ? 'solid' : 'dashed')) as ('dashed' | 'solid' | 'anacrusis')[];
+
   return {
-    macrobeatGroupings: [2, 2, 2, 2] as (2 | 3)[],
-    macrobeatBoundaryStyles: ['dashed', 'dashed', 'dashed', 'dashed'] as ('dashed' | 'solid' | 'anacrusis')[],
+    macrobeatGroupings,
+    macrobeatBoundaryStyles,
     hasAnacrusis: false,
     baseMicrobeatPx: 40,
-    modulationMarkers: []
+    tempoModulationMarkers: []
   };
 }
 

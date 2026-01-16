@@ -81,7 +81,7 @@ export interface TimeMapState {
   columnWidths: number[];
   hasAnacrusis: boolean;
   macrobeatBoundaryStyles: string[];
-  modulationMarkers?: ModulationMarkerData[];
+  tempoModulationMarkers?: ModulationMarkerData[];
   isLooping: boolean;
   cellWidth: number;
 }

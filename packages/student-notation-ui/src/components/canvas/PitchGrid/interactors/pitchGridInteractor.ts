@@ -193,7 +193,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
 
   // MODULATION FIX: Calculate highlight width based on modulated grid scaling
   let highlightWidth;
-  if (store.state.modulationMarkers && store.state.modulationMarkers.length > 0) {
+  if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
     // For modulated grids, calculate the actual width by finding the difference
     // between this column position and the next column position
     const nextX = getColumnX(colIndex + 1, fullOptions);
@@ -205,7 +205,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
 
   // Apply tool-specific width overrides, but account for modulation scaling
   if (toolType === 'eraser' || rightClickEraserInteractor.getIsActive()) {
-    if (store.state.modulationMarkers && store.state.modulationMarkers.length > 0) {
+    if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
       const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
@@ -213,7 +213,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
       highlightWidth = store.state.cellWidth * 2;
     }
   } else if (toolType === 'note' && store.state.selectedNote?.shape === 'circle') {
-    if (store.state.modulationMarkers && store.state.modulationMarkers.length > 0) {
+    if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
       const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
@@ -221,7 +221,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
       highlightWidth = store.state.cellWidth * 2;
     }
   } else if (toolType === 'sixteenthStamp') {
-    if (store.state.modulationMarkers && store.state.modulationMarkers.length > 0) {
+    if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
       const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
@@ -234,7 +234,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
     if (selectedTriplet) {
       const span = selectedTriplet.span === 'eighth' ? 1 : 2; // eighth=1 cell, quarter=2 cells
       const cellSpan = 2 * span; // Each cell is 2 microbeats
-      if (store.state.modulationMarkers && store.state.modulationMarkers.length > 0) {
+      if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
         const spanEndX = getColumnX(colIndex + cellSpan, fullOptions);
         highlightWidth = spanEndX - x;
       } else {
@@ -244,7 +244,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
       highlightWidth = store.state.cellWidth * 2;
     }
   } else if (toolType === 'tonicization') {
-    if (store.state.modulationMarkers && store.state.modulationMarkers.length > 0) {
+    if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
       const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
@@ -679,7 +679,7 @@ function handleMouseMove(e: MouseEvent) {
           cellHeight: store.state.cellHeight,
           columnWidths: store.state.columnWidths,
           musicalColumnWidths: store.state.columnWidths,
-          modulationMarkers: store.state.modulationMarkers,
+          tempoModulationMarkers: store.state.tempoModulationMarkers,
           baseMicrobeatPx: store.state.cellWidth,
           macrobeatGroupings: store.state.macrobeatGroupings,
           previewColor: getNoteColor()
@@ -697,7 +697,7 @@ function handleMouseMove(e: MouseEvent) {
           cellHeight: store.state.cellHeight,
           columnWidths: store.state.columnWidths,
           musicalColumnWidths: store.state.columnWidths,
-          modulationMarkers: store.state.modulationMarkers,
+          tempoModulationMarkers: store.state.tempoModulationMarkers,
           baseMicrobeatPx: store.state.cellWidth,
           macrobeatGroupings: store.state.macrobeatGroupings,
           previewColor: getNoteColor()
@@ -821,7 +821,7 @@ function findNearestMeasureBoundary(clickX: number): MeasureBoundary | null {
 
   // Find all measure boundaries (solid boundaries)
   const boundaries: MeasureBoundary[] = [];
-  const hasModulation = store.state.modulationMarkers && store.state.modulationMarkers.length > 0;
+  const hasModulation = store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0;
 
   logger.debug('PitchGridInteractor', 'Boundary calculation modulation state', { hasModulation }, 'grid');
 
@@ -834,7 +834,7 @@ function findNearestMeasureBoundary(clickX: number): MeasureBoundary | null {
         const canvasSpaceColumn = measureInfo.endColumn + 1;
         const boundaryX = getColumnX(canvasSpaceColumn, {
           ...store.state,
-          modulationMarkers: store.state.modulationMarkers || [],
+          tempoModulationMarkers: store.state.tempoModulationMarkers || [],
           cellWidth: store.state.cellWidth,
           columnWidths: store.state.columnWidths,
           musicalColumnWidths: store.state.columnWidths,
@@ -861,7 +861,7 @@ function findNearestMeasureBoundary(clickX: number): MeasureBoundary | null {
   // CANVAS-SPACE FIX: Always use rendererUtils.getColumnX() with canvas-space column 0
   const startBoundaryX = getColumnX(0, {
     ...store.state,
-    modulationMarkers: store.state.modulationMarkers || [],
+    tempoModulationMarkers: store.state.tempoModulationMarkers || [],
     cellWidth: store.state.cellWidth,
     columnWidths: store.state.columnWidths,
     musicalColumnWidths: store.state.columnWidths,

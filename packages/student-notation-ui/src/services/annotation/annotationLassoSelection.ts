@@ -35,7 +35,7 @@ export function computeLassoSelection(params: {
 
     const { cellWidth, cellHeight } = renderOptions;
     let actualCellWidth = cellWidth;
-    if (renderOptions.modulationMarkers && renderOptions.modulationMarkers.length > 0) {
+    if (renderOptions.tempoModulationMarkers && renderOptions.tempoModulationMarkers.length > 0) {
       const nextX = getColumnX(colIndex + 1, renderOptions);
       actualCellWidth = nextX - xStart;
     }

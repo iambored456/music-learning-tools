@@ -9,7 +9,7 @@ interface AnnotationOptions {
   cellHeight: number;
   columnWidths: number[];
   baseMicrobeatPx?: number;
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
 }
 
 interface Point { x: number; y: number }

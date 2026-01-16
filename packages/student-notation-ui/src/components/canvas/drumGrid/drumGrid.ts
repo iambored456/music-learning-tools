@@ -21,7 +21,7 @@ function renderDrumGrid(): void {
     cellHeight: store.state.cellHeight,
     macrobeatGroupings: store.state.macrobeatGroupings,
     macrobeatBoundaryStyles: store.state.macrobeatBoundaryStyles,
-    modulationMarkers: store.state.modulationMarkers,
+    tempoModulationMarkers: store.state.tempoModulationMarkers,
     baseMicrobeatPx: store.state.cellWidth,
     volumeIconState: getVolumeIconState()
   };

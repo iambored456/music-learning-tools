@@ -107,6 +107,7 @@
 
     return {
       pitchClass: stable.pitchClass,
+      midi: stable.midi,
       opacity: stable.opacity,
       color: '#ffff00',
     };

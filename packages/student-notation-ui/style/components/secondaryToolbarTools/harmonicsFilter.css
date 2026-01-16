@@ -187,7 +187,7 @@
 }
 
 /* --- Harmonic Bins Grid (Base Layer) --- */
-.harmonic-bins-grid {
+.overtone-bins-grid {
   display: flex;
   flex-direction: row;
   flex: 1 1 auto;

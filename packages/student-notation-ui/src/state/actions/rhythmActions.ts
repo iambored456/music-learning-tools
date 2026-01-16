@@ -258,7 +258,7 @@ export const rhythmActions = {
         (newGroupings.length - oldGroupings.length) :
         -(oldGroupings.length - newGroupings.length);
 
-      this.state.modulationMarkers.forEach(marker => {
+      this.state.tempoModulationMarkers.forEach(marker => {
         // Shift measureIndex by the number of macrobeats added/removed
         const newMeasureIndex = marker.measureIndex + anacrusisShift;
 
@@ -278,9 +278,9 @@ export const rhythmActions = {
       });
 
       markersToRemove.forEach(markerToRemove => {
-        const index = this.state.modulationMarkers.indexOf(markerToRemove);
+        const index = this.state.tempoModulationMarkers.indexOf(markerToRemove);
         if (index > -1) {
-          this.state.modulationMarkers.splice(index, 1);
+          this.state.tempoModulationMarkers.splice(index, 1);
         }
       });
     }
@@ -289,7 +289,7 @@ export const rhythmActions = {
     this.emit('notesChanged'); // Ensure notes are redrawn with new positions
     this.emit('sixteenthStampPlacementsChanged'); // Ensure stamps are redrawn with new positions
     this.emit('tripletStampPlacementsChanged'); // Ensure triplets are redrawn with new positions
-    this.emit('modulationMarkersChanged'); // Ensure modulation markers are redrawn with new positions
+    this.emit('tempoModulationMarkersChanged'); // Ensure modulation markers are redrawn with new positions
     this.emit('rhythmStructureChanged');
     this.recordState();
   },
@@ -636,7 +636,7 @@ export const rhythmActions = {
     }
 
     // Check for existing marker at the same location
-    const existingMarkerIndex = this.state.modulationMarkers.findIndex((marker: ModulationMarker) => {
+    const existingMarkerIndex = this.state.tempoModulationMarkers.findIndex((marker: ModulationMarker) => {
       // Check by measureIndex first (primary location identifier)
       if (marker.measureIndex === measureIndex) {
         return true;
@@ -657,7 +657,7 @@ export const rhythmActions = {
 
     if (existingMarkerIndex !== -1) {
       // Replace existing marker at the same location
-      const existingMarker = this.state.modulationMarkers[existingMarkerIndex]!;
+      const existingMarker = this.state.tempoModulationMarkers[existingMarkerIndex]!;
       logger.info('rhythmActions', `Replacing existing modulation marker ${existingMarker.id} at measure ${measureIndex} (old ratio: ${existingMarker.ratio}, new ratio: ${ratio})`, null, 'state');
 
       // Update the existing marker with new values
@@ -666,7 +666,7 @@ export const rhythmActions = {
       if (columnIndex !== null) {existingMarker.columnIndex = columnIndex;}
       if (macrobeatIndex !== null) {existingMarker.macrobeatIndex = macrobeatIndex;}
 
-      this.emit('modulationMarkersChanged');
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       return existingMarker.id;
@@ -674,12 +674,12 @@ export const rhythmActions = {
 
     // No existing marker, create new one
     const marker = createModulationMarker(measureIndex, ratio, xPosition, columnIndex, macrobeatIndex);
-    this.state.modulationMarkers.push(marker);
+    this.state.tempoModulationMarkers.push(marker);
 
     // Sort markers by measure index
-    this.state.modulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
+    this.state.tempoModulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
 
-    this.emit('modulationMarkersChanged');
+    this.emit('tempoModulationMarkersChanged');
     this.recordState();
 
     logger.info('rhythmActions', `Added modulation marker ${marker.id} at measure ${measureIndex} with ratio=${ratio}, columnIndex=${columnIndex}`, null, 'state');
@@ -691,14 +691,14 @@ export const rhythmActions = {
      * @param {string} markerId - The ID of the marker to remove
      */
   removeModulationMarker(this: Store, markerId: string): void {
-    const index = this.state.modulationMarkers.findIndex(m => m.id === markerId);
+    const index = this.state.tempoModulationMarkers.findIndex(m => m.id === markerId);
     if (index === -1) {
       logger.warn('rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
       return;
     }
 
-    this.state.modulationMarkers.splice(index, 1);
-    this.emit('modulationMarkersChanged');
+    this.state.tempoModulationMarkers.splice(index, 1);
+    this.emit('tempoModulationMarkersChanged');
     this.recordState();
 
     logger.info('rhythmActions', `Removed modulation marker ${markerId}`, null, 'state');
@@ -715,14 +715,14 @@ export const rhythmActions = {
       return;
     }
 
-    const marker = this.state.modulationMarkers.find(m => m.id === markerId);
+    const marker = this.state.tempoModulationMarkers.find(m => m.id === markerId);
     if (!marker) {
       logger.warn('rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
       return;
     }
 
     marker.ratio = ratio;
-    this.emit('modulationMarkersChanged');
+    this.emit('tempoModulationMarkersChanged');
     this.recordState();
 
     logger.info('rhythmActions', `Updated modulation marker ${markerId} ratio to ${ratio}`, null, 'state');
@@ -734,7 +734,7 @@ export const rhythmActions = {
      * @param {number} measureIndex - New measure index
      */
   moveModulationMarker(this: Store, markerId: string, measureIndex: number): void {
-    const marker = this.state.modulationMarkers.find(m => m.id === markerId);
+    const marker = this.state.tempoModulationMarkers.find(m => m.id === markerId);
     if (!marker) {
       logger.warn('rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
       return;
@@ -743,9 +743,9 @@ export const rhythmActions = {
     marker.measureIndex = measureIndex;
 
     // Re-sort markers by measure index
-    this.state.modulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
+    this.state.tempoModulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
 
-    this.emit('modulationMarkersChanged');
+    this.emit('tempoModulationMarkersChanged');
     this.recordState();
 
     logger.info('rhythmActions', `Moved modulation marker ${markerId} to measure ${measureIndex}`, null, 'state');
@@ -756,14 +756,14 @@ export const rhythmActions = {
      * @param {string} markerId - The ID of the marker to toggle
      */
   toggleModulationMarker(this: Store, markerId: string): void {
-    const marker = this.state.modulationMarkers.find(m => m.id === markerId);
+    const marker = this.state.tempoModulationMarkers.find(m => m.id === markerId);
     if (!marker) {
       logger.warn('rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
       return;
     }
 
     marker.active = !marker.active;
-    this.emit('modulationMarkersChanged');
+    this.emit('tempoModulationMarkersChanged');
     this.recordState();
 
     logger.info('rhythmActions', `Toggled modulation marker ${markerId} active state to ${marker.active}`, null, 'state');
@@ -773,9 +773,9 @@ export const rhythmActions = {
      * Clears all modulation markers
      */
   clearModulationMarkers(this: Store): void {
-    const removedCount = this.state.modulationMarkers.length;
-    this.state.modulationMarkers = [];
-    this.emit('modulationMarkersChanged');
+    const removedCount = this.state.tempoModulationMarkers.length;
+    this.state.tempoModulationMarkers = [];
+    this.emit('tempoModulationMarkersChanged');
     this.recordState();
 
     logger.info('rhythmActions', `Cleared ${removedCount} modulation markers`, null, 'state');

@@ -15,7 +15,7 @@ interface SixteenthStampRenderOptions {
   cellWidth: number;
   cellHeight: number;
   baseMicrobeatPx?: number;
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
 }
 
 logger.moduleLoaded('SixteenthStampRenderer', 'stamps');

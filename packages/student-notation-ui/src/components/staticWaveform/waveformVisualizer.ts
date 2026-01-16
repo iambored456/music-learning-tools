@@ -2,7 +2,7 @@
 import store from '@state/initStore.ts';
 import { HARMONIC_BINS } from '@/core/constants.ts';
 import { hexToRgba } from '@utils/colorUtils.ts';
-import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/harmonicBins.ts';
+import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/overtoneBins.ts';
 import DynamicWaveformVisualizer from '../dynamicWaveform/dynamicWaveformVisualizer.ts';
 import logger from '@utils/logger.ts';
 

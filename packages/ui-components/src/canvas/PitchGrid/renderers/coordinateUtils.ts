@@ -22,7 +22,7 @@ export interface CoordinateConfig {
   /** Current viewport configuration */
   viewport: PitchGridViewport;
   /** Modulation markers (optional, for notation mode) */
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   /** Base microbeat pixel width (optional) */
   baseMicrobeatPx?: number;
 }

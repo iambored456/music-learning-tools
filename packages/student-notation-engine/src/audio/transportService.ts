@@ -30,6 +30,36 @@ const FLAT_SYMBOL = '\u266d';
 const SHARP_SYMBOL = '\u266f';
 
 /**
+ * Binary search to find the timeMap index containing a given time.
+ * Returns the index i where timeMap[i] <= time < timeMap[i+1].
+ * Returns -1 if time is before the first entry or after the last.
+ */
+function binarySearchTimeMap(timeMap: number[], time: number): number {
+  if (timeMap.length < 2) return -1;
+  if (time < timeMap[0]!) return -1;
+  if (time >= timeMap[timeMap.length - 1]!) return -1;
+
+  let low = 0;
+  let high = timeMap.length - 2; // Last valid index for a column
+
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const colStart = timeMap[mid]!;
+    const colEnd = timeMap[mid + 1]!;
+
+    if (time >= colStart && time < colEnd) {
+      return mid;
+    } else if (time < colStart) {
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  return -1;
+}
+
+/**
  * Create a new transport service instance
  */
 export function createTransportService(config: TransportConfig): TransportServiceInstance {
@@ -331,6 +361,7 @@ export function createTransportService(config: TransportConfig): TransportServic
       const musicalEnd = timeMapCalculator.getMusicalEndTime();
       const playbackEnd = (isLooping && transportLoopEnd > 0) ? transportLoopEnd : musicalEnd;
       const currentTime = Tone.Transport.seconds;
+      const currentTimeMs = currentTime * 1000;
 
       const reachedEnd = currentTime >= (playbackEnd - 0.001);
 
@@ -373,34 +404,31 @@ export function createTransportService(config: TransportConfig): TransportServic
       let activeColumnWidth = 0;
       let activeDisplayColumnIndex = -1;
 
-      for (let i = 0; i < timeMap.length - 1; i++) {
-        const colStartTime = timeMap[i];
-        const colEndTime = timeMap[i + 1];
-        if (colStartTime === undefined || colEndTime === undefined) continue;
+      // Use binary search O(log n) instead of linear search O(n)
+      const foundIndex = binarySearchTimeMap(timeMap, loopAwareTime);
+      if (foundIndex >= 0) {
+        const colStartTime = timeMap[foundIndex]!;
+        const colEndTime = timeMap[foundIndex + 1]!;
 
-        if (loopAwareTime >= colStartTime && loopAwareTime < colEndTime) {
-          // Found the column containing current time
-          let displayColIndex = i;
-          while (tonicSpanColumns.has(displayColIndex) && displayColIndex < timeMap.length - 1) {
-            displayColIndex++;
-          }
+        // Found the column containing current time
+        let displayColIndex = foundIndex;
+        while (tonicSpanColumns.has(displayColIndex) && displayColIndex < timeMap.length - 1) {
+          displayColIndex++;
+        }
 
-          const colStartX = stateCallbacks.getColumnStartX?.(displayColIndex) ?? 0;
-          const colWidth = stateCallbacks.getColumnWidth?.(displayColIndex) ?? 10;
-          activeColumnStartX = colStartX;
-          activeColumnWidth = colWidth;
-          activeDisplayColumnIndex = displayColIndex;
+        const colStartX = stateCallbacks.getColumnStartX?.(displayColIndex) ?? 0;
+        const colWidth = stateCallbacks.getColumnWidth?.(displayColIndex) ?? 10;
+        activeColumnStartX = colStartX;
+        activeColumnWidth = colWidth;
+        activeDisplayColumnIndex = displayColIndex;
 
-          if (!tonicSpanColumns.has(i)) {
-            const colDuration = colEndTime - colStartTime;
-            const timeIntoCol = loopAwareTime - colStartTime;
-            const ratio = colDuration > 0 ? timeIntoCol / colDuration : 0;
-            xPos = colStartX + ratio * colWidth;
-          } else {
-            xPos = colStartX;
-          }
-
-          break;
+        if (!tonicSpanColumns.has(foundIndex)) {
+          const colDuration = colEndTime - colStartTime;
+          const timeIntoCol = loopAwareTime - colStartTime;
+          const ratio = colDuration > 0 ? timeIntoCol / colDuration : 0;
+          xPos = colStartX + ratio * colWidth;
+        } else {
+          xPos = colStartX;
         }
       }
 
@@ -420,8 +448,8 @@ export function createTransportService(config: TransportConfig): TransportServic
 
       if (finalXPos >= 0) {
         if (currentState.playheadMode === 'macrobeat' || currentState.playheadMode === 'microbeat') {
-          visualCallbacks?.drawPlayheadHighlight?.(highlightX, highlightWidth, canvasHeight, performance.now());
-          visualCallbacks?.drawDrumPlayheadHighlight?.(highlightX, highlightWidth, drumCanvasHeight, performance.now());
+          visualCallbacks?.drawPlayheadHighlight?.(highlightX, highlightWidth, canvasHeight, currentTimeMs);
+          visualCallbacks?.drawDrumPlayheadHighlight?.(highlightX, highlightWidth, drumCanvasHeight, currentTimeMs);
         } else {
           visualCallbacks?.drawPlayheadLine?.(finalXPos, canvasHeight);
           visualCallbacks?.drawDrumPlayheadLine?.(finalXPos, drumCanvasHeight);
@@ -451,11 +479,11 @@ export function createTransportService(config: TransportConfig): TransportServic
   ): void {
     if (!timeMapCalculator) return;
 
-    const modulationMarkers = Array.isArray(state.modulationMarkers)
-      ? state.modulationMarkers
+    const tempoModulationMarkers = Array.isArray(state.tempoModulationMarkers)
+      ? state.tempoModulationMarkers
       : [];
 
-    const activeMarkers = modulationMarkers
+    const activeMarkers = tempoModulationMarkers
       .filter(marker => marker?.active && typeof marker.ratio === 'number' && marker.ratio !== 0)
       .sort((a, b) => getMarkerX(a) - getMarkerX(b));
 
@@ -583,7 +611,7 @@ export function createTransportService(config: TransportConfig): TransportServic
       eventCallbacks.on('rhythmStructureChanged', rhythmHandler);
       eventCallbacks.on('notesChanged', notesHandler);
       eventCallbacks.on('sixteenthStampPlacementsChanged', stampsHandler);
-      eventCallbacks.on('modulationMarkersChanged', modulationHandler);
+      eventCallbacks.on('tempoModulationMarkersChanged', modulationHandler);
       eventCallbacks.on('layoutConfigChanged', layoutHandler);
       eventCallbacks.on('tempoChanged', tempoHandler);
       eventCallbacks.on('loopingChanged', loopingHandler);

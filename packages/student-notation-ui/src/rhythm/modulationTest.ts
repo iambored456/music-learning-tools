@@ -103,7 +103,7 @@ export const ModulationTest = {
      * Remove all modulation markers
      */
   clearAllMarkers(): void {
-    const markers = [...(store.state.modulationMarkers || [])];
+    const markers = [...(store.state.tempoModulationMarkers || [])];
     markers.forEach(marker => {
       store.removeModulationMarker(marker.id);
     });
@@ -116,7 +116,7 @@ export const ModulationTest = {
   testMapping(): void {
     const basePx = store.state.baseMicrobeatPx || store.state.cellWidth || 40;
     recordDebug('[MODULATION TEST] Base microbeat pixels:', basePx);
-    recordDebug('[MODULATION TEST] Modulation markers:', store.state.modulationMarkers);
+    recordDebug('[MODULATION TEST] Modulation markers:', store.state.tempoModulationMarkers);
 
     // Test some coordinate conversions
     const mapping = typeof window !== 'undefined' ? window.getModulationMapping?.() : undefined;
@@ -191,7 +191,7 @@ export const ModulationTest = {
   logState(): void {
     recordDebug('[MODULATION TEST] Current state:', {
       selectedTool: store.state.selectedTool,
-      modulationMarkers: store.state.modulationMarkers,
+      tempoModulationMarkers: store.state.tempoModulationMarkers,
       baseMicrobeatPx: store.state.baseMicrobeatPx,
       cellWidth: store.state.cellWidth
     });

@@ -37,8 +37,8 @@
   const SIXTEENTH_FULL_STAMP_ID = 15;
 
   // State
-  let lastDegreeMode: Exclude<DegreeDisplayMode, 'off'> = $state('diatonic');
-  let previousMode = $state<'inversion' | 'position'>('position');
+  let lastDegreeMode: Exclude<DegreeDisplayMode, 'off'> = 'diatonic';
+  let previousMode: 'inversion' | 'position' = 'position';
 
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;

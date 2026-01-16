@@ -23,7 +23,7 @@ type PitchRendererOptions = Partial<AppState> & {
   columnWidths: number[];
   cellWidth: number;
   cellHeight: number;
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   baseMicrobeatPx?: number;
 };
 
@@ -527,14 +527,14 @@ export function drawTwoColumnOvalNote(
   note: PlacedNote,
   rowIndex: number
 ): void {
-  const { cellWidth, cellHeight, modulationMarkers } = options;
+  const { cellWidth, cellHeight, tempoModulationMarkers } = options;
   const baseY = getRowY(rowIndex, options);
   const vibratoYOffset = calculateVibratoYOffset(note, options);
   const y = baseY + vibratoYOffset;
   const xStart = getColumnX(note.startColumnIndex, options);
 
   let actualCellWidth: number;
-  if (modulationMarkers && modulationMarkers.length > 0) {
+  if (tempoModulationMarkers && tempoModulationMarkers.length > 0) {
     const nextX = getColumnX(note.startColumnIndex + 1, options);
     actualCellWidth = nextX - xStart;
   } else {
@@ -637,14 +637,14 @@ export function drawSingleColumnOvalNote(
   note: PlacedNote,
   rowIndex: number
 ): void {
-  const { columnWidths, cellWidth, cellHeight, modulationMarkers } = options;
+  const { columnWidths, cellWidth, cellHeight, tempoModulationMarkers } = options;
   const baseY = getRowY(rowIndex, options);
   const vibratoYOffset = calculateVibratoYOffset(note, options);
   const y = baseY + vibratoYOffset;
   const x = getColumnX(note.startColumnIndex, options);
 
   let currentCellWidth: number;
-  if (modulationMarkers && modulationMarkers.length > 0) {
+  if (tempoModulationMarkers && tempoModulationMarkers.length > 0) {
     const nextX = getColumnX(note.startColumnIndex + 1, options);
     currentCellWidth = nextX - x;
   } else {
@@ -710,7 +710,7 @@ export function drawTonicShape(
   options: PitchRendererOptions,
   tonicSign: TonicSign
 ): void {
-  const { cellWidth, cellHeight, modulationMarkers } = options;
+  const { cellWidth, cellHeight, tempoModulationMarkers } = options;
   // Use globalRow for Y position calculation since getRowY expects a global row index
   const y = getRowY(tonicSign.globalRow ?? tonicSign.row, options);
 
@@ -730,7 +730,7 @@ export function drawTonicShape(
   const x = getColumnX(canvasSpaceColumn, options);
 
   let actualCellWidth: number;
-  if (modulationMarkers && modulationMarkers.length > 0) {
+  if (tempoModulationMarkers && tempoModulationMarkers.length > 0) {
     // Tonic spans 2 columns: use canvas-space for both
     const nextX = getColumnX(canvasSpaceColumn + 1, options);
     actualCellWidth = nextX - x;
@@ -778,9 +778,9 @@ interface NoteMarkerAnalysis {
 export function analyzeNoteCrossesMarkers(note: PlacedNote, options: PitchRendererOptions): NoteMarkerAnalysis {
   const noteStartX = getColumnX(note.startColumnIndex, options);
   const noteEndX = getColumnX(note.endColumnIndex + 1, options);
-  const { modulationMarkers } = options;
+  const { tempoModulationMarkers } = options;
 
-  if (!modulationMarkers || modulationMarkers.length === 0) {
+  if (!tempoModulationMarkers || tempoModulationMarkers.length === 0) {
     return { crossesMarkers: false, segments: [], noteStartX, noteEndX };
   }
 

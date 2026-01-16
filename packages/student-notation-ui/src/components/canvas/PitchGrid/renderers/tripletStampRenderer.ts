@@ -14,7 +14,7 @@ interface TripletStampRenderOptions {
   cellWidth: number;
   cellHeight: number;
   baseMicrobeatPx?: number;
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
 }
 
 logger.moduleLoaded('TripletStampRenderer', 'triplets');

@@ -111,6 +111,8 @@ export interface CurrentPitch {
 export interface LegendHighlightConfig {
   /** Pitch class to highlight (0-11, C=0). Null disables highlight. */
   pitchClass: number | null;
+  /** Specific MIDI note to highlight (e.g., 60 = C4). When set, overrides pitchClass matching. */
+  midi?: number | null;
   /** Opacity of the highlight (0-1). */
   opacity: number;
   /** Highlight color (default: yellow). */
@@ -195,7 +197,7 @@ export interface ScrollingGridData {
   /** Boundary line styles at each macrobeat */
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
   /** Modulation markers for tempo/key changes */
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   /** Drum notes for drum grid */
   drumNotes?: PlacedNote[];
   /** Tonic signs for grid */
@@ -319,7 +321,7 @@ export interface PitchGridNotationProps extends PitchGridBaseProps {
   /** Boundary line styles at each macrobeat */
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
   /** Modulation markers for tempo/key changes */
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
 
   // === Notation Mode Options ===
   /** Currently active tool (notation mode only) */

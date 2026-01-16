@@ -19,7 +19,7 @@
   let modulationClearBtn: HTMLButtonElement | null = null;
 
   // Reactive state
-  let selectedRatio = $state<ModulationRatio | null>(null);
+  let selectedRatio: ModulationRatio | null = null;
 
   // Event handlers
   function handle23Click() {
@@ -59,7 +59,7 @@
   }
 
   function handleClearClick() {
-    const markerCount = (store.state.modulationMarkers || []).length;
+    const markerCount = (store.state.tempoModulationMarkers || []).length;
 
     if (markerCount === 0) {
       logger.info('ModulationBridge', 'No modulation markers to clear', null, 'ui');
@@ -72,7 +72,7 @@
 
   function updateClearButton() {
     if (!modulationClearBtn) return;
-    const markerCount = (store.state.modulationMarkers || []).length;
+    const markerCount = (store.state.tempoModulationMarkers || []).length;
 
     if (markerCount === 0) {
       modulationClearBtn.disabled = true;
@@ -122,7 +122,7 @@
 
     // Subscribe to store events
     store.on('toolChanged', handleToolChanged);
-    store.on('modulationMarkersChanged', handleMarkersChanged);
+    store.on('tempoModulationMarkersChanged', handleMarkersChanged);
 
     // Initialize button states
     updateClearButton();

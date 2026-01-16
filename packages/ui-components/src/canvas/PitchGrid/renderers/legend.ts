@@ -33,9 +33,10 @@ export interface LegendRenderConfig {
   focusedPitchClasses: Set<number> | null;
   /** Whether focus coloring is enabled */
   focusColorsEnabled: boolean;
-  /** Optional highlight overlay for a specific pitch class */
+  /** Optional highlight overlay for a specific pitch */
   highlight?: {
     pitchClass: number | null;
+    midi?: number | null;
     opacity: number;
     color?: string;
   };
@@ -243,16 +244,20 @@ export function drawLegend(
       ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
 
       // Optional highlight overlay
-      if (
-        config.highlight &&
-        typeof config.highlight.pitchClass === 'number' &&
-        config.highlight.opacity > 0.01
-      ) {
-        const rowPitchClass = getPitchClassFromRow(row);
-        if (rowPitchClass === config.highlight.pitchClass) {
+      const highlight = config.highlight;
+      if (highlight && highlight.opacity > 0.01) {
+        let shouldHighlight = false;
+        if (typeof highlight.midi === 'number') {
+          shouldHighlight = typeof row.midi === 'number' && row.midi === Math.round(highlight.midi);
+        } else if (typeof highlight.pitchClass === 'number') {
+          const rowPitchClass = getPitchClassFromRow(row);
+          shouldHighlight = rowPitchClass === highlight.pitchClass;
+        }
+
+        if (shouldHighlight) {
           ctx.save();
-          ctx.globalAlpha = Math.min(Math.max(config.highlight.opacity, 0), 1);
-          ctx.fillStyle = config.highlight.color ?? '#ffff00';
+          ctx.globalAlpha = Math.min(Math.max(highlight.opacity, 0), 1);
+          ctx.fillStyle = highlight.color ?? '#ffff00';
           ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
           ctx.restore();
         }

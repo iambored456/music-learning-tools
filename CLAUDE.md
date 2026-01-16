@@ -119,6 +119,58 @@ The engine (`@mlt/student-notation-engine`) provides:
 - **Canvas**: Rendering utilities (currently app uses custom renderers)
 - **Controller**: `createEngineController()` - Unified API (available for future use)
 
+## Domain Concepts
+
+- **Harmonic (Overtone) Bins** - 12 overtone bins with 8 preset timbres; bins control per-voice harmonic coefficients.
+- **Filter System** - Graphic EQ overlay that filters overtone bins with blend, cutoff, and mix controls.
+- **Color/Voice System** - Four voices (blue, black, red, green) with simultaneous playback and per-voice timbre.
+- **PitchGrid Design** - "On a line / on a space" halves the visual distance between adjacent pitches.
+- **Rhythm System** - Macrobeats (2-based duple, 3-based triple) subdivided into microbeats.
+- **Stamps** - Sixteenth and triplet permutation patterns for quick rhythmic placement.
+- **Tonic Signs** - Zero time-space markers for tonal center and mode (1-7).
+- **Tempo Modulation Markers** - Visual space expansion and shrinking for rhythmic modulation.
+- **ADSR + Effects** - Per-voice ADSR plus delay and tremolo (time shaping) and vibrato (pitch/waveform shaping).
+
+## App Relationships
+
+- **Student Notation** - Four-voice composition tool using the shared engine and UI packages.
+- **Singing Trainer** - Real-time pitch detection with a note highway; imports Student Notation handoffs.
+- **Diatonic Compass** - Standalone mode and pitch-center visualizer.
+- **Handoff** - Student Notation exports to Singing Trainer and can import UltraStar format.
+
+## Architectural Decisions
+
+### Dependency Rules
+
+| From | May Import |
+|------|------------|
+| `apps/*` | `packages/*` only |
+| `packages/*` | Other `packages/*` (no cycles) |
+| `apps/hub` | `packages/*` only (never other apps) |
+
+### Package vs App Responsibilities
+
+- **Packages** hold reusable domain logic (audio, state, UI components, utilities).
+- **Apps** are thin composition shells (routing, layout, app-specific glue).
+- **Hub** is a showroom shell that imports packages only.
+
+### Development Workflow
+
+- Packages export from `src/` for HMR and type checking.
+- Workspace imports resolve to package sources (no pre-build required).
+- Vite configs allow filesystem access to package directories and avoid optimizing workspace deps.
+
+### Validation
+
+Run `node scripts/check-deps.js` to validate dependency rules and app/package boundaries.
+
+### PitchGrid Separation (Intentional)
+
+- `@mlt/ui-components` provides the shared PitchGrid renderer and shared modes.
+- `packages/student-notation-ui` owns app-specific PitchGrid interactors and tools.
+- `packages/singing-trainer-ui` wraps the shared renderer and adds its pitch trail overlay.
+- No merge needed unless renderer capabilities move across app boundaries.
+
 ## TypeScript Configuration
 
 All packages extend `tsconfig.base.json`:

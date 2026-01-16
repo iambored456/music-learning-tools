@@ -51,7 +51,7 @@ export function initStateSubscriptions(): { renderAll: () => void } {
     // Recalculate layout to update column widths based on new macrobeat structure
     LayoutService.reflow();
   });
-  store.on('modulationMarkersChanged', () => {
+  store.on('tempoModulationMarkersChanged', () => {
     // Reflow to recalculate canvas dimensions with modulation adjustments
     LayoutService.reflow();
     // Render to display the visual changes

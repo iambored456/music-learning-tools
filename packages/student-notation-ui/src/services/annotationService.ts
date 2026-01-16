@@ -189,7 +189,7 @@ class AnnotationService {
       columnWidths: store.state.columnWidths,
       cellWidth: store.state.cellWidth,
       cellHeight: store.state.cellHeight,
-      modulationMarkers: store.state.modulationMarkers,
+      tempoModulationMarkers: store.state.tempoModulationMarkers,
       baseMicrobeatPx: store.state.cellWidth
     };
   }

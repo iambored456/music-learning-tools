@@ -49,7 +49,7 @@ export interface EngineEvents {
 
   // Rhythm events
   rhythmStructureChanged: void;
-  modulationMarkersChanged: void;
+  tempoModulationMarkersChanged: void;
 
   // Audio events
   noteAttack: { noteId: string; color: string };

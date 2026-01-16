@@ -18,7 +18,7 @@ type RendererOptions = Partial<AppState> & {
   musicalColumnWidths?: number[];  // DEPRECATED: Will be removed, use columnWidths instead
   cellWidth: number;
   cellHeight: number;
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   baseMicrobeatPx?: number;
 };
 
@@ -33,7 +33,7 @@ let cachedViewportInfo: ReturnType<typeof pitchGridViewportService.getViewportIn
 let lastViewportFrame: number | null = null;
 
 // Set up cache invalidation when modulation markers change
-store.on('modulationMarkersChanged', () => {
+store.on('tempoModulationMarkersChanged', () => {
   invalidateCoordinateMapping();
 });
 
@@ -60,7 +60,7 @@ store.on('pitchRangeChanged', () => {
  */
 function getCoordinateMapping(options: RendererOptions): CoordinateMapping {
   const currentHash = JSON.stringify({
-    markers: options.modulationMarkers || [],
+    markers: options.tempoModulationMarkers || [],
     baseMicrobeatPx: options.baseMicrobeatPx ?? options.cellWidth ?? 40
   });
 
@@ -69,7 +69,7 @@ function getCoordinateMapping(options: RendererOptions): CoordinateMapping {
   }
 
   const baseMicrobeatPx = options.baseMicrobeatPx ?? options.cellWidth ?? 40;
-  cachedCoordinateMapping = createCoordinateMapping(options.modulationMarkers || [], baseMicrobeatPx, options as AppState);
+  cachedCoordinateMapping = createCoordinateMapping(options.tempoModulationMarkers || [], baseMicrobeatPx, options as AppState);
   lastMappingHash = currentHash;
 
   return cachedCoordinateMapping;
@@ -105,7 +105,7 @@ export function getColumnX(index: number, options: RendererOptions): number {
   const state = store.state;
   const pixelOptions = {
     cellWidth: options.cellWidth,
-    modulationMarkers: options.modulationMarkers,
+    tempoModulationMarkers: options.tempoModulationMarkers,
     baseMicrobeatPx: options.baseMicrobeatPx,
     columnWidths: options.columnWidths,
     state: state
@@ -218,7 +218,7 @@ export function getColumnFromX(canvasX: number, options: RendererOptions): numbe
   const state = store.state;
   const pixelOptions = {
     cellWidth: options.cellWidth,
-    modulationMarkers: options.modulationMarkers,
+    tempoModulationMarkers: options.tempoModulationMarkers,
     baseMicrobeatPx: options.baseMicrobeatPx,
     columnWidths: options.columnWidths,
     state: state

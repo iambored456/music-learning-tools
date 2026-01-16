@@ -45,7 +45,7 @@ export interface DrumGridRenderOptions extends CoordinateOptions {
   /** Macrobeat boundary styles */
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
   /** Modulation markers */
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   /** Base microbeat pixel width */
   baseMicrobeatPx: number;
   /** Whether piece has anacrusis */
@@ -375,7 +375,7 @@ export function createDrumGridRenderer(callbacks: DrumGridRenderCallbacks) {
     options: DrumGridRenderOptions,
     drumRowHeight: number
   ): void {
-    const { placedNotes, columnWidths, cellWidth, placedTonicSigns, modulationMarkers } = options;
+    const { placedNotes, columnWidths, cellWidth, placedTonicSigns, tempoModulationMarkers } = options;
     const totalColumns = columnWidths.length + 4; // +4 for legend columns
 
     for (let canvasCol = 0; canvasCol < totalColumns; canvasCol++) {
@@ -385,7 +385,7 @@ export function createDrumGridRenderer(callbacks: DrumGridRenderCallbacks) {
       const x = coords.getColumnX(canvasCol, options);
       let currentCellWidth: number;
 
-      if (modulationMarkers && modulationMarkers.length > 0) {
+      if (tempoModulationMarkers && tempoModulationMarkers.length > 0) {
         const nextX = coords.getColumnX(canvasCol + 1, options);
         currentCellWidth = nextX - x;
       } else {
@@ -461,7 +461,7 @@ export function renderDrumGrid(
   renderer.drawDrumNotes(ctx, options, drumRowHeight);
 
   // Render modulation markers if callback provided
-  if (callbacks.renderModulationMarkers && options.modulationMarkers?.length) {
+  if (callbacks.renderModulationMarkers && options.tempoModulationMarkers?.length) {
     callbacks.renderModulationMarkers(ctx, options);
   }
 }

@@ -59,7 +59,7 @@ export interface PitchGridRenderOptions {
   /** Viewport height */
   viewportHeight: number;
   /** Modulation markers */
-  modulationMarkers: ModulationMarker[];
+  tempoModulationMarkers: ModulationMarker[];
   /** Whether piece has anacrusis */
   hasAnacrusis: boolean;
 }

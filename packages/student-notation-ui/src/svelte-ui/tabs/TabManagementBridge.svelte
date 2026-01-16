@@ -9,7 +9,6 @@
    *
    * This replaces: src/bootstrap/ui/initTabManagement.ts
    */
-  import { onMount, onDestroy } from 'svelte';
   import logger from '@utils/logger.ts';
 
   // LocalStorage keys for tab persistence
@@ -543,12 +542,12 @@
       targetPanel.classList.add('active');
 
       // Handle harmonic bins visibility based on which tab is active
-      const harmonicBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
-      if (harmonicBinsContainer) {
+      const overtoneBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
+      if (overtoneBinsContainer) {
         if (savedTab === 'effects') {
-          harmonicBinsContainer.style.display = 'none';
+          overtoneBinsContainer.style.display = 'none';
         } else {
-          harmonicBinsContainer.style.display = 'flex';
+          overtoneBinsContainer.style.display = 'flex';
         }
       }
     } else {
@@ -630,12 +629,12 @@
         saveCurrentPresetTab(tabId);
 
         // Hide harmonic bins when effects tabs are selected
-        const harmonicBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
-        if (harmonicBinsContainer) {
+        const overtoneBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
+        if (overtoneBinsContainer) {
           if (tabId === 'effects') {
-            harmonicBinsContainer.style.display = 'none';
+            overtoneBinsContainer.style.display = 'none';
           } else {
-            harmonicBinsContainer.style.display = 'flex';
+            overtoneBinsContainer.style.display = 'flex';
           }
         }
 
@@ -677,7 +676,8 @@
     logger.info('TabManagementBridge', 'Pitch tabs initialized', null, 'ui');
   }
 
-  onMount(() => {
+  // Initialize tabs using Svelte 5 $effect()
+  $effect(() => {
     initMainTabs();
     initPresetTabs();
     initPitchTabs();
@@ -698,29 +698,33 @@
       startSizingAutoLog();
     }
 
-    console.log('[Svelte] TabManagementBridge mounted');
-  });
+    console.log('[Svelte 5] TabManagementBridge mounted');
 
-  onDestroy(() => {
-    // Remove main tab handlers
-    mainTabHandlers.forEach((handler, button) => {
-      button.removeEventListener('click', handler);
-    });
-    mainTabHandlers.clear();
+    // Cleanup on unmount
+    return () => {
+      // Remove main tab handlers
+      mainTabHandlers.forEach((handler, button) => {
+        button.removeEventListener('click', handler);
+      });
+      mainTabHandlers.clear();
 
-    // Remove preset tab handlers
-    presetTabHandlers.forEach((handler, button) => {
-      button.removeEventListener('click', handler);
-    });
-    presetTabHandlers.clear();
+      // Remove preset tab handlers
+      presetTabHandlers.forEach((handler, button) => {
+        button.removeEventListener('click', handler);
+      });
+      presetTabHandlers.clear();
 
-    // Remove pitch tab handlers
-    pitchTabHandlers.forEach((handler, button) => {
-      button.removeEventListener('click', handler);
-    });
-    pitchTabHandlers.clear();
+      // Remove pitch tab handlers
+      pitchTabHandlers.forEach((handler, button) => {
+        button.removeEventListener('click', handler);
+      });
+      pitchTabHandlers.clear();
 
-    console.log('[Svelte] TabManagementBridge unmounted');
+      // Stop sizing observers
+      stopSizingAutoLog();
+
+      console.log('[Svelte 5] TabManagementBridge unmounted');
+    };
   });
 </script>
 

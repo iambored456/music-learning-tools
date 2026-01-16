@@ -126,7 +126,7 @@ export interface DrumGridRenderOptions extends PitchRendererOptions {
   cellHeight: number;
   macrobeatGroupings: number[];
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   baseMicrobeatPx: number;
   volumeIconState?: VolumeIconState;
 }
@@ -276,7 +276,7 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
 
     const x = getColumnX(canvasCol, options);
     let currentCellWidth: number;
-    if (options.modulationMarkers && options.modulationMarkers.length > 0) {
+    if (options.tempoModulationMarkers && options.tempoModulationMarkers.length > 0) {
       const nextX = getColumnX(canvasCol + 1, options);
       currentCellWidth = nextX - x;
     } else {
@@ -309,7 +309,7 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
     }
   }
 
-  if (options.modulationMarkers && options.modulationMarkers.length > 0) {
+  if (options.tempoModulationMarkers && options.tempoModulationMarkers.length > 0) {
     renderModulationMarkers(ctx, options as unknown as ModulationRendererOptions);
   }
 }

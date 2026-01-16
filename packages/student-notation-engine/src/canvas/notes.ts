@@ -489,14 +489,14 @@ export function createNoteRenderer(callbacks: NoteRenderCallbacks) {
     note: PlacedNote,
     rowIndex: number
   ): void {
-    const { cellWidth, cellHeight, modulationMarkers, placedNotes } = options;
+    const { cellWidth, cellHeight, tempoModulationMarkers, placedNotes } = options;
     const baseY = coords.getRowY(rowIndex, options);
     const vibratoYOffset = calculateVibratoYOffset(note, options);
     const y = baseY + vibratoYOffset;
     const xStart = coords.getColumnX(note.startColumnIndex, options);
 
     let actualCellWidth: number;
-    if (modulationMarkers && modulationMarkers.length > 0) {
+    if (tempoModulationMarkers && tempoModulationMarkers.length > 0) {
       const nextX = coords.getColumnX(note.startColumnIndex + 1, options);
       actualCellWidth = nextX - xStart;
     } else {
@@ -581,14 +581,14 @@ export function createNoteRenderer(callbacks: NoteRenderCallbacks) {
     note: PlacedNote,
     rowIndex: number
   ): void {
-    const { columnWidths, cellWidth, cellHeight, modulationMarkers, placedNotes } = options;
+    const { columnWidths, cellWidth, cellHeight, tempoModulationMarkers, placedNotes } = options;
     const baseY = coords.getRowY(rowIndex, options);
     const vibratoYOffset = calculateVibratoYOffset(note, options);
     const y = baseY + vibratoYOffset;
     const x = coords.getColumnX(note.startColumnIndex, options);
 
     let currentCellWidth: number;
-    if (modulationMarkers && modulationMarkers.length > 0) {
+    if (tempoModulationMarkers && tempoModulationMarkers.length > 0) {
       const nextX = coords.getColumnX(note.startColumnIndex + 1, options);
       currentCellWidth = nextX - x;
     } else {

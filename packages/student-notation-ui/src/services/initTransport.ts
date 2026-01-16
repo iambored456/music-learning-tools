@@ -58,7 +58,7 @@ const TransportService = {
           columnWidths: store.state.columnWidths,
           hasAnacrusis: store.state.hasAnacrusis,
           macrobeatBoundaryStyles: store.state.macrobeatBoundaryStyles,
-          modulationMarkers: store.state.modulationMarkers,
+          tempoModulationMarkers: store.state.tempoModulationMarkers,
           isLooping: store.state.isLooping,
           isPaused: store.state.isPaused,
           cellWidth: store.state.cellWidth,

@@ -34,7 +34,7 @@ export interface CoordinateOptions {
   /** Base cell height in pixels */
   cellHeight: number;
   /** Modulation markers for tempo changes */
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   /** Base microbeat pixel width */
   baseMicrobeatPx?: number;
 }

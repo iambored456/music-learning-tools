@@ -154,14 +154,14 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
       return;
     }
 
-    const modulationMarkers = state.modulationMarkers?.filter(m => m.active) || [];
+    const tempoModulationMarkers = state.tempoModulationMarkers?.filter(m => m.active) || [];
 
-    if (modulationMarkers.length === 0) {
+    if (tempoModulationMarkers.length === 0) {
       cachedMusicalEndTime = baseEndTime;
       return;
     }
 
-    const sortedMarkers = [...modulationMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
+    const sortedMarkers = [...tempoModulationMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
     let adjustedEndTime = baseEndTime;
 
     for (const marker of sortedMarkers) {
@@ -236,13 +236,13 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
     },
 
     applyModulationToTime(baseTime: number, columnIndex: number, state: TimeMapState): number {
-      const modulationMarkers = state.modulationMarkers?.filter(m => m.active) || [];
+      const tempoModulationMarkers = state.tempoModulationMarkers?.filter(m => m.active) || [];
 
-      if (modulationMarkers.length === 0) {
+      if (tempoModulationMarkers.length === 0) {
         return baseTime;
       }
 
-      const sortedMarkers = [...modulationMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
+      const sortedMarkers = [...tempoModulationMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
       let adjustedTime = baseTime;
 
       if (columnIndex < 5) {

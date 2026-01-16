@@ -16,7 +16,7 @@ export class PitchGridModulationToolInteractor {
   private lastModulationHoverResult: ReturnType<typeof hitTestModulationMarker> | null = null;
 
   handleMouseDown(actualX: number, canvasY: number): boolean {
-    for (const marker of store.state.modulationMarkers || []) {
+    for (const marker of store.state.tempoModulationMarkers || []) {
       const xCanvas = marker.xCanvas ?? marker.xPosition ?? 0;
       const hitResult = hitTestModulationMarker(actualX, canvasY, { ...marker, xCanvas });
       if (!hitResult) {
@@ -95,7 +95,7 @@ export class PitchGridModulationToolInteractor {
   }
 
   getHoveredMarker(actualX: number, canvasY: number): ReturnType<typeof hitTestModulationMarker> | null {
-    for (const marker of store.state.modulationMarkers || []) {
+    for (const marker of store.state.tempoModulationMarkers || []) {
       const xCanvas = marker.xCanvas ?? marker.xPosition ?? 0;
       const hitResult = hitTestModulationMarker(actualX, canvasY, { ...marker, xCanvas });
       if (hitResult) {

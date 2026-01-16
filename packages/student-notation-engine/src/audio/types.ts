@@ -222,7 +222,7 @@ export interface TransportState {
   columnWidths: number[];
   hasAnacrusis: boolean;
   macrobeatBoundaryStyles: string[];
-  modulationMarkers?: Array<{
+  tempoModulationMarkers?: Array<{
     measureIndex: number;
     ratio: number;
     active: boolean;

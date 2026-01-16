@@ -254,6 +254,10 @@ export default class CartesianSlider {
     this._svgWrapper.setAttribute('width', `${w}`);
     this._svgWrapper.setAttribute('height', `${h}`);
     this._svgWrapper.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    this._bg.setAttribute('width', `${w}`);
+    this._bg.setAttribute('height', `${h}`);
+    this._gridFill.setAttribute('width', `${w}`);
+    this._gridFill.setAttribute('height', `${h}`);
     this._label.setAttribute('y', `${h - 8}`);
     this._updateFromValues();
   }

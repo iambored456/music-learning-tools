@@ -38,10 +38,10 @@ function ensureMacrobeatBeatSpans(): void {
   }
 }
 
-function getPixelOptions(): { cellWidth: number; modulationMarkers?: AppState['modulationMarkers']; baseMicrobeatPx?: number } {
+function getPixelOptions(): { cellWidth: number; tempoModulationMarkers?: AppState['tempoModulationMarkers']; baseMicrobeatPx?: number } {
   return {
     cellWidth: store.state.cellWidth,
-    modulationMarkers: store.state.modulationMarkers,
+    tempoModulationMarkers: store.state.tempoModulationMarkers,
     baseMicrobeatPx: store.state.baseMicrobeatPx
   };
 }

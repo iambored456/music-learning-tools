@@ -14,7 +14,7 @@ interface RenderOptions {
   columnWidths: number[];
   cellWidth: number;
   baseMicrobeatPx: number;
-  modulationMarkers?: unknown[];
+  tempoModulationMarkers?: unknown[];
 }
 
 interface TimeSignatureSegment {
@@ -76,12 +76,12 @@ const RhythmService = {
         const measureEndColumn = mbInfo.endColumn + 1;
 
         // Use modulated positions if modulation exists
-        const hasModulation = Array.isArray(state.modulationMarkers) && state.modulationMarkers.length > 0;
+        const hasModulation = Array.isArray(state.tempoModulationMarkers) && state.tempoModulationMarkers.length > 0;
         // Use rendererUtils.getColumnX for both modulated and unmodulated paths
         // This ensures consistent coordinate system with grid rendering
         const renderOptions: RenderOptions = {
           ...state,
-          modulationMarkers: hasModulation ? state.modulationMarkers : [],
+          tempoModulationMarkers: hasModulation ? state.tempoModulationMarkers : [],
           cellWidth: state.cellWidth,
           columnWidths: state.columnWidths,
           musicalColumnWidths: state.musicalColumnWidths,
@@ -135,7 +135,7 @@ const RhythmService = {
       // Ensure musicalColumnWidths is always available
       const canvasSpaceRenderOptions = {
         ...state,
-        modulationMarkers: state.modulationMarkers || [],
+        tempoModulationMarkers: state.tempoModulationMarkers || [],
         cellWidth: state.cellWidth,
         columnWidths: state.columnWidths,
         musicalColumnWidths: state.columnWidths,

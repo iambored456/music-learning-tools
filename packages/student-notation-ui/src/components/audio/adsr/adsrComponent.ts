@@ -1,4 +1,5 @@
 // js/components/ADSR/adsrComponent.ts
+// Deprecated: replaced by the Svelte 5 ADSREnvelope component.
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { logAdsrFlow } from '@utils/adsrDebug.ts';

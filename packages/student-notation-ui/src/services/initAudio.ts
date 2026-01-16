@@ -9,7 +9,7 @@
 import { createSynthEngine, type SynthEngineInstance } from '@mlt/student-notation-engine';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/harmonicBins.ts';
+import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/overtoneBins.ts';
 
 logger.moduleLoaded('EngineAudio', 'general');
 

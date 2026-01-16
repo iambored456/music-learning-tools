@@ -650,7 +650,7 @@ function recalcAndApplyLayout() {
 
   // Always use modulated width if modulation is active (allows compression)
   // Only fall back to unmodulated musical width if no modulation present
-  const hasModulation = store.state.modulationMarkers && store.state.modulationMarkers.length > 0;
+  const hasModulation = store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0;
   const finalMusicalWidth = hasModulation ? modulatedMusicalWidth : musicalCanvasWidth;
 
   // After Phase 8: Add legend widths to musical width to get total grid width
@@ -790,7 +790,7 @@ function recalcAndApplyLayout() {
     const renderOptions = {
       cellWidth: store.state.cellWidth,
       columnWidths: store.state.columnWidths,
-      modulationMarkers: store.state.modulationMarkers,
+      tempoModulationMarkers: store.state.tempoModulationMarkers,
       baseMicrobeatPx: store.state.cellWidth,
       cellHeight: store.state.cellHeight,
       state: store.state
@@ -2213,7 +2213,7 @@ const LayoutService = {
     return getColumnXFromPixelMap(index, {
       cellWidth,
       columnWidths,
-      modulationMarkers: store.state.modulationMarkers,
+      tempoModulationMarkers: store.state.tempoModulationMarkers,
       baseMicrobeatPx: cellWidth,
       state: store.state
     });
@@ -2246,7 +2246,7 @@ const LayoutService = {
 
 
 
-    if (!store.state.modulationMarkers || store.state.modulationMarkers.length === 0) {
+    if (!store.state.tempoModulationMarkers || store.state.tempoModulationMarkers.length === 0) {
 
 
       return baseWidth;
@@ -2267,7 +2267,7 @@ const LayoutService = {
       const renderOptions = {
         cellWidth,
         columnWidths,
-        modulationMarkers: store.state.modulationMarkers,
+        tempoModulationMarkers: store.state.tempoModulationMarkers,
         baseMicrobeatPx: cellWidth,
         cellHeight: store.state.cellHeight || 40,
         state: store.state

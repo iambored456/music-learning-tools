@@ -72,8 +72,8 @@
   let rightLegendBtn: HTMLElement | null = null;
 
   // State
-  let isDragging = $state(false);
-  let dragHandle = $state<DragHandle>(null);
+  let isDragging = false;
+  let dragHandle: DragHandle = null;
   const handleSize = 20;
   const handlePadding = 5;
   let cropState: CropState | null = null;

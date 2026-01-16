@@ -39,7 +39,7 @@ const getColumnX = (index: number): number => {
     ? store.state.musicalColumnWidths
     : store.state.columnWidths;
   const options = {
-    modulationMarkers: store.state.modulationMarkers || [],
+    tempoModulationMarkers: store.state.tempoModulationMarkers || [],
     columnWidths: store.state.columnWidths,
     musicalColumnWidths,
     cellWidth: store.state.cellWidth,
@@ -52,7 +52,7 @@ const getColumnX = (index: number): number => {
 };
 
 const getModulatedCellWidth = (colIndex: number): number => {
-  const hasModulation = store.state.modulationMarkers && store.state.modulationMarkers.length > 0;
+  const hasModulation = store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0;
   if (hasModulation) {
     const currentX = getColumnX(colIndex);
     const nextX = getColumnX(colIndex + 1);

@@ -22,7 +22,7 @@
   let presetContainer: HTMLElement | null = null;
 
   // State
-  let isSliderPressed = $state(false);
+  let isSliderPressed = false;
 
   // Color helpers
   const darkenColor = (hex: string, percent = 20): string => {

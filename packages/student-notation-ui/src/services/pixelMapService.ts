@@ -32,7 +32,7 @@ export interface PixelMap {
  */
 export interface RenderOptions {
   cellWidth: number;
-  modulationMarkers?: ModulationMarker[];
+  tempoModulationMarkers?: ModulationMarker[];
   baseMicrobeatPx?: number;
   columnWidths?: number[];
   state?: AppState;
@@ -141,8 +141,8 @@ class PixelMapService {
    * Builds hash for cache invalidation
    */
   private buildPixelMapHash(options: RenderOptions, state: AppState): string {
-    const modulationHash = options.modulationMarkers
-      ? JSON.stringify(options.modulationMarkers.map(m => ({ id: m.id, col: m.columnIndex, ratio: m.ratio })))
+    const modulationHash = options.tempoModulationMarkers
+      ? JSON.stringify(options.tempoModulationMarkers.map(m => ({ id: m.id, col: m.columnIndex, ratio: m.ratio })))
       : 'none';
 
     return JSON.stringify({
@@ -156,15 +156,15 @@ class PixelMapService {
    * Builds the pixel map from column map and modulation data
    */
   private buildPixelMap(options: RenderOptions, state: AppState): PixelMap {
-    const { cellWidth, modulationMarkers } = options;
+    const { cellWidth, tempoModulationMarkers } = options;
     const columnMap = columnMapService.getColumnMap(state);
     const positions = new Map<number, ColumnPixelPosition>();
 
     // Create coordinate mapping for modulation
     const baseMicrobeatPx = options.baseMicrobeatPx ?? cellWidth;
     const modulationMapping: CoordinateMapping | null =
-      (modulationMarkers && modulationMarkers.length > 0)
-        ? createCoordinateMapping(modulationMarkers, baseMicrobeatPx, state)
+      (tempoModulationMarkers && tempoModulationMarkers.length > 0)
+        ? createCoordinateMapping(tempoModulationMarkers, baseMicrobeatPx, state)
         : null;
 
     let xAccumulator = 0;

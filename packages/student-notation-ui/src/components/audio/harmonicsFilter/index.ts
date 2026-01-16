@@ -5,7 +5,7 @@
  *
  * Sub-modules:
  * - filterCalculations.ts: Pure math for filter curves and coefficient filtering
- * - harmonicBins.ts: Main UI component and state management
+ * - overtoneBins.ts: Main UI component and state management
  */
 
 // Filter calculation functions
@@ -20,6 +20,6 @@ export {
 
 // Main initialization
 export {
-  initHarmonicBins,
-  getHarmonicBinsDebugMessages
-} from './harmonicBins.ts';
+  initOvertoneBins,
+  getOvertoneBinsDebugMessages
+} from './overtoneBins.ts';

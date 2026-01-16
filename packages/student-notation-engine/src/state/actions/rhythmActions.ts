@@ -302,7 +302,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
           ? (newGroupings.length - oldGroupings.length)
           : -(oldGroupings.length - newGroupings.length);
 
-        this.state.modulationMarkers.forEach(marker => {
+        this.state.tempoModulationMarkers.forEach(marker => {
           const newMeasureIndex = marker.measureIndex + anacrusisShift;
 
           if (newMeasureIndex < 0) {
@@ -317,9 +317,9 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
         });
 
         markersToRemove.forEach(markerToRemove => {
-          const index = this.state.modulationMarkers.indexOf(markerToRemove);
+          const index = this.state.tempoModulationMarkers.indexOf(markerToRemove);
           if (index > -1) {
-            this.state.modulationMarkers.splice(index, 1);
+            this.state.tempoModulationMarkers.splice(index, 1);
           }
         });
       }
@@ -328,7 +328,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
       this.emit('notesChanged');
       this.emit('sixteenthStampPlacementsChanged');
       this.emit('tripletStampPlacementsChanged');
-      this.emit('modulationMarkersChanged');
+      this.emit('tempoModulationMarkersChanged');
       this.emit('rhythmStructureChanged');
       this.recordState();
     },
@@ -630,7 +630,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
         return null;
       }
 
-      const existingMarkerIndex = this.state.modulationMarkers.findIndex((marker: ModulationMarker) => {
+      const existingMarkerIndex = this.state.tempoModulationMarkers.findIndex((marker: ModulationMarker) => {
         if (marker.measureIndex === measureIndex) {
           return true;
         }
@@ -647,7 +647,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
       });
 
       if (existingMarkerIndex !== -1) {
-        const existingMarker = this.state.modulationMarkers[existingMarkerIndex]!;
+        const existingMarker = this.state.tempoModulationMarkers[existingMarkerIndex]!;
         log('info', 'rhythmActions', `Replacing existing modulation marker ${existingMarker.id} at measure ${measureIndex} (old ratio: ${existingMarker.ratio}, new ratio: ${ratio})`, null, 'state');
 
         existingMarker.ratio = ratio;
@@ -655,18 +655,18 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
         if (columnIndex !== null) { existingMarker.columnIndex = columnIndex; }
         if (macrobeatIndex !== null) { existingMarker.macrobeatIndex = macrobeatIndex; }
 
-        this.emit('modulationMarkersChanged');
+        this.emit('tempoModulationMarkersChanged');
         this.recordState();
 
         return existingMarker.id;
       }
 
       const marker = createModulationMarker(measureIndex, ratio, xPosition, columnIndex, macrobeatIndex);
-      this.state.modulationMarkers.push(marker);
+      this.state.tempoModulationMarkers.push(marker);
 
-      this.state.modulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
+      this.state.tempoModulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
 
-      this.emit('modulationMarkersChanged');
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       log('info', 'rhythmActions', `Added modulation marker ${marker.id} at measure ${measureIndex} with ratio=${ratio}, columnIndex=${columnIndex}`, null, 'state');
@@ -674,14 +674,14 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
     },
 
     removeModulationMarker(this: Store, markerId: string): void {
-      const index = this.state.modulationMarkers.findIndex(m => m.id === markerId);
+      const index = this.state.tempoModulationMarkers.findIndex(m => m.id === markerId);
       if (index === -1) {
         log('warn', 'rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
         return;
       }
 
-      this.state.modulationMarkers.splice(index, 1);
-      this.emit('modulationMarkersChanged');
+      this.state.tempoModulationMarkers.splice(index, 1);
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       log('info', 'rhythmActions', `Removed modulation marker ${markerId}`, null, 'state');
@@ -693,21 +693,21 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
         return;
       }
 
-      const marker = this.state.modulationMarkers.find(m => m.id === markerId);
+      const marker = this.state.tempoModulationMarkers.find(m => m.id === markerId);
       if (!marker) {
         log('warn', 'rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
         return;
       }
 
       marker.ratio = ratio;
-      this.emit('modulationMarkersChanged');
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       log('info', 'rhythmActions', `Updated modulation marker ${markerId} ratio to ${ratio}`, null, 'state');
     },
 
     moveModulationMarker(this: Store, markerId: string, measureIndex: number): void {
-      const marker = this.state.modulationMarkers.find(m => m.id === markerId);
+      const marker = this.state.tempoModulationMarkers.find(m => m.id === markerId);
       if (!marker) {
         log('warn', 'rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
         return;
@@ -715,32 +715,32 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
 
       marker.measureIndex = measureIndex;
 
-      this.state.modulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
+      this.state.tempoModulationMarkers.sort((a, b) => a.measureIndex - b.measureIndex);
 
-      this.emit('modulationMarkersChanged');
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       log('info', 'rhythmActions', `Moved modulation marker ${markerId} to measure ${measureIndex}`, null, 'state');
     },
 
     toggleModulationMarker(this: Store, markerId: string): void {
-      const marker = this.state.modulationMarkers.find(m => m.id === markerId);
+      const marker = this.state.tempoModulationMarkers.find(m => m.id === markerId);
       if (!marker) {
         log('warn', 'rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
         return;
       }
 
       marker.active = !marker.active;
-      this.emit('modulationMarkersChanged');
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       log('info', 'rhythmActions', `Toggled modulation marker ${markerId} active state to ${marker.active}`, null, 'state');
     },
 
     clearModulationMarkers(this: Store): void {
-      const removedCount = this.state.modulationMarkers.length;
-      this.state.modulationMarkers = [];
-      this.emit('modulationMarkersChanged');
+      const removedCount = this.state.tempoModulationMarkers.length;
+      this.state.tempoModulationMarkers = [];
+      this.emit('tempoModulationMarkersChanged');
       this.recordState();
 
       log('info', 'rhythmActions', `Cleared ${removedCount} modulation markers`, null, 'state');

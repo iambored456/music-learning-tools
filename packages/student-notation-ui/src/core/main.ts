@@ -54,7 +54,8 @@ import initRhythmUi from '@/bootstrap/rhythm/initRhythmUi.ts';
 import { initCanvasServices } from '@/bootstrap/canvas/initCanvasServices.ts';
 import { initDrawSystem } from '@/bootstrap/draw/initDrawSystem.ts';
 import { initInputAndDiagnostics } from '@/bootstrap/input/initInputAndDiagnostics.ts';
-import { initStateSubscriptions } from '@/bootstrap/state/initStateSubscriptions.ts';
+// DEPRECATED: initStateSubscriptions now managed by StoreContext.svelte (Phase 3 modernization)
+// import { initStateSubscriptions } from '@/bootstrap/state/initStateSubscriptions.ts';
 import { unmountSvelteComponents } from '@/svelte-ui/index.ts';
 
 interface ComponentReadiness {
@@ -77,6 +78,23 @@ declare global {
     ModulationTest?: typeof ModulationTest;
   }
 }
+
+const shouldInitDebug = (): boolean => {
+  if (typeof window === 'undefined') {return false;}
+  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
+  if (override === true) {return true;}
+  if (override === false) {return false;}
+  return import.meta.env.DEV;
+};
+
+const initDebug = (message: string, data?: unknown): void => {
+  if (!shouldInitDebug()) {return;}
+  if (data === undefined) {
+    console.log(`[Init] ${message}`);
+    return;
+  }
+  console.log(`[Init] ${message}`, data);
+};
 
 
 let isInitialized = false;
@@ -248,6 +266,17 @@ async function startStudentNotation(): Promise<void> {
   try {
     loadingManager.init();
     loadingPhases.forEach(phase => loadingManager.registerTask(phase));
+    initDebug('startup rhythm defaults', {
+      macrobeatGroupings: store.state.macrobeatGroupings,
+      macrobeatBoundaryStyles: store.state.macrobeatBoundaryStyles
+    });
+    const defaultColor = store.state.selectedNote?.color ?? '#4a90e2';
+    const defaultTimbre = store.state.timbres?.[defaultColor];
+    initDebug('startup adsr defaults', {
+      color: defaultColor,
+      adsr: defaultTimbre?.adsr ?? null,
+      preset: defaultTimbre?.activePresetName ?? null
+    });
     await loadingManager.nextFrame();
     initDeviceProfileService();
 
@@ -392,13 +421,21 @@ async function startStudentNotation(): Promise<void> {
 
     // Phase 3: Initializing UI components
     loadingManager.updateStatus('Loading interface components...');
+    initDebug('Loading interface components...');
+    initDebug('initUiComponents:start');
     initUiComponents();
+    initDebug('initUiComponents:done');
     markComponentReady('uiComponents');
+    initDebug('uiComponents marked ready');
     loadingManager.completeTask('ui-components');
+    initDebug('ui-components task complete');
     await loadingManager.nextFrame();
+    initDebug('ui-components nextFrame resolved');
 
     // Wait for UI components before audio components
+    initDebug('waitForComponent:uiComponents');
     await waitForComponent('uiComponents');
+    initDebug('waitForComponent:uiComponents resolved');
     // Phase 4: Initializing audio components
     loadingManager.updateStatus('Preparing audio components...');
     initAudioComponents();
@@ -420,7 +457,23 @@ async function startStudentNotation(): Promise<void> {
     logger.section('SETTING UP STATE SUBSCRIPTIONS');
 
     loadingManager.updateStatus('Binding state subscriptions...');
-    const { renderAll } = initStateSubscriptions();
+    // NOTE: State subscriptions are now managed by StoreContext.svelte (Phase 3 modernization)
+    // The renderAll function is no longer returned from initStateSubscriptions
+    // Instead, we'll use a local implementation for the initial render
+    const renderAll = () => {
+      try {
+        PitchGridController.render();
+        const DrumGridController = (window as any).DrumGridController;
+        if (DrumGridController?.render) {
+          DrumGridController.render();
+        }
+        logger.debug('Main', 'renderAll invoked', null, 'grid');
+      } catch (err) {
+        logger.error('Main', 'renderAll failed', err, 'grid');
+      }
+    };
+    // DEPRECATED: initStateSubscriptions() - now managed by StoreContext.svelte
+    // const { renderAll } = initStateSubscriptions();
     loadingManager.completeTask('state-subscriptions');
     await loadingManager.nextFrame();
 

@@ -52,10 +52,10 @@
   let takeToSingingTrainerBtn: HTMLElement | null = null;
 
   // State tracking
-  let isDrumGridVisible = $state(true);
-  let isButtonGridVisible = $state(true);
-  let isLeftLegendVisible = $state(true);
-  let isRightLegendVisible = $state(true);
+  let isDrumGridVisible = true;
+  let isButtonGridVisible = true;
+  let isLeftLegendVisible = true;
+  let isRightLegendVisible = true;
 
   const VOLUME_STORAGE_KEY = 'app.volumeSliderValue';
 

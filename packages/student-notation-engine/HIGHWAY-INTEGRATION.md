@@ -349,7 +349,7 @@ const scrollingGridData = {
     'solid',
   ],
 
-  modulationMarkers: [
+  tempoModulationMarkers: [
     {
       measureIndex: 4,
       ratio: 0.5,  // Half speed

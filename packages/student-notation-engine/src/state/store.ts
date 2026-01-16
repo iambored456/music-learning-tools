@@ -96,6 +96,23 @@ function restoreTimbres(timbresSnapshot: Record<string, TimbreState>): Record<st
 /**
  * Load state from storage
  */
+const VALID_BOUNDARY_STYLES = new Set(['dashed', 'solid', 'anacrusis']);
+
+function isValidMacrobeatGroupings(value: unknown): value is Array<2 | 3> {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every((entry) => entry === 2 || entry === 3);
+}
+
+function isValidMacrobeatBoundaryStyles(
+  value: unknown,
+  groupingsLength: number
+): value is Array<'dashed' | 'solid' | 'anacrusis'> {
+  return Array.isArray(value)
+    && value.length === Math.max(groupingsLength - 1, 0)
+    && value.every((entry) => VALID_BOUNDARY_STYLES.has(entry));
+}
+
 function loadStateFromStorage(storage: StorageAdapter | undefined, storageKey: string): Partial<AppState> | undefined {
   if (!storage) return undefined;
 
@@ -106,20 +123,19 @@ function loadStateFromStorage(storage: StorageAdapter | undefined, storageKey: s
     }
     const parsedState = JSON.parse(serializedState);
 
-    // Convert Float32Arrays back from storage
-    if (parsedState.timbres) {
-      for (const color in parsedState.timbres) {
-        const timbre = parsedState.timbres[color];
-        if (timbre.coeffs && typeof timbre.coeffs === 'object') {
-          const values = Array.isArray(timbre.coeffs) ? timbre.coeffs : Object.values(timbre.coeffs);
-          timbre.coeffs = new Float32Array(values as number[]);
-        }
-        if (timbre.phases && typeof timbre.phases === 'object') {
-          const values = Array.isArray(timbre.phases) ? timbre.phases : Object.values(timbre.phases);
-          timbre.phases = new Float32Array(values as number[]);
-        }
-      }
+    const groupings = parsedState.macrobeatGroupings;
+    if (!isValidMacrobeatGroupings(groupings)) {
+      storage.removeItem(storageKey);
+      return undefined;
     }
+    if (!isValidMacrobeatBoundaryStyles(parsedState.macrobeatBoundaryStyles, groupings.length)) {
+      storage.removeItem(storageKey);
+      return undefined;
+    }
+
+    // Remove timbres from persisted state - always use defaults.
+    // This ensures the Sine preset loads on each session.
+    delete parsedState.timbres;
 
     // Validate pitch range
     if (parsedState.pitchRange) {
@@ -154,18 +170,21 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
   if (!storage) return;
 
   try {
+    // NOTE: timbres are intentionally NOT persisted
+    // This ensures the default Sine preset loads on each session
+    // Users can change presets during a session, but they reset on reload
     const stateToPersist = JSON.parse(JSON.stringify({
       placedNotes: state.placedNotes,
       placedChords: state.placedChords,
       tonicSignGroups: state.tonicSignGroups,
       sixteenthStampPlacements: state.sixteenthStampPlacements,
       tripletStampPlacements: state.tripletStampPlacements,
-      timbres: state.timbres,
+      // timbres: state.timbres, // Removed - always use default Sine preset
       macrobeatGroupings: state.macrobeatGroupings,
       macrobeatBoundaryStyles: state.macrobeatBoundaryStyles,
       hasAnacrusis: state.hasAnacrusis,
       baseMicrobeatPx: state.baseMicrobeatPx,
-      modulationMarkers: state.modulationMarkers,
+      tempoModulationMarkers: state.tempoModulationMarkers,
       tempo: state.tempo,
       activeChordIntervals: state.activeChordIntervals,
       selectedNote: state.selectedNote,
@@ -176,20 +195,6 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
       longNoteStyle: state.longNoteStyle,
       playheadMode: state.playheadMode
     }));
-
-    // Convert Float32Arrays to regular arrays for storage
-    if (state.timbres) {
-      for (const color in state.timbres) {
-        const timbre = state.timbres[color];
-        const persistTimbre = stateToPersist.timbres?.[color];
-        if (timbre?.coeffs && persistTimbre) {
-          persistTimbre.coeffs = Array.from(timbre.coeffs);
-        }
-        if (timbre?.phases && persistTimbre) {
-          persistTimbre.phases = Array.from(timbre.phases);
-        }
-      }
-    }
 
     const serializedState = JSON.stringify(stateToPersist);
     storage.setItem(storageKey, serializedState);
