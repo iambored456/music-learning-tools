@@ -6,7 +6,7 @@
  */
 
 import type { PitchRowData, AccidentalMode } from '@mlt/types';
-import type { CoordinateUtils } from '../types.js';
+import type { CoordinateUtils, LegendHighlightConfig, LegendHighlightEntry } from '../types.js';
 
 // ============================================================================
 // Types
@@ -34,12 +34,7 @@ export interface LegendRenderConfig {
   /** Whether focus coloring is enabled */
   focusColorsEnabled: boolean;
   /** Optional highlight overlay for a specific pitch */
-  highlight?: {
-    pitchClass: number | null;
-    midi?: number | null;
-    opacity: number;
-    color?: string;
-  };
+  highlight?: LegendHighlightConfig;
 }
 
 export interface LegendRenderOptions {
@@ -124,6 +119,14 @@ function getPitchClassFromRow(row: PitchRowData): number {
 }
 
 /**
+ * Normalize highlight input into a flat list.
+ */
+function normalizeHighlights(highlight?: LegendHighlightConfig): LegendHighlightEntry[] {
+  if (!highlight) return [];
+  return Array.isArray(highlight) ? highlight : [highlight];
+}
+
+/**
  * Determine if a row should be focused based on pitch class.
  */
 function isRowFocused(
@@ -200,6 +203,7 @@ export function drawLegend(
 
   const pixelRatio = getCanvasPixelRatio(ctx.canvas);
   const snap = (value: number): number => snapToDevicePixel(value, pixelRatio);
+  const highlightEntries = normalizeHighlights(config.highlight);
 
   // Each legend has two columns (A and B), split evenly
   const colWidth = legendColumnWidth;
@@ -244,22 +248,25 @@ export function drawLegend(
       ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
 
       // Optional highlight overlay
-      const highlight = config.highlight;
-      if (highlight && highlight.opacity > 0.01) {
-        let shouldHighlight = false;
-        if (typeof highlight.midi === 'number') {
-          shouldHighlight = typeof row.midi === 'number' && row.midi === Math.round(highlight.midi);
-        } else if (typeof highlight.pitchClass === 'number') {
-          const rowPitchClass = getPitchClassFromRow(row);
-          shouldHighlight = rowPitchClass === highlight.pitchClass;
-        }
+      if (highlightEntries.length > 0) {
+        for (const highlight of highlightEntries) {
+          if (highlight.opacity <= 0) continue;
 
-        if (shouldHighlight) {
-          ctx.save();
-          ctx.globalAlpha = Math.min(Math.max(highlight.opacity, 0), 1);
-          ctx.fillStyle = highlight.color ?? '#ffff00';
-          ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
-          ctx.restore();
+          let shouldHighlight = false;
+          if (typeof highlight.midi === 'number') {
+            shouldHighlight = typeof row.midi === 'number' && row.midi === Math.round(highlight.midi);
+          } else if (typeof highlight.pitchClass === 'number') {
+            const rowPitchClass = getPitchClassFromRow(row);
+            shouldHighlight = rowPitchClass === highlight.pitchClass;
+          }
+
+          if (shouldHighlight) {
+            ctx.save();
+            ctx.globalAlpha = Math.min(Math.max(highlight.opacity, 0), 1);
+            ctx.fillStyle = highlight.color ?? '#ffff00';
+            ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+            ctx.restore();
+          }
         }
       }
 

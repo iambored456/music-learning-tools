@@ -101,16 +101,16 @@
     }
 
     const stable = pitchState.state.stablePitch;
-    if (stable.pitchClass === null || stable.opacity <= 0.01) {
+    if (stable.highlights.length === 0) {
       return undefined;
     }
 
-    return {
-      pitchClass: stable.pitchClass,
-      midi: stable.midi,
-      opacity: stable.opacity,
+    return stable.highlights.map((highlight) => ({
+      pitchClass: highlight.pitchClass,
+      midi: highlight.midi,
+      opacity: highlight.opacity,
       color: '#ffff00',
-    };
+    }));
   })());
 
   // Convert local target notes to shared format

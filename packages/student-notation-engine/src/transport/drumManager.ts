@@ -95,6 +95,16 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
       drumPlayers = null;
       drumVolumeNode = null;
       lastDrumStartTimes.clear();
+    },
+
+    isLoaded(): boolean {
+      return drumPlayers?.loaded ?? false;
+    },
+
+    async waitForLoad(): Promise<void> {
+      if (drumPlayers) {
+        await drumPlayers.loaded;
+      }
     }
   };
 }

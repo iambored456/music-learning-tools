@@ -281,6 +281,52 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
       return wasErased;
     },
 
+    eraseDrumNoteAt(
+      this: Store,
+      colIndex: CanvasSpaceColumn,
+      drumTrack: number | string,
+      record = true
+    ): boolean {
+      const targetTrack = String(drumTrack);
+      const initialCount = this.state.placedNotes.length;
+      this.state.placedNotes = this.state.placedNotes.filter(note =>
+        !(note.isDrum && String(note.drumTrack) === targetTrack && note.startColumnIndex === colIndex)
+      );
+      const wasErased = this.state.placedNotes.length < initialCount;
+      if (wasErased) {
+        this.emit('notesChanged');
+        if (record) {
+          this.recordState();
+        }
+      }
+      return wasErased;
+    },
+
+    toggleDrumNote(
+      this: Store,
+      drumHit: Partial<PlacedNote> & { drumTrack: number | string; startColumnIndex: CanvasSpaceColumn }
+    ): void {
+      const targetTrack = String(drumHit.drumTrack);
+      const existingIndex = this.state.placedNotes.findIndex(note =>
+        note.isDrum &&
+        String(note.drumTrack) === targetTrack &&
+        note.startColumnIndex === drumHit.startColumnIndex
+      );
+      if (existingIndex >= 0) {
+        this.state.placedNotes.splice(existingIndex, 1);
+      } else {
+        const newDrumNote: PlacedNote = {
+          ...drumHit,
+          uuid: generateUUID(),
+          isDrum: true,
+          endColumnIndex: (drumHit.endColumnIndex ?? drumHit.startColumnIndex) as CanvasSpaceColumn
+        } as PlacedNote;
+        this.state.placedNotes.push(newDrumNote);
+      }
+      this.emit('notesChanged');
+      this.recordState();
+    },
+
     addTonicSignGroup(
       this: Store,
       tonicSignGroup: Array<Pick<TonicSign, 'preMacrobeatIndex' | 'columnIndex' | 'row' | 'tonicNumber' | 'globalRow' | 'uuid'>>

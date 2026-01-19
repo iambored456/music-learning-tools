@@ -15,7 +15,8 @@
   import TransportService from '@services/initTransport.ts';
   import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.js';
   import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.js';
-  import { getIconPath } from '@utils/assetPaths.ts';
+  import playIconUrl from '../../../public/assets/icons/play.svg?url';
+  import pauseIconUrl from '../../../public/assets/icons/pause.svg?url';
 
   // Reactive state
   let isPlaying = store.state.isPlaying;
@@ -78,8 +79,8 @@
   // Update button visuals based on state
   function updatePlayButton() {
     if (!playBtn) return;
-    const playIcon = `<img src="${getIconPath('play.svg')}" alt="Play">`;
-    const pauseIcon = `<img src="${getIconPath('pause.svg')}" alt="Pause">`;
+    const playIcon = `<img src="${playIconUrl}" alt="Play">`;
+    const pauseIcon = `<img src="${pauseIconUrl}" alt="Pause">`;
     playBtn.innerHTML = (isPlaying && !isPaused) ? pauseIcon : playIcon;
   }
 

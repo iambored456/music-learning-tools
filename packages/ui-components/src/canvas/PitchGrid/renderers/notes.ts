@@ -716,10 +716,24 @@ export function drawTargetNotes(
     // Draw stadium shape
     ctx.save();
     ctx.beginPath();
-    ctx.arc(startX, y, ry, Math.PI / 2, -Math.PI / 2, false);
-    ctx.lineTo(endX, y - ry);
-    ctx.arc(endX, y, ry, -Math.PI / 2, Math.PI / 2, false);
-    ctx.lineTo(startX, y + ry);
+
+    // Check if note is long enough for stadium shape
+    const noteWidth = endX - startX;
+    if (noteWidth >= 2 * ry) {
+      // Shift arc centers inward so caps fit within startX to endX boundaries
+      const leftCapCenterX = startX + ry;
+      const rightCapCenterX = endX - ry;
+
+      ctx.arc(leftCapCenterX, y, ry, Math.PI / 2, -Math.PI / 2, false);
+      ctx.lineTo(rightCapCenterX, y - ry);
+      ctx.arc(rightCapCenterX, y, ry, -Math.PI / 2, Math.PI / 2, false);
+      ctx.lineTo(leftCapCenterX, y + ry);
+    } else {
+      // Note too short for stadium - draw ellipse instead
+      const centerX = (startX + endX) / 2;
+      const rx = noteWidth / 2;
+      ctx.ellipse(centerX, y, rx, ry, 0, 0, 2 * Math.PI);
+    }
     ctx.closePath();
 
     if (isBeingHit) {
@@ -749,7 +763,8 @@ export function drawTargetNotes(
 
     // Draw label if provided (at left edge of note)
     if (note.label) {
-      const labelX = startX + ry + 4; // Position inside the left cap
+      // Label positioned just inside the left edge of the stadium
+      const labelX = startX + 4;
       ctx.fillStyle = isBeingHit ? '#FFD700' : '#212529'; // Gold when hit
       ctx.font = `bold ${Math.max(16, ry * 1.2)}px 'Atkinson Hyperlegible', sans-serif`;
       ctx.textAlign = 'left';

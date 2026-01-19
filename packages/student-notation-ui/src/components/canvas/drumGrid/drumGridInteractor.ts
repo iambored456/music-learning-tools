@@ -1,4 +1,5 @@
 // js/components/canvas/drumGrid/drumGridInteractor.ts
+import * as Tone from 'tone';
 import store from '@state/initStore.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
 import { drawDrumShape, type VolumeIconState } from './drumGridRenderer.ts';
@@ -7,6 +8,7 @@ import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/
 import { isPlayableColumn } from '@services/columnMapService.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
+import { getDrumPlayers, initDrumPlayers, triggerDrum } from '@services/transport/drumManager.ts';
 
 /**
  * COORDINATE SYSTEM NOTE:
@@ -30,6 +32,25 @@ let volumeSlider: HTMLInputElement | null = null;
 const volumeIconState: VolumeIconState = 'normal';
 let lastDrumPlaybackTime = 0;
 const DRUM_PLAYBACK_THROTTLE_MS = 500;
+
+const ensureDrumPlayersReady = (): boolean => {
+  if (getDrumPlayers()) {return true;}
+  initDrumPlayers();
+  return Boolean(getDrumPlayers());
+};
+
+const triggerDrumHit = (drumTrack: DrumTrack, timeOffsetSeconds = 0): void => {
+  const play = () => {
+    if (!ensureDrumPlayersReady()) {return;}
+    triggerDrum(drumTrack, Tone.now() + timeOffsetSeconds);
+  };
+  const initPromise = (window as any).initAudio?.();
+  if (initPromise && typeof (initPromise as Promise<void>).then === 'function') {
+    void (initPromise as Promise<void>).then(play).catch(() => {});
+    return;
+  }
+  play();
+};
 
 const getColumnX = (index: number): number => {
   // CANVAS-SPACE FIX: Always use rendererUtils.getColumnX() with proper options
@@ -216,12 +237,8 @@ function handleMouseDown(event: MouseEvent): void {
     };
     (store as any).toggleDrumNote?.(drumHit);
 
-    const transportService = (window as any).transportService;
-    const drumPlayers = transportService?.drumPlayers;
-    if (drumPlayers?.player) {
-      drumPlayers.player(drumTrack).start();
-      DrumPlayheadRenderer.triggerNotePop(colIndex, drumTrack);
-    }
+    DrumPlayheadRenderer.triggerNotePop(colIndex, drumTrack);
+    triggerDrumHit(drumTrack);
   }
 }
 
@@ -302,11 +319,9 @@ function createVolumeSlider(): void {
       const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
       drumVolumeNode.volume.value = volumeDb;
 
-      const transportService = (window as any).transportService;
-      const drumPlayers = transportService?.drumPlayers;
       const now = Date.now();
-      if (drumPlayers?.player && now - lastDrumPlaybackTime >= DRUM_PLAYBACK_THROTTLE_MS) {
-        drumPlayers.player('M').start('+0.1');
+      if (now - lastDrumPlaybackTime >= DRUM_PLAYBACK_THROTTLE_MS) {
+        triggerDrumHit('M', 0.1);
         lastDrumPlaybackTime = now;
       }
     }

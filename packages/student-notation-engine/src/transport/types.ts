@@ -125,4 +125,8 @@ export interface DrumManagerInstance {
   reset(): void;
   /** Dispose resources */
   dispose(): void;
+  /** Check if drum samples are loaded */
+  isLoaded(): boolean;
+  /** Wait for drum samples to finish loading */
+  waitForLoad(): Promise<void>;
 }

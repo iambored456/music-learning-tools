@@ -530,12 +530,12 @@ export function createTransportService(config: TransportConfig): TransportServic
         logger: log
       });
 
-      // Create drum manager
+      // Create drum manager with Tone.js sample URLs
       drumManager = createDrumManager({
         samples: {
-          H: '/audio/drums/hi.mp3',
-          M: '/audio/drums/mid.mp3',
-          L: '/audio/drums/lo.mp3'
+          H: 'https://tonejs.github.io/audio/drum-samples/CR78/hihat.mp3',
+          M: 'https://tonejs.github.io/audio/drum-samples/CR78/snare.mp3',
+          L: 'https://tonejs.github.io/audio/drum-samples/CR78/kick.mp3'
         },
         synthEngine: {
           getMainVolumeNode: () => synthEngine.getMainVolumeNode()
@@ -653,16 +653,28 @@ export function createTransportService(config: TransportConfig): TransportServic
       log.info('TransportService', 'Starting playback');
 
       const init = audioInit || (() => Tone.start());
-      void init().then(() => {
-        scheduleNotes();
+      void init().then(async () => {
+        // Ensure context has fully transitioned to running state
+        if (Tone.context.state !== 'running') {
+          await Tone.context.resume();
+        }
 
+        // Wait for drum samples to be loaded
+        if (drumManager) {
+          await drumManager.waitForLoad();
+        }
+
+        // IMPORTANT: Set loop bounds BEFORE scheduling notes
+        // Otherwise configuredLoopEnd is 0 and notes get near-instant release
         const state = stateCallbacks.getState();
-        const currentTimeMap = timeMapCalculator?.getTimeMap() ?? [];
+        timeMapCalculator?.calculate(state);
         const musicalDuration = timeMapCalculator?.getMusicalEndTime() ?? 0;
         const loopStart = timeMapCalculator?.findNonAnacrusisStart(state) ?? 0;
 
         timeMapCalculator?.setLoopBounds(loopStart, musicalDuration, state.tempo);
         Tone.Transport.bpm.value = state.tempo;
+
+        scheduleNotes();
 
         const startTime = Tone.now() + 0.1;
         Tone.Transport.start(startTime, 0);
@@ -680,7 +692,12 @@ export function createTransportService(config: TransportConfig): TransportServic
       log.info('TransportService', 'Resuming playback');
 
       const init = audioInit || (() => Tone.start());
-      void init().then(() => {
+      void init().then(async () => {
+        // Ensure context has fully transitioned to running state
+        if (Tone.context.state !== 'running') {
+          await Tone.context.resume();
+        }
+
         Tone.Transport.start();
 
         // In standard mode, animate playhead here. In highway mode, the highway service handles visuals

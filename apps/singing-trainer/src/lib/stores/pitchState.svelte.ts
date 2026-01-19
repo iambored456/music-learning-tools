@@ -18,10 +18,14 @@ export interface PitchHistoryPoint {
   clarity: number;
 }
 
-export interface StablePitch {
-  pitchClass: number | null;
-  midi: number | null;
+export interface StablePitchHighlight {
+  pitchClass: number;
+  midi: number;
   opacity: number;
+}
+
+export interface StablePitch {
+  highlights: StablePitchHighlight[];
   size: number;
 }
 
@@ -36,7 +40,7 @@ const MAX_HISTORY_LENGTH = 200; // Cap history to bound trail render cost
 const DEFAULT_STATE: PitchState = {
   currentPitch: null,
   history: [],
-  stablePitch: { pitchClass: null, midi: null, opacity: 0, size: 1.0 },
+  stablePitch: { highlights: [], size: 1.0 },
 };
 
 function createPitchState() {

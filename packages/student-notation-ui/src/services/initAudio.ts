@@ -35,15 +35,16 @@ const SynthEngine = {
         }
       },
 
-      // Inject the effects manager if available
-      effectsManager: window.audioEffectsManager ? {
+      // Inject the effects manager - always provide wrapper, check at call time
+      // (window.audioEffectsManager is set by initAudioComponents which runs AFTER this)
+      effectsManager: {
         applySynthEffects: (synth: any, color: string, masterGain: any) => {
           window.audioEffectsManager?.applySynthEffects(synth, color, masterGain);
         },
         applyEffectsToVoice: (voice: any, color: string) => {
           window.audioEffectsManager?.applyEffectsToVoice(voice, color);
         }
-      } : undefined,
+      },
 
       // Inject the logger
       logger: {

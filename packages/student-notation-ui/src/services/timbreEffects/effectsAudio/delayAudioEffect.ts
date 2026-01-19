@@ -44,7 +44,9 @@ class DelayAudioEffect {
 
     if (delayInstance) {
       this.updateDelayInstance(delayInstance, time, feedback, wet);
-    } else if (time > 0 || feedback > 0) {
+    } else if (wet > 0) {
+      // Create delay instance if wet > 0, even with time/feedback at 0
+      // This ensures the delay node is in the audio chain during preview
       delayInstance = this.createDelayInstance(time, feedback, wet);
       if (delayInstance) {
         this.delayInstances.set(color, delayInstance);
@@ -88,15 +90,15 @@ class DelayAudioEffect {
   }
 
   getEffectInstance(color: string): DelayInstance | null {
-    const settings = this.getCurrentSettings(color);
-    if (settings.time > 0 && settings.wet > 0) {
-      return this.delayInstances.get(color) ?? null;
-    }
-    return null;
+    // Return the instance if it exists, regardless of current wet/time values
+    // This ensures the delay node stays in the audio chain during preview
+    return this.delayInstances.get(color) ?? null;
   }
 
   private createDelayInstance(time: number, feedback: number, wet = 30): DelayInstance | null {
-    if (time === 0 && feedback === 0) {
+    // Create instance if wet > 0, even if time/feedback are 0
+    // This allows delay to be in the audio chain during preview
+    if (wet === 0) {
       return null;
     }
 

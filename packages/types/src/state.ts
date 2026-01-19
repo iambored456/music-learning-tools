@@ -157,6 +157,8 @@ export interface Store {
   clearAllNotes(): void;
   loadNotes(notes: Partial<PlacedNote>[]): void;
   eraseInPitchArea(col: CanvasSpaceColumn, row: number, width?: number, record?: boolean): boolean;
+  eraseDrumNoteAt(colIndex: CanvasSpaceColumn, drumTrack: number | string, record?: boolean): boolean;
+  toggleDrumNote(drumHit: Partial<PlacedNote> & { drumTrack: number | string; startColumnIndex: CanvasSpaceColumn }): void;
   eraseTonicSignAt(columnIndex: CanvasSpaceColumn, record?: boolean): boolean;
   addTonicSignGroup(tonicSignGroup: Array<Pick<TonicSign, 'preMacrobeatIndex' | 'columnIndex' | 'row' | 'tonicNumber' | 'globalRow' | 'uuid'>>): void;
 

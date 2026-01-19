@@ -46,7 +46,7 @@
       yParam: 'feedback',
       xRange: { min: 0, max: 100, step: 1 },
       yRange: { min: 0, max: 95, step: 1 },
-      backgroundOpacity: 0.2
+      backgroundOpacity: 0.5
     },
     vibrato: {
       xParam: 'speed',

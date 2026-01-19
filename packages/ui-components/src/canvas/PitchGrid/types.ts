@@ -108,7 +108,7 @@ export interface CurrentPitch {
 /**
  * Highlight overlay configuration for legend labels.
  */
-export interface LegendHighlightConfig {
+export interface LegendHighlightEntry {
   /** Pitch class to highlight (0-11, C=0). Null disables highlight. */
   pitchClass: number | null;
   /** Specific MIDI note to highlight (e.g., 60 = C4). When set, overrides pitchClass matching. */
@@ -118,6 +118,11 @@ export interface LegendHighlightConfig {
   /** Highlight color (default: yellow). */
   color?: string;
 }
+
+/**
+ * Single highlight or list of highlights for legend labels.
+ */
+export type LegendHighlightConfig = LegendHighlightEntry | LegendHighlightEntry[];
 
 /**
  * A target note to display on the note highway.

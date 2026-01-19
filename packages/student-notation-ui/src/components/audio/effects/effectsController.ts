@@ -327,6 +327,15 @@ class EffectsController {
     const { isPlaying, isPaused } = store.state as any;
     if (isPlaying && !isPaused) {return;}
 
+    // For delay effect, ensure the delay instance exists in the audio chain before triggering preview
+    if (effectType === 'delay') {
+      const effectParams = effectsCoordinator.getEffectParameters(color, 'delay');
+      if (effectParams && effectParams.wet > 0) {
+        // Trigger a parameter update to ensure delay instance is created and routed
+        effectsCoordinator.updateParameter('delay', 'wet', effectParams.wet, color);
+      }
+    }
+
     pitches.forEach(pitch => SynthEngine.triggerAttack(pitch, color));
 
     const rowData = store.state.fullRowData.find(row => row.toneNote === root);
