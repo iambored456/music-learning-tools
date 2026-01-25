@@ -248,6 +248,9 @@ class ClefViewportController {
   private trebleButton: HTMLElement | null = null;
   private altoButton: HTMLElement | null = null;
   private bassButton: HTMLElement | null = null;
+  private voice1Button: HTMLElement | null = null;
+  private voice2Button: HTMLElement | null = null;
+  private voice3Button: HTMLElement | null = null;
   private presetContainer: HTMLElement | null = null;
   private presetButtons: HTMLElement[] = [];
   private activePresetId: string | null = null;
@@ -265,6 +268,9 @@ class ClefViewportController {
     this.trebleButton = document.getElementById('clef-treble-button');
     this.altoButton = document.getElementById('clef-alto-button');
     this.bassButton = document.getElementById('clef-bass-button');
+    this.voice1Button = document.getElementById('clef-voice1-button');
+    this.voice2Button = document.getElementById('clef-voice2-button');
+    this.voice3Button = document.getElementById('clef-voice3-button');
     this.presetContainer = document.querySelector('.clef-preset-buttons');
     this.presetButtons = Array.from(document.querySelectorAll('.clef-preset-button'));
 
@@ -311,6 +317,15 @@ class ClefViewportController {
     }
     if (this.bassButton) {
       this.bassButton.addEventListener('click', () => this.applyPresetView('bass'));
+    }
+    if (this.voice1Button) {
+      this.voice1Button.addEventListener('click', () => this.applyPresetView('voice1'));
+    }
+    if (this.voice2Button) {
+      this.voice2Button.addEventListener('click', () => this.applyPresetView('voice2'));
+    }
+    if (this.voice3Button) {
+      this.voice3Button.addEventListener('click', () => this.applyPresetView('voice3'));
     }
 
     store.on('pitchRangeChanged', () => {
@@ -416,7 +431,7 @@ class ClefViewportController {
       full: { topIndex: 0, bottomIndex: Math.max(0, this.masterOptions.length - 1) },
       treble: resolvePresetFromToneNotes('G5', 'C4'),
       alto: resolvePresetFromToneNotes('A4', 'D3'),
-      bass: resolvePresetFromToneNotes('C4', 'E2'),
+      bass: resolvePresetFromToneNotes('C4', 'F2'),
       voice1: resolvePresetFromToneNotes('A5', 'A3'),  // Voice I
       voice2: resolvePresetFromToneNotes('C5', 'C3'),  // Voice II
       voice3: resolvePresetFromToneNotes('E4', 'E2')   // Voice III
