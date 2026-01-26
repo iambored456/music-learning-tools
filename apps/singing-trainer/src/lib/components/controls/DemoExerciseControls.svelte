@@ -8,15 +8,25 @@
   import { demoExerciseState } from '../../stores/demoExerciseState.svelte.js';
   import { highwayState } from '../../stores/highwayState.svelte.js';
   import { appState } from '../../stores/appState.svelte.js';
+  import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
   import { referenceAudio } from '../../services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
   import { onDestroy } from 'svelte';
+
+  // DEBUG: Verify this file is being loaded
+  console.log('[DemoExerciseControls] MODULE LOADED - app-level component');
 
   // Local state for settings panel
   let showSettings = $state(false);
   let numLoops = $state(5);
   let tempo = $state(108);
   let referenceVolume = $state(-12);
+
+  // Completion tracking
+  let completionTriggered = $state(false);
+
+  // Polling interval for results collection (bypasses Svelte reactivity issues)
+  let resultsPollingInterval: ReturnType<typeof setInterval> | null = null;
 
   // Reactive state from stores
   const isActive = $derived(demoExerciseState.state.isActive);
@@ -42,24 +52,51 @@
   });
 
   /**
+   * Start polling for results (called when exercise starts)
+   */
+  function startResultsPolling() {
+    console.log('[Polling] Starting results polling');
+    resultsPollingInterval = setInterval(() => {
+      collectResults();
+      checkCompletion();
+    }, 200); // Poll every 200ms
+  }
+
+  /**
+   * Stop polling for results (called when exercise stops)
+   */
+  function stopResultsPolling() {
+    if (resultsPollingInterval) {
+      clearInterval(resultsPollingInterval);
+      resultsPollingInterval = null;
+    }
+  }
+
+  /**
    * Collect results from highway performance data
    */
-  $effect(() => {
-    if (!isActive) return;
-
+  function collectResults() {
     const performances = highwayState.getPerformanceResults();
     const notes = demoExerciseState.getGeneratedNotes();
 
-    // Check each input note for completion
+    console.log('[Polling] collectResults:', {
+      performanceCount: performances.size,
+      notesCount: notes.length,
+      currentResults: demoExerciseState.state.results.length,
+    });
+
     notes.forEach((note, index) => {
       if (note.lyric !== '🎤') return; // Only process input notes
 
       const noteId = `target-${index}`;
       const perf = performances.get(noteId);
 
+      console.log('[Polling] Checking:', { noteId, hasPerf: !!perf, lyric: note.lyric });
+
       if (perf && !demoExerciseState.hasResultForLoop(Math.floor(index / 2))) {
-        // Calculate accuracy percentage from performance data
         const accuracy = calculateAccuracy(perf);
+
+        console.log('[Polling] Adding result for loop', Math.floor(index / 2));
 
         demoExerciseState.addResult({
           loopIndex: Math.floor(index / 2),
@@ -69,7 +106,68 @@
         });
       }
     });
-  });
+  }
+
+  /**
+   * Check if exercise is complete and trigger results modal
+   */
+  function checkCompletion() {
+    const completedLoops = demoExerciseState.state.results.length;
+    const totalLoops = demoExerciseState.state.config.numLoops;
+
+    console.log('[Polling] checkCompletion:', { completedLoops, totalLoops, completionTriggered });
+
+    if (completedLoops >= totalLoops && totalLoops > 0 && !completionTriggered) {
+      console.log('[Polling] Triggering completion!');
+      completionTriggered = true;
+      handleExerciseComplete();
+    }
+  }
+
+  /**
+   * Handle exercise completion - stop and show results modal
+   */
+  function handleExerciseComplete() {
+    handleStop();
+
+    // Build summary from collected results
+    const exerciseResults = demoExerciseState.getResults();
+    const notesHit = exerciseResults.filter(r => r.performance?.hitStatus === 'hit').length;
+    const totalNotes = exerciseResults.length;
+
+    // Calculate average pitch deviation from hits
+    let totalDeviation = 0;
+    let deviationCount = 0;
+    exerciseResults.forEach(r => {
+      if (r.performance?.hitStatus === 'hit' && typeof r.performance.pitchAccuracyCents === 'number') {
+        totalDeviation += Math.abs(r.performance.pitchAccuracyCents);
+        deviationCount++;
+      }
+    });
+
+    const summary: ResultsSummary = {
+      totalNotes,
+      notesHit,
+      notesMissed: totalNotes - notesHit,
+      accuracyPercent: totalNotes > 0 ? (notesHit / totalNotes) * 100 : 0,
+      goldenNotesHit: 0,
+      goldenNotesTotal: 0,
+      phraseResults: exerciseResults.map((r, i) => ({
+        phraseIndex: i,
+        notesHit: r.performance?.hitStatus === 'hit' ? 1 : 0,
+        totalNotes: 1,
+        accuracyPercent: r.accuracy,
+        lyricPreview: `Loop ${i + 1}: ${getPitchName(r.targetPitch)}`,
+      })),
+      averagePitchDeviationCents: deviationCount > 0 ? totalDeviation / deviationCount : 0,
+    };
+
+    // Show results modal
+    resultsState.show(summary, {
+      title: 'Pitch Matching Exercise',
+      source: 'demo',
+    });
+  }
 
   /**
    * Calculate accuracy percentage from performance data
@@ -92,6 +190,7 @@
    * Cleanup on component destroy
    */
   onDestroy(() => {
+    stopResultsPolling();
     if (isActive) {
       handleStop();
     }
@@ -116,6 +215,7 @@
    * Start the demo exercise
    */
   async function handleStart() {
+    console.log('[DemoExerciseControls] handleStart called');
     // Auto-switch to highway mode
     appState.setVisualizationMode('highway');
 
@@ -145,6 +245,9 @@
     highwayState.start();
     demoExerciseState.setPlaying(true);
 
+    // Start polling for results
+    startResultsPolling();
+
     // Schedule reference tones (only the reference notes, not input notes)
     const referenceTones = notes.filter(n => n.lyric === '👂');
     referenceAudio.scheduleReferenceTones(referenceTones);
@@ -154,6 +257,12 @@
    * Stop the demo exercise
    */
   function handleStop() {
+    // Stop polling
+    stopResultsPolling();
+
+    // Reset completion flag
+    completionTriggered = false;
+
     // Stop audio
     referenceAudio.stop();
 

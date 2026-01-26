@@ -18,3 +18,14 @@ export {
   type ResultsSummary,
   type PhraseResult,
 } from './resultsState.svelte.js';
+export {
+  preferencesStore,
+  type SingingTrainerPreferences,
+} from './preferencesStore.svelte.js';
+export {
+  demoExerciseState,
+  type ExerciseConfig,
+  type ExerciseState,
+  type ExerciseResult,
+  type ExercisePhase,
+} from './demoExerciseState.svelte.js';

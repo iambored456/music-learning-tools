@@ -268,6 +268,23 @@ function createDemoExerciseState() {
     },
 
     /**
+     * Check if all loops have been completed
+     */
+    isComplete(): boolean {
+      return state.results.length >= state.config.numLoops && state.config.numLoops > 0;
+    },
+
+    /**
+     * Get total exercise duration in milliseconds
+     */
+    getTotalDurationMs(): number {
+      const microbeatDurationMs = getMicrobeatDurationMs(state.config.tempo);
+      const leadInMs = 2000;
+      const loopDurationMs = 32 * microbeatDurationMs;
+      return leadInMs + (state.config.numLoops * loopDurationMs);
+    },
+
+    /**
      * Reset to default state
      */
     reset() {

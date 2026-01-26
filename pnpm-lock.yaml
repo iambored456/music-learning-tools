@@ -72,9 +72,33 @@ importers:
 
   apps/singing-trainer:
     dependencies:
+      '@mlt/handoff':
+        specifier: workspace:*
+        version: link:../../packages/handoff
+      '@mlt/lesson-templates':
+        specifier: workspace:*
+        version: link:../../packages/lesson-templates
+      '@mlt/pitch-data':
+        specifier: workspace:*
+        version: link:../../packages/pitch-data
+      '@mlt/pitch-utils':
+        specifier: workspace:*
+        version: link:../../packages/pitch-utils
       '@mlt/singing-trainer-ui':
         specifier: workspace:*
         version: link:../../packages/singing-trainer-ui
+      '@mlt/student-notation-engine':
+        specifier: workspace:*
+        version: link:../../packages/student-notation-engine
+      '@mlt/ui-components':
+        specifier: workspace:*
+        version: link:../../packages/ui-components
+      pitchy:
+        specifier: ^4.1.0
+        version: 4.1.0
+      tone:
+        specifier: ^15.0.4
+        version: 15.1.22
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^5.0.3
@@ -161,6 +185,12 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/lesson-templates:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   packages/note-highway:
     dependencies:
       '@mlt/pitch-data':
@@ -231,6 +261,9 @@ importers:
       '@mlt/handoff':
         specifier: workspace:*
         version: link:../handoff
+      '@mlt/lesson-templates':
+        specifier: workspace:*
+        version: link:../lesson-templates
       '@mlt/pitch-data':
         specifier: workspace:*
         version: link:../pitch-data

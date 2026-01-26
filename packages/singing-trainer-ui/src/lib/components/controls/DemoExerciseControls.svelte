@@ -3,20 +3,35 @@
    * Demo Exercise Controls Component
    *
    * UI for starting/stopping the pitch-matching demo exercise.
+   * Supports speaking pitch integration and lesson templates.
    */
 
   import { demoExerciseState } from '../../stores/demoExerciseState.svelte.js';
   import { highwayState } from '../../stores/highwayState.svelte.js';
   import { appState } from '../../stores/appState.svelte.js';
+  import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
+  import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
   import { referenceAudio } from '../../services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
   import { onDestroy } from 'svelte';
+  import type { SpeakingPitchUsage } from '@mlt/lesson-templates';
 
   // Local state for settings panel
   let showSettings = $state(false);
   let numLoops = $state(5);
   let tempo = $state(108);
   let referenceVolume = $state(-12);
+  let speakingPitchUsage = $state<SpeakingPitchUsage>('none');
+
+  // Speaking pitch availability
+  const isSpeakingPitchCalibrated = $derived(preferencesStore.isCalibrated);
+  const speakingPitchNote = $derived(preferencesStore.speakingPitchNoteName);
+
+  // Completion tracking
+  let completionTriggered = $state(false);
+
+  // Polling interval for results collection (bypasses Svelte reactivity issues with 60fps animation)
+  let resultsPollingInterval: ReturnType<typeof setInterval> | null = null;
 
   // Reactive state from stores
   const isActive = $derived(demoExerciseState.state.isActive);
@@ -42,13 +57,48 @@
   });
 
   /**
-   * Collect results from highway performance data
+   * Watch for restart request (from "Try Again" button)
    */
   $effect(() => {
-    if (!isActive) return;
+    if (demoExerciseState.state.restartRequested && !isActive) {
+      demoExerciseState.consumeRestartRequest();
+      handleStart();
+    }
+  });
 
+  /**
+   * Start polling for results (called when exercise starts)
+   */
+  function startResultsPolling() {
+    console.log('[DemoExercise] Starting results polling');
+    resultsPollingInterval = setInterval(() => {
+      collectResults();
+      checkCompletion();
+    }, 200); // Poll every 200ms
+  }
+
+  /**
+   * Stop polling for results (called when exercise stops)
+   */
+  function stopResultsPolling() {
+    if (resultsPollingInterval) {
+      clearInterval(resultsPollingInterval);
+      resultsPollingInterval = null;
+    }
+  }
+
+  /**
+   * Collect results from highway performance data
+   */
+  function collectResults() {
     const performances = highwayState.getPerformanceResults();
     const notes = demoExerciseState.getGeneratedNotes();
+
+    console.log('[DemoExercise] collectResults:', {
+      performanceCount: performances.size,
+      notesCount: notes.length,
+      currentResults: demoExerciseState.state.results.length,
+    });
 
     // Check each input note for completion
     notes.forEach((note, index) => {
@@ -61,6 +111,8 @@
         // Calculate accuracy percentage from performance data
         const accuracy = calculateAccuracy(perf);
 
+        console.log('[DemoExercise] Adding result for loop', Math.floor(index / 2), { noteId, accuracy });
+
         demoExerciseState.addResult({
           loopIndex: Math.floor(index / 2),
           targetPitch: note.midi,
@@ -69,7 +121,71 @@
         });
       }
     });
-  });
+  }
+
+  /**
+   * Check if exercise is complete and trigger results modal
+   */
+  function checkCompletion() {
+    const completedLoops = demoExerciseState.state.results.length;
+    const totalLoops = demoExerciseState.state.config.numLoops;
+
+    console.log('[DemoExercise] checkCompletion:', { completedLoops, totalLoops, completionTriggered });
+
+    if (completedLoops >= totalLoops && totalLoops > 0 && !completionTriggered) {
+      console.log('[DemoExercise] Exercise complete! Showing results modal');
+      completionTriggered = true;
+      handleExerciseComplete();
+    }
+  }
+
+  /**
+   * Handle exercise completion - stop and show results modal
+   */
+  function handleExerciseComplete() {
+    handleStop();
+
+    // Reset highway to clear the pitch grid
+    highwayState.reset();
+
+    // Build summary from collected results
+    const exerciseResults = demoExerciseState.getResults();
+    const notesHit = exerciseResults.filter(r => r.performance?.hitStatus === 'hit').length;
+    const totalNotes = exerciseResults.length;
+
+    // Calculate average pitch deviation from hits
+    let totalDeviation = 0;
+    let deviationCount = 0;
+    exerciseResults.forEach(r => {
+      if (r.performance?.hitStatus === 'hit' && typeof r.performance.pitchAccuracyCents === 'number') {
+        totalDeviation += Math.abs(r.performance.pitchAccuracyCents);
+        deviationCount++;
+      }
+    });
+
+    const summary: ResultsSummary = {
+      totalNotes,
+      notesHit,
+      notesMissed: totalNotes - notesHit,
+      accuracyPercent: totalNotes > 0 ? (notesHit / totalNotes) * 100 : 0,
+      goldenNotesHit: 0,
+      goldenNotesTotal: 0,
+      phraseResults: exerciseResults.map((r, i) => ({
+        phraseIndex: i,
+        notesHit: r.performance?.hitStatus === 'hit' ? 1 : 0,
+        totalNotes: 1,
+        accuracyPercent: r.accuracy,
+        lyricPreview: `Loop ${i + 1}: ${getPitchName(r.targetPitch)}`,
+      })),
+      averagePitchDeviationCents: deviationCount > 0 ? totalDeviation / deviationCount : 0,
+    };
+
+    // Show results modal
+    resultsState.show(summary, {
+      title: 'Pitch Matching Exercise',
+      source: 'demo',
+    });
+  }
 
   /**
    * Calculate accuracy percentage from performance data
@@ -92,6 +208,7 @@
    * Cleanup on component destroy
    */
   onDestroy(() => {
+    stopResultsPolling();
     if (isActive) {
       handleStop();
     }
@@ -119,11 +236,12 @@
     // Auto-switch to highway mode
     appState.setVisualizationMode('highway');
 
-    // Update configuration
+    // Update configuration including speaking pitch usage
     demoExerciseState.configure({
       numLoops,
       tempo,
       referenceVolume,
+      speakingPitchUsage,
     });
 
     // Set pitch range to current Y-axis range
@@ -145,6 +263,9 @@
     highwayState.start();
     demoExerciseState.setPlaying(true);
 
+    // Start polling for results
+    startResultsPolling();
+
     // Schedule reference tones (only the reference notes, not input notes)
     const referenceTones = notes.filter(n => n.lyric === '👂');
     referenceAudio.scheduleReferenceTones(referenceTones);
@@ -154,6 +275,12 @@
    * Stop the demo exercise
    */
   function handleStop() {
+    // Stop polling
+    stopResultsPolling();
+
+    // Reset completion flag
+    completionTriggered = false;
+
     // Stop audio
     referenceAudio.stop();
 
@@ -239,6 +366,24 @@
           Use Full Range
         </button>
       </div>
+
+      <!-- Speaking Pitch Usage -->
+      <label class="setting-label">
+        <span class="label-text">Speaking Pitch:</span>
+        {#if isSpeakingPitchCalibrated}
+          <select
+            class="setting-input"
+            bind:value={speakingPitchUsage}
+            disabled={isActive}
+          >
+            <option value="none">Don't use</option>
+            <option value="asFloorNote">As lowest note ({speakingPitchNote})</option>
+            <option value="asTonic">As center ({speakingPitchNote})</option>
+          </select>
+        {:else}
+          <span class="not-calibrated">Not calibrated</span>
+        {/if}
+      </label>
     </div>
   </details>
 
@@ -403,6 +548,12 @@
   .range-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .not-calibrated {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-style: italic;
   }
 
   /* Main Controls */

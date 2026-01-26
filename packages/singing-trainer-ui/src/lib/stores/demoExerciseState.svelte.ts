@@ -2,10 +2,13 @@
  * Demo Exercise State Store - Svelte 5 Runes
  *
  * Manages the pitch-matching demo exercise with reference tones and graded user input.
+ * Supports integration with lesson templates and speaking pitch calibration.
  */
 
 import type { NotePerformance } from '@mlt/student-notation-engine';
 import type { TargetNote } from './highwayState.svelte.js';
+import type { SpeakingPitchUsage } from '@mlt/lesson-templates';
+import { preferencesStore } from './preferencesStore.svelte.js';
 
 export interface ExerciseConfig {
   numLoops: number;
@@ -13,6 +16,8 @@ export interface ExerciseConfig {
   maxMidi: number;
   tempo: number;
   referenceVolume: number; // dB, -60 to 0
+  speakingPitchUsage: SpeakingPitchUsage;
+  templateId?: string;
 }
 
 export type ExercisePhase = 'reference' | 'rest1' | 'input' | 'rest2';
@@ -26,6 +31,7 @@ export interface ExerciseState {
   currentPitch: number | null;
   generatedNotes: TargetNote[];
   results: ExerciseResult[];
+  restartRequested: boolean;
 }
 
 export interface ExerciseResult {
@@ -41,6 +47,8 @@ const DEFAULT_CONFIG: ExerciseConfig = {
   maxMidi: 72,
   tempo: 108,
   referenceVolume: -12, // -12 dB default
+  speakingPitchUsage: 'none',
+  templateId: undefined,
 };
 
 const DEFAULT_STATE: ExerciseState = {
@@ -52,6 +60,7 @@ const DEFAULT_STATE: ExerciseState = {
   currentPitch: null,
   generatedNotes: [],
   results: [],
+  restartRequested: false,
 };
 
 /**
@@ -69,6 +78,47 @@ function getMicrobeatDurationMs(tempo: number): number {
   return (60 / tempo) * 1000 / 2;
 }
 
+/**
+ * Apply speaking pitch mapping to get effective MIDI range
+ */
+function applyPitchMapping(config: ExerciseConfig): { minMidi: number; maxMidi: number } {
+  const speakingPitch = preferencesStore.speakingPitchMidi;
+
+  // If no speaking pitch or usage is 'none', use config values
+  if (speakingPitch === null || config.speakingPitchUsage === 'none') {
+    return { minMidi: config.minMidi, maxMidi: config.maxMidi };
+  }
+
+  const configRange = config.maxMidi - config.minMidi;
+
+  switch (config.speakingPitchUsage) {
+    case 'asTonic': {
+      // Center range around speaking pitch
+      const halfRange = Math.floor(configRange / 2);
+      return {
+        minMidi: speakingPitch - Math.floor(halfRange * 0.4), // 40% below
+        maxMidi: speakingPitch + Math.ceil(halfRange * 1.6), // 60% above
+      };
+    }
+    case 'asFloorNote': {
+      // Speaking pitch is the lowest note
+      return {
+        minMidi: speakingPitch,
+        maxMidi: speakingPitch + configRange,
+      };
+    }
+    case 'custom': {
+      // For now, treat same as asFloorNote (could add offset param)
+      return {
+        minMidi: speakingPitch,
+        maxMidi: speakingPitch + configRange,
+      };
+    }
+    default:
+      return { minMidi: config.minMidi, maxMidi: config.maxMidi };
+  }
+}
+
 function createDemoExerciseState() {
   let state = $state<ExerciseState>({ ...DEFAULT_STATE });
 
@@ -79,11 +129,14 @@ function createDemoExerciseState() {
     const notes: TargetNote[] = [];
     const microbeatDurationMs = getMicrobeatDurationMs(config.tempo);
 
+    // Apply speaking pitch mapping
+    const { minMidi, maxMidi } = applyPitchMapping(config);
+
     // Add 2-second lead-in so notes don't start immediately
     const leadInMs = 2000;
 
     for (let loop = 0; loop < config.numLoops; loop++) {
-      const pitch = randomPitch(config.minMidi, config.maxMidi);
+      const pitch = randomPitch(minMidi, maxMidi);
       const loopStartTime = leadInMs + (loop * 32 * microbeatDurationMs);
 
       // Reference note (0-8 microbeats) with 👂 emoji
@@ -272,6 +325,48 @@ function createDemoExerciseState() {
      */
     reset() {
       state = { ...DEFAULT_STATE, config: { ...state.config } };
+    },
+
+    /**
+     * Request a restart (called from App.svelte retry handler)
+     */
+    requestRestart() {
+      state.restartRequested = true;
+    },
+
+    /**
+     * Consume the restart request (called by DemoExerciseControls after starting)
+     */
+    consumeRestartRequest() {
+      state.restartRequested = false;
+    },
+
+    /**
+     * Set speaking pitch usage mode
+     */
+    setSpeakingPitchUsage(usage: SpeakingPitchUsage) {
+      state.config.speakingPitchUsage = usage;
+    },
+
+    /**
+     * Get speaking pitch usage mode
+     */
+    getSpeakingPitchUsage(): SpeakingPitchUsage {
+      return state.config.speakingPitchUsage;
+    },
+
+    /**
+     * Check if speaking pitch is available
+     */
+    isSpeakingPitchAvailable(): boolean {
+      return preferencesStore.isCalibrated;
+    },
+
+    /**
+     * Get the effective pitch range after applying speaking pitch mapping
+     */
+    getEffectivePitchRange(): { minMidi: number; maxMidi: number } {
+      return applyPitchMapping(state.config);
     },
   };
 }

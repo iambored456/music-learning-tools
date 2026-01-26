@@ -214,3 +214,95 @@ function cleanup(): void {
 export function isDetecting(): boolean {
   return isRunning;
 }
+
+/** Pitch sample for calibration */
+export interface CalibrationPitchSample {
+  midi: number;
+  frequency: number;
+  clarity: number;
+  timestamp: number;
+}
+
+/**
+ * Collect pitch samples for a specified duration.
+ * Used for speaking pitch calibration.
+ *
+ * @param durationMs - How long to collect samples
+ * @param onProgress - Optional callback with elapsed time
+ * @returns Array of collected pitch samples
+ */
+export async function collectPitchSamples(
+  durationMs: number,
+  onProgress?: (elapsedMs: number, currentPitch: CalibrationPitchSample | null) => void
+): Promise<CalibrationPitchSample[]> {
+  const samples: CalibrationPitchSample[] = [];
+
+  // Set up dedicated mic and analyser for calibration
+  const calibrationMic = new Tone.UserMedia();
+  const calibrationAnalyser = new Tone.Analyser('waveform', CONFIG.FFT_SIZE);
+  const calibrationDetector = PitchDetector.forFloat32Array(calibrationAnalyser.size);
+
+  try {
+    await Tone.start();
+    await calibrationMic.open();
+    calibrationMic.connect(calibrationAnalyser);
+  } catch (err) {
+    console.error('[collectPitchSamples] Microphone access failed:', err);
+    throw err;
+  }
+
+  const startTime = performance.now();
+
+  return new Promise((resolve) => {
+    let frameId: number | null = null;
+
+    function collectFrame(): void {
+      const elapsed = performance.now() - startTime;
+
+      if (elapsed >= durationMs) {
+        // Done collecting
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId);
+        }
+        calibrationMic.close();
+        resolve(samples);
+        return;
+      }
+
+      // Get pitch from audio
+      const waveform = calibrationAnalyser.getValue() as Float32Array;
+      const [pitch, clarity] = calibrationDetector.findPitch(
+        waveform,
+        Tone.getContext().sampleRate
+      );
+
+      const isValidPitch =
+        pitch !== null &&
+        clarity > CONFIG.CLARITY_THRESHOLD &&
+        pitch > CONFIG.MIN_PITCH_HZ &&
+        pitch < CONFIG.MAX_PITCH_HZ;
+
+      let currentSample: CalibrationPitchSample | null = null;
+
+      if (isValidPitch) {
+        const midi = frequencyToMidi(pitch);
+        currentSample = {
+          midi,
+          frequency: pitch,
+          clarity,
+          timestamp: performance.now(),
+        };
+        samples.push(currentSample);
+      }
+
+      // Report progress
+      onProgress?.(elapsed, currentSample);
+
+      // Continue collecting
+      frameId = requestAnimationFrame(collectFrame);
+    }
+
+    // Start collection
+    frameId = requestAnimationFrame(collectFrame);
+  });
+}

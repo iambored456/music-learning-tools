@@ -11,7 +11,15 @@
     "check": "echo 'App check delegated to @mlt/singing-trainer-ui package'"
   },
   "dependencies": {
-    "@mlt/singing-trainer-ui": "workspace:*"
+    "@mlt/handoff": "workspace:*",
+    "@mlt/lesson-templates": "workspace:*",
+    "@mlt/pitch-data": "workspace:*",
+    "@mlt/pitch-utils": "workspace:*",
+    "@mlt/singing-trainer-ui": "workspace:*",
+    "@mlt/student-notation-engine": "workspace:*",
+    "@mlt/ui-components": "workspace:*",
+    "pitchy": "^4.1.0",
+    "tone": "^15.0.4"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

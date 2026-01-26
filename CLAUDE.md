@@ -160,6 +160,22 @@ The engine (`@mlt/student-notation-engine`) provides:
 - Workspace imports resolve to package sources (no pre-build required).
 - Vite configs allow filesystem access to package directories and avoid optimizing workspace deps.
 
+### Hub Development Pitfall (Singing Trainer)
+
+**Common mistake**: When running `pnpm dev`, the hub is served at localhost:5173. The hub loads singing-trainer from the **package** (`@mlt/singing-trainer-ui`), NOT from the standalone app (`apps/singing-trainer/`).
+
+| What you want to change | Edit this file |
+|------------------------|----------------|
+| Singing Trainer UI when accessed via hub | `packages/singing-trainer-ui/src/App.svelte` |
+| Standalone singing-trainer app | `apps/singing-trainer/src/App.svelte` |
+
+The hub entry point is at `apps/hub/singing-trainer/main.ts`:
+```typescript
+import { mountSingingTrainer } from '@mlt/singing-trainer-ui';
+```
+
+Changes to `apps/singing-trainer/src/` have **no effect** when viewing through the hub.
+
 ### Validation
 
 Run `node scripts/check-deps.js` to validate dependency rules and app/package boundaries.

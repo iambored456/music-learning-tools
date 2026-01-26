@@ -26,3 +26,15 @@ export type { HighwayState, TargetNote } from './lib/stores/highwayState.svelte'
 export type { UltrastarState } from './lib/stores/ultrastarState.svelte';
 export type { YouTubeState } from './lib/stores/youtubeState.svelte';
 export type { ResultsState, ResultsSummary, PhraseResult } from './lib/stores/resultsState.svelte';
+
+// Calibration exports
+export * from './lib/calibration/index.js';
+
+// Preferences store
+export { preferencesStore, type SingingTrainerPreferences } from './lib/stores/preferencesStore.svelte.js';
+
+// Speaking Pitch Panel component
+export { default as SpeakingPitchPanel } from './lib/components/controls/SpeakingPitchPanel.svelte';
+
+// Pitch detection with calibration support
+export { collectPitchSamples, type CalibrationPitchSample } from './lib/services/pitchDetection.js';

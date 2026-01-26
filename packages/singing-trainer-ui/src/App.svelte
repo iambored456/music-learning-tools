@@ -14,8 +14,10 @@
     RangeControl,
     DemoExerciseControls,
     UltrastarControls,
+    SpeakingPitchPanel,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
+  import { CalibrationWizard } from './lib/calibration/index.js';
   import { handoffState } from './lib/stores/handoffState.svelte.js';
   import { appState } from './lib/stores/appState.svelte.js';
   import { highwayState } from './lib/stores/highwayState.svelte.js';
@@ -26,6 +28,21 @@
 
   // Settings panel state
   let showSettings = $state(false);
+
+  // Calibration wizard state
+  let showCalibrationWizard = $state(false);
+
+  function openCalibrationWizard() {
+    showCalibrationWizard = true;
+  }
+
+  function handleCalibrationComplete() {
+    showCalibrationWizard = false;
+  }
+
+  function handleCalibrationCancel() {
+    showCalibrationWizard = false;
+  }
 
   // Reactive state for Ultrastar
   const isUltrastarActive = $derived(ultrastarState.state.isActive);
@@ -61,7 +78,19 @@
       highwayState.setTargetNotes(ultrastarState.state.targetNotes);
       appState.setVisualizationMode('highway');
     } else if (resultsState.state.source === 'demo') {
-      // Restart demo exercise - handled by DemoExerciseControls
+      // Reset highway and request restart - DemoExerciseControls will auto-start
+      highwayState.reset();
+      demoExerciseState.reset();
+      demoExerciseState.requestRestart();
+    }
+  }
+
+  // Handle results modal close
+  function handleResultsClose() {
+    // Clear highway and reset to clean state
+    highwayState.reset();
+    if (resultsState.state.source === 'demo') {
+      demoExerciseState.reset();
     }
   }
 
@@ -154,6 +183,10 @@
       </div>
 
       <div class="control-group">
+        <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
+      </div>
+
+      <div class="control-group">
         <details class="settings-details" bind:open={showSettings}>
           <summary class="settings-summary">Settings</summary>
           <div class="settings-content">
@@ -195,7 +228,15 @@
   </main>
 
   <!-- Results Modal -->
-  <ResultsModal onRetry={handleResultsRetry} />
+  <ResultsModal onRetry={handleResultsRetry} onClose={handleResultsClose} />
+
+  <!-- Calibration Wizard Modal -->
+  {#if showCalibrationWizard}
+    <CalibrationWizard
+      onComplete={handleCalibrationComplete}
+      onCancel={handleCalibrationCancel}
+    />
+  {/if}
 </div>
 
 <style>

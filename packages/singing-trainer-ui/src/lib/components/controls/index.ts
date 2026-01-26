@@ -7,3 +7,4 @@ export { default as PitchHighlightToggle } from './PitchHighlightToggle.svelte';
 export { default as DemoExerciseControls } from './DemoExerciseControls.svelte';
 export { default as UltrastarControls } from './UltrastarControls.svelte';
 export { default as SyncControls } from './SyncControls.svelte';
+export { default as SpeakingPitchPanel } from './SpeakingPitchPanel.svelte';
