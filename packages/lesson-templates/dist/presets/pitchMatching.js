@@ -4,6 +4,28 @@
  * Pre-defined templates for pitch matching exercises.
  * The "Basic Pitch Matching" template corresponds to the existing Demo Exercise.
  */
+// ============================================================================
+// Shared Settings Schemas
+// ============================================================================
+/** Standard settings schema for pitch matching exercises */
+const STANDARD_SETTINGS_SCHEMA = {
+    fields: [
+        { key: 'loopCount', label: 'Loops', type: 'integer', default: 5, min: 1, max: 20 },
+        { key: 'tempoBpm', label: 'Tempo (BPM)', type: 'integer', default: 108, min: 60, max: 180 },
+        { key: 'droneOn', label: 'Drone', type: 'boolean', default: false },
+        { key: 'playbackReferenceOn', label: 'Reference Tone', type: 'boolean', default: true },
+    ],
+};
+/** Settings schema with drone enabled by default (for anchored exercises) */
+const ANCHORED_SETTINGS_SCHEMA = {
+    fields: [
+        { key: 'loopCount', label: 'Loops', type: 'integer', default: 5, min: 1, max: 20 },
+        { key: 'tempoBpm', label: 'Tempo (BPM)', type: 'integer', default: 100, min: 60, max: 180 },
+        { key: 'countInBeats', label: 'Count-in Beats', type: 'integer', default: 4, min: 0, max: 8 },
+        { key: 'droneOn', label: 'Drone', type: 'boolean', default: true },
+        { key: 'playbackReferenceOn', label: 'Reference Tone', type: 'boolean', default: true },
+    ],
+};
 /**
  * Standard 4-phase pattern used by the Demo Exercise
  *
@@ -64,7 +86,10 @@ export const BASIC_PITCH_MATCHING = {
     description: 'Match single pitches. Listen to the reference tone, then sing it back.',
     type: 'pitch-matching',
     difficulty: 1,
+    category: 'foundations',
     speakingPitchUsage: 'asFloorNote',
+    durationEstimate: '~30s',
+    settingsSchema: STANDARD_SETTINGS_SCHEMA,
     config: {
         numLoops: 5,
         tempo: 108,
@@ -103,7 +128,10 @@ export const QUICK_PITCH_MATCHING = {
     description: 'Develop fast pitch recognition. Shorter rest between listen and sing.',
     type: 'pitch-matching',
     difficulty: 2,
+    category: 'beginning',
     speakingPitchUsage: 'asFloorNote',
+    durationEstimate: '~45s',
+    settingsSchema: STANDARD_SETTINGS_SCHEMA,
     config: {
         numLoops: 8,
         tempo: 120,
@@ -136,7 +164,10 @@ export const SUSTAINED_PITCH_MATCHING = {
     description: 'Practice holding pitches steady. Extended singing duration for each note.',
     type: 'pitch-matching',
     difficulty: 2,
+    category: 'beginning',
     speakingPitchUsage: 'asTonic',
+    durationEstimate: '~1 min',
+    settingsSchema: ANCHORED_SETTINGS_SCHEMA,
     config: {
         numLoops: 4,
         tempo: 80,
@@ -169,7 +200,10 @@ export const CENTERED_RANGE_MATCHING = {
     description: 'Explore your comfortable range. Pitches centered around your speaking pitch.',
     type: 'pitch-matching',
     difficulty: 1,
+    category: 'foundations',
     speakingPitchUsage: 'asTonic',
+    durationEstimate: '~40s',
+    settingsSchema: ANCHORED_SETTINGS_SCHEMA,
     config: {
         numLoops: 6,
         tempo: 100,

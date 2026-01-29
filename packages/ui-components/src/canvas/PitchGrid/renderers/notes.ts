@@ -703,7 +703,11 @@ export function drawTargetNotes(
 
     const y = coords.getRowY(rowIndex);
     const ry = (cellHeight / 2) - 2;
-    const color = note.color ?? '#4CAF50';
+    const isGolden = note.isGolden === true;
+    const isRap = note.isRap === true;
+
+    // Golden notes use gold color, rap notes use purple, others use default green
+    const baseColor = isGolden ? '#FFD700' : (isRap ? '#9C27B0' : (note.color ?? '#4CAF50'));
 
     // Check if this note is currently being hit (at judgment line and pitch matches)
     const isAtJudgmentLine = startX <= nowLineX && endX >= nowLineX;
@@ -750,10 +754,21 @@ export function drawTargetNotes(
 
       // Draw particle burst effect
       drawHitParticles(ctx, nowLineX, y, ry);
+    } else if (isGolden) {
+      // Golden notes have extra glow and thicker border
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 4;
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur = 15;
+      ctx.stroke();
+
+      // Add subtle gold fill
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+      ctx.fill();
     } else {
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = baseColor;
       ctx.lineWidth = 3;
-      ctx.shadowColor = color;
+      ctx.shadowColor = baseColor;
       ctx.shadowBlur = 8;
       ctx.stroke();
     }
@@ -761,17 +776,60 @@ export function drawTargetNotes(
     ctx.shadowBlur = 0;
     ctx.restore();
 
-    // Draw label if provided (at left edge of note)
+    // Draw golden note star indicator
+    if (isGolden && !isBeingHit) {
+      drawGoldenNoteIndicator(ctx, startX, y, ry);
+    }
+
+    // Draw label if provided
     if (note.label) {
-      // Label positioned just inside the left edge of the stadium
-      const labelX = startX + 4;
-      ctx.fillStyle = isBeingHit ? '#FFD700' : '#212529'; // Gold when hit
-      ctx.font = `bold ${Math.max(16, ry * 1.2)}px 'Atkinson Hyperlegible', sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(note.label, labelX, y);
+      const labelText = note.label.trim();
+      if (labelText) {
+        // Calculate position and size based on note width
+        const fontSize = Math.min(Math.max(14, noteWidth * 0.4), ry * 1.4);
+
+        ctx.save();
+        ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        // Draw text background for better visibility
+        const textWidth = ctx.measureText(labelText).width;
+        const padding = 3;
+        const bgX = startX + 4;
+        const bgY = y - fontSize / 2 - padding;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(bgX - 2, bgY, textWidth + padding * 2, fontSize + padding * 2);
+
+        // Draw text
+        ctx.fillStyle = isBeingHit ? '#FFD700' : (isGolden ? '#FFEB3B' : '#FFFFFF');
+        ctx.fillText(labelText, bgX, y);
+
+        ctx.restore();
+      }
     }
   }
+}
+
+/**
+ * Draw golden note star indicator
+ */
+function drawGoldenNoteIndicator(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number
+): void {
+  ctx.save();
+  ctx.fillStyle = '#FFD700';
+  ctx.shadowColor = '#FFD700';
+  ctx.shadowBlur = 6;
+  ctx.font = `${Math.max(12, radius * 0.8)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('★', x + radius * 0.5, y - radius * 0.8);
+  ctx.restore();
 }
 
 /**

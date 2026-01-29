@@ -11,6 +11,104 @@ export type SpeakingPitchUsage = 'none' | 'asTonic' | 'asFloorNote' | 'custom';
 export type LessonType = 'pitch-matching' | 'interval' | 'rhythm' | 'melody';
 /** Difficulty levels */
 export type DifficultyLevel = 1 | 2 | 3;
+/** Lesson categories for browsing/filtering */
+export type LessonCategory = 'foundations' | 'beginning';
+/** Supported setting field types */
+export type SettingFieldType = 'integer' | 'boolean';
+/** Single setting field definition */
+export interface SettingField {
+    /** Unique key for this setting */
+    key: string;
+    /** Display label */
+    label: string;
+    /** Field type */
+    type: SettingFieldType;
+    /** Default value */
+    default: number | boolean;
+    /** Minimum value (for integer fields) */
+    min?: number;
+    /** Maximum value (for integer fields) */
+    max?: number;
+    /** Step increment (for integer fields) */
+    step?: number;
+    /** Optional description/help text */
+    description?: string;
+}
+/** Schema defining configurable settings for a lesson */
+export interface LessonSettingsSchema {
+    /** Array of setting field definitions */
+    fields: SettingField[];
+}
+/** Types of lesson steps */
+export type LessonStepType = 'instruction' | 'configure' | 'listen' | 'input' | 'feedback' | 'complete';
+/** Configuration for instruction step */
+export interface InstructionStepConfig {
+    message: string;
+    title?: string;
+    dismissAfterMs?: number;
+}
+/** Configuration for configure step */
+export interface ConfigureStepConfig {
+    pitchRange?: {
+        minMidi: number;
+        maxMidi: number;
+    };
+    droneOn?: boolean;
+    tempo?: number;
+}
+/** Configuration for listen step */
+export interface ListenStepConfig {
+    durationMs: number;
+    pitches?: number[];
+}
+/** Configuration for input step */
+export interface InputStepConfig {
+    durationMs: number;
+    targetPitch?: number;
+}
+/** Configuration for feedback step */
+export interface FeedbackStepConfig {
+    showAccuracy?: boolean;
+    showPitchDeviation?: boolean;
+    autoProceedAfterMs?: number;
+}
+/** Configuration for complete step */
+export interface CompleteStepConfig {
+    message?: string;
+    showSummary?: boolean;
+}
+/** Union of all step config types */
+export type LessonStepConfig = InstructionStepConfig | ConfigureStepConfig | ListenStepConfig | InputStepConfig | FeedbackStepConfig | CompleteStepConfig;
+/** Single step in a lesson flow */
+export interface LessonStep {
+    /** Unique step identifier */
+    id: string;
+    /** Step type */
+    type: LessonStepType;
+    /** Step-specific configuration */
+    config: LessonStepConfig;
+}
+/** Interface for lesson stepper (manages step progression) */
+export interface LessonStepper {
+    /** Current step being executed (null if not started or complete) */
+    readonly currentStep: LessonStep | null;
+    /** Current step index */
+    readonly currentIndex: number;
+    /** Total number of steps */
+    readonly totalSteps: number;
+    /** Whether the lesson is complete */
+    readonly isComplete: boolean;
+    /** Start the lesson from the beginning */
+    start(): LessonStep | null;
+    /** Advance to the next step */
+    next(): LessonStep | null;
+    /** Go back to previous step */
+    previous(): LessonStep | null;
+    /** Stop the lesson */
+    stop(): void;
+    /** Reset to beginning */
+    reset(): void;
+}
 /** Base lesson template interface */
 export interface LessonTemplate {
     /** Unique identifier for the template */
@@ -23,10 +121,18 @@ export interface LessonTemplate {
     type: LessonType;
     /** Difficulty level: 1 = beginner, 2 = intermediate, 3 = advanced */
     difficulty: DifficultyLevel;
+    /** Category for browsing */
+    category: LessonCategory;
     /** How the template uses the user's calibrated speaking pitch */
     speakingPitchUsage: SpeakingPitchUsage;
     /** Semitone offset when speakingPitchUsage is 'custom' */
     customPitchOffset?: number;
+    /** Estimated duration display string (e.g., "~30s", "~1 min") */
+    durationEstimate: string;
+    /** Schema for configurable pre-start settings */
+    settingsSchema: LessonSettingsSchema;
+    /** Optional array of steps for linear lesson flow */
+    steps?: LessonStep[];
 }
 /** Exercise configuration for pitch matching exercises */
 export interface PitchMatchingConfig {

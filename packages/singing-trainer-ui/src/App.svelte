@@ -17,6 +17,7 @@
     SpeakingPitchPanel,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
+  import { ExerciseChooserModal } from './lib/components/chooser/index.js';
   import { CalibrationWizard } from './lib/calibration/index.js';
   import { handoffState } from './lib/stores/handoffState.svelte.js';
   import { appState } from './lib/stores/appState.svelte.js';
@@ -25,12 +26,16 @@
   import { resultsState } from './lib/stores/resultsState.svelte.js';
   import { demoExerciseState } from './lib/stores/demoExerciseState.svelte.js';
   import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
+  import { registerTemplates, ALL_LESSONS } from '@mlt/lesson-templates';
 
   // Settings panel state
   let showSettings = $state(false);
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
+
+  // Demo Exercise Controls component reference
+  let demoExerciseControlsRef: { handleLessonStart: (exerciseId: string, settings: Record<string, number | boolean>) => void } | undefined;
 
   function openCalibrationWizard() {
     showCalibrationWizard = true;
@@ -96,6 +101,15 @@
 
   // Check for handoff and auto-start pitch detection on mount
   onMount(async () => {
+    // Register lesson templates
+    try {
+      registerTemplates(ALL_LESSONS);
+      console.log('[App] Registered', ALL_LESSONS.length, 'lesson templates');
+    } catch (err) {
+      // Templates might already be registered
+      console.log('[App] Lesson templates already registered or error:', err);
+    }
+
     const wasHandoff = await handoffState.checkAndConsumeHandoff();
 
     if (wasHandoff) {
@@ -139,6 +153,14 @@
   function handleTransposeDown() {
     handoffState.transposeDown();
   }
+
+  /**
+   * Handle starting an exercise from the chooser modal
+   */
+  function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
+    console.log('[App] Exercise start requested:', exerciseId, settings);
+    demoExerciseControlsRef?.handleLessonStart(exerciseId, settings);
+  }
 </script>
 
 <div class="app">
@@ -175,7 +197,7 @@
       </div>
 
       <div class="control-group">
-        <DemoExerciseControls />
+        <DemoExerciseControls bind:this={demoExerciseControlsRef} />
       </div>
 
       <div class="control-group">
@@ -226,6 +248,9 @@
       <SingingCanvas />
     </section>
   </main>
+
+  <!-- Exercise Chooser Modal -->
+  <ExerciseChooserModal onstart={handleExerciseStart} />
 
   <!-- Results Modal -->
   <ResultsModal onRetry={handleResultsRetry} onClose={handleResultsClose} />

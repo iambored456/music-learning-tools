@@ -46,11 +46,11 @@
     switch (event.key) {
       case 'ArrowLeft':
         event.preventDefault();
-        adjust(event.shiftKey ? -0.1 : -0.01);
+        adjust(event.shiftKey ? -0.25 : -0.05);
         break;
       case 'ArrowRight':
         event.preventDefault();
-        adjust(event.shiftKey ? 0.1 : 0.01);
+        adjust(event.shiftKey ? 0.25 : 0.05);
         break;
     }
   }
@@ -67,19 +67,19 @@
   <div class="sync-buttons">
     <button
       class="sync-btn coarse"
-      onclick={() => adjust(-0.1)}
+      onclick={() => adjust(-0.25)}
       disabled={!isActive}
-      title="Earlier by 0.1s"
+      title="Earlier by 250ms"
     >
-      -0.1s
+      -250ms
     </button>
     <button
       class="sync-btn fine"
-      onclick={() => adjust(-0.01)}
+      onclick={() => adjust(-0.05)}
       disabled={!isActive}
-      title="Earlier by 0.01s"
+      title="Earlier by 50ms"
     >
-      -0.01s
+      -50ms
     </button>
     <button
       class="sync-btn reset"
@@ -91,19 +91,19 @@
     </button>
     <button
       class="sync-btn fine"
-      onclick={() => adjust(0.01)}
+      onclick={() => adjust(0.05)}
       disabled={!isActive}
-      title="Later by 0.01s"
+      title="Later by 50ms"
     >
-      +0.01s
+      +50ms
     </button>
     <button
       class="sync-btn coarse"
-      onclick={() => adjust(0.1)}
+      onclick={() => adjust(0.25)}
       disabled={!isActive}
-      title="Later by 0.1s"
+      title="Later by 250ms"
     >
-      +0.1s
+      +250ms
     </button>
   </div>
 

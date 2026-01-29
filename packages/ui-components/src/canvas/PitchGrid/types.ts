@@ -140,6 +140,10 @@ export interface TargetNote {
   color?: string;
   /** Optional label (e.g., scale degree, lyric syllable) */
   label?: string;
+  /** Whether this is a golden note (worth double points in karaoke) */
+  isGolden?: boolean;
+  /** Whether this is a rap note (rhythm only, no pitch judgment) */
+  isRap?: boolean;
 }
 
 /**

@@ -8,6 +8,8 @@
 import type {
   UltrastarSong,
   YouTubeSyncConfig,
+  UltrastarPitchFormat,
+  LyricPhrase,
 } from '../types/ultrastar.js';
 import { DEFAULT_SYNC_CONFIG, ULTRASTAR_BASE_MIDI } from '../types/ultrastar.js';
 import {
@@ -17,6 +19,10 @@ import {
   getSyncConfig,
   calculateSongDuration,
   detectPitchRange,
+  detectPitchFormat,
+  buildLyricPhrases,
+  normalizeBpm,
+  type NormalizedBpm,
 } from '../services/ultrastarParser.js';
 import type { TargetNote } from './highwayState.svelte.js';
 
@@ -32,6 +38,16 @@ export interface UltrastarState {
   totalDurationMs: number;
   detectedRange: { minMidi: number; maxMidi: number };
   error: string | null;
+  /** Detected pitch format from file analysis */
+  detectedPitchFormat: 'relative' | 'absolute';
+  /** User override for pitch format (null = use auto-detected) */
+  pitchFormatOverride: 'relative' | 'absolute' | null;
+  /** Lyric phrases for karaoke display */
+  lyricPhrases: LyricPhrase[];
+  /** Current phrase index being sung (-1 if none) */
+  currentPhraseIndex: number;
+  /** BPM normalization info (raw BPM, effective BPM, beat divisor) */
+  bpmInfo: NormalizedBpm | null;
 }
 
 const DEFAULT_STATE: UltrastarState = {
@@ -46,6 +62,11 @@ const DEFAULT_STATE: UltrastarState = {
   totalDurationMs: 0,
   detectedRange: { minMidi: 48, maxMidi: 72 },
   error: null,
+  detectedPitchFormat: 'relative',
+  pitchFormatOverride: null,
+  lyricPhrases: [],
+  currentPhraseIndex: -1,
+  bpmInfo: null,
 };
 
 function createUltrastarState() {
@@ -84,20 +105,37 @@ function createUltrastarState() {
         // Get sync configuration from metadata
         const syncConfig = getSyncConfig(song.metadata);
 
-        // Convert notes to target format
-        const targetNotes = convertToTargetNotes(song, state.baseMidi);
+        // Normalize BPM for display/debugging
+        const bpmInfo = normalizeBpm(song.metadata.bpm);
+
+        // Detect pitch format from file content
+        const detectedFormat = detectPitchFormat(song.notes);
+        state.detectedPitchFormat = detectedFormat;
+        state.pitchFormatOverride = null; // Reset override on new file
+
+        // Get effective pitch format (override or detected)
+        const effectiveFormat = state.pitchFormatOverride ?? detectedFormat;
+
+        // Convert notes to target format using detected/override format
+        const targetNotes = convertToTargetNotes(song, state.baseMidi, effectiveFormat);
+
+        // Build lyric phrases for karaoke display
+        const lyricPhrases = buildLyricPhrases(song, state.baseMidi, effectiveFormat);
 
         // Calculate duration and detect pitch range
         const totalDurationMs = calculateSongDuration(song);
-        const detectedRange = detectPitchRange(song, state.baseMidi);
+        const detectedRange = detectPitchRange(song, state.baseMidi, effectiveFormat);
 
         // Update state
         state.song = song;
         state.youtubeId = youtubeId;
         state.syncConfig = syncConfig;
         state.targetNotes = targetNotes;
+        state.lyricPhrases = lyricPhrases;
+        state.currentPhraseIndex = -1;
         state.totalDurationMs = totalDurationMs;
         state.detectedRange = detectedRange;
+        state.bpmInfo = bpmInfo;
         state.isActive = true;
         state.isLoading = false;
 
@@ -145,9 +183,59 @@ function createUltrastarState() {
 
       // Reconvert notes if song is loaded
       if (state.song) {
-        state.targetNotes = convertToTargetNotes(state.song, midi);
-        state.detectedRange = detectPitchRange(state.song, midi);
+        const effectiveFormat = state.pitchFormatOverride ?? state.detectedPitchFormat;
+        state.targetNotes = convertToTargetNotes(state.song, midi, effectiveFormat);
+        state.lyricPhrases = buildLyricPhrases(state.song, midi, effectiveFormat);
+        state.detectedRange = detectPitchRange(state.song, midi, effectiveFormat);
       }
+    },
+
+    /** Set pitch format override (null = use auto-detected) */
+    setPitchFormat(format: 'relative' | 'absolute' | null) {
+      state.pitchFormatOverride = format;
+
+      // Reconvert notes with new format if song is loaded
+      if (state.song) {
+        const effectiveFormat = format ?? state.detectedPitchFormat;
+        state.targetNotes = convertToTargetNotes(state.song, state.baseMidi, effectiveFormat);
+        state.lyricPhrases = buildLyricPhrases(state.song, state.baseMidi, effectiveFormat);
+        state.detectedRange = detectPitchRange(state.song, state.baseMidi, effectiveFormat);
+      }
+    },
+
+    /** Get the effective pitch format (override or detected) */
+    get effectivePitchFormat(): 'relative' | 'absolute' {
+      return state.pitchFormatOverride ?? state.detectedPitchFormat;
+    },
+
+    /** Update current phrase index based on playback time */
+    updateCurrentPhrase(currentTimeMs: number) {
+      // Find the phrase that contains the current time
+      const newIndex = state.lyricPhrases.findIndex(
+        (p) => currentTimeMs >= p.startTimeMs && currentTimeMs < p.endTimeMs
+      );
+
+      // Only update if changed (includes -1 when no phrase matches)
+      if (newIndex !== state.currentPhraseIndex) {
+        state.currentPhraseIndex = newIndex;
+      }
+    },
+
+    /** Get the current phrase being sung */
+    get currentPhrase(): LyricPhrase | null {
+      if (state.currentPhraseIndex < 0 || state.currentPhraseIndex >= state.lyricPhrases.length) {
+        return null;
+      }
+      return state.lyricPhrases[state.currentPhraseIndex];
+    },
+
+    /** Get the next phrase (for preview) */
+    get nextPhrase(): LyricPhrase | null {
+      const nextIndex = state.currentPhraseIndex + 1;
+      if (nextIndex < 0 || nextIndex >= state.lyricPhrases.length) {
+        return null;
+      }
+      return state.lyricPhrases[nextIndex];
     },
 
     /** Set playing state */
@@ -196,6 +284,11 @@ function createUltrastarState() {
       return state.youtubeId !== null;
     },
 
+    /** Manually set or clear the YouTube video ID */
+    setYoutubeId(id: string | null) {
+      state.youtubeId = id;
+    },
+
     /** Reset state and clear loaded song */
     reset() {
       state = { ...DEFAULT_STATE };
@@ -208,9 +301,14 @@ function createUltrastarState() {
       state.isPlaying = false;
       state.song = null;
       state.targetNotes = [];
+      state.lyricPhrases = [];
+      state.currentPhraseIndex = -1;
       state.youtubeId = null;
       state.totalDurationMs = 0;
       state.error = null;
+      state.detectedPitchFormat = 'relative';
+      state.pitchFormatOverride = null;
+      state.bpmInfo = null;
     },
   };
 }

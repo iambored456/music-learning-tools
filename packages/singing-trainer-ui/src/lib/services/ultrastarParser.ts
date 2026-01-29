@@ -12,9 +12,60 @@ import type {
   UltrastarSong,
   ParseResult,
   YouTubeSyncConfig,
+  UltrastarPitchFormat,
+  LyricPhrase,
+  LyricSyllable,
 } from '../types/ultrastar.js';
 import { YOUTUBE_URL_PATTERNS, ULTRASTAR_BASE_MIDI } from '../types/ultrastar.js';
 import type { TargetNote } from '../stores/highwayState.svelte.js';
+
+/**
+ * BPM normalization result
+ */
+export interface NormalizedBpm {
+  /** BPM normalized to 60-180 range */
+  effectiveBpm: number;
+  /** Divisor applied to beat values (e.g., 2 means beats are half as long) */
+  beatDivisor: number;
+  /** Original raw BPM from file */
+  rawBpm: number;
+}
+
+/**
+ * Normalize UltraStar BPM to musical range (60-180).
+ *
+ * UltraStar files often have inflated BPM values that need normalization.
+ * For example, 184.60 BPM should be halved to 92.30 BPM.
+ *
+ * The beatDivisor tells us how to scale beat values:
+ * - If BPM was halved (divisor = 2), beats take twice as long
+ * - If BPM was doubled (divisor = 0.5), beats take half as long
+ *
+ * @param rawBpm - Raw BPM value from Ultrastar file
+ * @returns Normalized BPM info with effective tempo and beat divisor
+ */
+export function normalizeBpm(rawBpm: number): NormalizedBpm {
+  let effectiveBpm = rawBpm;
+  let beatDivisor = 1;
+
+  // Halve until in reasonable range (60-180 BPM)
+  while (effectiveBpm > 180) {
+    effectiveBpm /= 2;
+    beatDivisor *= 2;
+  }
+
+  // Double if too slow (rare but possible)
+  while (effectiveBpm < 60 && effectiveBpm > 0) {
+    effectiveBpm *= 2;
+    beatDivisor /= 2;
+  }
+
+  return {
+    effectiveBpm,
+    beatDivisor,
+    rawBpm,
+  };
+}
 
 /**
  * Parse an Ultrastar .txt file content into structured song data
@@ -177,17 +228,18 @@ export function parseNoteLines(lines: string[]): {
  * Example: : 0 5 60 Hel
  */
 function parseNoteLine(line: string): UltrastarNote | null {
-  const type = line[0] as UltrastarNoteType;
-  const rest = line.slice(1).trim();
+  const match = line.match(/^([:*FR])\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)(\s*)(.*)$/);
+  if (!match) return null;
 
-  // Split by whitespace, but keep lyric text together
-  const parts = rest.split(/\s+/);
-  if (parts.length < 3) return null;
-
-  const startBeat = parseInt(parts[0]);
-  const duration = parseInt(parts[1]);
-  const pitch = parseInt(parts[2]);
-  const lyric = parts.slice(3).join(' ') || '';
+  const [, typeRaw, startRaw, durationRaw, pitchRaw, lyricSeparator, lyricText] = match;
+  const type = typeRaw as UltrastarNoteType;
+  const startBeat = parseInt(startRaw);
+  const duration = parseInt(durationRaw);
+  const pitch = parseInt(pitchRaw);
+  const lyric =
+    lyricText.length > 0
+      ? `${lyricSeparator.slice(1)}${lyricText}`
+      : '';
 
   if (isNaN(startBeat) || isNaN(duration) || isNaN(pitch)) {
     return null;
@@ -223,38 +275,50 @@ export function extractYouTubeId(urlOrId: string): string | null {
 /**
  * Convert Ultrastar song to highway target notes
  *
- * Note: GAP is NOT added to note timing here. GAP represents the offset
- * from audio start to first note, and is handled separately via YouTube sync.
- * Note timing is relative to transport time 0 = first beat of song.
+ * GAP is added to note timing so the highway shows blank scrolling
+ * for the lead-in silence before the first note appears.
+ *
+ * @param song - Parsed Ultrastar song
+ * @param baseMidi - Base MIDI note for relative pitch format (default: 60)
+ * @param pitchFormat - Pitch format: 'absolute' (MIDI directly), 'relative' (offset from baseMidi), or 'auto' (detect)
  */
 export function convertToTargetNotes(
   song: UltrastarSong,
-  baseMidi: number = ULTRASTAR_BASE_MIDI
+  baseMidi: number = ULTRASTAR_BASE_MIDI,
+  pitchFormat: UltrastarPitchFormat = 'auto'
 ): TargetNote[] {
   const { metadata, notes, lineBreaks } = song;
-  const { bpm } = metadata;
+  const { bpm, gap } = metadata;
 
-  // Calculate milliseconds per beat
-  // Ultrastar BPM is actually quarter-beat resolution (beats are 1/4 notes)
-  // So we multiply by 4 to get real ms per beat unit
-  const msPerBeat = (60 / bpm) * 1000 * 4;
+  // GAP is in milliseconds - the lead-in silence before first note
+  const gapMs = gap ?? 0;
+
+  // Determine actual pitch format
+  const format = pitchFormat === 'auto' ? detectPitchFormat(notes) : pitchFormat;
+
+  // Normalize BPM to musical range (60-180)
+  const { effectiveBpm, beatDivisor } = normalizeBpm(bpm);
+
+  // Calculate milliseconds per beat using normalized BPM
+  const msPerBeat = (60 / effectiveBpm) * 1000 / 4;
 
   // Group notes by phrase (between line breaks)
   let phraseIndex = 0;
   const sortedBreaks = [...lineBreaks].sort((a, b) => a - b);
 
-  // Find the first note's beat to use as reference (transport 0 = first note)
-  const firstNoteBeat = notes.length > 0 ? Math.min(...notes.map(n => n.startBeat)) : 0;
-
   return notes
     .filter((note) => note.type !== 'F') // Skip freestyle notes (no pitch judgment)
     .map((note) => {
-      // Calculate timing relative to first note (so first note starts at ~0)
-      const startTimeMs = (note.startBeat - firstNoteBeat) * msPerBeat;
-      const durationMs = note.duration * msPerBeat;
+      // Apply beatDivisor to convert file beats to actual musical beats
+      const effectiveStartBeat = note.startBeat / beatDivisor;
+      const effectiveDuration = note.duration / beatDivisor;
 
-      // Convert relative pitch to MIDI
-      const midi = baseMidi + note.pitch;
+      // Calculate timing: beat time + GAP offset
+      const startTimeMs = effectiveStartBeat * msPerBeat + gapMs;
+      const durationMs = effectiveDuration * msPerBeat;
+
+      // Convert pitch to MIDI based on detected format
+      const midi = format === 'absolute' ? note.pitch : baseMidi + note.pitch;
 
       // Determine phrase index
       while (
@@ -268,6 +332,7 @@ export function convertToTargetNotes(
       const targetNote: TargetNote & {
         phraseIndex?: number;
         isGolden?: boolean;
+        isRap?: boolean;
       } = {
         midi,
         startTimeMs,
@@ -278,6 +343,9 @@ export function convertToTargetNotes(
       // Add optional metadata
       if (note.type === '*') {
         targetNote.isGolden = true;
+      }
+      if (note.type === 'R') {
+        targetNote.isRap = true;
       }
 
       return targetNote;
@@ -297,33 +365,46 @@ export function getSyncConfig(metadata: UltrastarMetadata): YouTubeSyncConfig {
 
 /**
  * Calculate total duration of song in milliseconds
- * Duration is relative to transport time 0 = first note
+ * Includes GAP lead-in time so duration starts from time 0
  */
 export function calculateSongDuration(song: UltrastarSong): number {
-  const { metadata, notes, totalBeats } = song;
-  const { bpm } = metadata;
+  const { metadata, totalBeats } = song;
+  const { bpm, gap } = metadata;
 
-  // Ultrastar BPM is quarter-beat resolution
-  const msPerBeat = (60 / bpm) * 1000 * 4;
+  // GAP is in milliseconds - the lead-in silence before first note
+  const gapMs = gap ?? 0;
 
-  // Find first note beat to calculate relative duration
-  const firstNoteBeat = notes.length > 0 ? Math.min(...notes.map(n => n.startBeat)) : 0;
-  const relativeTotalBeats = totalBeats - firstNoteBeat;
+  // Normalize BPM to musical range (60-180)
+  const { effectiveBpm, beatDivisor } = normalizeBpm(bpm);
 
-  // Add some buffer after the last note
-  return relativeTotalBeats * msPerBeat + 2000;
+  // Calculate milliseconds per beat using normalized BPM
+  const msPerBeat = (60 / effectiveBpm) * 1000 / 4;
+
+  // Apply beatDivisor to get effective musical beats
+  const effectiveTotalBeats = totalBeats / beatDivisor;
+
+  // Total duration = GAP + beat duration + buffer
+  return gapMs + effectiveTotalBeats * msPerBeat + 2000;
 }
 
 /**
  * Detect pitch range of song (for auto-adjusting viewport)
+ *
+ * @param song - Parsed Ultrastar song
+ * @param baseMidi - Base MIDI note for relative pitch format (default: 60)
+ * @param pitchFormat - Pitch format: 'absolute', 'relative', or 'auto' (detect)
  */
 export function detectPitchRange(
   song: UltrastarSong,
-  baseMidi: number = ULTRASTAR_BASE_MIDI
+  baseMidi: number = ULTRASTAR_BASE_MIDI,
+  pitchFormat: UltrastarPitchFormat = 'auto'
 ): { minMidi: number; maxMidi: number } {
+  // Determine actual pitch format
+  const format = pitchFormat === 'auto' ? detectPitchFormat(song.notes) : pitchFormat;
+
   const midiNotes = song.notes
     .filter((note) => note.type !== 'F' && note.type !== '-')
-    .map((note) => baseMidi + note.pitch);
+    .map((note) => (format === 'absolute' ? note.pitch : baseMidi + note.pitch));
 
   if (midiNotes.length === 0) {
     return { minMidi: 48, maxMidi: 72 };
@@ -379,4 +460,137 @@ export function getPhraseLyricPreview(notes: UltrastarNote[], maxLength = 30): s
   }
 
   return lyrics.slice(0, maxLength - 3) + '...';
+}
+
+/**
+ * Detect whether the Ultrastar file uses absolute MIDI pitch values
+ * or relative offsets from C4 (MIDI 60).
+ *
+ * Standard Ultrastar format uses relative pitches where 0 = C4 (MIDI 60).
+ * However, some community files use absolute MIDI note numbers directly.
+ *
+ * Detection heuristics:
+ * - If pitch values are in typical singing range (30-90) and all positive → absolute
+ * - If pitch values include negatives or cluster around 0 → relative
+ *
+ * @returns 'relative' or 'absolute' (never 'auto')
+ */
+export function detectPitchFormat(notes: UltrastarNote[]): 'relative' | 'absolute' {
+  // Filter to actual pitch notes (not freestyle or line breaks)
+  const pitchValues = notes
+    .filter((n) => n.type !== 'F' && n.type !== '-')
+    .map((n) => n.pitch);
+
+  if (pitchValues.length === 0) return 'relative';
+
+  const minPitch = Math.min(...pitchValues);
+  const maxPitch = Math.max(...pitchValues);
+
+  // If any pitch is negative, it must be relative format
+  if (minPitch < 0) {
+    return 'relative';
+  }
+
+  // Check if values look like absolute MIDI (typical singing range 30-90)
+  // rather than relative offsets from C4 (which would give range like -24 to +24)
+  const looksAbsolute = minPitch >= 30 && maxPitch <= 96;
+
+  // Check if values look like they could be relative
+  // Relative values typically range from about -36 (C2) to +36 (C7) from C4
+  const looksRelative = minPitch >= -36 && maxPitch <= 36;
+
+  // If values are all in the 30-90 range (typical singing), assume absolute
+  // This is a common case for community-created files
+  if (looksAbsolute && minPitch > 24) {
+    return 'absolute';
+  }
+
+  // If values are small and centered around 0, assume relative
+  if (looksRelative && maxPitch < 36) {
+    return 'relative';
+  }
+
+  // Default to relative (standard Ultrastar format)
+  return 'relative';
+}
+
+/**
+ * Build lyric phrases from parsed Ultrastar song data.
+ * Phrases are delimited by line break markers (`-`) in the file.
+ *
+ * @param song - Parsed Ultrastar song
+ * @param baseMidi - Base MIDI note for relative pitch format (default: 60)
+ * @param pitchFormat - Pitch format to use ('absolute', 'relative', or 'auto')
+ * @returns Array of lyric phrases with timing and syllable data
+ */
+export function buildLyricPhrases(
+  song: UltrastarSong,
+  baseMidi: number = ULTRASTAR_BASE_MIDI,
+  pitchFormat: UltrastarPitchFormat = 'auto'
+): LyricPhrase[] {
+  const { metadata, notes, lineBreaks } = song;
+  const { bpm, gap } = metadata;
+
+  // GAP is in milliseconds - the lead-in silence before first note
+  const gapMs = gap ?? 0;
+
+  // Determine actual pitch format
+  const format = pitchFormat === 'auto' ? detectPitchFormat(notes) : pitchFormat;
+
+  // Normalize BPM to musical range (60-180)
+  const { effectiveBpm, beatDivisor } = normalizeBpm(bpm);
+
+  // Calculate milliseconds per beat using normalized BPM
+  const msPerBeat = (60 / effectiveBpm) * 1000 / 4;
+
+  // Sort line breaks and add 0 at the start to capture first phrase
+  const sortedBreaks = [0, ...lineBreaks].sort((a, b) => a - b);
+  const phrases: LyricPhrase[] = [];
+
+  for (let i = 0; i < sortedBreaks.length; i++) {
+    const startBeat = sortedBreaks[i];
+    const endBeat = sortedBreaks[i + 1] ?? Infinity;
+
+    // Get all notes in this phrase (excluding freestyle notes)
+    const phraseNotes = notes.filter(
+      (n) => n.startBeat >= startBeat && n.startBeat < endBeat && n.type !== 'F'
+    );
+
+    if (phraseNotes.length === 0) continue;
+
+    // Build syllables for this phrase with normalized timing
+    const syllables: LyricSyllable[] = phraseNotes.map((note) => {
+      // Apply beatDivisor to convert file beats to actual musical beats
+      const effectiveStartBeat = note.startBeat / beatDivisor;
+      const effectiveEndBeat = (note.startBeat + note.duration) / beatDivisor;
+
+      return {
+        text: note.lyric,
+        startTimeMs: effectiveStartBeat * msPerBeat + gapMs,
+        endTimeMs: effectiveEndBeat * msPerBeat + gapMs,
+        midi: format === 'absolute' ? note.pitch : baseMidi + note.pitch,
+        isGolden: note.type === '*',
+        isRap: note.type === 'R',
+      };
+    });
+
+    // Calculate phrase timing
+    const phraseStartTimeMs = syllables[0].startTimeMs;
+    const phraseEndTimeMs = syllables[syllables.length - 1].endTimeMs;
+
+    // Build full phrase text by joining syllables
+    const fullText = syllables.map((s) => s.text).join('').trim();
+
+    phrases.push({
+      index: phrases.length,
+      startBeat,
+      endBeat,
+      startTimeMs: phraseStartTimeMs,
+      endTimeMs: phraseEndTimeMs,
+      syllables,
+      fullText,
+    });
+  }
+
+  return phrases;
 }

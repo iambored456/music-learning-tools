@@ -29,3 +29,4 @@ export {
   type ExerciseResult,
   type ExercisePhase,
 } from './demoExerciseState.svelte.js';
+export { chooserState, type ChooserState } from './chooserState.svelte.js';

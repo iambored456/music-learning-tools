@@ -4,7 +4,7 @@
  * Central registry for lesson templates. Templates are registered at startup
  * and can be retrieved by ID or filtered by type.
  */
-import type { LessonType, AnyLessonTemplate } from './types.js';
+import type { LessonType, LessonCategory, DifficultyLevel, AnyLessonTemplate } from './types.js';
 /**
  * Register a template in the registry
  * @throws Error if template with same ID already exists
@@ -34,7 +34,35 @@ export declare function getTemplatesByType(type: LessonType): AnyLessonTemplate[
 /**
  * Get templates filtered by difficulty
  */
-export declare function getTemplatesByDifficulty(difficulty: 1 | 2 | 3): AnyLessonTemplate[];
+export declare function getTemplatesByDifficulty(difficulty: DifficultyLevel): AnyLessonTemplate[];
+/**
+ * Get templates filtered by category
+ */
+export declare function getTemplatesByCategory(category: LessonCategory): AnyLessonTemplate[];
+/**
+ * Get templates grouped by category
+ */
+export declare function getTemplatesGroupedByCategory(): Map<LessonCategory, AnyLessonTemplate[]>;
+/**
+ * Get all categories that have registered templates
+ */
+export declare function getAvailableCategories(): LessonCategory[];
+/** Registry entry with template and derived metadata */
+export interface RegistryEntry {
+    template: AnyLessonTemplate;
+    /** Whether the template requires speaking pitch calibration */
+    requiresSpeakingPitch: boolean;
+    /** Human-readable difficulty label */
+    difficultyLabel: string;
+}
+/**
+ * Get registry entries with derived metadata for the chooser UI
+ */
+export declare function getRegistryEntries(): RegistryEntry[];
+/**
+ * Get registry entries filtered by category
+ */
+export declare function getRegistryEntriesByCategory(category: LessonCategory): RegistryEntry[];
 /**
  * Check if a template is registered
  */

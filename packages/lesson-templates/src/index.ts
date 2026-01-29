@@ -11,6 +11,7 @@ export type {
   SpeakingPitchUsage,
   LessonType,
   DifficultyLevel,
+  LessonCategory,
   LessonTemplate,
   PitchMatchingConfig,
   LoopPhaseType,
@@ -21,6 +22,21 @@ export type {
   TemplateContext,
   ResolvedConfig,
   AnyLessonTemplate,
+  // Settings schema types
+  SettingFieldType,
+  SettingField,
+  LessonSettingsSchema,
+  // Step types
+  LessonStepType,
+  LessonStep,
+  LessonStepper,
+  InstructionStepConfig,
+  ConfigureStepConfig,
+  ListenStepConfig,
+  InputStepConfig,
+  FeedbackStepConfig,
+  CompleteStepConfig,
+  LessonStepConfig,
 } from './types.js';
 
 // Registry
@@ -32,11 +48,37 @@ export {
   getAllTemplates,
   getTemplatesByType,
   getTemplatesByDifficulty,
+  getTemplatesByCategory,
+  getTemplatesGroupedByCategory,
+  getAvailableCategories,
+  getRegistryEntries,
+  getRegistryEntriesByCategory,
   hasTemplate,
   unregisterTemplate,
   clearRegistry,
   getTemplateCount,
+  type RegistryEntry,
 } from './registry.js';
+
+// Engine module
+export {
+  createLessonEngine,
+  getLessonEngine,
+  resetGlobalEngine,
+  createStepper,
+  LinearStepper,
+  type LessonEngine,
+  type LessonEngineState,
+  type LessonEngineEvent,
+  type LessonEngineListener,
+  type LessonContext,
+  type GridController,
+  type GridOverlay,
+  type GridLabelMode,
+  type AudioController,
+  type UiController,
+  type UiOverlay,
+} from './engine/index.js';
 
 // Pitch mapping utilities
 export {
@@ -68,3 +110,10 @@ export {
   registerAllPresets,
   getAllPresets,
 } from './presets/index.js';
+
+// Lessons
+export {
+  INTRO_PITCH_MATCHING,
+  ANCHORED_PITCH_MATCHING,
+  ALL_LESSONS,
+} from './lessons/index.js';

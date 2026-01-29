@@ -85,3 +85,50 @@ export const DEFAULT_SYNC_CONFIG: YouTubeSyncConfig = {
 
 /** Standard Ultrastar base MIDI (0 = C4 = MIDI 60) */
 export const ULTRASTAR_BASE_MIDI = 60;
+
+/**
+ * Pitch format for Ultrastar files.
+ * - 'relative': Pitch values are offsets from C4 (MIDI 60) - standard Ultrastar format
+ * - 'absolute': Pitch values are direct MIDI note numbers - common in community files
+ * - 'auto': Automatically detect format based on pitch value distribution
+ */
+export type UltrastarPitchFormat = 'relative' | 'absolute' | 'auto';
+
+/**
+ * A single syllable within a lyric phrase.
+ */
+export interface LyricSyllable {
+  /** The syllable text (may include leading space for word boundaries) */
+  text: string;
+  /** Start time in milliseconds from exercise start */
+  startTimeMs: number;
+  /** End time in milliseconds from exercise start */
+  endTimeMs: number;
+  /** MIDI note number for this syllable */
+  midi: number;
+  /** Whether this is a golden note (worth double points) */
+  isGolden: boolean;
+  /** Whether this is a rap note (rhythm only, no pitch judgment) */
+  isRap: boolean;
+}
+
+/**
+ * A phrase (line) of lyrics for karaoke display.
+ * Phrases are delimited by line break markers (`-`) in Ultrastar files.
+ */
+export interface LyricPhrase {
+  /** Index of this phrase (0-based) */
+  index: number;
+  /** Beat number where this phrase starts */
+  startBeat: number;
+  /** Beat number where this phrase ends */
+  endBeat: number;
+  /** Start time in milliseconds from exercise start */
+  startTimeMs: number;
+  /** End time in milliseconds from exercise start */
+  endTimeMs: number;
+  /** Individual syllables in this phrase */
+  syllables: LyricSyllable[];
+  /** Full phrase text (all syllables joined) */
+  fullText: string;
+}

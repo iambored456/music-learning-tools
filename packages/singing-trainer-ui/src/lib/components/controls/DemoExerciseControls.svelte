@@ -4,6 +4,7 @@
    *
    * UI for starting/stopping the pitch-matching demo exercise.
    * Supports speaking pitch integration and lesson templates.
+   * Now includes "Choose Exercise" button to open the exercise chooser modal.
    */
 
   import { demoExerciseState } from '../../stores/demoExerciseState.svelte.js';
@@ -11,17 +12,28 @@
   import { appState } from '../../stores/appState.svelte.js';
   import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
   import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
+  import { chooserState } from '../../stores/chooserState.svelte.js';
   import { referenceAudio } from '../../services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
   import { onDestroy } from 'svelte';
-  import type { SpeakingPitchUsage } from '@mlt/lesson-templates';
+  import type { SpeakingPitchUsage, AnyLessonTemplate } from '@mlt/lesson-templates';
+  import { getTemplate } from '@mlt/lesson-templates';
 
-  // Local state for settings panel
+  // Local state for settings panel (legacy demo mode)
   let showSettings = $state(false);
   let numLoops = $state(5);
   let tempo = $state(108);
   let referenceVolume = $state(-12);
   let speakingPitchUsage = $state<SpeakingPitchUsage>('none');
+
+  // Active lesson state
+  let activeLessonId = $state<string | null>(null);
+  let activeLesson = $derived<AnyLessonTemplate | null>(
+    activeLessonId ? (getTemplate(activeLessonId) ?? null) : null
+  );
+  const usesSpeakingPitch = $derived(
+    activeLesson?.speakingPitchUsage && activeLesson.speakingPitchUsage !== 'none'
+  );
 
   // Speaking pitch availability
   const isSpeakingPitchCalibrated = $derived(preferencesStore.isCalibrated);
@@ -289,6 +301,9 @@
 
     // Mark exercise as stopped
     demoExerciseState.stop();
+
+    // Clear active lesson
+    clearActiveLesson();
   }
 
   /**
@@ -312,88 +327,155 @@
     const pitch = getPitchByMidi(midi);
     return pitch?.pitch || `MIDI ${midi}`;
   }
+
+  /**
+   * Open the exercise chooser modal
+   */
+  function handleOpenChooser() {
+    chooserState.show();
+  }
+
+  /**
+   * Handle starting an exercise from the chooser
+   */
+  export function handleLessonStart(
+    exerciseId: string,
+    settings: Record<string, number | boolean>
+  ) {
+    console.log('[DemoExercise] Starting lesson:', exerciseId, settings);
+
+    // Store the active lesson ID
+    activeLessonId = exerciseId;
+
+    // Get the template
+    const template = getTemplate(exerciseId);
+    if (!template) {
+      console.error('[DemoExercise] Template not found:', exerciseId);
+      return;
+    }
+
+    // Apply settings from chooser
+    numLoops = (settings.loopCount as number) ?? template.config?.numLoops ?? 5;
+    tempo = (settings.tempoBpm as number) ?? template.config?.tempo ?? 108;
+    referenceVolume = template.config?.referenceVolume ?? -12;
+    speakingPitchUsage = template.speakingPitchUsage;
+
+    // Start the exercise
+    handleStart();
+  }
+
+  /**
+   * Clear active lesson on stop
+   */
+  function clearActiveLesson() {
+    activeLessonId = null;
+  }
 </script>
 
 <div class="demo-exercise-panel">
-  <h3 class="panel-title">Demo Exercise</h3>
+  <h3 class="panel-title">Exercises</h3>
 
-  <!-- Settings (collapsed by default) -->
-  <details class="settings-details" bind:open={showSettings}>
-    <summary class="settings-summary">Settings</summary>
-    <div class="exercise-settings">
-      <label class="setting-label">
-        <span class="label-text">Number of loops:</span>
-        <input
-          class="setting-input"
-          type="number"
-          min="1"
-          max="20"
-          bind:value={numLoops}
-          disabled={isActive}
-        />
-      </label>
+  <!-- Choose Exercise Button -->
+  {#if !isActive}
+    <button class="choose-exercise-btn" onclick={handleOpenChooser}>
+      Choose Exercise
+    </button>
+  {/if}
 
-      <label class="setting-label">
-        <span class="label-text">Tempo (BPM):</span>
-        <input
-          class="setting-input"
-          type="number"
-          min="60"
-          max="180"
-          bind:value={tempo}
-          disabled={isActive}
-        />
-      </label>
+  <!-- Speaking Pitch Anchor Label (when lesson using speaking pitch is active) -->
+  {#if isActive && usesSpeakingPitch && speakingPitchNote}
+    <div class="speaking-pitch-anchor">
+      <span class="anchor-icon">🎙️</span>
+      <span class="anchor-text">Anchored to your Speaking Pitch ({speakingPitchNote})</span>
+    </div>
+  {/if}
 
-      <label class="setting-label">
-        <span class="label-text">Reference Volume:</span>
-        <input
-          class="setting-slider"
-          type="range"
-          min="-40"
-          max="0"
-          bind:value={referenceVolume}
-          disabled={isActive}
-        />
-        <span class="volume-value">{referenceVolume} dB</span>
-      </label>
+  <!-- Active Lesson Info -->
+  {#if isActive && activeLesson}
+    <div class="active-lesson-info">
+      <span class="lesson-name">{activeLesson.name}</span>
+    </div>
+  {/if}
 
-      <div class="pitch-range-buttons">
-        <button class="range-btn" onclick={useCurrentRange} disabled={isActive}>
-          Use Current Range
-        </button>
-        <button class="range-btn" onclick={useFullRange} disabled={isActive}>
-          Use Full Range
+  <!-- Legacy Settings (collapsed, for advanced users / debugging) -->
+  {#if !isActive}
+    <details class="settings-details" bind:open={showSettings}>
+      <summary class="settings-summary">Advanced Settings</summary>
+      <div class="exercise-settings">
+        <label class="setting-label">
+          <span class="label-text">Number of loops:</span>
+          <input
+            class="setting-input"
+            type="number"
+            min="1"
+            max="20"
+            bind:value={numLoops}
+            disabled={isActive}
+          />
+        </label>
+
+        <label class="setting-label">
+          <span class="label-text">Tempo (BPM):</span>
+          <input
+            class="setting-input"
+            type="number"
+            min="60"
+            max="180"
+            bind:value={tempo}
+            disabled={isActive}
+          />
+        </label>
+
+        <label class="setting-label">
+          <span class="label-text">Reference Volume:</span>
+          <input
+            class="setting-slider"
+            type="range"
+            min="-40"
+            max="0"
+            bind:value={referenceVolume}
+            disabled={isActive}
+          />
+          <span class="volume-value">{referenceVolume} dB</span>
+        </label>
+
+        <div class="pitch-range-buttons">
+          <button class="range-btn" onclick={useCurrentRange} disabled={isActive}>
+            Use Current Range
+          </button>
+          <button class="range-btn" onclick={useFullRange} disabled={isActive}>
+            Use Full Range
+          </button>
+        </div>
+
+        <!-- Speaking Pitch Usage -->
+        <label class="setting-label">
+          <span class="label-text">Speaking Pitch:</span>
+          {#if isSpeakingPitchCalibrated}
+            <select
+              class="setting-input"
+              bind:value={speakingPitchUsage}
+              disabled={isActive}
+            >
+              <option value="none">Don't use</option>
+              <option value="asFloorNote">As lowest note ({speakingPitchNote})</option>
+              <option value="asTonic">As center ({speakingPitchNote})</option>
+            </select>
+          {:else}
+            <span class="not-calibrated">Not calibrated</span>
+          {/if}
+        </label>
+
+        <button class="start-exercise-btn legacy-start" onclick={handleStart}>
+          Quick Start (Legacy)
         </button>
       </div>
+    </details>
+  {/if}
 
-      <!-- Speaking Pitch Usage -->
-      <label class="setting-label">
-        <span class="label-text">Speaking Pitch:</span>
-        {#if isSpeakingPitchCalibrated}
-          <select
-            class="setting-input"
-            bind:value={speakingPitchUsage}
-            disabled={isActive}
-          >
-            <option value="none">Don't use</option>
-            <option value="asFloorNote">As lowest note ({speakingPitchNote})</option>
-            <option value="asTonic">As center ({speakingPitchNote})</option>
-          </select>
-        {:else}
-          <span class="not-calibrated">Not calibrated</span>
-        {/if}
-      </label>
-    </div>
-  </details>
-
-  <!-- Main Controls -->
+  <!-- Main Controls (when active) -->
   <div class="exercise-controls">
-    {#if !isActive}
-      <button class="start-exercise-btn" onclick={handleStart}>
-        Start Demo Exercise
-      </button>
-    {:else}
+    {#if isActive}
       <button class="stop-exercise-btn" onclick={handleStop}>
         Stop Exercise
       </button>
@@ -456,6 +538,68 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin: 0;
+  }
+
+  /* Choose Exercise Button */
+  .choose-exercise-btn {
+    padding: var(--spacing-md);
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    background-color: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .choose-exercise-btn:hover {
+    background-color: var(--color-primary-dark, #4a7bc8);
+  }
+
+  /* Speaking Pitch Anchor Label */
+  .speaking-pitch-anchor {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    background-color: rgba(var(--color-primary-rgb, 74, 123, 200), 0.15);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--color-primary);
+  }
+
+  .anchor-icon {
+    font-size: var(--font-size-md);
+  }
+
+  .anchor-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  /* Active Lesson Info */
+  .active-lesson-info {
+    text-align: center;
+    padding: var(--spacing-xs);
+  }
+
+  .lesson-name {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  /* Legacy Start Button */
+  .legacy-start {
+    margin-top: var(--spacing-sm);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .legacy-start:hover {
+    background-color: rgba(255, 255, 255, 0.1);
   }
 
   /* Settings */

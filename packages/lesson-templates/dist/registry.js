@@ -60,6 +60,67 @@ export function getTemplatesByDifficulty(difficulty) {
     return Array.from(templates.values()).filter((t) => t.difficulty === difficulty);
 }
 /**
+ * Get templates filtered by category
+ */
+export function getTemplatesByCategory(category) {
+    return Array.from(templates.values()).filter((t) => t.category === category);
+}
+/**
+ * Get templates grouped by category
+ */
+export function getTemplatesGroupedByCategory() {
+    const grouped = new Map();
+    for (const template of templates.values()) {
+        const category = template.category;
+        if (!grouped.has(category)) {
+            grouped.set(category, []);
+        }
+        grouped.get(category).push(template);
+    }
+    return grouped;
+}
+/**
+ * Get all categories that have registered templates
+ */
+export function getAvailableCategories() {
+    const categories = new Set();
+    for (const template of templates.values()) {
+        categories.add(template.category);
+    }
+    return Array.from(categories);
+}
+/**
+ * Get registry entries with derived metadata for the chooser UI
+ */
+export function getRegistryEntries() {
+    return Array.from(templates.values()).map((template) => ({
+        template,
+        requiresSpeakingPitch: template.speakingPitchUsage !== 'none',
+        difficultyLabel: getDifficultyLabel(template.difficulty),
+    }));
+}
+/**
+ * Get registry entries filtered by category
+ */
+export function getRegistryEntriesByCategory(category) {
+    return getRegistryEntries().filter((entry) => entry.template.category === category);
+}
+/**
+ * Get human-readable difficulty label
+ */
+function getDifficultyLabel(difficulty) {
+    switch (difficulty) {
+        case 1:
+            return 'Intro';
+        case 2:
+            return 'Basic';
+        case 3:
+            return 'Advanced';
+        default:
+            return 'Unknown';
+    }
+}
+/**
  * Check if a template is registered
  */
 export function hasTemplate(id) {

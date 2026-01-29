@@ -177,17 +177,18 @@ export function parseNoteLines(lines: string[]): {
  * Example: : 0 5 60 Hel
  */
 function parseNoteLine(line: string): UltrastarNote | null {
-  const type = line[0] as UltrastarNoteType;
-  const rest = line.slice(1).trim();
+  const match = line.match(/^([:*FR])\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)(\s*)(.*)$/);
+  if (!match) return null;
 
-  // Split by whitespace, but keep lyric text together
-  const parts = rest.split(/\s+/);
-  if (parts.length < 3) return null;
-
-  const startBeat = parseInt(parts[0]);
-  const duration = parseInt(parts[1]);
-  const pitch = parseInt(parts[2]);
-  const lyric = parts.slice(3).join(' ') || '';
+  const [, typeRaw, startRaw, durationRaw, pitchRaw, lyricSeparator, lyricText] = match;
+  const type = typeRaw as UltrastarNoteType;
+  const startBeat = parseInt(startRaw);
+  const duration = parseInt(durationRaw);
+  const pitch = parseInt(pitchRaw);
+  const lyric =
+    lyricText.length > 0
+      ? `${lyricSeparator.slice(1)}${lyricText}`
+      : '';
 
   if (isNaN(startBeat) || isNaN(duration) || isNaN(pitch)) {
     return null;

@@ -38,3 +38,15 @@ export { default as SpeakingPitchPanel } from './lib/components/controls/Speakin
 
 // Pitch detection with calibration support
 export { collectPitchSamples, type CalibrationPitchSample } from './lib/services/pitchDetection.js';
+
+// Chooser state and components
+export { chooserState, type ChooserState } from './lib/stores/chooserState.svelte.js';
+export { ExerciseChooserModal } from './lib/components/chooser/index.js';
+
+// Lesson engine adapters
+export {
+  createGridControllerAdapter,
+  createAudioControllerAdapter,
+  createUiControllerAdapter,
+  createLessonContext,
+} from './lib/engine/index.js';

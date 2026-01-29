@@ -28,6 +28,8 @@
   import { pitchState } from '../stores/pitchState.svelte.js';
   import { highwayState } from '../stores/highwayState.svelte.js';
   import { demoExerciseState } from '../stores/demoExerciseState.svelte.js';
+  import { ultrastarState } from '../stores/ultrastarState.svelte.js';
+  import { LyricsDisplay } from './karaoke/index.js';
 
   // Container element for measuring size
   let container: HTMLDivElement | undefined = $state(undefined);
@@ -85,6 +87,9 @@
   const mode = $derived<PitchGridMode>(
     appState.state.visualizationMode === 'highway' ? 'highway' : 'singing'
   );
+
+  // Check if ultrastar mode is active (for lyrics display)
+  const isUltrastarActive = $derived(ultrastarState.state.isActive && ultrastarState.state.isPlaying);
 
   // Calculate beat interval based on exercise tempo
   // 1 beat = 2 microbeats, beatIntervalMs = 60000 / tempo
@@ -362,6 +367,11 @@
     bind:this={trailCanvas}
     class="pitch-trail-canvas"
   ></canvas>
+
+  <!-- Karaoke lyrics display (only shown during Ultrastar playback) -->
+  {#if isUltrastarActive && mode === 'highway'}
+    <LyricsDisplay />
+  {/if}
 </div>
 
 <style>
