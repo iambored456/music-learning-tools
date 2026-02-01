@@ -10,14 +10,23 @@ import {
   type NoteHighwayServiceInstance,
   type HighwayTargetNote,
   type NotePerformance,
+  type TargetKind,
+  type SlideDirection,
+  type FeedbackCollectorConfig,
 } from '@mlt/student-notation-engine';
 
 export interface TargetNote {
-  midi: number;
+  targetKind?: TargetKind;
+  midi?: number;
+  minMidi?: number;
+  maxMidi?: number;
   startTimeMs: number;
   durationMs: number;
   hit?: boolean;
   lyric?: string; // For emoji/text display on notes
+  label?: string;
+  slideDirection?: SlideDirection;
+  role?: 'reference' | 'input';
 }
 
 export interface HighwayState {
@@ -28,6 +37,7 @@ export interface HighwayState {
   nowLineX: number;
   pixelsPerSecond: number;
   timeWindowMs: number;
+  feedbackConfig: FeedbackCollectorConfig;
 }
 
 const DEFAULT_STATE: HighwayState = {
@@ -38,6 +48,17 @@ const DEFAULT_STATE: HighwayState = {
   nowLineX: 100, // Position of the "now" line from left edge
   pixelsPerSecond: 200,
   timeWindowMs: 4000,
+  feedbackConfig: {
+    onsetToleranceMs: 100,
+    releaseToleranceMs: 150,
+    pitchToleranceCents: 50,
+    hitThreshold: 70,
+    minAmplitudeDb: -60,
+    minVoicedMs: 400,
+    minCoveragePct: 60,
+    bandToleranceSemitones: 0,
+    minSlideSemitones: 3,
+  },
 };
 
 function createHighwayState() {
@@ -50,7 +71,12 @@ function createHighwayState() {
   function convertToEngineFormat(notes: TargetNote[]): HighwayTargetNote[] {
     return notes.map((note, index) => ({
       id: `target-${index}`,
+      targetKind: note.targetKind,
       midi: note.midi,
+      minMidi: note.minMidi,
+      maxMidi: note.maxMidi,
+      label: note.label,
+      slideDirection: note.slideDirection,
       startTimeMs: note.startTimeMs,
       durationMs: note.durationMs,
       startColumn: 0, // Not used in target notes mode
@@ -107,12 +133,7 @@ function createHighwayState() {
       playTargetNotes: false,
       playMetronome: false,
       inputSources: ['microphone'],
-      feedbackConfig: {
-        onsetToleranceMs: 100,
-        releaseToleranceMs: 150,
-        pitchToleranceCents: 50,
-        hitThreshold: 70,
-      },
+      feedbackConfig: state.feedbackConfig,
       stateCallbacks: {
         getTempo: () => 120,
         getCellWidth: () => 20,
@@ -235,9 +256,21 @@ function createHighwayState() {
       state.timeWindowMs = ms;
     },
 
-    recordPitchInput(midi: number, clarity: number) {
+    setFeedbackConfig(config: Partial<FeedbackCollectorConfig>) {
+      state.feedbackConfig = { ...state.feedbackConfig, ...config };
+
+      if (engineService && !state.isPlaying) {
+        const engineNotes = convertToEngineFormat(state.targetNotes);
+        initializeEngine();
+        if (engineService) {
+          engineService.init(engineNotes);
+        }
+      }
+    },
+
+    recordPitchInput(midi: number, clarity: number, amplitudeDb?: number) {
       if (engineService && state.isPlaying) {
-        engineService.recordPitchInput(midi, clarity, 'microphone');
+        engineService.recordPitchInput(midi, clarity, 'microphone', amplitudeDb);
       }
     },
 

@@ -1,4 +1,4 @@
-# Demo Exercise Feature - Implementation Plan
+# Exercise Feature - Implementation Plan
 
 ## Overview
 Add an interactive pitch-matching exercise to the Singing Trainer with visual cues, reference tones, and graded performance feedback.
@@ -23,8 +23,8 @@ Add an interactive pitch-matching exercise to the Singing Trainer with visual cu
 
 ## File Structure
 
-### 1. New Store: `demoExerciseState.svelte.ts`
-**Location**: `apps/singing-trainer/src/lib/stores/demoExerciseState.svelte.ts`
+### 1. New Store: `exerciseState.svelte.ts`
+**Location**: `apps/singing-trainer/src/lib/stores/exerciseState.svelte.ts`
 
 ```typescript
 export interface ExerciseConfig {
@@ -51,7 +51,7 @@ export interface ExerciseResult {
   accuracy: number; // 0-100%
 }
 
-interface DemoExerciseStore {
+interface ExerciseStore {
   state: ExerciseState;
   configure(config: Partial<ExerciseConfig>): void;
   start(): void;
@@ -69,13 +69,13 @@ interface DemoExerciseStore {
 - Internal: `handlePhaseTransition()` - Track which phase user is in
 - Internal: `collectResults()` - Gather performance data from highway service
 
-### 2. New Component: `DemoExerciseControls.svelte`
-**Location**: `apps/singing-trainer/src/lib/components/controls/DemoExerciseControls.svelte`
+### 2. New Component: `ExerciseControls.svelte`
+**Location**: `apps/singing-trainer/src/lib/components/controls/ExerciseControls.svelte`
 
 **UI Elements**:
 ```svelte
-<div class="demo-exercise-panel">
-  <h3>Demo Exercise</h3>
+<div class="exercise-panel">
+  <h3>Exercise</h3>
 
   <!-- Configuration (collapsed by default) -->
   <details>
@@ -103,7 +103,7 @@ interface DemoExerciseStore {
   <div class="exercise-controls">
     {#if !isActive}
       <button class="start-exercise-btn" onclick={handleStart}>
-        Start Demo Exercise
+        Start Lesson
       </button>
     {:else}
       <button class="stop-exercise-btn" onclick={handleStop}>
@@ -177,10 +177,10 @@ export interface TargetNote {
 No changes needed - PitchGrid should already support rendering lyrics if we use scrollingGridData mode.
 
 #### `App.svelte`
-Add DemoExerciseControls to sidebar:
+Add ExerciseControls to sidebar:
 ```svelte
 <div class="control-group">
-  <DemoExerciseControls />
+  <ExerciseControls />
 </div>
 ```
 
@@ -189,7 +189,7 @@ Add DemoExerciseControls to sidebar:
 ## Implementation Phases
 
 ### Phase 1: Core Exercise State (30-45 min)
-**Files**: `demoExerciseState.svelte.ts`
+**Files**: `exerciseState.svelte.ts`
 
 1. Create store with state management
 2. Implement `generateExerciseNotes()`:
@@ -245,7 +245,7 @@ Add DemoExerciseControls to sidebar:
 3. Mute during user input phases
 
 ### Phase 3: UI Controls (30-40 min)
-**Files**: `DemoExerciseControls.svelte`
+**Files**: `ExerciseControls.svelte`
 
 1. Create component layout
 2. Wire up configuration inputs
@@ -263,7 +263,7 @@ Add DemoExerciseControls to sidebar:
 3. Test scrolling with emojis
 
 ### Phase 5: Results & Feedback (20-30 min)
-**Files**: `DemoExerciseControls.svelte`
+**Files**: `ExerciseControls.svelte`
 
 1. Collect performance data from highway service
 2. Calculate accuracy metrics
@@ -307,18 +307,18 @@ Add DemoExerciseControls to sidebar:
 
 ```
 ┌─────────────────────────────┐
-│ Demo Exercise               │
+│ Exercise               │
 │ ▼ Settings                  │
 │   Number of loops: [5]      │
 │   Tempo (BPM): [120]        │
 │   Pitch Range: [Use Current]│
 │                             │
-│ [Start Demo Exercise]       │
+│ [Start Lesson]       │
 └─────────────────────────────┘
 
 // During Exercise:
 ┌─────────────────────────────┐
-│ Demo Exercise               │
+│ Exercise               │
 │                             │
 │ [Stop Exercise]             │
 │                             │
@@ -329,10 +329,10 @@ Add DemoExerciseControls to sidebar:
 
 // After Exercise:
 ┌─────────────────────────────┐
-│ Demo Exercise               │
+│ Exercise               │
 │ ▶ Settings                  │
 │                             │
-│ [Start Demo Exercise]       │
+│ [Start Lesson]       │
 │                             │
 │ Results                     │
 │ Average Accuracy: 87.2%     │

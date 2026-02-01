@@ -12,7 +12,7 @@
     PitchHighlightToggle,
     PitchReadout,
     RangeControl,
-    DemoExerciseControls,
+    ExerciseControls,
     UltrastarControls,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
@@ -22,7 +22,7 @@
   import { highwayState } from './lib/stores/highwayState.svelte.js';
   import { ultrastarState } from './lib/stores/ultrastarState.svelte.js';
   import { resultsState } from './lib/stores/resultsState.svelte.js';
-  import { demoExerciseState } from './lib/stores/demoExerciseState.svelte.js';
+  import { exerciseState } from './lib/stores/exerciseState.svelte.js';
   import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
 
   // Calibration wizard state
@@ -60,7 +60,7 @@
         });
         ultrastarState.setPlaying(false);
       }
-      // Demo exercise handles its own results display
+      // Exercises handle their own results display
     });
 
     return unsubscribe;
@@ -73,10 +73,10 @@
       highwayState.reset();
       highwayState.setTargetNotes(ultrastarState.state.targetNotes);
       appState.setVisualizationMode('highway');
-    } else if (resultsState.state.source === 'demo') {
-      // Hide modal and reset - user can click "Start Demo Exercise" to restart
+    } else if (resultsState.state.source === 'exercise') {
+      // Hide modal and reset - user can click "Start Lesson" to restart
       resultsState.hide();
-      demoExerciseState.reset();
+      exerciseState.reset();
     }
   }
 
@@ -156,7 +156,7 @@
 
   <main class="main">
     <aside class="sidebar sidebar--left">
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">User Settings</summary>
         <div class="settings-content">
           <PitchReadout />
@@ -166,21 +166,21 @@
         </div>
       </details>
 
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">Exercises &amp; Lessons</summary>
         <div class="settings-content">
-          <DemoExerciseControls />
+          <ExerciseControls />
         </div>
       </details>
 
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">UltraStar Karaoke</summary>
         <div class="settings-content">
           <UltrastarControls />
         </div>
       </details>
 
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">Drone Controls</summary>
         <div class="settings-content">
           <TonicSelector />

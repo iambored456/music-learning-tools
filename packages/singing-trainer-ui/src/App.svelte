@@ -13,7 +13,7 @@
     LyricLabelControls,
     PitchReadout,
     RangeControl,
-    DemoExerciseControls,
+    ExerciseControls,
     UltrastarControls,
     SpeakingPitchPanel,
   } from './lib/components/index.js';
@@ -25,15 +25,15 @@
   import { highwayState } from './lib/stores/highwayState.svelte.js';
   import { ultrastarState } from './lib/stores/ultrastarState.svelte.js';
   import { resultsState } from './lib/stores/resultsState.svelte.js';
-  import { demoExerciseState } from './lib/stores/demoExerciseState.svelte.js';
+  import { exerciseState } from './lib/stores/exerciseState.svelte.js';
   import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
   import { registerTemplates, ALL_LESSONS } from '@mlt/lesson-templates';
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
 
-  // Demo Exercise Controls component reference
-  let demoExerciseControlsRef: { handleLessonStart: (exerciseId: string, settings: Record<string, number | boolean>) => void } | undefined;
+  // Exercise Controls component reference
+  let exerciseControlsRef: { handleLessonStart: (lessonId: string, settings: Record<string, number | boolean>) => void } | undefined;
 
   function openCalibrationWizard() {
     showCalibrationWizard = true;
@@ -67,7 +67,7 @@
         });
         ultrastarState.setPlaying(false);
       }
-      // Demo exercise handles its own results display
+      // Exercises handle their own results display
     });
 
     return unsubscribe;
@@ -80,11 +80,11 @@
       highwayState.reset();
       highwayState.setTargetNotes(ultrastarState.state.targetNotes);
       appState.setVisualizationMode('highway');
-    } else if (resultsState.state.source === 'demo') {
-      // Reset highway and request restart - DemoExerciseControls will auto-start
+    } else if (resultsState.state.source === 'exercise') {
+      // Reset highway and request restart - ExerciseControls will auto-start
       highwayState.reset();
-      demoExerciseState.reset();
-      demoExerciseState.requestRestart();
+      exerciseState.reset();
+      exerciseState.requestRestart();
     }
   }
 
@@ -92,8 +92,8 @@
   function handleResultsClose() {
     // Clear highway and reset to clean state
     highwayState.reset();
-    if (resultsState.state.source === 'demo') {
-      demoExerciseState.reset();
+    if (resultsState.state.source === 'exercise') {
+      exerciseState.reset();
     }
   }
 
@@ -153,11 +153,11 @@
   }
 
   /**
-   * Handle starting an exercise from the chooser modal
+   * Handle starting a lesson from the chooser modal
    */
-  function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
-    console.log('[App] Exercise start requested:', exerciseId, settings);
-    demoExerciseControlsRef?.handleLessonStart(exerciseId, settings);
+  function handleLessonStart(lessonId: string, settings: Record<string, number | boolean>) {
+    console.log('[App] Lesson start requested:', lessonId, settings);
+    exerciseControlsRef?.handleLessonStart(lessonId, settings);
   }
 </script>
 
@@ -190,7 +190,7 @@
 
   <main class="main">
     <aside class="sidebar sidebar--left">
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">User Settings</summary>
         <div class="settings-content">
           <PitchReadout />
@@ -200,14 +200,14 @@
         </div>
       </details>
 
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">Exercises &amp; Lessons</summary>
         <div class="settings-content">
-          <DemoExerciseControls bind:this={demoExerciseControlsRef} />
+          <ExerciseControls bind:this={exerciseControlsRef} />
         </div>
       </details>
 
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">UltraStar Karaoke</summary>
         <div class="settings-content">
           <UltrastarControls />
@@ -215,7 +215,7 @@
         </div>
       </details>
 
-      <details class="settings-details" open>
+      <details class="settings-details">
         <summary class="settings-summary">Drone Controls</summary>
         <div class="settings-content">
           <TonicSelector />
@@ -249,8 +249,8 @@
     </section>
   </main>
 
-  <!-- Exercise Chooser Modal -->
-  <ExerciseChooserModal onstart={handleExerciseStart} />
+  <!-- Lesson Chooser Modal -->
+  <ExerciseChooserModal onstart={handleLessonStart} />
 
   <!-- Results Modal -->
   <ResultsModal onRetry={handleResultsRetry} onClose={handleResultsClose} />

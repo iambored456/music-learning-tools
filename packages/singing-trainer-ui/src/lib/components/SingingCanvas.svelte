@@ -27,7 +27,7 @@
   import { appState } from '../stores/appState.svelte.js';
   import { pitchState } from '../stores/pitchState.svelte.js';
   import { highwayState } from '../stores/highwayState.svelte.js';
-  import { demoExerciseState } from '../stores/demoExerciseState.svelte.js';
+  import { exerciseState } from '../stores/exerciseState.svelte.js';
   import { ultrastarState } from '../stores/ultrastarState.svelte.js';
   import { LyricsDisplay } from './karaoke/index.js';
 
@@ -94,14 +94,14 @@
   // Calculate beat interval based on exercise tempo
   // 1 beat = 2 microbeats, beatIntervalMs = 60000 / tempo
   const beatIntervalMs = $derived<number>(
-    (60 / demoExerciseState.state.config.tempo) * 1000 // ms per beat (quarter note)
+    (60 / exerciseState.state.config.tempo) * 1000 // ms per beat (quarter note)
   );
   const gridBeatIntervalMs = $derived<number>(
     ultrastarState.state.isActive ? 0 : beatIntervalMs
   );
 
-  // Lead-in time offset for beat line alignment (matches demoExerciseState)
-  const beatTimeOffsetMs = 2000;
+  // Lead-in time offset for beat line alignment (matches exerciseState)
+  const beatTimeOffsetMs = $derived(exerciseState.state.config.leadInMs ?? 0);
 
   const legendHighlight = $derived<LegendHighlightConfig | undefined>((() => {
     if (!appState.state.pitchHighlightEnabled) {
@@ -127,10 +127,14 @@
     const showDegrees = appState.state.useDegrees && degrees.length > 0;
     return highwayState.state.targetNotes.map((n, i) => ({
       id: `target-${i}`,
+      targetKind: n.targetKind,
       midi: n.midi,
+      minMidi: n.minMidi,
+      maxMidi: n.maxMidi,
+      slideDirection: n.slideDirection,
       startTimeMs: n.startTimeMs,
       durationMs: n.durationMs,
-      label: showDegrees ? degrees[i] : n.lyric,
+      label: n.label ?? ((showDegrees && typeof n.midi === 'number') ? degrees[i] : n.lyric),
     }));
   }
 

@@ -63,11 +63,11 @@ const ANCHORED_SETTINGS_SCHEMA = {
  * - REQUIRES speaking pitch calibration
  * - Uses speaking pitch as tonic (center of pitch range)
  * - Drone enabled by default to reinforce tonal center
- * - Category: Beginning Exercises
+ * - Category: Beginning Lessons
  */
 export const ANCHORED_PITCH_MATCHING = {
     id: 'anchored-pitch-matching',
-    name: 'Anchored Pitch Matching',
+    name: '2.1 Anchored Pitch Matching',
     description: 'Match pitches centered around your speaking voice. Personalized to your range.',
     type: 'pitch-matching',
     difficulty: 1,

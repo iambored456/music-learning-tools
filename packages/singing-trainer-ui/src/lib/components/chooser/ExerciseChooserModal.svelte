@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
-   * Exercise Chooser Modal Component
+   * Lesson Chooser Modal Component
    *
-   * True modal for browsing and selecting exercises.
+   * True modal for browsing and selecting lessons.
    * Matches the Results modal styling and interaction patterns.
    */
 
@@ -16,7 +16,7 @@
   import ExerciseCard from './ExerciseCard.svelte';
 
   interface Props {
-    onstart?: (exerciseId: string, settings: Record<string, number | boolean>) => void;
+    onstart?: (lessonId: string, settings: Record<string, number | boolean>) => void;
     onclose?: () => void;
   }
 
@@ -25,11 +25,11 @@
   // Reactive state
   const isVisible = $derived(chooserState.state.isVisible);
   const selectedCategory = $derived(chooserState.state.selectedCategory);
-  const selectedExerciseId = $derived(chooserState.state.selectedExerciseId);
+  const selectedLessonId = $derived(chooserState.state.selectedLessonId);
   const localSettings = $derived(chooserState.state.localSettings);
 
-  // Get exercises for selected category
-  const categoryExercises = $derived(getRegistryEntriesByCategory(selectedCategory));
+  // Get lessons for selected category
+  const categoryLessons = $derived(getRegistryEntriesByCategory(selectedCategory));
 
   /**
    * Handle backdrop click
@@ -66,10 +66,10 @@
   }
 
   /**
-   * Handle exercise card selection
+   * Handle lesson card selection
    */
-  function handleExerciseSelect(entry: RegistryEntry) {
-    chooserState.selectExercise(entry.template.id, entry.template.settingsSchema);
+  function handleLessonSelect(entry: RegistryEntry) {
+    chooserState.selectLesson(entry.template.id, entry.template.settingsSchema);
   }
 
   /**
@@ -80,10 +80,10 @@
   }
 
   /**
-   * Handle start exercise
+   * Handle start lesson
    */
-  function handleStartExercise() {
-    if (!selectedExerciseId) return;
+  function handleStartLesson() {
+    if (!selectedLessonId) return;
 
     const settings = chooserState.getLocalSettings();
 
@@ -91,7 +91,7 @@
     chooserState.hide();
 
     // Trigger start callback
-    onstart?.(selectedExerciseId, settings);
+    onstart?.(selectedLessonId, settings);
 
     // Reset selection after a delay
     setTimeout(() => {
@@ -117,7 +117,7 @@
     <div class="modal-content">
       <!-- Header -->
       <div class="modal-header">
-        <h2 id="chooser-title" class="modal-title">Choose Exercise</h2>
+        <h2 id="chooser-title" class="modal-title">Choose Lesson</h2>
         <button class="close-btn" onclick={handleClose} aria-label="Close">
           <span class="close-icon">×</span>
         </button>
@@ -133,22 +133,22 @@
           />
         </aside>
 
-        <!-- Right: Exercise cards -->
+        <!-- Right: Lesson cards -->
         <main class="exercises-column">
-          {#if categoryExercises.length === 0}
+          {#if categoryLessons.length === 0}
             <div class="empty-state">
-              <p>No exercises in this category yet.</p>
+              <p>No lessons in this category yet.</p>
             </div>
           {:else}
             <div class="exercise-list">
-              {#each categoryExercises as entry (entry.template.id)}
+              {#each categoryLessons as entry (entry.template.id)}
                 <ExerciseCard
                   {entry}
-                  isSelected={selectedExerciseId === entry.template.id}
+                  isSelected={selectedLessonId === entry.template.id}
                   {localSettings}
-                  onselect={() => handleExerciseSelect(entry)}
+                  onselect={() => handleLessonSelect(entry)}
                   onsettingchange={handleSettingChange}
-                  onstart={handleStartExercise}
+                  onstart={handleStartLesson}
                 />
               {/each}
             </div>

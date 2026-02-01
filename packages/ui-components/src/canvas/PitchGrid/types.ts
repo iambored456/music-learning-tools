@@ -127,11 +127,26 @@ export type LegendHighlightConfig = LegendHighlightEntry | LegendHighlightEntry[
 /**
  * A target note to display on the note highway.
  */
+export type TargetNoteKind = 'fixedPitch' | 'windowAnyPitch' | 'windowBand' | 'slideWindow';
+
+export type SlideDirection = 'up' | 'down';
+
+/**
+ * A target note/window to display on the note highway.
+ */
 export interface TargetNote {
   /** Unique identifier */
   id: string;
-  /** MIDI note number of the target pitch */
-  midi: number;
+  /** Target kind (defaults to fixedPitch) */
+  targetKind?: TargetNoteKind;
+  /** MIDI note number of the target pitch (fixedPitch) */
+  midi?: number;
+  /** Optional lower MIDI bound (windowBand) */
+  minMidi?: number;
+  /** Optional upper MIDI bound (windowBand) */
+  maxMidi?: number;
+  /** Optional slide direction (slideWindow) */
+  slideDirection?: SlideDirection;
   /** Start time in milliseconds from exercise start */
   startTimeMs: number;
   /** Duration in milliseconds */

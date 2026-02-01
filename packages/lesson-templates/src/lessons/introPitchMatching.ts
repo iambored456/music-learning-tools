@@ -62,7 +62,7 @@ const INTRO_SETTINGS_SCHEMA: LessonSettingsSchema = {
  */
 export const INTRO_PITCH_MATCHING: PitchMatchingTemplate = {
   id: 'intro-pitch-matching',
-  name: 'Introduction to Pitch Matching',
+  name: '1.0 Introduction to Pitch Matching',
   description: 'Learn the basics of pitch matching with a comfortable, fixed range.',
   type: 'pitch-matching',
   difficulty: 1,

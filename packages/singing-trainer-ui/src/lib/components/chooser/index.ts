@@ -1,7 +1,7 @@
 /**
  * Chooser Components
  *
- * Components for the exercise chooser modal.
+ * Components for the lesson chooser modal.
  */
 
 export { default as ExerciseChooserModal } from './ExerciseChooserModal.svelte';

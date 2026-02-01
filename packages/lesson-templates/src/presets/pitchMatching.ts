@@ -2,7 +2,7 @@
  * Pitch Matching Presets
  *
  * Pre-defined templates for pitch matching exercises.
- * The "Basic Pitch Matching" template corresponds to the existing Demo Exercise.
+ * The "Basic Pitch Matching" template corresponds to the core exercise flow.
  */
 
 import type { PitchMatchingTemplate, ExercisePattern, LessonSettingsSchema } from '../types.js';
@@ -33,7 +33,7 @@ const ANCHORED_SETTINGS_SCHEMA: LessonSettingsSchema = {
 };
 
 /**
- * Standard 4-phase pattern used by the Demo Exercise
+ * Standard 4-phase pattern used by the core exercise flow
  *
  * Structure per loop (32 microbeats total):
  * - Reference (8 microbeats): System plays the target pitch
@@ -86,12 +86,12 @@ export const EXTENDED_HOLD_PATTERN: ExercisePattern = {
 /**
  * Basic Pitch Matching Template
  *
- * This is the standard template corresponding to the existing Demo Exercise.
+ * This is the standard template corresponding to the core exercise flow.
  * Uses the user's speaking pitch as the floor note by default.
  */
 export const BASIC_PITCH_MATCHING: PitchMatchingTemplate = {
   id: 'basic-pitch-match',
-  name: 'Basic Pitch Matching',
+  name: '1.5 Basic Pitch Matching',
   description: 'Match single pitches. Listen to the reference tone, then sing it back.',
   type: 'pitch-matching',
   difficulty: 1,
@@ -134,7 +134,7 @@ export const BASIC_PITCH_MATCHING: PitchMatchingTemplate = {
  */
 export const QUICK_PITCH_MATCHING: PitchMatchingTemplate = {
   id: 'quick-pitch-match',
-  name: 'Quick Pitch Response',
+  name: '2.2 Quick Pitch Response',
   description: 'Develop fast pitch recognition. Shorter rest between listen and sing.',
   type: 'pitch-matching',
   difficulty: 2,
@@ -171,7 +171,7 @@ export const QUICK_PITCH_MATCHING: PitchMatchingTemplate = {
  */
 export const SUSTAINED_PITCH_MATCHING: PitchMatchingTemplate = {
   id: 'sustained-pitch-match',
-  name: 'Sustained Pitch',
+  name: '2.3 Sustained Pitch',
   description: 'Practice holding pitches steady. Extended singing duration for each note.',
   type: 'pitch-matching',
   difficulty: 2,
@@ -208,7 +208,7 @@ export const SUSTAINED_PITCH_MATCHING: PitchMatchingTemplate = {
  */
 export const CENTERED_RANGE_MATCHING: PitchMatchingTemplate = {
   id: 'centered-range-match',
-  name: 'Centered Range',
+  name: '1.6 Centered Range',
   description: 'Explore your comfortable range. Pitches centered around your speaking pitch.',
   type: 'pitch-matching',
   difficulty: 1,

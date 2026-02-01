@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
-   * Exercise Card Component
+   * Lesson Card Component
    *
-   * Displays exercise metadata and expands to show settings when selected.
+   * Displays lesson metadata and expands to show settings when selected.
    */
 
   import type { AnyLessonTemplate, RegistryEntry } from '@mlt/lesson-templates';
@@ -95,7 +95,7 @@
       </div>
 
       <button class="start-btn" onclick={handleStartClick}>
-        Start Exercise
+        Start Lesson
       </button>
     </div>
   {/if}

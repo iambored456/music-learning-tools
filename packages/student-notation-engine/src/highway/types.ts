@@ -19,6 +19,8 @@ export interface PitchSample {
   midi: number;
   /** Detection confidence (0-1) for microphone input */
   clarity: number;
+  /** Optional amplitude in dBFS (if available) */
+  amplitudeDb?: number;
   /** Input source */
   source: 'microphone' | 'keyboard';
 }
@@ -28,14 +30,34 @@ export interface PitchSample {
 // ============================================================================
 
 /**
+ * Target kind for grading/rendering.
+ */
+export type TargetKind = 'fixedPitch' | 'windowAnyPitch' | 'windowBand' | 'slideWindow';
+
+/**
+ * Direction for slide targets.
+ */
+export type SlideDirection = 'up' | 'down';
+
+/**
  * A target note to display on the note highway.
  * Represents a note from the Student Notation score.
  */
 export interface HighwayTargetNote {
   /** Unique identifier */
   id: string;
-  /** MIDI note number */
-  midi: number;
+  /** Target kind (defaults to fixedPitch) */
+  targetKind?: TargetKind;
+  /** MIDI note number (for fixed-pitch targets) */
+  midi?: number;
+  /** Optional lower MIDI bound (for band targets) */
+  minMidi?: number;
+  /** Optional upper MIDI bound (for band targets) */
+  maxMidi?: number;
+  /** Optional label for display (e.g., LOW/HIGH/SLIDE UP) */
+  label?: string;
+  /** Optional slide direction (for slide targets) */
+  slideDirection?: SlideDirection;
   /** Start time in milliseconds from playback start */
   startTimeMs: number;
   /** Duration in milliseconds */
@@ -68,6 +90,16 @@ export interface NotePerformance {
   pitchAccuracyCents: number;
   /** Percentage of note duration with correct pitch (0-100) */
   pitchCoverage: number;
+  /** Percentage of note duration with any voiced pitch (0-100) */
+  voicedCoverage?: number;
+  /** Total voiced duration in milliseconds */
+  voicedMs?: number;
+  /** Percentage of duration within band (for band targets) */
+  bandCoverage?: number;
+  /** Slide span in semitones (for slide targets) */
+  slideSemitoneSpan?: number;
+  /** Slide direction (for slide targets) */
+  slideDirection?: SlideDirection;
   /** All pitch samples collected during this note */
   pitchSamples: PitchSample[];
   /** Optional accuracy tier for display ('perfect' | 'good' | 'okay' | 'miss') */
@@ -90,6 +122,16 @@ export interface FeedbackCollectorConfig {
   pitchToleranceCents: number;
   /** Minimum percentage of note duration with correct pitch to count as "hit" */
   hitThreshold: number;
+  /** Minimum amplitude in dBFS for a sample to count as voiced (optional) */
+  minAmplitudeDb?: number;
+  /** Minimum voiced duration in ms required for window targets */
+  minVoicedMs?: number;
+  /** Minimum coverage percentage required for window targets (0-100) */
+  minCoveragePct?: number;
+  /** Optional tolerance added to band bounds (in semitones) */
+  bandToleranceSemitones?: number;
+  /** Minimum slide span in semitones (for slide targets) */
+  minSlideSemitones?: number;
   /** Optional thresholds for accuracy tiers */
   accuracyTiers?: {
     perfect: { onsetMs: number; pitchCents: number; coverage: number };
@@ -284,7 +326,7 @@ export interface NoteHighwayServiceInstance {
   /** Seek to a specific time position (ms) */
   setScrollOffset(timeMs: number): void;
   /** Record a user pitch input */
-  recordPitchInput(midi: number, clarity: number, source: InputSource): void;
+  recordPitchInput(midi: number, clarity: number, source: InputSource, amplitudeDb?: number): void;
   /** Get current state */
   getState(): Readonly<NoteHighwayState>;
   /** Get notes visible in current viewport */

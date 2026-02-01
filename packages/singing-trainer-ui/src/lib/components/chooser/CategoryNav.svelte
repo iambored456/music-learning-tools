@@ -2,7 +2,7 @@
   /**
    * Category Navigation Component
    *
-   * Vertical list of category buttons for filtering exercises.
+   * Vertical list of category buttons for filtering lessons.
    */
 
   import type { LessonCategory } from '@mlt/lesson-templates';
@@ -22,7 +22,7 @@
 
   const categories: CategoryInfo[] = [
     { id: 'foundations', label: 'Foundations', icon: '🎯' },
-    { id: 'beginning', label: 'Beginning Exercises', icon: '🎵' },
+    { id: 'beginning', label: 'Beginning Lessons', icon: '🎵' },
   ];
 
   function handleClick(category: LessonCategory) {
@@ -37,7 +37,7 @@
   }
 </script>
 
-<nav class="category-nav" role="tablist" aria-label="Exercise categories">
+<nav class="category-nav" role="tablist" aria-label="Lesson categories">
   {#each categories as cat}
     <button
       class="category-btn"

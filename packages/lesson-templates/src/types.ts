@@ -182,6 +182,28 @@ export interface PitchMatchingConfig {
   minMidi?: number;
   /** Maximum MIDI note (optional - may be derived from speaking pitch) */
   maxMidi?: number;
+  /** Minimum amplitude (dB) to consider a voiced sample */
+  minAmplitudeDb?: number;
+  /** Minimum voiced duration within a window (ms) */
+  minVoicedMs?: number;
+  /** Minimum coverage percentage within a window */
+  minCoveragePct?: number;
+  /** Low band minimum offset from speaking pitch (semitones) */
+  bandLowMinOffsetSemis?: number;
+  /** Low band maximum offset from speaking pitch (semitones) */
+  bandLowMaxOffsetSemis?: number;
+  /** High band minimum offset from speaking pitch (semitones) */
+  bandHighMinOffsetSemis?: number;
+  /** High band maximum offset from speaking pitch (semitones) */
+  bandHighMaxOffsetSemis?: number;
+  /** Hold band size in semitones (± value) */
+  holdBandSemitones?: number;
+  /** Minimum slide span in semitones */
+  minSlideSemitones?: number;
+  /** Toggle immediate feedback (UI scaffold) */
+  showImmediateFeedback?: boolean;
+  /** Toggle score display (UI scaffold) */
+  showScore?: boolean;
 }
 
 /** Phase type in an exercise loop */

@@ -1,24 +1,24 @@
 /**
  * Chooser State Store - Svelte 5 Runes
  *
- * Manages the exercise chooser modal visibility, category selection,
- * exercise selection, and local per-run settings.
+ * Manages the lesson chooser modal visibility, category selection,
+ * lesson selection, and local per-run settings.
  */
 
 import type { LessonCategory, LessonSettingsSchema, AnyLessonTemplate } from '@mlt/lesson-templates';
 
-/** State for the exercise chooser modal */
+/** State for the lesson chooser modal */
 export interface ChooserState {
   isVisible: boolean;
   selectedCategory: LessonCategory;
-  selectedExerciseId: string | null;
+  selectedLessonId: string | null;
   localSettings: Record<string, number | boolean>;
 }
 
 const DEFAULT_STATE: ChooserState = {
   isVisible: false,
   selectedCategory: 'foundations',
-  selectedExerciseId: null,
+  selectedLessonId: null,
   localSettings: {},
 };
 
@@ -31,33 +31,33 @@ function createChooserState() {
     },
 
     /**
-     * Show the exercise chooser modal
+     * Show the lesson chooser modal
      */
     show() {
       state.isVisible = true;
     },
 
     /**
-     * Hide the exercise chooser modal
+     * Hide the lesson chooser modal
      */
     hide() {
       state.isVisible = false;
     },
 
     /**
-     * Select a category and clear exercise selection
+     * Select a category and clear lesson selection
      */
     selectCategory(category: LessonCategory) {
       state.selectedCategory = category;
-      state.selectedExerciseId = null;
+      state.selectedLessonId = null;
       state.localSettings = {};
     },
 
     /**
-     * Select an exercise and initialize its settings from schema defaults
+     * Select a lesson and initialize its settings from schema defaults
      */
-    selectExercise(exerciseId: string, settingsSchema?: LessonSettingsSchema) {
-      state.selectedExerciseId = exerciseId;
+    selectLesson(lessonId: string, settingsSchema?: LessonSettingsSchema) {
+      state.selectedLessonId = lessonId;
 
       // Initialize local settings from schema defaults
       if (settingsSchema) {
@@ -72,10 +72,10 @@ function createChooserState() {
     },
 
     /**
-     * Deselect the current exercise
+     * Deselect the current lesson
      */
-    deselectExercise() {
-      state.selectedExerciseId = null;
+    deselectLesson() {
+      state.selectedLessonId = null;
       state.localSettings = {};
     },
 
@@ -104,7 +104,7 @@ function createChooserState() {
      * Reset selection state without hiding modal
      */
     resetSelection() {
-      state.selectedExerciseId = null;
+      state.selectedLessonId = null;
       state.localSettings = {};
     },
   };

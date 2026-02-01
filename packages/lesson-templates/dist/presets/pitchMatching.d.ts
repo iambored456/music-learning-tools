@@ -2,11 +2,11 @@
  * Pitch Matching Presets
  *
  * Pre-defined templates for pitch matching exercises.
- * The "Basic Pitch Matching" template corresponds to the existing Demo Exercise.
+ * The "Basic Pitch Matching" template corresponds to the core exercise flow.
  */
 import type { PitchMatchingTemplate, ExercisePattern } from '../types.js';
 /**
- * Standard 4-phase pattern used by the Demo Exercise
+ * Standard 4-phase pattern used by the core exercise flow
  *
  * Structure per loop (32 microbeats total):
  * - Reference (8 microbeats): System plays the target pitch
@@ -26,7 +26,7 @@ export declare const EXTENDED_HOLD_PATTERN: ExercisePattern;
 /**
  * Basic Pitch Matching Template
  *
- * This is the standard template corresponding to the existing Demo Exercise.
+ * This is the standard template corresponding to the core exercise flow.
  * Uses the user's speaking pitch as the floor note by default.
  */
 export declare const BASIC_PITCH_MATCHING: PitchMatchingTemplate;

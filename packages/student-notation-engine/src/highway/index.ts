@@ -28,6 +28,8 @@ export type {
   // State
   NoteHighwayState,
   HighwayTargetNote,
+  TargetKind,
+  SlideDirection,
   NotePerformance,
   PitchSample,
 

@@ -364,7 +364,7 @@ export function createNoteHighwayService(
       logger?.debug('NoteHighway', 'Scroll offset set', { timeMs, scrollOffset: state.scrollOffset });
     },
 
-    recordPitchInput(midi: number, clarity: number, source: InputSource): void {
+    recordPitchInput(midi: number, clarity: number, source: InputSource, amplitudeDb?: number): void {
       if (!state.isPlaying || state.isPaused) return;
       if (!finalConfig.inputSources.includes(source)) return;
 
@@ -372,6 +372,7 @@ export function createNoteHighwayService(
         timeMs: state.currentTimeMs,
         midi,
         clarity,
+        amplitudeDb,
         source,
       };
 

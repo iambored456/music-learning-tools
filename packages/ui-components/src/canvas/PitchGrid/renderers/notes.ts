@@ -27,6 +27,8 @@ const STROKE_WIDTH_RATIO = 0.15;
 const TAIL_LINE_WIDTH_RATIO = 0.2;
 const MIN_TAIL_LINE_WIDTH = 1;
 const SHADOW_BLUR_RADIUS = 1.5;
+const WINDOW_FILL_COLOR = 'rgba(76, 175, 80, 0.18)';
+const WINDOW_STROKE_COLOR = 'rgba(76, 175, 80, 0.65)';
 
 // ============================================================================
 // Types
@@ -700,7 +702,91 @@ export function drawTargetNotes(
     // Skip if completely off-screen
     if (endX < 0 || startX > config.viewportWidth) continue;
 
+    const targetKind = note.targetKind ?? 'fixedPitch';
+
+    if (targetKind === 'windowAnyPitch' || targetKind === 'slideWindow') {
+      const topY = fullRowData
+        ? coords.getRowY(0) - (cellHeight / 2)
+        : 0;
+      const bottomY = fullRowData
+        ? coords.getRowY(fullRowData.length - 1) + (cellHeight / 2)
+        : ctx.canvas.height;
+      const height = bottomY - topY;
+
+      ctx.save();
+      ctx.fillStyle = WINDOW_FILL_COLOR;
+      ctx.strokeStyle = WINDOW_STROKE_COLOR;
+      ctx.lineWidth = 2;
+      ctx.fillRect(startX, topY, endX - startX, height);
+      ctx.strokeRect(startX, topY, endX - startX, height);
+      ctx.restore();
+
+      if (note.label) {
+        const labelText = note.label.trim();
+        if (labelText) {
+          const fontSize = getTargetLabelFontSize(endX - startX, cellHeight, config.labelConfig);
+          ctx.save();
+          ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          const textWidth = ctx.measureText(labelText).width;
+          const padding = 4;
+          const bgX = startX + 6;
+          const bgY = topY + 6;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fillRect(bgX - padding, bgY - padding, textWidth + padding * 2, fontSize + padding * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(labelText, bgX, bgY);
+          ctx.restore();
+        }
+      }
+      continue;
+    }
+
+    if (targetKind === 'windowBand') {
+      if (!fullRowData || typeof note.minMidi !== 'number' || typeof note.maxMidi !== 'number') {
+        continue;
+      }
+
+      const bandTopY = getMidiY(coords, Math.max(note.minMidi, note.maxMidi), cellHeight, fullRowData) - (cellHeight / 2);
+      const bandBottomY = getMidiY(coords, Math.min(note.minMidi, note.maxMidi), cellHeight, fullRowData) + (cellHeight / 2);
+      const bandHeight = bandBottomY - bandTopY;
+
+      ctx.save();
+      ctx.fillStyle = WINDOW_FILL_COLOR;
+      ctx.strokeStyle = WINDOW_STROKE_COLOR;
+      ctx.lineWidth = 2;
+      ctx.fillRect(startX, bandTopY, endX - startX, bandHeight);
+      ctx.strokeRect(startX, bandTopY, endX - startX, bandHeight);
+      ctx.restore();
+
+      if (note.label) {
+        const labelText = note.label.trim();
+        if (labelText) {
+          const fontSize = getTargetLabelFontSize(endX - startX, cellHeight, config.labelConfig);
+          ctx.save();
+          ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          const textWidth = ctx.measureText(labelText).width;
+          const padding = 4;
+          const bgX = startX + 6;
+          const bgY = bandTopY + 6;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fillRect(bgX - padding, bgY - padding, textWidth + padding * 2, fontSize + padding * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(labelText, bgX, bgY);
+          ctx.restore();
+        }
+      }
+      continue;
+    }
+
     // Find row index from fullRowData if provided, otherwise use default calculation
+    if (typeof note.midi !== 'number') {
+      continue;
+    }
+
     let rowIndex: number;
     if (fullRowData) {
       rowIndex = fullRowData.findIndex(row => row.midi === note.midi);

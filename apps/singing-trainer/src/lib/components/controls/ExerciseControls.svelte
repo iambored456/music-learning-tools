@@ -1,11 +1,11 @@
 <script lang="ts">
   /**
-   * Demo Exercise Controls Component
+   * Exercise Controls Component
    *
-   * UI for starting/stopping the pitch-matching demo exercise.
+   * UI for starting/stopping the pitch-matching exercise.
    */
 
-  import { demoExerciseState } from '../../stores/demoExerciseState.svelte.js';
+  import { exerciseState } from '../../stores/exerciseState.svelte.js';
   import { highwayState } from '../../stores/highwayState.svelte.js';
   import { appState } from '../../stores/appState.svelte.js';
   import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
@@ -14,7 +14,7 @@
   import { onDestroy } from 'svelte';
 
   // DEBUG: Verify this file is being loaded
-  console.log('[DemoExerciseControls] MODULE LOADED - app-level component');
+  console.log('[ExerciseControls] MODULE LOADED - app-level component');
 
   // Local state for exercise defaults
   let numLoops = $state(5);
@@ -28,16 +28,16 @@
   let resultsPollingInterval: ReturnType<typeof setInterval> | null = null;
 
   // Reactive state from stores
-  const isActive = $derived(demoExerciseState.state.isActive);
-  const isPlaying = $derived(demoExerciseState.state.isPlaying);
-  const currentPhase = $derived(demoExerciseState.state.currentPhase);
-  const progress = $derived(demoExerciseState.getCurrentProgress());
-  const results = $derived(demoExerciseState.getResults());
+  const isActive = $derived(exerciseState.state.isActive);
+  const isPlaying = $derived(exerciseState.state.isPlaying);
+  const currentPhase = $derived(exerciseState.state.currentPhase);
+  const progress = $derived(exerciseState.getCurrentProgress());
+  const results = $derived(exerciseState.getResults());
   const hasResults = $derived(results.length > 0);
 
   // Calculate stats from results
-  const averageAccuracy = $derived(demoExerciseState.getAverageAccuracy());
-  const hitCount = $derived(demoExerciseState.getHitCount());
+  const averageAccuracy = $derived(exerciseState.getAverageAccuracy());
+  const hitCount = $derived(exerciseState.getHitCount());
   const totalCount = $derived(results.length);
 
   /**
@@ -47,7 +47,7 @@
     if (!isActive || !isPlaying) return;
 
     const currentTimeMs = highwayState.state.currentTimeMs;
-    demoExerciseState.updatePhase(currentTimeMs);
+    exerciseState.updatePhase(currentTimeMs);
   });
 
   /**
@@ -71,35 +71,46 @@
     }
   }
 
+
+  function isInputNote(note: any): boolean {
+    return note?.role === 'input';
+  }
+
+  function isReferenceNote(note: any): boolean {
+    return note?.role === 'reference';
+  }
+
   /**
    * Collect results from highway performance data
    */
   function collectResults() {
     const performances = highwayState.getPerformanceResults();
-    const notes = demoExerciseState.getGeneratedNotes();
+    const notes = exerciseState.getGeneratedNotes();
 
     console.log('[Polling] collectResults:', {
       performanceCount: performances.size,
       notesCount: notes.length,
-      currentResults: demoExerciseState.state.results.length,
+      currentResults: exerciseState.state.results.length,
     });
 
-    notes.forEach((note, index) => {
-      if (note.lyric !== '🎤') return; // Only process input notes
+    const inputNotes = notes
+      .map((note, index) => ({ note, index }))
+      .filter(({ note }) => isInputNote(note));
 
+    inputNotes.forEach(({ note, index }, inputIndex) => {
       const noteId = `target-${index}`;
       const perf = performances.get(noteId);
 
       console.log('[Polling] Checking:', { noteId, hasPerf: !!perf, lyric: note.lyric });
 
-      if (perf && !demoExerciseState.hasResultForLoop(Math.floor(index / 2))) {
+      if (perf && !exerciseState.hasResultForLoop(inputIndex)) {
         const accuracy = calculateAccuracy(perf);
 
-        console.log('[Polling] Adding result for loop', Math.floor(index / 2));
+        console.log('[Polling] Adding result for input', inputIndex);
 
-        demoExerciseState.addResult({
-          loopIndex: Math.floor(index / 2),
-          targetPitch: note.midi,
+        exerciseState.addResult({
+          loopIndex: inputIndex,
+          targetPitch: typeof note.midi === 'number' ? note.midi : null,
           accuracy,
           performance: perf,
         });
@@ -111,8 +122,8 @@
    * Check if exercise is complete and trigger results modal
    */
   function checkCompletion() {
-    const completedLoops = demoExerciseState.state.results.length;
-    const totalLoops = demoExerciseState.state.config.numLoops;
+    const completedLoops = exerciseState.state.results.length;
+    const totalLoops = exerciseState.getGeneratedNotes().filter(isInputNote).length;
 
     console.log('[Polling] checkCompletion:', { completedLoops, totalLoops, completionTriggered });
 
@@ -130,7 +141,7 @@
     handleStop();
 
     // Build summary from collected results
-    const exerciseResults = demoExerciseState.getResults();
+    const exerciseResults = exerciseState.getResults();
     const notesHit = exerciseResults.filter(r => r.performance?.hitStatus === 'hit').length;
     const totalNotes = exerciseResults.length;
 
@@ -163,8 +174,8 @@
 
     // Show results modal
     resultsState.show(summary, {
-      title: 'Pitch Matching Exercise',
-      source: 'demo',
+      title: 'Pitch Matching Lesson',
+      source: 'exercise',
     });
   }
 
@@ -200,26 +211,26 @@
    */
   function useCurrentRange() {
     const range = appState.state.yAxisRange;
-    demoExerciseState.setPitchRange(range.minMidi, range.maxMidi);
+    exerciseState.setPitchRange(range.minMidi, range.maxMidi);
   }
 
   /**
    * Use full piano range
    */
   function useFullRange() {
-    demoExerciseState.setPitchRange(21, 108); // A0 to C8
+    exerciseState.setPitchRange(21, 108); // A0 to C8
   }
 
   /**
-   * Start the demo exercise
+   * Start the exercise
    */
   async function handleStart() {
-    console.log('[DemoExerciseControls] handleStart called');
+    console.log('[ExerciseControls] handleStart called');
     // Auto-switch to highway mode
     appState.setVisualizationMode('highway');
 
     // Update configuration
-    demoExerciseState.configure({
+    exerciseState.configure({
       numLoops,
       tempo,
       referenceVolume,
@@ -233,27 +244,27 @@
     referenceAudio.setVolume(referenceVolume);
 
     // Start exercise (generates notes)
-    demoExerciseState.start();
+    exerciseState.start();
 
-    const notes = demoExerciseState.getGeneratedNotes();
+    const notes = exerciseState.getGeneratedNotes();
 
     // Set highway state with generated notes
     highwayState.setTargetNotes(notes);
 
     // Start highway playback
     highwayState.start();
-    demoExerciseState.setPlaying(true);
+    exerciseState.setPlaying(true);
 
     // Start polling for results
     startResultsPolling();
 
     // Schedule reference tones (only the reference notes, not input notes)
-    const referenceTones = notes.filter(n => n.lyric === '👂');
+    const referenceTones = notes.filter(isReferenceNote);
     referenceAudio.scheduleReferenceTones(referenceTones);
   }
 
   /**
-   * Stop the demo exercise
+   * Stop the exercise
    */
   function handleStop() {
     // Stop polling
@@ -269,7 +280,7 @@
     highwayState.stop();
 
     // Mark exercise as stopped
-    demoExerciseState.stop();
+    exerciseState.stop();
   }
 
   /**
@@ -289,24 +300,27 @@
   /**
    * Get pitch name from MIDI number
    */
-  function getPitchName(midi: number): string {
+  function getPitchName(midi: number | null | undefined): string {
+    if (typeof midi !== 'number') {
+      return 'Window';
+    }
     const pitch = getPitchByMidi(midi);
     return pitch?.pitch || `MIDI ${midi}`;
   }
 </script>
 
-<div class="demo-exercise-panel">
-  <h3 class="panel-title">Exercise Panel</h3>
+<div class="exercise-panel">
+  <h3 class="panel-title">Exercises &amp; Lessons</h3>
 
   <!-- Main Controls -->
   <div class="exercise-controls">
     {#if !isActive}
       <button class="start-exercise-btn" onclick={handleStart}>
-        Start Demo Exercise
+        Start Lesson
       </button>
     {:else}
       <button class="stop-exercise-btn" onclick={handleStop}>
-        Stop Exercise
+        Stop Lesson
       </button>
 
       <div class="progress-indicator">
@@ -354,7 +368,7 @@
 </div>
 
 <style>
-  .demo-exercise-panel {
+  .exercise-panel {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);

@@ -1,7 +1,7 @@
 /**
  * Reference Audio Service
  *
- * Plays sine wave reference tones for the demo exercise.
+ * Plays sine wave reference tones for the exercise.
  */
 
 import * as Tone from 'tone';

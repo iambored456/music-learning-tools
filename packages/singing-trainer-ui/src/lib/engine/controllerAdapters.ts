@@ -145,16 +145,13 @@ export function createAudioControllerAdapter(): AudioController {
       tones: Array<{ midi: number; startTimeMs: number; endTimeMs: number }>
     ): void {
       // Convert to the format expected by referenceAudio
-      const notes = tones.map((t, i) => ({
-        id: `ref-${i}`,
+      const notes = tones.map((t) => ({
         midi: t.midi,
         startTimeMs: t.startTimeMs,
-        endTimeMs: t.endTimeMs,
-        lyric: '👂',
+        durationMs: Math.max(0, t.endTimeMs - t.startTimeMs),
       }));
       referenceAudio.scheduleReferenceTones(notes);
     },
-
     stopAll(): void {
       referenceAudio.stop();
       if (appState.state.drone.isPlaying) {
@@ -243,7 +240,7 @@ export function createUiControllerAdapter(): UiController {
       // Cast to ResultsSummary and show
       resultsState.show(summary as any, {
         title: 'Exercise Results',
-        source: 'demo',
+        source: 'exercise',
       });
     },
 

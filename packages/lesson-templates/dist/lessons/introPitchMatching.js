@@ -58,7 +58,7 @@ const INTRO_SETTINGS_SCHEMA = {
  */
 export const INTRO_PITCH_MATCHING = {
     id: 'intro-pitch-matching',
-    name: 'Introduction to Pitch Matching',
+    name: '1.0 Introduction to Pitch Matching',
     description: 'Learn the basics of pitch matching with a comfortable, fixed range.',
     type: 'pitch-matching',
     difficulty: 1,

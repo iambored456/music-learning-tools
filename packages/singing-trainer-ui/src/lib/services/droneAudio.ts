@@ -104,6 +104,14 @@ export function updateDrone(): void {
 }
 
 /**
+ * Update drone volume immediately.
+ */
+export function setDroneVolume(db: number): void {
+  if (!synth) return;
+  synth.volume.value = db;
+}
+
+/**
  * Toggle drone on/off
  */
 export async function toggleDrone(): Promise<void> {

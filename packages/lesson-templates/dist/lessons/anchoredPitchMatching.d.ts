@@ -17,7 +17,7 @@ import type { PitchMatchingTemplate } from '../types.js';
  * - REQUIRES speaking pitch calibration
  * - Uses speaking pitch as tonic (center of pitch range)
  * - Drone enabled by default to reinforce tonal center
- * - Category: Beginning Exercises
+ * - Category: Beginning Lessons
  */
 export declare const ANCHORED_PITCH_MATCHING: PitchMatchingTemplate;
 //# sourceMappingURL=anchoredPitchMatching.d.ts.map

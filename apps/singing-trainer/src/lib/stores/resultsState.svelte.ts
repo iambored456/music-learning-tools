@@ -35,7 +35,7 @@ export interface ResultsState {
   summary: ResultsSummary | null;
   songTitle: string;
   artistName: string;
-  source: 'demo' | 'ultrastar' | null;
+  source: 'exercise' | 'ultrastar' | null;
 }
 
 const DEFAULT_STATE: ResultsState = {
@@ -73,7 +73,7 @@ function createResultsState() {
       options: {
         title?: string;
         artist?: string;
-        source?: 'demo' | 'ultrastar';
+        source?: 'exercise' | 'ultrastar';
       } = {}
     ) {
       state.summary = summary;

@@ -23,10 +23,10 @@ export {
   type SingingTrainerPreferences,
 } from './preferencesStore.svelte.js';
 export {
-  demoExerciseState,
+  exerciseState,
   type ExerciseConfig,
   type ExerciseState,
   type ExerciseResult,
   type ExercisePhase,
-} from './demoExerciseState.svelte.js';
+} from './exerciseState.svelte.js';
 export { chooserState, type ChooserState } from './chooserState.svelte.js';

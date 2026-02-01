@@ -1,7 +1,7 @@
 /**
- * Demo Exercise State Store - Svelte 5 Runes
+ * Exercise State Store - Svelte 5 Runes
  *
- * Manages the pitch-matching demo exercise with reference tones and graded user input.
+ * Manages the pitch-matching exercise with reference tones and graded user input.
  */
 
 import type { NotePerformance } from '@mlt/student-notation-engine';
@@ -13,6 +13,7 @@ export interface ExerciseConfig {
   maxMidi: number;
   tempo: number;
   referenceVolume: number; // dB, -60 to 0
+  leadInMs: number;
 }
 
 export type ExercisePhase = 'reference' | 'rest1' | 'input' | 'rest2';
@@ -30,7 +31,7 @@ export interface ExerciseState {
 
 export interface ExerciseResult {
   loopIndex: number;
-  targetPitch: number;
+  targetPitch: number | null;
   performance: NotePerformance | null;
   accuracy: number; // 0-100%
 }
@@ -41,6 +42,7 @@ const DEFAULT_CONFIG: ExerciseConfig = {
   maxMidi: 72,
   tempo: 108,
   referenceVolume: -12, // -12 dB default
+  leadInMs: 2000,
 };
 
 const DEFAULT_STATE: ExerciseState = {
@@ -69,7 +71,7 @@ function getMicrobeatDurationMs(tempo: number): number {
   return (60 / tempo) * 1000 / 2;
 }
 
-function createDemoExerciseState() {
+function createExerciseState() {
   let state = $state<ExerciseState>({ ...DEFAULT_STATE });
 
   /**
@@ -80,7 +82,7 @@ function createDemoExerciseState() {
     const microbeatDurationMs = getMicrobeatDurationMs(config.tempo);
 
     // Add 2-second lead-in so notes don't start immediately
-    const leadInMs = 2000;
+    const leadInMs = config.leadInMs;
 
     for (let loop = 0; loop < config.numLoops; loop++) {
       const pitch = randomPitch(config.minMidi, config.maxMidi);
@@ -91,6 +93,7 @@ function createDemoExerciseState() {
         midi: pitch,
         startTimeMs: loopStartTime,
         durationMs: 8 * microbeatDurationMs,
+        role: 'reference',
         lyric: '👂',
       });
 
@@ -101,6 +104,7 @@ function createDemoExerciseState() {
         midi: pitch,
         startTimeMs: loopStartTime + (16 * microbeatDurationMs),
         durationMs: 8 * microbeatDurationMs,
+        role: 'input',
         lyric: '🎤',
       });
 
@@ -113,10 +117,13 @@ function createDemoExerciseState() {
   /**
    * Determine which phase we're in based on current time
    */
-  function getPhaseFromTime(currentTimeMs: number, tempo: number): { loop: number; phase: ExercisePhase } {
+  function getPhaseFromTime(
+    currentTimeMs: number,
+    tempo: number,
+    leadInMs: number
+  ): { loop: number; phase: ExercisePhase } {
     const microbeatDurationMs = getMicrobeatDurationMs(tempo);
     const loopDurationMs = 32 * microbeatDurationMs;
-    const leadInMs = 2000;
 
     // Subtract lead-in time
     const adjustedTimeMs = currentTimeMs - leadInMs;
@@ -165,7 +172,7 @@ function createDemoExerciseState() {
     },
 
     /**
-     * Start the demo exercise
+     * Start the exercise
      */
     start() {
       // Generate notes
@@ -176,7 +183,7 @@ function createDemoExerciseState() {
       state.isPlaying = false; // Will be set to true when playback starts
       state.currentLoop = 0;
       state.currentPhase = 'reference';
-      state.currentPitch = notes.length > 0 ? notes[0].midi : null;
+      state.currentPitch = notes.length > 0 ? (notes[0].midi ?? null) : null;
       state.results = [];
     },
 
@@ -202,14 +209,18 @@ function createDemoExerciseState() {
      * Update current phase based on time
      */
     updatePhase(currentTimeMs: number) {
-      const { loop, phase } = getPhaseFromTime(currentTimeMs, state.config.tempo);
+      const { loop, phase } = getPhaseFromTime(
+        currentTimeMs,
+        state.config.tempo,
+        state.config.leadInMs
+      );
       state.currentLoop = loop;
       state.currentPhase = phase;
 
       // Update current pitch
       const noteIndex = loop * 2; // 2 notes per loop (reference + input)
       if (noteIndex < state.generatedNotes.length) {
-        state.currentPitch = state.generatedNotes[noteIndex].midi;
+        state.currentPitch = state.generatedNotes[noteIndex]?.midi ?? null;
       }
     },
 
@@ -293,4 +304,4 @@ function createDemoExerciseState() {
   };
 }
 
-export const demoExerciseState = createDemoExerciseState();
+export const exerciseState = createExerciseState();

@@ -39,6 +39,18 @@ function frequencyToMidi(frequency: number): number {
   return 12 * Math.log2(frequency / 440) + 69;
 }
 
+function calculateRmsDb(waveform: Float32Array): number {
+  if (waveform.length === 0) return CONFIG.MIN_VOLUME_DB;
+  let sumSquares = 0;
+  for (let i = 0; i < waveform.length; i++) {
+    const sample = waveform[i] ?? 0;
+    sumSquares += sample * sample;
+  }
+  const rms = Math.sqrt(sumSquares / waveform.length);
+  if (!Number.isFinite(rms) || rms <= 0) return CONFIG.MIN_VOLUME_DB;
+  return Math.max(CONFIG.MIN_VOLUME_DB, 20 * Math.log10(rms));
+}
+
 /**
  * The main detection and animation loop
  */
@@ -63,6 +75,7 @@ function animationLoop(): void {
 
   // Get pitch from audio
   const waveform = analyser.getValue() as Float32Array;
+  const amplitudeDb = calculateRmsDb(waveform);
   const [pitch, clarity] = detector.findPitch(waveform, Tone.getContext().sampleRate);
 
   const isValidPitch =
@@ -89,7 +102,7 @@ function animationLoop(): void {
     });
 
     // Record pitch input for highway performance tracking
-    highwayState.recordPitchInput(midi, clarity);
+    highwayState.recordPitchInput(midi, clarity, amplitudeDb);
   } else {
     pitchState.addHistoryPoint({
       frequency: 0,

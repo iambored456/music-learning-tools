@@ -39,8 +39,12 @@
 
   function handleFindScale() {
     const notes = ultrastarState.state.targetNotes;
-    if (notes.length === 0) return;
-    const midiPitches = notes.map((n) => n.midi);
+    const pitchedNotes = notes.filter(
+      (n): n is { midi: number; startTimeMs: number; durationMs: number } =>
+        typeof n.midi === 'number'
+    );
+    if (pitchedNotes.length === 0) return;
+    const midiPitches = pitchedNotes.map((n) => n.midi);
     scaleResult = findDiatonicMajor(midiPitches);
     const scanResult = scanKeyChangesMajor(midiPitches);
     scanSegments = scanResult.segments;
@@ -63,22 +67,31 @@
   function handleApplyTonic(tonicPc: number, tonicName: string) {
     appState.setTonic(tonicName as TonicNote);
     const notes = ultrastarState.state.targetNotes;
-    appState.setNoteScaleDegrees(computeScaleDegrees(notes, [], tonicPc));
+    const pitchedNotes = notes.filter(
+      (n): n is { midi: number; startTimeMs: number; durationMs: number } =>
+        typeof n.midi === 'number'
+    );
+    appState.setNoteScaleDegrees(computeScaleDegrees(pitchedNotes, [], tonicPc));
     showScaleModal = false;
   }
 
   function handleApplyAllSegments() {
     const notes = ultrastarState.state.targetNotes;
+    const pitchedNotes = notes.filter(
+      (n): n is { midi: number; startTimeMs: number; durationMs: number } =>
+        typeof n.midi === 'number'
+    );
+    if (pitchedNotes.length === 0) return;
     const timeSegments: TonicSegment[] = scanSegments.map((seg) => ({
-      startMs: notes[Math.min(seg.start, notes.length - 1)].startTimeMs,
+      startMs: pitchedNotes[Math.min(seg.start, pitchedNotes.length - 1)].startTimeMs,
       endMs:
-        notes[Math.min(seg.end, notes.length - 1)].startTimeMs +
-        notes[Math.min(seg.end, notes.length - 1)].durationMs,
+        pitchedNotes[Math.min(seg.end, pitchedNotes.length - 1)].startTimeMs +
+        pitchedNotes[Math.min(seg.end, pitchedNotes.length - 1)].durationMs,
       tonic: seg.tonicName as TonicNote,
       tonicPc: seg.tonicPc,
     }));
     appState.setTonicSegments(timeSegments);
-    appState.setNoteScaleDegrees(computeScaleDegrees(notes, timeSegments));
+    appState.setNoteScaleDegrees(computeScaleDegrees(pitchedNotes, timeSegments));
     showScaleModal = false;
   }
 
