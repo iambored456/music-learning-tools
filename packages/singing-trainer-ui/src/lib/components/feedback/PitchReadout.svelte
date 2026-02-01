@@ -5,6 +5,7 @@
    * Displays the current detected pitch information.
    */
 
+  import { appState } from '../../stores/appState.svelte.js';
   import { pitchState } from '../../stores/pitchState.svelte.js';
 
   const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -25,6 +26,8 @@
       clarity: Math.round(pitch.clarity * 100),
     };
   });
+
+  const isDetecting = $derived(appState.state.isDetecting);
 </script>
 
 <div class="pitch-readout">
@@ -44,7 +47,9 @@
   {:else}
     <div class="no-pitch">
       <span class="placeholder">---</span>
-      <span class="hint">Sing or hum into the microphone</span>
+      <span class="hint">
+        {isDetecting ? 'Sing or hum into the microphone' : 'Click Start to enable the microphone'}
+      </span>
     </div>
   {/if}
 </div>

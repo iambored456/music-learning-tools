@@ -9,6 +9,7 @@
     SingingCanvas,
     TonicSelector,
     DroneControls,
+    StartButton,
     PitchHighlightToggle,
     LyricLabelControls,
     PitchReadout,
@@ -193,6 +194,7 @@
       <details class="settings-details">
         <summary class="settings-summary">User Settings</summary>
         <div class="settings-content">
+          <StartButton />
           <PitchReadout />
           <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
           <RangeControl />
