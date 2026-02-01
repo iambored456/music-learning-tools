@@ -55,9 +55,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-lg);
-    background-color: var(--color-surface);
-    border-radius: var(--radius-md);
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
     min-width: 200px;
     min-height: 100px;
   }

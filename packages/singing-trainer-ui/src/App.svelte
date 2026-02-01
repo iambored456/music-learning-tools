@@ -29,9 +29,6 @@
   import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
   import { registerTemplates, ALL_LESSONS } from '@mlt/lesson-templates';
 
-  // Settings panel state
-  let showSettings = $state(false);
-
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
 
@@ -193,37 +190,38 @@
 
   <main class="main">
     <aside class="sidebar sidebar--left">
-      <div class="control-group">
-        <PitchReadout />
-      </div>
+      <details class="settings-details" open>
+        <summary class="settings-summary">User Settings</summary>
+        <div class="settings-content">
+          <PitchReadout />
+          <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
+          <RangeControl />
+          <PitchHighlightToggle />
+        </div>
+      </details>
 
-      <div class="control-group">
-        <DemoExerciseControls bind:this={demoExerciseControlsRef} />
-      </div>
+      <details class="settings-details" open>
+        <summary class="settings-summary">Exercises &amp; Lessons</summary>
+        <div class="settings-content">
+          <DemoExerciseControls bind:this={demoExerciseControlsRef} />
+        </div>
+      </details>
 
-      <div class="control-group">
-        <UltrastarControls />
-      </div>
+      <details class="settings-details" open>
+        <summary class="settings-summary">UltraStar Karaoke</summary>
+        <div class="settings-content">
+          <UltrastarControls />
+          <LyricLabelControls />
+        </div>
+      </details>
 
-      <div class="control-group">
-        <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
-      </div>
-
-      <div class="control-group">
-        <details class="settings-details" bind:open={showSettings}>
-          <summary class="settings-summary">Settings</summary>
-          <div class="settings-content">
-            <TonicSelector />
-            <DroneControls />
-            <LyricLabelControls />
-            <PitchHighlightToggle />
-          </div>
-        </details>
-      </div>
-
-      <div class="control-group">
-        <RangeControl />
-      </div>
+      <details class="settings-details" open>
+        <summary class="settings-summary">Drone Controls</summary>
+        <div class="settings-content">
+          <TonicSelector />
+          <DroneControls />
+        </div>
+      </details>
 
       {#if hasImportedSnapshot}
         <div class="control-group">

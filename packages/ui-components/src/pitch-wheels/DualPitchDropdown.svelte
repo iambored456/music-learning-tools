@@ -87,8 +87,8 @@
 			selectedIndex={topIndex}
 			onchange={handleTopChange}
 			onbeforechange={constrainTopIndex}
-			label="High"
-			ariaLabel="High pitch selector"
+			label="Top"
+			ariaLabel="Top pitch selector"
 		/>
 
 		<PitchDropdown
@@ -96,8 +96,8 @@
 			selectedIndex={bottomIndex}
 			onchange={handleBottomChange}
 			onbeforechange={constrainBottomIndex}
-			label="Low"
-			ariaLabel="Low pitch selector"
+			label="Bottom"
+			ariaLabel="Bottom pitch selector"
 		/>
 	</div>
 

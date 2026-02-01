@@ -112,11 +112,6 @@
   const songTitle = $derived(ultrastarState.title);
   const songArtist = $derived(ultrastarState.artist);
   const error = $derived(ultrastarState.state.error);
-  const detectedPitchFormat = $derived(ultrastarState.state.detectedPitchFormat);
-  const pitchFormatOverride = $derived(ultrastarState.state.pitchFormatOverride);
-  const effectivePitchFormat = $derived(ultrastarState.effectivePitchFormat);
-  const detectedRange = $derived(ultrastarState.state.detectedRange);
-  const bpmInfo = $derived(ultrastarState.state.bpmInfo);
 
   /**
    * Handle file upload
@@ -314,73 +309,6 @@
       <div class="song-artist">{songArtist}</div>
     </div>
 
-    <!-- Pitch Format Section -->
-    <div class="pitch-format-section">
-      <div class="format-header">
-        <span class="format-label">Pitch Format</span>
-        <span class="format-detected">
-          Detected: <strong>{detectedPitchFormat}</strong>
-        </span>
-      </div>
-      <div class="format-buttons">
-        <button
-          class="format-btn"
-          class:active={pitchFormatOverride === null}
-          onclick={() => ultrastarState.setPitchFormat(null)}
-          disabled={isPlaying}
-        >
-          Auto
-        </button>
-        <button
-          class="format-btn"
-          class:active={pitchFormatOverride === 'relative'}
-          onclick={() => ultrastarState.setPitchFormat('relative')}
-          disabled={isPlaying}
-        >
-          Relative
-        </button>
-        <button
-          class="format-btn"
-          class:active={pitchFormatOverride === 'absolute'}
-          onclick={() => ultrastarState.setPitchFormat('absolute')}
-          disabled={isPlaying}
-        >
-          Absolute
-        </button>
-      </div>
-      <div class="range-info">
-        Range: {detectedRange.minMidi} - {detectedRange.maxMidi} MIDI
-      </div>
-      {#if bpmInfo}
-        <div class="bpm-info">
-          BPM: {bpmInfo.effectiveBpm.toFixed(1)}
-          {#if bpmInfo.beatDivisor !== 1}
-            <span class="bpm-normalized">(raw: {bpmInfo.rawBpm.toFixed(1)} ÷{bpmInfo.beatDivisor})</span>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    <!-- Scale Analysis -->
-    <button
-      class="analyze-btn"
-      onclick={handleFindScale}
-      disabled={isPlaying}
-    >
-      Find Diatonic Scale
-    </button>
-
-    {#if appState.state.noteScaleDegrees.length > 0}
-      <label class="degrees-toggle">
-        <input
-          type="checkbox"
-          checked={appState.state.useDegrees}
-          onchange={() => appState.setUseDegrees(!appState.state.useDegrees)}
-        />
-        Show scale degrees
-      </label>
-    {/if}
-
     <!-- YouTube Video Section -->
     <div class="video-section">
       {#if hasVideo}
@@ -432,6 +360,26 @@
         Unload
       </button>
     </div>
+
+    <!-- Scale Analysis -->
+    <button
+      class="analyze-btn"
+      onclick={handleFindScale}
+      disabled={isPlaying}
+    >
+      Find Diatonic Scale
+    </button>
+
+    {#if appState.state.noteScaleDegrees.length > 0}
+      <label class="degrees-toggle">
+        <input
+          type="checkbox"
+          checked={appState.state.useDegrees}
+          onchange={() => appState.setUseDegrees(!appState.state.useDegrees)}
+        />
+        Show scale degrees
+      </label>
+    {/if}
 
     <!-- Progress info -->
     {#if isPlaying}
@@ -534,93 +482,7 @@
   .song-artist {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
-  }
-
-  .pitch-format-section {
-    padding: var(--spacing-sm);
-    background-color: var(--color-surface);
-    border-radius: var(--radius-sm);
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-
-  .format-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .format-label {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .format-detected {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-  }
-
-  .format-detected strong {
-    color: var(--color-primary);
-  }
-
-  .format-buttons {
-    display: flex;
-    gap: var(--spacing-xs);
-  }
-
-  .format-btn {
-    flex: 1;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    background-color: var(--color-bg);
-    color: var(--color-text-muted);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .format-btn:hover:not(:disabled) {
-    background-color: var(--color-bg-light);
-    color: var(--color-text);
-  }
-
-  .format-btn.active {
-    background-color: var(--color-primary);
-    color: white;
-    border-color: var(--color-primary);
-  }
-
-  .format-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .range-info {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    text-align: center;
-    font-family: monospace;
-  }
-
-  .bpm-info {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    text-align: center;
-    font-family: monospace;
-  }
-
-  .bpm-normalized {
-    color: var(--color-text-muted);
-    opacity: 0.7;
-    font-size: 0.9em;
-  }
-
-  .analyze-btn {
+  }\n.analyze-btn {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-sm);
@@ -821,3 +683,6 @@
     color: var(--color-text);
   }
 </style>
+
+
+

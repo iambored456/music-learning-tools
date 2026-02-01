@@ -96,6 +96,9 @@
   const beatIntervalMs = $derived<number>(
     (60 / demoExerciseState.state.config.tempo) * 1000 // ms per beat (quarter note)
   );
+  const gridBeatIntervalMs = $derived<number>(
+    ultrastarState.state.isActive ? 0 : beatIntervalMs
+  );
 
   // Lead-in time offset for beat line alignment (matches demoExerciseState)
   const beatTimeOffsetMs = 2000;
@@ -379,7 +382,7 @@
     {singingConfig}
     {highwayConfig}
     legendHighlight={legendHighlight}
-    {beatIntervalMs}
+    beatIntervalMs={gridBeatIntervalMs}
     {beatTimeOffsetMs}
   />
   <canvas

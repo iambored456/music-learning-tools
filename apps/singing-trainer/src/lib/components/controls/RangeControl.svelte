@@ -36,7 +36,7 @@
 		{bottomIndex}
 		minSpan={7}
 		onrangechange={handleRangeChange}
-		showSummary={true}
+		showSummary={false}
 		wheelHeight={200}
 	/>
 </div>

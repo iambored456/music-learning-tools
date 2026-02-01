@@ -118,9 +118,9 @@
 
 <style>
   .speaking-pitch-panel {
-    background: var(--color-surface, rgba(255, 255, 255, 0.05));
-    border-radius: var(--radius-md, 8px);
-    padding: var(--spacing-md, 1rem);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm, 0.5rem);

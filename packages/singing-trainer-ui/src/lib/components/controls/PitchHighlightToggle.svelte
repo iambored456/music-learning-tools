@@ -29,6 +29,9 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-sm);
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
   }
 
   .toggle-label {

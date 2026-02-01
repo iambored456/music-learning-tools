@@ -16,8 +16,7 @@
   // DEBUG: Verify this file is being loaded
   console.log('[DemoExerciseControls] MODULE LOADED - app-level component');
 
-  // Local state for settings panel
-  let showSettings = $state(false);
+  // Local state for exercise defaults
   let numLoops = $state(5);
   let tempo = $state(108);
   let referenceVolume = $state(-12);
@@ -297,59 +296,7 @@
 </script>
 
 <div class="demo-exercise-panel">
-  <h3 class="panel-title">Demo Exercise</h3>
-
-  <!-- Settings (collapsed by default) -->
-  <details class="settings-details" bind:open={showSettings}>
-    <summary class="settings-summary">Settings</summary>
-    <div class="exercise-settings">
-      <label class="setting-label">
-        <span class="label-text">Number of loops:</span>
-        <input
-          class="setting-input"
-          type="number"
-          min="1"
-          max="20"
-          bind:value={numLoops}
-          disabled={isActive}
-        />
-      </label>
-
-      <label class="setting-label">
-        <span class="label-text">Tempo (BPM):</span>
-        <input
-          class="setting-input"
-          type="number"
-          min="60"
-          max="180"
-          bind:value={tempo}
-          disabled={isActive}
-        />
-      </label>
-
-      <label class="setting-label">
-        <span class="label-text">Reference Volume:</span>
-        <input
-          class="setting-slider"
-          type="range"
-          min="-40"
-          max="0"
-          bind:value={referenceVolume}
-          disabled={isActive}
-        />
-        <span class="volume-value">{referenceVolume} dB</span>
-      </label>
-
-      <div class="pitch-range-buttons">
-        <button class="range-btn" onclick={useCurrentRange} disabled={isActive}>
-          Use Current Range
-        </button>
-        <button class="range-btn" onclick={useFullRange} disabled={isActive}>
-          Use Full Range
-        </button>
-      </div>
-    </div>
-  </details>
+  <h3 class="panel-title">Exercise Panel</h3>
 
   <!-- Main Controls -->
   <div class="exercise-controls">
@@ -420,98 +367,6 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin: 0;
-  }
-
-  /* Settings */
-  .settings-details {
-    background-color: var(--color-surface);
-    border-radius: var(--radius-sm);
-    padding: var(--spacing-xs);
-  }
-
-  .settings-summary {
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    padding: var(--spacing-xs);
-    user-select: none;
-  }
-
-  .settings-summary:hover {
-    color: var(--color-primary);
-  }
-
-  .exercise-settings {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    padding-top: 0;
-  }
-
-  .setting-label {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-sm);
-  }
-
-  .label-text {
-    color: var(--color-text-muted);
-    font-weight: 500;
-  }
-
-  .setting-input {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    font-size: var(--font-size-sm);
-    width: 100%;
-  }
-
-  .setting-input:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .setting-slider {
-    width: 100%;
-    accent-color: var(--color-primary);
-  }
-
-  .volume-value {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-  }
-
-  .pitch-range-buttons {
-    display: flex;
-    gap: var(--spacing-xs);
-  }
-
-  .range-btn {
-    flex: 1;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .range-btn:hover:not(:disabled) {
-    background-color: var(--color-primary);
-    color: white;
-  }
-
-  .range-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   /* Main Controls */

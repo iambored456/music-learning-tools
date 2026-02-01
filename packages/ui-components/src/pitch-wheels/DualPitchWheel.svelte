@@ -108,26 +108,26 @@
 <div class="dual-pitch-wheel">
 	<div class="wheels-container">
 		<div class="wheel-column">
-			<div class="wheel-label">High</div>
+			<div class="wheel-label">Top</div>
 			<PitchWheel
 				{options}
 				selectedIndex={topIndex}
 				onchange={handleTopChange}
 				onbeforechange={constrainTopIndex}
 				{wheelHeight}
-				ariaLabel="High pitch selector"
+				ariaLabel="Top pitch selector"
 			/>
 		</div>
 
 		<div class="wheel-column">
-			<div class="wheel-label">Low</div>
+			<div class="wheel-label">Bottom</div>
 			<PitchWheel
 				{options}
 				selectedIndex={bottomIndex}
 				onchange={handleBottomChange}
 				onbeforechange={constrainBottomIndex}
 				{wheelHeight}
-				ariaLabel="Low pitch selector"
+				ariaLabel="Bottom pitch selector"
 			/>
 		</div>
 	</div>
@@ -169,7 +169,7 @@
 	.wheel-label {
 		font-size: 0.7rem;
 		font-weight: 600;
-		color: rgba(33, 37, 41, 0.6);
+		color: var(--color-text-muted, rgba(33, 37, 41, 0.6));
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	}

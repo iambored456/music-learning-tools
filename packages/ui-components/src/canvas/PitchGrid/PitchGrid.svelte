@@ -350,21 +350,24 @@
       renderScrollingGrid(renderCtx, coords);
     } else {
       // Render target notes mode (Singing Trainer style - original behavior)
-      // Draw time-based vertical lines
-      const visibleTimeRange = {
-        startMs: highwayConfig.currentTimeMs - 1000,
-        endMs: highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
-      };
+      const shouldDrawBeatLines = Number.isFinite(beatIntervalMs) && beatIntervalMs > 0;
+      if (shouldDrawBeatLines) {
+        // Draw time-based vertical lines
+        const visibleTimeRange = {
+          startMs: highwayConfig.currentTimeMs - 1000,
+          endMs: highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
+        };
 
-      const verticalConfig: TimeBasedVerticalLinesConfig = {
-        viewportWidth: gridWidth,
-        viewportHeight: viewport.containerHeight,
-        beatIntervalMs,
-        visibleTimeRange,
-        nowLineX: highwayConfig.nowLineX,
-        beatTimeOffsetMs,
-      };
-      drawTimeBasedVerticalLines(renderCtx, verticalConfig, coords);
+        const verticalConfig: TimeBasedVerticalLinesConfig = {
+          viewportWidth: gridWidth,
+          viewportHeight: viewport.containerHeight,
+          beatIntervalMs,
+          visibleTimeRange,
+          nowLineX: highwayConfig.nowLineX,
+          beatTimeOffsetMs,
+        };
+        drawTimeBasedVerticalLines(renderCtx, verticalConfig, coords);
+      }
 
       // Draw target notes with user pitch for hit detection
       if (highwayConfig.targetNotes && highwayConfig.targetNotes.length > 0) {
