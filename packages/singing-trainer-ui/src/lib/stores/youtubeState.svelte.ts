@@ -44,6 +44,7 @@ function createYouTubeState() {
   let state = $state<YouTubeState>({ ...DEFAULT_STATE });
   let player: YT.Player | null = null;
   let syncIntervalId: number | null = null;
+  let rafSyncId: number | null = null;
   let timeUpdateCallback: ((time: number) => void) | null = null;
 
   return {
@@ -220,11 +221,48 @@ function createYouTubeState() {
       }, intervalMs);
     },
 
+    /** Start a RAF-based sync loop that interpolates between YouTube time polls */
+    startRAFSyncLoop(onTimeUpdate: (time: number) => void) {
+      this.stopSyncLoop();
+      timeUpdateCallback = onTimeUpdate;
+      let lastYtTime = 0;
+      let lastYtPollAt = performance.now();
+
+      function tick() {
+        if (player && state.isPlayerReady && state.isPlaying) {
+          const ytTime = player.getCurrentTime();
+          const now = performance.now();
+
+          // Detect new YouTube time reading (it updates infrequently)
+          if (ytTime !== lastYtTime) {
+            lastYtTime = ytTime;
+            lastYtPollAt = now;
+          }
+
+          // Interpolate forward from last known YouTube time
+          const elapsedSec = (now - lastYtPollAt) / 1000;
+          const interpolatedTime = lastYtTime + elapsedSec;
+
+          state.currentTime = interpolatedTime;
+          timeUpdateCallback?.(interpolatedTime);
+        }
+
+        // Keep running regardless of isPlaying — stop only via stopSyncLoop()
+        rafSyncId = requestAnimationFrame(tick);
+      }
+
+      rafSyncId = requestAnimationFrame(tick);
+    },
+
     /** Stop the sync loop */
     stopSyncLoop() {
       if (syncIntervalId !== null) {
         clearInterval(syncIntervalId);
         syncIntervalId = null;
+      }
+      if (rafSyncId !== null) {
+        cancelAnimationFrame(rafSyncId);
+        rafSyncId = null;
       }
       timeUpdateCallback = null;
     },

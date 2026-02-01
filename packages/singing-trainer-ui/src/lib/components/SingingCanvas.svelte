@@ -120,12 +120,14 @@
 
   // Convert local target notes to shared format
   function convertTargetNotes(): SharedTargetNote[] {
+    const degrees = appState.state.noteScaleDegrees;
+    const showDegrees = appState.state.useDegrees && degrees.length > 0;
     return highwayState.state.targetNotes.map((n, i) => ({
       id: `target-${i}`,
       midi: n.midi,
       startTimeMs: n.startTimeMs,
       durationMs: n.durationMs,
-      label: n.lyric, // Pass emoji as label
+      label: showDegrees ? degrees[i] : n.lyric,
     }));
   }
 
@@ -142,6 +144,12 @@
     tonicPitchClass: getTonicPitchClass(appState.state.tonic),
     clarityThreshold: 0.5,
     maxOpacity: 0.9,
+  });
+
+  const labelConfig = $derived({
+    mode: appState.state.lyricLabelMode,
+    scale: appState.state.lyricLabelScale,
+    fixedPx: appState.state.lyricLabelFixedPx,
   });
 
   // Build singing mode config
@@ -161,6 +169,7 @@
           pixelsPerSecond: 200,
           timeWindowMs: 4000,
           trailConfig,
+          labelConfig,
         }
       : undefined
   );
@@ -184,6 +193,7 @@
           currentTimeMs: highwayState.state.currentTimeMs,
           timeWindowMs: highwayState.state.timeWindowMs,
           trailConfig,
+          labelConfig,
         }
       : undefined
   );
@@ -246,6 +256,13 @@
       currentTimeMs: mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0,
     });
 
+    // Compute tonic pitch class dynamically for multi-tonic segments
+    const currentTonicPc = appState.state.tonicSegments.length > 0
+      ? getTonicPitchClass(appState.getTonicAt(
+          mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0
+        ))
+      : trailConfig.tonicPitchClass;
+
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight: viewportWindow.cellHeight,
       viewportWidth: gridWidth,
@@ -253,7 +270,9 @@
       pixelsPerSecond: activeConfig.pixelsPerSecond ?? 200,
       timeWindowMs: activeConfig.timeWindowMs ?? 4000,
       colorMode: 'color',
-      trailConfig,
+      trailConfig: currentTonicPc !== trailConfig.tonicPitchClass
+        ? { ...trailConfig, tonicPitchClass: currentTonicPc }
+        : trailConfig,
     };
 
     const currentTime = performance.now();

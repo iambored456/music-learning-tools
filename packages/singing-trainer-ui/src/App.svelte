@@ -10,6 +10,7 @@
     TonicSelector,
     DroneControls,
     PitchHighlightToggle,
+    LyricLabelControls,
     PitchReadout,
     RangeControl,
     DemoExerciseControls,
@@ -214,6 +215,7 @@
           <div class="settings-content">
             <TonicSelector />
             <DroneControls />
+            <LyricLabelControls />
             <PitchHighlightToggle />
           </div>
         </details>
@@ -425,6 +427,7 @@
     background-color: var(--color-surface, rgba(255, 255, 255, 0.05));
     border-radius: var(--radius-sm);
     padding: var(--spacing-xs);
+    width: 100%;
   }
 
   .settings-summary {
@@ -465,6 +468,7 @@
     gap: var(--spacing-md);
     padding: var(--spacing-sm);
     padding-top: var(--spacing-md);
+    width: 100%;
   }
 
   @media (max-width: 900px) {

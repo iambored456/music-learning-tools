@@ -15,6 +15,11 @@
   import { onDestroy } from 'svelte';
   import YouTubePlayer from '../youtube/YouTubePlayer.svelte';
   import SyncControls from './SyncControls.svelte';
+  import DiatonicScaleModal from '../analysis/DiatonicScaleModal.svelte';
+  import { findDiatonicMajor, midiToScaleDegreeLabel, type DiatonicMajorResult } from '../../services/diatonicAnalysis.js';
+  import { scanKeyChangesMajor, type KeySegment } from '../../services/scanKeyChangesMajor.js';
+  import { getTonicPitchClass } from '@mlt/pitch-data';
+  import type { TonicNote, TonicSegment } from '../../stores/appState.svelte.js';
 
   // Transport sync instance
   let transportSync: TransportSyncInstance | null = null;
@@ -26,6 +31,56 @@
   // Video linking state
   let videoUrlInput = $state('');
   let videoLinkError = $state<string | null>(null);
+
+  // Scale analysis state
+  let showScaleModal = $state(false);
+  let scaleResult = $state<DiatonicMajorResult | null>(null);
+  let scanSegments = $state<KeySegment[]>([]);
+
+  function handleFindScale() {
+    const notes = ultrastarState.state.targetNotes;
+    if (notes.length === 0) return;
+    const midiPitches = notes.map((n) => n.midi);
+    scaleResult = findDiatonicMajor(midiPitches);
+    const scanResult = scanKeyChangesMajor(midiPitches);
+    scanSegments = scanResult.segments;
+    showScaleModal = true;
+  }
+
+  function computeScaleDegrees(notes: { midi: number; startTimeMs: number }[], segments: TonicSegment[], singleTonicPc?: number) {
+    return notes.map((n) => {
+      let tonicPc: number;
+      if (segments.length > 0) {
+        const seg = segments.find((s) => n.startTimeMs >= s.startMs && n.startTimeMs <= s.endMs);
+        tonicPc = seg ? seg.tonicPc : segments[segments.length - 1].tonicPc;
+      } else {
+        tonicPc = singleTonicPc ?? 0;
+      }
+      return midiToScaleDegreeLabel(n.midi, tonicPc);
+    });
+  }
+
+  function handleApplyTonic(tonicPc: number, tonicName: string) {
+    appState.setTonic(tonicName as TonicNote);
+    const notes = ultrastarState.state.targetNotes;
+    appState.setNoteScaleDegrees(computeScaleDegrees(notes, [], tonicPc));
+    showScaleModal = false;
+  }
+
+  function handleApplyAllSegments() {
+    const notes = ultrastarState.state.targetNotes;
+    const timeSegments: TonicSegment[] = scanSegments.map((seg) => ({
+      startMs: notes[Math.min(seg.start, notes.length - 1)].startTimeMs,
+      endMs:
+        notes[Math.min(seg.end, notes.length - 1)].startTimeMs +
+        notes[Math.min(seg.end, notes.length - 1)].durationMs,
+      tonic: seg.tonicName as TonicNote,
+      tonicPc: seg.tonicPc,
+    }));
+    appState.setTonicSegments(timeSegments);
+    appState.setNoteScaleDegrees(computeScaleDegrees(notes, timeSegments));
+    showScaleModal = false;
+  }
 
   /**
    * Link a YouTube video by URL or ID
@@ -194,25 +249,12 @@
     const syncConfig = ultrastarState.state.syncConfig;
     const videoOffsetSec = (syncConfig.videoGapSec ?? 0) + (syncConfig.manualOffsetSec ?? 0);
 
-    // Use YouTube as the master clock - update highway time from YouTube position
-    youtubeState.startSyncLoop((ytTimeSec) => {
-      // Direct conversion: YouTube seconds to transport milliseconds
-      // GAP is already included in note timing, so no subtraction needed
-      // Only apply videoGap and manualOffset for fine-tuning
+    // Use YouTube as the master clock - poll player time every frame via RAF
+    youtubeState.startRAFSyncLoop((ytTimeSec) => {
       const transportTimeMs = (ytTimeSec + videoOffsetSec) * 1000;
-
-      // Only update if significantly different to avoid jitter
-      const currentTransport = highwayState.state.currentTimeMs;
-      const diffMs = Math.abs(transportTimeMs - currentTransport);
-
-      // Update highway time to match YouTube (with small threshold to reduce jitter)
-      if (diffMs > 50) {
-        highwayState.setCurrentTime(Math.max(0, transportTimeMs));
-      }
-
-      // Update current lyric phrase for karaoke display
+      highwayState.setCurrentTime(Math.max(0, transportTimeMs));
       ultrastarState.updateCurrentPhrase(transportTimeMs);
-    }, 100); // Check every 100ms for smoother sync
+    });
   }
 
   /**
@@ -319,6 +361,26 @@
       {/if}
     </div>
 
+    <!-- Scale Analysis -->
+    <button
+      class="analyze-btn"
+      onclick={handleFindScale}
+      disabled={isPlaying}
+    >
+      Find Diatonic Scale
+    </button>
+
+    {#if appState.state.noteScaleDegrees.length > 0}
+      <label class="degrees-toggle">
+        <input
+          type="checkbox"
+          checked={appState.state.useDegrees}
+          onchange={() => appState.setUseDegrees(!appState.state.useDegrees)}
+        />
+        Show scale degrees
+      </label>
+    {/if}
+
     <!-- YouTube Video Section -->
     <div class="video-section">
       {#if hasVideo}
@@ -382,6 +444,16 @@
     {/if}
   {/if}
 </div>
+
+{#if showScaleModal && scaleResult}
+  <DiatonicScaleModal
+    result={scaleResult}
+    segments={scanSegments}
+    onApply={handleApplyTonic}
+    onAcceptAll={handleApplyAllSegments}
+    onClose={() => (showScaleModal = false)}
+  />
+{/if}
 
 <style>
   .ultrastar-panel {
@@ -546,6 +618,39 @@
     color: var(--color-text-muted);
     opacity: 0.7;
     font-size: 0.9em;
+  }
+
+  .analyze-btn {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    background-color: var(--color-surface);
+    color: var(--color-text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .analyze-btn:hover:not(:disabled) {
+    background-color: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  .analyze-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .degrees-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs, 0.25rem);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
   }
 
   .video-section {

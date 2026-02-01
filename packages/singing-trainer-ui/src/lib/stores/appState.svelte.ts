@@ -5,6 +5,7 @@
  */
 
 export type VisualizationMode = 'stationary' | 'highway';
+export type LyricLabelMode = 'auto' | 'fixed';
 export type TonicNote =
   | 'C'
   | 'C#'
@@ -35,26 +36,43 @@ export interface YAxisRange {
   maxMidi: number;
 }
 
+export interface TonicSegment {
+  startMs: number;
+  endMs: number;
+  tonic: TonicNote;
+  tonicPc: number;
+}
+
 export interface AppState {
   isDetecting: boolean;
   visualizationMode: VisualizationMode;
   tonic: TonicNote;
+  tonicSegments: TonicSegment[];
+  noteScaleDegrees: string[];
   useDegrees: boolean;
   showAccidentals: boolean;
   pitchHighlightEnabled: boolean;
   yAxisRange: YAxisRange;
   drone: DroneState;
+  lyricLabelMode: LyricLabelMode;
+  lyricLabelScale: number;
+  lyricLabelFixedPx: number;
 }
 
 const DEFAULT_STATE: AppState = {
   isDetecting: false,
   visualizationMode: 'highway',
   tonic: 'C',
+  tonicSegments: [],
+  noteScaleDegrees: [],
   useDegrees: false,
   showAccidentals: true,
   pitchHighlightEnabled: true,
   yAxisRange: { minMidi: 40, maxMidi: 72 }, // E2 to C5
   drone: { isPlaying: false, octave: 3, volume: -12 },
+  lyricLabelMode: 'auto',
+  lyricLabelScale: 1,
+  lyricLabelFixedPx: 16,
 };
 
 function createAppState() {
@@ -79,6 +97,26 @@ function createAppState() {
 
     setTonic(tonic: TonicNote) {
       state.tonic = tonic;
+      state.tonicSegments = [];
+    },
+
+    setTonicSegments(segments: TonicSegment[]) {
+      state.tonicSegments = segments;
+      if (segments.length > 0) {
+        state.tonic = segments[0].tonic;
+      }
+    },
+
+    getTonicAt(timeMs: number): TonicNote {
+      if (state.tonicSegments.length === 0) return state.tonic;
+      for (const seg of state.tonicSegments) {
+        if (timeMs >= seg.startMs && timeMs <= seg.endMs) return seg.tonic;
+      }
+      return state.tonicSegments[state.tonicSegments.length - 1].tonic;
+    },
+
+    setNoteScaleDegrees(degrees: string[]) {
+      state.noteScaleDegrees = degrees;
     },
 
     setUseDegrees(useDegrees: boolean) {
@@ -95,6 +133,20 @@ function createAppState() {
 
     setPitchHighlightEnabled(enabled: boolean) {
       state.pitchHighlightEnabled = enabled;
+    },
+
+    setLyricLabelMode(mode: LyricLabelMode) {
+      state.lyricLabelMode = mode;
+    },
+
+    setLyricLabelScale(scale: number) {
+      if (!Number.isFinite(scale)) return;
+      state.lyricLabelScale = Math.max(0.5, Math.min(2.5, scale));
+    },
+
+    setLyricLabelFixedPx(px: number) {
+      if (!Number.isFinite(px)) return;
+      state.lyricLabelFixedPx = Math.max(8, Math.min(48, Math.round(px)));
     },
 
     setYAxisRange(range: YAxisRange) {

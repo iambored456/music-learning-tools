@@ -121,6 +121,7 @@ class ReferenceAudioService {
    */
   stop(): void {
     this.clearScheduled();
+    this._isPlaying = false;
     if (this.synth) {
       this.synth.triggerRelease();
     }

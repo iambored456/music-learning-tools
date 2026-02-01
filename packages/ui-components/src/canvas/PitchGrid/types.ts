@@ -147,6 +147,22 @@ export interface TargetNote {
 }
 
 /**
+ * Configuration for target note label sizing.
+ */
+export interface TargetNoteLabelConfig {
+  /** Sizing mode for labels */
+  mode?: 'auto' | 'fixed';
+  /** Scale factor applied to auto sizing (default: 1) */
+  scale?: number;
+  /** Fixed pixel size when mode is 'fixed' */
+  fixedPx?: number;
+  /** Optional minimum pixel size clamp */
+  minPx?: number;
+  /** Optional maximum pixel size clamp */
+  maxPx?: number;
+}
+
+/**
  * Configuration for pitch trail visual style.
  */
 export interface PitchTrailConfig {
@@ -190,6 +206,8 @@ export interface SingingModeConfig {
   pixelsPerSecond?: number;
   /** Pitch trail visual configuration */
   trailConfig?: PitchTrailConfig;
+  /** Optional label sizing configuration for target notes */
+  labelConfig?: TargetNoteLabelConfig;
 }
 
 /**

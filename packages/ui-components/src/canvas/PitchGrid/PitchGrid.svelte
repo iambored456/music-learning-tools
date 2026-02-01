@@ -287,6 +287,7 @@
       timeWindowMs: singingConfig.timeWindowMs ?? 4000,
       colorMode,
       trailConfig: singingConfig.trailConfig,
+      labelConfig: singingConfig.labelConfig,
     };
 
     // Draw user pitch trace
@@ -338,6 +339,7 @@
       timeWindowMs: highwayConfig.timeWindowMs ?? 4000,
       colorMode,
       trailConfig: highwayConfig.trailConfig,
+      labelConfig: highwayConfig.labelConfig,
     };
 
     // Check if we have scrolling grid data (Student Notation mode)

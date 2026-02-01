@@ -72,7 +72,7 @@ export function normalizeBpm(rawBpm: number): NormalizedBpm {
  */
 export function parseUltrastarFile(content: string): ParseResult {
   try {
-    const lines = content.split(/\r?\n/).map((line) => line.trim());
+    const lines = content.split(/\r?\n/).map((line) => line.trimStart());
 
     // Extract metadata from header lines
     const metadata = extractMetadata(lines);

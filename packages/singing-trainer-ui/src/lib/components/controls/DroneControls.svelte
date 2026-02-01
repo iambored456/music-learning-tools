@@ -65,6 +65,8 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
+    flex-wrap: wrap;
+    width: 100%;
   }
 
   .drone-toggle {
@@ -92,6 +94,8 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   label {
@@ -100,6 +104,7 @@
     gap: var(--spacing-xs);
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
+    min-width: 0;
   }
 
   select {
@@ -113,8 +118,9 @@
   }
 
   input[type='range'] {
-    width: 80px;
+    width: 120px;
     height: 4px;
     cursor: pointer;
+    max-width: 100%;
   }
 </style>

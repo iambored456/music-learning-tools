@@ -6,7 +6,13 @@
  */
 
 import type { PlacedNote, TonicSign, DegreeDisplayMode, LongNoteStyle, AccidentalMode } from '@mlt/types';
-import type { CoordinateUtils, PitchHistoryPoint, TargetNote, PitchTrailConfig } from '../types.js';
+import type {
+  CoordinateUtils,
+  PitchHistoryPoint,
+  TargetNote,
+  TargetNoteLabelConfig,
+  PitchTrailConfig,
+} from '../types.js';
 import { getInterpolatedPitchColor, type RGB, type PitchRowData } from '@mlt/pitch-data';
 
 // ============================================================================
@@ -448,6 +454,8 @@ export interface UserPitchRenderConfig {
   colorMode: 'color' | 'bw';
   /** Pitch trail visual configuration */
   trailConfig?: PitchTrailConfig;
+  /** Optional label sizing configuration for target notes */
+  labelConfig?: TargetNoteLabelConfig;
 }
 
 // ============================================================================
@@ -630,14 +638,18 @@ export function drawUserPitchTrace(
   ctx.lineWidth = trail.connectorLineWidth;
   ctx.beginPath();
 
+  const thresholdSq = trail.proximityThreshold * trail.proximityThreshold;
   for (let i = 0; i < notePoints.length; i++) {
     let connections = 0;
     for (let j = i + 1; j < notePoints.length && connections < trail.maxConnections; j++) {
-      const dx = notePoints[i].x - notePoints[j].x;
+      const dx = notePoints[j].x - notePoints[i].x;
+      // Points are sorted by x (oldest=leftmost first), so once x-gap
+      // exceeds threshold no further points can be proximate
+      if (dx > trail.proximityThreshold) break;
       const dy = notePoints[i].y - notePoints[j].y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const distSq = dx * dx + dy * dy;
 
-      if (dist <= trail.proximityThreshold) {
+      if (distSq <= thresholdSq) {
         ctx.moveTo(notePoints[i].x, notePoints[i].y);
         ctx.lineTo(notePoints[j].x, notePoints[j].y);
         connections++;
@@ -786,7 +798,7 @@ export function drawTargetNotes(
       const labelText = note.label.trim();
       if (labelText) {
         // Calculate position and size based on note width
-        const fontSize = Math.min(Math.max(14, noteWidth * 0.4), ry * 1.4);
+        const fontSize = getTargetLabelFontSize(noteWidth, ry, config.labelConfig);
 
         ctx.save();
         ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
@@ -861,4 +873,35 @@ function drawHitParticles(
   }
 
   ctx.restore();
+}
+
+function clampLabelSize(
+  size: number,
+  labelConfig?: TargetNoteLabelConfig
+): number {
+  let clamped = size;
+  if (!labelConfig) return clamped;
+  if (typeof labelConfig.minPx === 'number') {
+    clamped = Math.max(labelConfig.minPx, clamped);
+  }
+  if (typeof labelConfig.maxPx === 'number') {
+    clamped = Math.min(labelConfig.maxPx, clamped);
+  }
+  return clamped;
+}
+
+function getTargetLabelFontSize(
+  noteWidth: number,
+  noteRadiusY: number,
+  labelConfig?: TargetNoteLabelConfig
+): number {
+  const baseFontSize = Math.min(Math.max(14, noteWidth * 0.4), noteRadiusY * 1.4);
+
+  if (labelConfig?.mode === 'fixed') {
+    const fixedSize = labelConfig.fixedPx ?? baseFontSize;
+    return clampLabelSize(fixedSize, labelConfig);
+  }
+
+  const scale = labelConfig?.scale ?? 1;
+  return clampLabelSize(baseFontSize * scale, labelConfig);
 }
