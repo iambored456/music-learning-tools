@@ -14,6 +14,7 @@
     PitchGridMode,
     PitchGridViewport,
     CoordinateUtils,
+    CurrentPitch,
     LegendHighlightConfig,
     SingingModeConfig,
     HighwayModeConfig,
@@ -94,6 +95,8 @@
 
     // Highway mode props
     highwayConfig?: HighwayModeConfig;
+    /** User pitch from mic — separate prop to avoid expensive config recalculation */
+    userPitch?: CurrentPitch | null;
     beatIntervalMs?: number;
     beatTimeOffsetMs?: number;
   }
@@ -120,6 +123,7 @@
     longNoteStyle = 'style1',
     singingConfig,
     highwayConfig,
+    userPitch,
     beatIntervalMs = 500,
     beatTimeOffsetMs = 0,
   }: Props = $props();
@@ -315,12 +319,14 @@
     }
 
     // Draw current pitch indicator at right edge (for stationary mode)
-    if (singingConfig.userPitch && singingConfig.userPitch.clarity > 0.5) {
+    // Use separate userPitch prop (falls back to config for backwards compat)
+    const singingUserPitch = userPitch ?? singingConfig.userPitch;
+    if (singingUserPitch && singingUserPitch.clarity > 0.5) {
       drawUserPitchIndicator(
         renderCtx,
         coords,
-        singingConfig.userPitch.midi,
-        singingConfig.userPitch.clarity,
+        singingUserPitch.midi,
+        singingUserPitch.clarity,
         gridWidth - 20,
         userPitchConfig,
         fullRowData
@@ -370,6 +376,8 @@
       }
 
       // Draw target notes with user pitch for hit detection
+      // Use separate userPitch prop (falls back to config for backwards compat)
+      const hwUserPitch = userPitch ?? highwayConfig.userPitch;
       if (highwayConfig.targetNotes && highwayConfig.targetNotes.length > 0) {
         drawTargetNotes(
           renderCtx,
@@ -378,8 +386,8 @@
           highwayConfig.currentTimeMs,
           userPitchConfig,
           fullRowData,
-          highwayConfig.userPitch?.midi ?? null,
-          highwayConfig.userPitch?.clarity ?? 0
+          hwUserPitch?.midi ?? null,
+          hwUserPitch?.clarity ?? 0
         );
       }
     }
@@ -393,12 +401,13 @@
     }
 
     // Draw user pitch indicator at now line
-    if (highwayConfig.userPitch && highwayConfig.userPitch.clarity > 0.5) {
+    const hwUserPitchForIndicator = userPitch ?? highwayConfig.userPitch;
+    if (hwUserPitchForIndicator && hwUserPitchForIndicator.clarity > 0.5) {
       drawUserPitchIndicator(
         renderCtx,
         coords,
-        highwayConfig.userPitch.midi,
-        highwayConfig.userPitch.clarity,
+        hwUserPitchForIndicator.midi,
+        hwUserPitchForIndicator.clarity,
         highwayConfig.nowLineX,
         userPitchConfig,
         fullRowData

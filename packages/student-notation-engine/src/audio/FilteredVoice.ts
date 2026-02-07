@@ -3,9 +3,16 @@
  *
  * A custom Tone.js synth voice with:
  * - Multi-mode filter (HP/BP/LP with crossfade blend)
- * - Vibrato (frequency modulation via LFO)
- * - Tremolo (amplitude modulation via LFO)
  * - Preset gain control
+ * - tremoloGain in signal path (modulated externally by shared LFOs)
+ *
+ * Performance optimizations:
+ * - [PERF:SHARED-LFO] Vibrato/tremolo LFOs are shared per color in synthEngine,
+ *   not created per voice. Saves ~42 native Web Audio nodes per voice.
+ * - [PERF:LAZY-FILTER] Filter wet chain is disconnected when filter is disabled,
+ *   orphaning ~22 native nodes from the audio graph.
+ * - [PERF:OPP-D] Redundant pass-through gain taps removed; filters connect
+ *   directly to crossfade inputs. Saves 3 native nodes per voice.
  *
  * Framework-agnostic - no DOM dependencies.
  */
@@ -56,15 +63,18 @@ export function setVoiceLogger(logger: VoiceLogger | null): void {
 
 /**
  * A custom synth voice with a sophisticated series/parallel filter blend.
+ *
+ * Signal chain:
+ *   oscillator → presetGain → wetDryFade(dry=a, wet=b) → tremoloGain → envelope
+ *                            ↘ [filter chain] → wetDryFade.b (when filter enabled)
+ *
+ * External modulation targets (connected by synthEngine shared LFOs):
+ *   - oscillator.detune  ← shared vibrato LFO (cents-based, frequency-proportional)
+ *   - tremoloGain.gain   ← shared tremolo LFO (amplitude modulation)
  */
 export class FilteredVoice extends Tone.Synth {
-  // Audio effect nodes
+  // Core signal path nodes
   presetGain!: Tone.Gain;
-  vibratoLFO!: Tone.LFO;
-  vibratoDepth!: Tone.Scale;
-  vibratoGain!: Tone.Gain;
-  tremoloLFO!: Tone.LFO;
-  tremoloDepth!: Tone.Scale;
   tremoloGain!: Tone.Gain;
 
   // Filter nodes
@@ -72,108 +82,70 @@ export class FilteredVoice extends Tone.Synth {
   lpFilterForBP!: Tone.Filter;
   lpFilterSolo!: Tone.Filter;
 
-  // Output nodes
-  hpOutput!: Tone.Gain;
-  bpOutput!: Tone.Gain;
-  lpOutput!: Tone.Gain;
-
   // Crossfade nodes
   hp_bp_fade!: Tone.CrossFade;
   main_fade!: Tone.CrossFade;
   wetDryFade!: Tone.CrossFade;
 
+  // [PERF:LAZY-FILTER] Track whether the filter wet chain is connected to the audio graph
+  private _filterChainConnected = false;
+
   constructor(options: FilteredVoiceOptions) {
     super(options);
 
-    // --- Create all necessary audio nodes ---
+    // --- Core signal path nodes ---
     this.presetGain = new Tone.Gain(options.gain || 1.0);
-
-    // --- Vibrato LFO and frequency modulation ---
-    this.vibratoLFO = new Tone.LFO(0, 0);
-    this.vibratoDepth = new Tone.Scale(-1, 1);
-    this.vibratoGain = new Tone.Gain(0);
-
-    // Connect vibrato chain: LFO -> Scale -> Gain -> Oscillator frequency
-    this.vibratoLFO.connect(this.vibratoDepth);
-    this.vibratoDepth.connect(this.vibratoGain);
-    this.vibratoGain.connect(this.oscillator.frequency);
-
-    // --- Tremolo LFO and amplitude modulation ---
-    this.tremoloLFO = new Tone.LFO(0, 0);
-    this.tremoloDepth = new Tone.Scale(0, 1);
     this.tremoloGain = new Tone.Gain(1);
 
-    // Connect tremolo chain: LFO -> Scale -> Gain
-    this.tremoloLFO.connect(this.tremoloDepth);
-    this.tremoloDepth.connect(this.tremoloGain.gain);
-
-    // Filters for the three distinct paths
+    // --- Filter nodes (always created, conditionally connected) ---
     this.hpFilter = new Tone.Filter({ type: 'highpass' });
     this.lpFilterForBP = new Tone.Filter({ type: 'lowpass' });
     this.lpFilterSolo = new Tone.Filter({ type: 'lowpass' });
 
-    // Gain nodes to tap the audio from different points in the chain
-    this.hpOutput = new Tone.Gain();
-    this.bpOutput = new Tone.Gain();
-    this.lpOutput = new Tone.Gain();
-
-    // Cross-faders to blend between the three outputs
+    // --- Crossfade nodes ---
     this.hp_bp_fade = new Tone.CrossFade(0);
     this.main_fade = new Tone.CrossFade(0);
-
-    // Wet/Dry control for filter bypass
     this.wetDryFade = new Tone.CrossFade(0);
 
-    // --- Audio Routing ---
-    // 1. Oscillator -> Preset Gain Node
+    // === Audio Routing ===
+
+    // 1. Oscillator → Preset Gain
     this.oscillator.connect(this.presetGain);
 
-    // 2. Preset Gain -> Dry Path & Wet Path (start)
-    this.presetGain.connect(this.wetDryFade.a); // Dry Path
+    // 2. Dry path: Preset Gain → wetDryFade input A (always connected)
+    this.presetGain.connect(this.wetDryFade.a);
 
-    // 3. Setup Wet Path (now fed from presetGain)
+    // 3. Internal filter chain wiring (always interconnected, but only
+    //    connected to the main graph when filter is enabled)
+    // [PERF:OPP-D] Filters connect directly to crossfade inputs — no tap gains
     // A) High-Pass path
-    this.presetGain.connect(this.hpFilter);
-    this.hpFilter.connect(this.hpOutput);
-
-    // B) Band-Pass path (HPF -> LPF in series)
+    this.hpFilter.connect(this.hp_bp_fade.a);
+    // B) Band-Pass path (HPF → LPF in series)
     this.hpFilter.connect(this.lpFilterForBP);
-    this.lpFilterForBP.connect(this.bpOutput);
-
-    // C) Low-Pass path (a separate, parallel LPF)
-    this.presetGain.connect(this.lpFilterSolo);
-    this.lpFilterSolo.connect(this.lpOutput);
-
-    // 4. Route the three paths into the blender
-    this.hpOutput.connect(this.hp_bp_fade.a);
-    this.bpOutput.connect(this.hp_bp_fade.b);
-    this.lpOutput.connect(this.main_fade.b);
+    this.lpFilterForBP.connect(this.hp_bp_fade.b);
+    // C) Low-Pass path
+    this.lpFilterSolo.connect(this.main_fade.b);
+    // D) Blend outputs
     this.hp_bp_fade.connect(this.main_fade.a);
 
-    // 5. Connect the blended (wet) signal to the wet/dry fader
-    this.main_fade.connect(this.wetDryFade.b);
+    // 4. [PERF:LAZY-FILTER] Conditionally connect wet chain entrance/exit
+    const filterEnabled = options.filter?.enabled ?? false;
+    if (filterEnabled) {
+      this._connectFilterWetChain();
+    }
 
-    // 6. Apply tremolo gain to the signal before the envelope
+    // 5. Output path: wetDryFade → tremoloGain → envelope
     this.wetDryFade.connect(this.tremoloGain);
-
-    // 7. Final output goes to the main amplitude envelope
     this.tremoloGain.connect(this.envelope);
 
+    // 6. Apply initial filter settings
     if (options.filter) {
       this._setFilter(options.filter);
     }
 
-    if (options.vibrato) {
-      this._setVibrato(options.vibrato);
-    } else {
-      this._setVibrato({ speed: 0, span: 0 });
-    }
-
-    if (options.tremelo) {
-      this._setTremolo(options.tremelo);
-    } else {
-      this._setTremolo({ speed: 0, span: 0 });
-    }
+    // [PERF:SHARED-LFO] Vibrato and tremolo are handled by shared per-color LFOs
+    // in synthEngine.ts, not per-voice. _setVibrato/_setTremolo are kept as no-ops
+    // for backwards compatibility with callers that haven't been updated yet.
   }
 
   _setPresetGain(value: number): void {
@@ -182,107 +154,86 @@ export class FilteredVoice extends Tone.Synth {
     }
   }
 
-  _setVibrato(params: VibratoParams, time = Tone.now()): void {
-    if (!this.vibratoLFO || !this.vibratoGain) return;
-
-    // Convert 0-100% speed to 0-16 Hz (linear mapping)
-    const speedHz = (params.speed / 100) * 16;
-    const rawContextState = ((Tone.getContext() as any)?.rawContext?.state ?? Tone.context.state) as string;
-    const isAudioRunning = rawContextState === 'running';
-
-    // If speed is 0 or span is 0, disable vibrato completely
-    if (params.speed === 0 || params.span === 0) {
-      if (isAudioRunning && this.vibratoLFO.state === 'started') {
-        this.vibratoLFO.stop(time);
-      }
-      this.vibratoLFO.frequency.value = 0;
-      this.vibratoGain.gain.value = 0;
-      return;
-    }
-
-    // Start LFO if it was stopped
-    if (isAudioRunning && this.vibratoLFO.state !== 'started') {
-      this.vibratoLFO.start(time);
-    }
-
-    this.vibratoLFO.frequency.value = speedHz;
-
-    // Convert 0-100% span to proper Hz deviation
-    // 100% span = ±50 cents maximum deviation
-    const maxCents = 50;
-    const centsAmplitude = (params.span / 100) * maxCents;
-
-    // Convert cents to Hz deviation for frequency modulation
-    const centRatio = centsAmplitude / 1200;
-    const hzDeviationFactor = Math.pow(2, centRatio) - 1;
-
-    // For vibrato, we need a reasonable Hz range. Using 440Hz as reference
-    const referenceFreq = 440;
-    const hzDeviation = referenceFreq * hzDeviationFactor;
-
-    this.vibratoGain.gain.value = hzDeviation;
-    voiceLogger?.debug('FilteredVoice', 'Vibrato gain set', { hzDeviation, centsAmplitude }, 'audio');
+  // [PERF:SHARED-LFO] No-op — vibrato is now handled by shared per-color LFOs.
+  // Kept for backwards compatibility with callers in synthEngine.ts and effectsManager.
+  _setVibrato(_params: VibratoParams, _time = Tone.now()): void {
+    // No-op: vibrato modulation is applied externally via shared LFO → oscillator.detune
   }
 
-  _setTremolo(params: TremoloParams, time = Tone.now()): void {
-    if (!this.tremoloLFO || !this.tremoloGain) return;
+  // [PERF:SHARED-LFO] No-op — tremolo is now handled by shared per-color LFOs.
+  // Kept for backwards compatibility with callers in synthEngine.ts and effectsManager.
+  _setTremolo(_params: TremoloParams, _time = Tone.now()): void {
+    // No-op: tremolo modulation is applied externally via shared LFO → tremoloGain.gain
+  }
 
-    // Convert 0-100% speed to 0-16 Hz (linear mapping)
-    const speedHz = (params.speed / 100) * 16;
-    const rawContextState = ((Tone.getContext() as any)?.rawContext?.state ?? Tone.context.state) as string;
-    const isAudioRunning = rawContextState === 'running';
-
-    // If speed is 0 or span is 0, disable tremolo completely
-    if (params.speed === 0 || params.span === 0) {
-      if (isAudioRunning && this.tremoloLFO.state === 'started') {
-        this.tremoloLFO.stop(time);
-      }
-      this.tremoloLFO.frequency.value = 0;
+  /**
+   * Reset tremoloGain to pass-through (gain=1.0).
+   * Called by synthEngine when shared tremolo LFO is disconnected.
+   */
+  _resetTremoloGain(time = Tone.now()): void {
+    if (this.tremoloGain) {
       this.tremoloGain.gain.cancelScheduledValues(time);
       this.tremoloGain.gain.value = 1.0;
-      return;
     }
-
-    // Start LFO if it was stopped
-    if (isAudioRunning && this.tremoloLFO.state !== 'started') {
-      this.tremoloLFO.start(time);
-    }
-
-    this.tremoloLFO.frequency.value = speedHz;
-
-    // Convert 0-100% span to amplitude modulation depth
-    const spanAmount = params.span / 100;
-
-    // Set tremolo depth scale to modulate from (1 - span) to 1.0
-    const minGain = Math.max(0, 1 - spanAmount);
-    const maxGain = 1.0;
-
-    this.tremoloDepth.min = minGain;
-    this.tremoloDepth.max = maxGain;
   }
 
   _setFilter(params: FilterParams): void {
+    // [PERF:LAZY-FILTER] Connect/disconnect the filter wet chain based on enabled state
+    if (params.enabled && !this._filterChainConnected) {
+      this._connectFilterWetChain();
+    } else if (!params.enabled && this._filterChainConnected) {
+      this._disconnectFilterWetChain();
+    }
+
     this.wetDryFade.fade.value = params.enabled ? 1 : 0;
 
-    const freq = Tone.Midi(params.cutoff + 35).toFrequency();
-    const q = (params.resonance / 100) * 12 + 0.1;
+    // Only update filter parameters when enabled (avoids unnecessary computation)
+    if (params.enabled) {
+      const freq = Tone.Midi(params.cutoff + 35).toFrequency();
+      const q = (params.resonance / 100) * 12 + 0.1;
 
-    // Set parameters on all three filters
-    this.hpFilter.set({ frequency: freq, Q: q });
-    this.lpFilterForBP.set({ frequency: freq, Q: q });
-    this.lpFilterSolo.set({ frequency: freq, Q: q });
+      // Set parameters on all three filters
+      this.hpFilter.set({ frequency: freq, Q: q });
+      this.lpFilterForBP.set({ frequency: freq, Q: q });
+      this.lpFilterSolo.set({ frequency: freq, Q: q });
 
-    const blend = params.blend;
+      const blend = params.blend;
 
-    // Blend from HP (0) -> BP (1)
-    if (blend <= 1.0) {
-      this.main_fade.fade.value = 0;
-      this.hp_bp_fade.fade.value = blend;
+      // Blend from HP (0) -> BP (1)
+      if (blend <= 1.0) {
+        this.main_fade.fade.value = 0;
+        this.hp_bp_fade.fade.value = blend;
+      }
+      // Blend from BP (1) -> LP (2)
+      else {
+        this.main_fade.fade.value = blend - 1.0;
+        this.hp_bp_fade.fade.value = 1.0;
+      }
     }
-    // Blend from BP (1) -> LP (2)
-    else {
-      this.main_fade.fade.value = blend - 1.0;
-      this.hp_bp_fade.fade.value = 1.0;
-    }
+  }
+
+  // [PERF:LAZY-FILTER] Connect the filter wet chain entrance/exit to the audio graph.
+  // The internal filter wiring (hpFilter↔hp_bp_fade, etc.) stays permanently connected.
+  // Only the "entrance" (presetGain → filters) and "exit" (main_fade → wetDryFade.b)
+  // are toggled, which orphans/re-adopts the entire subgraph.
+  private _connectFilterWetChain(): void {
+    if (this._filterChainConnected) return;
+    this.presetGain.connect(this.hpFilter);
+    this.presetGain.connect(this.lpFilterSolo);
+    this.main_fade.connect(this.wetDryFade.b);
+    this._filterChainConnected = true;
+    voiceLogger?.debug('FilteredVoice', 'Filter wet chain connected', null, 'audio');
+  }
+
+  // [PERF:LAZY-FILTER] Disconnect the filter wet chain. The 8 orphaned nodes
+  // (3 filters + 2 crossfades + internal wiring) won't be processed by the
+  // audio thread since they have no path to the AudioContext destination.
+  private _disconnectFilterWetChain(): void {
+    if (!this._filterChainConnected) return;
+    this.presetGain.disconnect(this.hpFilter);
+    this.presetGain.disconnect(this.lpFilterSolo);
+    this.main_fade.disconnect(this.wetDryFade.b);
+    this._filterChainConnected = false;
+    voiceLogger?.debug('FilteredVoice', 'Filter wet chain disconnected', null, 'audio');
   }
 }

@@ -131,7 +131,6 @@ export class ErrorHandler {
   static recoverCanvas() {
     // Canvas errors often resolve with a redraw
     requestAnimationFrame(() => {
-      console.log('Attempting canvas recovery via redraw');
     });
   }
 
@@ -182,7 +181,6 @@ export class ErrorHandler {
    */
   static enableDebugMode() {
     this.isDebugMode = true;
-    console.log('ErrorHandler debug mode enabled');
   }
 
   /**

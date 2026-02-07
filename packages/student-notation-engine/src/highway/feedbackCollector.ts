@@ -135,6 +135,17 @@ export function createFeedbackCollector(
     );
   }
 
+  function isWindowAnyPitchMatch(sample: PitchSample, note: HighwayTargetNote): boolean {
+    if (!isVoicedSample(sample)) return false;
+    const bounds = getBandBounds(note);
+    if (!bounds) return true;
+    const tolerance = finalConfig.bandToleranceSemitones ?? 0;
+    return (
+      sample.midi >= bounds.minMidi - tolerance &&
+      sample.midi <= bounds.maxMidi + tolerance
+    );
+  }
+
   function isSampleCorrectForTarget(sample: PitchSample, note: HighwayTargetNote): boolean {
     const kind = getTargetKind(note);
     if (kind === 'fixedPitch') {
@@ -142,6 +153,9 @@ export function createFeedbackCollector(
     }
     if (kind === 'windowBand') {
       return isBandMatch(sample, note);
+    }
+    if (kind === 'windowAnyPitch') {
+      return isWindowAnyPitchMatch(sample, note);
     }
     return isVoicedSample(sample);
   }
@@ -330,7 +344,7 @@ export function createFeedbackCollector(
     } else if (targetKind === 'windowAnyPitch') {
       const voiced = calculateCoverage(
         samples,
-        isVoicedSample,
+        (sample) => isWindowAnyPitchMatch(sample, note),
         note.startTimeMs,
         note.durationMs
       );
@@ -515,7 +529,7 @@ export function createFeedbackCollector(
       } else if (targetKind === 'windowAnyPitch') {
         const voiced = calculateCoverage(
           samples,
-          isVoicedSample,
+          (sample) => isWindowAnyPitchMatch(sample, note),
           note.startTimeMs,
           note.durationMs
         );

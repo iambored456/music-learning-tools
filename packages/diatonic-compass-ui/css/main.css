@@ -96,8 +96,17 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  min-height: 0; 
-  padding:0.2rem;
+  min-height: 0;
+  padding: 1.5rem;
+}
+
+/* Horizontal mode: wrappers become transparent so all 6 items are flat flex children */
+.compass-result-container {
+  display: contents;
+}
+
+.main-container:not(.vertical-layout) .belts-container {
+  display: contents;
 }
 
 .main-container .wheel-container {
@@ -105,27 +114,20 @@ body {
   min-height: 0;
 }
 
-.main-container .belts-container {
-  flex: none;
+.main-container:not(.vertical-layout) .belt {
+  flex: 0 0 auto;
+  height: clamp(2rem, 4rem, 8rem);
+  width: 100%;
+}
+
+.main-container:not(.vertical-layout) .interval-brackets-wrapper {
+  flex: 0 0 auto;
+  height: 1.875rem;
+  width: 100%;
 }
 
 .main-container #result-container {
   flex: none;
-}
-
-/* Styling for individual belts when moved out of belts-container */
-.main-container > .belt {
-  flex: 0 0 auto; /* Don't grow or shrink */
-  margin: 0.15rem 0; /* Half the gap from belts-container */
-  height: clamp(2rem, 4rem, 8rem); /* Maintain belt height */
-  width: 100%; /* Full width available */
-}
-
-.main-container > .interval-brackets-wrapper {
-  flex: 0 0 auto; /* Don't grow or shrink */
-  margin: 0.15rem 0;
-  height: 1.875rem; /* Fixed height for interval brackets */
-  width: 100%; /* Full width available */
 }
 
 .wheel-container {
@@ -549,6 +551,17 @@ body.dark-mode .cursor-color-btn {
   pointer-events: all;
 }
 
+/* --- AVATAR STYLES --- */
+#avatar-mount {
+  position: fixed;
+  bottom: 20px;
+  left: calc(33vw - 90px);  /* Center avatar at 33% of viewport */
+  width: 180px;
+  height: 180px;
+  z-index: 2001;  /* Above the darkened mask */
+  pointer-events: none;
+}
+
 /* --- TUTORIAL STYLES --- */
 #tutorial-mask {
     position: fixed;
@@ -567,9 +580,9 @@ body.dark-mode .cursor-color-btn {
 
 #tutorial-bubble {
     position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: 240px;  /* Above avatar (avatar is 180px + 20px bottom + gap) */
+    left: calc(33vw - 90px);  /* Left-aligned with avatar */
+    transform: none;  /* Remove centering transform */
     background: var(--color-surface);
     color: var(--color-text-primary);
     padding: 20px;
@@ -577,52 +590,102 @@ body.dark-mode .cursor-color-btn {
     z-index: 2001; /* Must be higher than the mask */
     opacity: 0;
     visibility: hidden;
-    max-width: 90%;
+    max-width: none;  /* Allow horizontal expansion */
+    white-space: nowrap;  /* Keep text on one line */
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     border: 1px solid #ccc;
 }
 
 #tutorial-text {
     font-size: 1.2rem;
-    text-align: center;
+    text-align: left;  /* Left-align text */
 }
 #tutorial-text strong {
     color: #33c6dc;
 }
 
+/* Tutorial navigation controls */
+.tutorial-nav {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.tutorial-nav-btn {
+    background: transparent;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.tutorial-nav-btn:hover {
+    background: rgba(51, 198, 220, 0.1);
+    border-color: #33c6dc;
+}
+
+.tutorial-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.tutorial-exit-btn {
+    margin-left: auto;  /* Push exit button to the right */
+}
+
 /* --- SOLUTION FOR WIDE SCREENS --- */
 .main-container.vertical-layout {
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: 1fr auto;
-  grid-template-areas:
-    "belts wheel"
-    "result wheel";
+  display: flex;
+  flex-direction: row;
   gap: var(--space-s);
   max-width: none;
   justify-content: center;
-  align-content: center;
+  align-items: stretch;
 }
 
-.main-container.vertical-layout .belts-container {
-  grid-area: belts;
-  justify-self: center;
+/* In vertical mode, compass+result wrapper becomes a visible column */
+.main-container.vertical-layout .compass-result-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-s);
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
-.main-container.vertical-layout .wheel-container {
-  grid-area: wheel;
-  justify-self: center;
+.main-container.vertical-layout .compass-result-container .wheel-container {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
 }
 
-.main-container.vertical-layout #result-container {
-  grid-area: result;
-  justify-self: center;
+.main-container.vertical-layout .compass-result-container #result-container {
+  flex: none;
   width: auto;
   max-width: 28.125rem;
 }
 
-.main-container.vertical-layout .wheel-and-result-wrapper {
-  display: none;
+/* In vertical mode, belts-container uses display:contents so each belt is its own column */
+.main-container.vertical-layout .belts-container {
+  display: contents;
+}
+
+.main-container.vertical-layout .belt {
+  flex: 0 0 auto;
+  width: clamp(2rem, 5vw, 4rem);
+  height: 100%;
+  min-width: 0;
+}
+
+.main-container.vertical-layout .interval-brackets-wrapper {
+  flex: 0 0 auto;
+  width: 1.875rem;
+  height: 100%;
 }
 
 /* Accessibility text section */

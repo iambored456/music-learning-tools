@@ -32,4 +32,5 @@ export interface Preferences {
   cursorColor: CursorColor;
   cursorFill: boolean;
   layoutOrder?: LayoutOrder;
+  resultAboveCompass?: boolean;
 }

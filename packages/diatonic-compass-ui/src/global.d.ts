@@ -40,10 +40,3 @@ interface Performance {
   };
 }
 
-interface HTMLElement {
-  _originalParent?: Node | null;
-  _originalNextSibling?: ChildNode | null;
-  _isFlattened?: boolean;
-  _beltElements?: HTMLElement[];
-  _beltsContainer?: HTMLElement | null;
-}

@@ -153,32 +153,16 @@ export default class BeltOrderManager {
     const currentOrder = [...appState.belts.order];
     const draggedIndex = currentOrder.indexOf(draggedBelt);
     const targetIndex = currentOrder.indexOf(targetBelt);
-    
-    console.log('=== BELT ORDER MANAGER REORDER DEBUG ===', {
-      draggedBelt,
-      targetBelt,
-      currentOrder: [...currentOrder],
-      draggedIndex,
-      targetIndex
-    });
-    
+
     if (draggedIndex === -1 || targetIndex === -1) return;
     
     // Remove dragged item and insert at target position
     currentOrder.splice(draggedIndex, 1);
     // Fix: Use proper logic to place after target instead of before
     const newTargetIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
-    
-    console.log('BeltOrderManager reorder calculation:', {
-      afterRemoval: [...currentOrder],
-      newTargetIndex,
-      calculation: `${draggedIndex} < ${targetIndex} ? ${targetIndex} : ${targetIndex + 1}`,
-      explanation: draggedIndex < targetIndex ? 'Moving forward: place after target' : 'Moving backward: place after target'
-    });
-    
+
     currentOrder.splice(newTargetIndex, 0, draggedBelt);
-    
-    console.log('Final BeltOrderManager order:', [...currentOrder]);
+
     appState.belts.order = currentOrder;
   }
 

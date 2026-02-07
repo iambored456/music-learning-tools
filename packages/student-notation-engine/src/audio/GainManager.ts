@@ -29,16 +29,18 @@ export class GainManager {
   private readonly masterGain: Tone.Gain;
   private readonly options: Required<GainManagerOptions>;
   private readonly perVoiceBaselineGain: number;
+  private readonly voiceCountFn: (() => number) | null;
 
   private activeVoiceCount = 0;
   private smoothedVoiceCount: number;
   private gainUpdateLoopId: ReturnType<typeof setInterval> | null = null;
 
-  constructor(masterGain: Tone.Gain, options: GainManagerOptions = {}) {
+  constructor(masterGain: Tone.Gain, options: GainManagerOptions = {}, voiceCountFn?: () => number) {
     this.masterGain = masterGain;
     this.options = { ...DEFAULT_GAIN_MANAGER_OPTIONS, ...options };
     this.perVoiceBaselineGain = getPerVoiceBaselineGain(this.options.polyphonyReference);
     this.smoothedVoiceCount = this.options.polyphonyReference;
+    this.voiceCountFn = voiceCountFn ?? null;
   }
 
   start(): void {
@@ -84,6 +86,10 @@ export class GainManager {
   }
 
   private updateMasterGain(): void {
+    if (this.voiceCountFn) {
+      this.activeVoiceCount = this.voiceCountFn();
+    }
+
     const { polyphonyReference, smoothingTauMs, masterGainRampMs, gainUpdateIntervalMs } = this.options;
 
     const now = Tone.now();

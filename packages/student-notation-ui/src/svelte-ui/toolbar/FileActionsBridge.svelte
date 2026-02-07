@@ -185,7 +185,7 @@
     printBtn?.addEventListener('click', handlePrint);
     resetBtn?.addEventListener('click', handleReset);
 
-    console.log('[Svelte] FileActionsBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] FileActionsBridge mounted');
   });
 
   onDestroy(() => {
@@ -195,7 +195,7 @@
     printBtn?.removeEventListener('click', handlePrint);
     resetBtn?.removeEventListener('click', handleReset);
 
-    console.log('[Svelte] FileActionsBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] FileActionsBridge unmounted');
   });
 </script>
 

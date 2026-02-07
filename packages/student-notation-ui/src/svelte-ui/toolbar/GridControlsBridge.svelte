@@ -58,7 +58,7 @@
     increaseBtn?.addEventListener('click', handleIncreaseMacrobeat);
     decreaseBtn?.addEventListener('click', handleDecreaseMacrobeat);
 
-    console.log('[Svelte] GridControlsBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] GridControlsBridge mounted');
   });
 
   onDestroy(() => {
@@ -68,7 +68,7 @@
     increaseBtn?.removeEventListener('click', handleIncreaseMacrobeat);
     decreaseBtn?.removeEventListener('click', handleDecreaseMacrobeat);
 
-    console.log('[Svelte] GridControlsBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] GridControlsBridge unmounted');
   });
 </script>
 

@@ -311,7 +311,7 @@
       updatePresetSelection(initialColor);
     }
 
-    console.log('[Svelte] AudioControlsBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] AudioControlsBridge mounted');
   });
 
   onDestroy(() => {
@@ -325,7 +325,7 @@
     document.removeEventListener('touchend', handleDocumentTouchEnd);
     document.removeEventListener('touchcancel', handleDocumentTouchCancel);
 
-    console.log('[Svelte] AudioControlsBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] AudioControlsBridge unmounted');
   });
 </script>
 

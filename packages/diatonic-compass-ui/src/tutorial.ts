@@ -1,45 +1,66 @@
 import { gsap } from "gsap";
 import { appState } from './state/appState.ts';
-import { indexAtTop } from './core/math.ts';
 import { ActionController } from './core/ActionController.ts';
 import type { RingName } from './types.ts';
+import {
+    createTalkingAvatarController,
+    defaultAvatarAssets,
+    type TalkingAvatarController
+} from '@mlt/talking-avatar';
 
 type TutorialStep = {
     text: string;
     highlightTarget?: string;
-    waitFor?: () => Promise<void>;
+    waitFor?: (token: number) => Promise<void>;
 };
 
+// Module-level state
+let avatar: TalkingAvatarController | null = null;
+let currentStepIndex = 0;
+let isExecutingStep = false;
+let currentHighlightTarget: string | null = null;
+let activeToken = 0;
+let pendingAdvanceTimeout: number | null = null;
+
+// Tutorial steps definition
+const tutorialSteps: TutorialStep[] = [
+    { text: "Welcome to the <strong>Diatonic Compass!</strong>" },
+    { text: "Rotate the <strong>Pitch</strong> belt so we leave <strong>C Major.</strong>", highlightTarget: ".pitch-belt", waitFor: (token) => awaitInteractionAndAnimation('pitchClass', token) },
+    { text: "Nice! <br>Change the <strong>mode</strong> by spinning the <strong>Degree belt.</strong>", highlightTarget: ".degree-belt", waitFor: (token) => awaitInteractionAndAnimation('degree', token) },
+    { text: "Wonderful!<br>Now shift the perspective by spinning the <strong>Chromatic belt</strong>.", highlightTarget: ".chromatic-belt", waitFor: (token) => awaitInteractionAndAnimation('chromatic', token) },
+    { text: "Almost there!<br> Tap the <strong>result bar</strong> to <strong>hear your scale.</strong>", highlightTarget: "#result-container", waitFor: (token) => awaitPlayback(token) },
+    { text: "You did it!<br><strong>Enjoy exploring.</strong>" },
+];
+
 /**
- * Speaks text and returns a Promise that resolves when done.
+ * Initialize the avatar if not already created
  */
-function speak(text: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        console.log('Speech function called with text:', text);
-        window.speechSynthesis.cancel();
-        const tempElem = document.createElement('div');
-        tempElem.innerHTML = text;
-        const cleanText = tempElem.textContent || tempElem.innerText || "";
-        console.log('Clean text for speech:', cleanText);
-        
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.onend = () => {
-            console.log('Speech utterance ended');
-            resolve();
-        };
-        utterance.onerror = (error) => {
-            console.error('Speech utterance error:', error);
-            reject(error);
-        };
-        
-        console.log('Starting speech after 50ms delay');
-        setTimeout(() => {
-            window.speechSynthesis.speak(utterance);
-            console.log('Speech synthesis.speak() called');
-        }, 50);
+function initAvatar(): TalkingAvatarController | null {
+    if (avatar) return avatar;
+
+    const mount = document.getElementById('avatar-mount');
+    if (!mount) {
+        console.error('Avatar mount element not found!');
+        return null;
+    }
+
+    avatar = createTalkingAvatarController({
+        assets: defaultAvatarAssets,
+        mount,
     });
+
+    return avatar;
 }
 
+/**
+ * Clean up and dispose of the avatar
+ */
+function disposeAvatar(): void {
+    if (avatar) {
+        avatar.dispose();
+        avatar = null;
+    }
+}
 
 function showSpotlight(targetSelector: string) {
     const target = document.querySelector(targetSelector);
@@ -56,9 +77,9 @@ function showSpotlight(targetSelector: string) {
 
 
 function hideSpotlight() {
-    gsap.to("#tutorial-mask", { 
+    gsap.to("#tutorial-mask", {
         clipPath: "polygon(0% 0%, 0% 100%, 50% 100%, 50% 50%, 50% 50%, 50% 50%, 50% 50%, 50% 100%, 100% 100%, 100% 0%, 0% 0%)",
-        duration: 0.4, 
+        duration: 0.4,
         ease: "power2.inOut"
     });
 }
@@ -69,6 +90,7 @@ function hideSpotlight() {
 function addHighlight(targetSelector: string) {
     const target = document.querySelector(targetSelector);
     if (!target) return;
+    currentHighlightTarget = targetSelector;
     gsap.to(target, {
         position: 'relative',
         zIndex: 2001,
@@ -83,6 +105,7 @@ function addHighlight(targetSelector: string) {
 function removeHighlight(targetSelector: string) {
     const target = document.querySelector(targetSelector);
     if (!target) return;
+    currentHighlightTarget = null;
     gsap.to(target, {
         boxShadow: "0 0 0px 0px rgba(51,198,220,0)",
         duration: 0.3,
@@ -93,14 +116,41 @@ function removeHighlight(targetSelector: string) {
 }
 
 /**
+ * Clear any active highlight
+ */
+function clearCurrentHighlight() {
+    if (currentHighlightTarget) {
+        removeHighlight(currentHighlightTarget);
+        hideSpotlight();
+    }
+}
+
+function isTokenActive(token: number): boolean {
+    return token === activeToken;
+}
+
+function clearPendingAdvanceTimeout() {
+    if (pendingAdvanceTimeout !== null) {
+        clearTimeout(pendingAdvanceTimeout);
+        pendingAdvanceTimeout = null;
+    }
+}
+
+/**
  * Waits for a user to start moving a belt, then waits for the drag and snap animation to complete.
  */
-function awaitInteractionAndAnimation(ringKey: RingName) {
+function awaitInteractionAndAnimation(ringKey: RingName, token: number) {
     return new Promise<void>(resolve => {
         const initialValue = appState.rings[ringKey];
         let hasMoved = false;
+        let reqId = 0;
 
         const check = () => {
+            if (!isTokenActive(token)) {
+                cancelAnimationFrame(reqId);
+                resolve();
+                return;
+            }
             if (!hasMoved) {
                 if (appState.rings[ringKey] !== initialValue) {
                     hasMoved = true;
@@ -114,210 +164,271 @@ function awaitInteractionAndAnimation(ringKey: RingName) {
             }
             reqId = requestAnimationFrame(check);
         };
-        let reqId = requestAnimationFrame(check);
+        reqId = requestAnimationFrame(check);
     });
 }
 
+/**
+ * Wait for playback to start and then stop
+ */
+async function awaitPlayback(token: number): Promise<void> {
+    await new Promise<void>(resolve => {
+        const check = () => {
+            if (!isTokenActive(token)) {
+                resolve();
+                return;
+            }
+            appState.playback.isPlaying ? resolve() : requestAnimationFrame(check);
+        };
+        check();
+    });
+    await new Promise<void>(resolve => {
+        const check = () => {
+            if (!isTokenActive(token)) {
+                resolve();
+                return;
+            }
+            !appState.playback.isPlaying ? resolve() : requestAnimationFrame(check);
+        };
+        check();
+    });
+}
+
+/**
+ * Update navigation button states
+ */
+function updateNavButtons() {
+    const prevBtn = document.getElementById('tutorial-prev') as HTMLButtonElement | null;
+    const nextBtn = document.getElementById('tutorial-next') as HTMLButtonElement | null;
+
+    if (prevBtn) {
+        // Only disable on first step, allow navigation during speech
+        prevBtn.disabled = currentStepIndex === 0;
+    }
+    if (nextBtn) {
+        // Only disable on last step, allow navigation during speech
+        nextBtn.disabled = currentStepIndex >= tutorialSteps.length - 1;
+    }
+}
+
+/**
+ * Execute a single tutorial step
+ */
+async function executeStep(stepIndex: number, token: number): Promise<boolean> {
+    if (stepIndex < 0 || stepIndex >= tutorialSteps.length) return false;
+    if (!isTokenActive(token)) return false;
+
+    const config = tutorialSteps[stepIndex];
+    isExecutingStep = true;
+    updateNavButtons();
+
+    const tutorialTextEl = document.getElementById('tutorial-text');
+
+    if (tutorialTextEl) {
+        tutorialTextEl.innerHTML = config.text;
+        tutorialTextEl.style.opacity = '1';
+        tutorialTextEl.style.visibility = 'visible';
+    }
+
+    if (!isTokenActive(token)) return false;
+
+    if (config.highlightTarget) {
+        showSpotlight(config.highlightTarget);
+        addHighlight(config.highlightTarget);
+    }
+
+    const speakPromise = avatar
+        ? avatar.speak(config.text, {
+            lang: 'en-CA',
+            rate: 0.92,
+            chunking: 'sentence',
+        }).catch(() => undefined)
+        : Promise.resolve();
+
+    if (config.waitFor) {
+        const waitPromise = config.waitFor(token);
+        const first = await Promise.race([
+            speakPromise.then(() => 'speak'),
+            waitPromise.then(() => 'wait'),
+        ]);
+
+        if (!isTokenActive(token)) return false;
+
+        if (first === 'wait') {
+            // User completed the action before speech ended: stop speaking and advance.
+            avatar?.cancel();
+        } else {
+            await waitPromise;
+            if (!isTokenActive(token)) return false;
+        }
+    } else {
+        await speakPromise;
+        if (!isTokenActive(token)) return false;
+    }
+
+    // Clear highlight after interaction complete
+    if (config.highlightTarget) {
+        removeHighlight(config.highlightTarget);
+        hideSpotlight();
+    }
+
+    if (isTokenActive(token)) {
+        isExecutingStep = false;
+        updateNavButtons();
+    }
+    return isTokenActive(token);
+}
+
+/**
+ * Go to a specific step
+ */
+async function goToStep(index: number): Promise<void> {
+    if (index < 0 || index >= tutorialSteps.length) return;
+    const token = ++activeToken;
+    clearPendingAdvanceTimeout();
+    if (isExecutingStep) {
+        // Cancel current speech if navigating
+        avatar?.cancel();
+        clearCurrentHighlight();
+        isExecutingStep = false;
+    }
+
+    currentStepIndex = index;
+    updateNavButtons();
+    const completed = await executeStep(index, token);
+    if (!completed || !isTokenActive(token)) {
+        return;
+    }
+
+    // Auto-advance to next step if not the last step
+    if (currentStepIndex < tutorialSteps.length - 1) {
+        pendingAdvanceTimeout = window.setTimeout(() => {
+            if (!isTokenActive(token)) return;
+            void goToStep(currentStepIndex + 1);
+        }, 500);
+    } else {
+        // Last step - end tutorial after delay
+        pendingAdvanceTimeout = window.setTimeout(() => {
+            if (!isTokenActive(token)) return;
+            exitTutorial();
+        }, 1000);
+    }
+}
+
+/**
+ * Exit the tutorial
+ */
+function exitTutorial() {
+    activeToken++;
+    clearPendingAdvanceTimeout();
+    avatar?.cancel();
+    clearCurrentHighlight();
+
+    gsap.to(["#tutorial-mask", "#tutorial-bubble"], {
+        autoAlpha: 0,
+        duration: 0.3,
+        onComplete: () => {
+            const bubble = document.getElementById('tutorial-bubble');
+            if (bubble) {
+                bubble.style.display = 'none';
+            }
+            if (avatar) {
+                avatar.setVisible(false);
+            }
+        }
+    });
+
+    if (window.diatonicCompassTutorial) {
+        window.diatonicCompassTutorial.kill();
+        window.diatonicCompassTutorial = null;
+    }
+
+    // Remove event listeners
+    document.getElementById('tutorial-prev')?.removeEventListener('click', handlePrevClick);
+    document.getElementById('tutorial-next')?.removeEventListener('click', handleNextClick);
+    document.getElementById('tutorial-exit')?.removeEventListener('click', handleExitClick);
+}
+
+// Event handlers
+function handlePrevClick() {
+    if (currentStepIndex > 0) {
+        avatar?.cancel();
+        clearCurrentHighlight();
+        isExecutingStep = false;
+        currentStepIndex--;
+        goToStep(currentStepIndex);
+    }
+}
+
+function handleNextClick() {
+    if (currentStepIndex < tutorialSteps.length - 1) {
+        avatar?.cancel();
+        clearCurrentHighlight();
+        isExecutingStep = false;
+        currentStepIndex++;
+        goToStep(currentStepIndex);
+    }
+}
+
+function handleExitClick() {
+    exitTutorial();
+}
 
 export function startTutorial() {
-    console.log('=== TUTORIAL START ===');
     ActionController.toggleSidebar(false);
-    
-    // Ensure tutorial elements are accessible
+
     const tutorialBubble = document.getElementById('tutorial-bubble');
     const tutorialMask = document.getElementById('tutorial-mask');
     const tutorialText = document.getElementById('tutorial-text');
-    
-    console.log('Tutorial elements check:', {
-        tutorialBubble: !!tutorialBubble,
-        tutorialMask: !!tutorialMask,
-        tutorialText: !!tutorialText,
-        bubbleStyles: tutorialBubble ? {
-            opacity: tutorialBubble.style.opacity,
-            visibility: tutorialBubble.style.visibility,
-            display: getComputedStyle(tutorialBubble).display
-        } : null,
-        textStyles: tutorialText ? {
-            opacity: tutorialText.style.opacity,
-            visibility: tutorialText.style.visibility,
-            display: getComputedStyle(tutorialText).display,
-            innerHTML: tutorialText.innerHTML
-        } : null
-    });
-    
-    if (tutorialBubble && tutorialMask && tutorialText) {
-      console.log('All tutorial elements found successfully');
-    } else {
+
+    if (!tutorialBubble || !tutorialMask || !tutorialText) {
       console.error('Tutorial elements missing!', { tutorialBubble: !!tutorialBubble, tutorialMask: !!tutorialMask, tutorialText: !!tutorialText });
       return;
     }
-    
+
+    // Initialize the avatar
+    const avatarController = initAvatar();
+    if (!avatarController) {
+        console.error('Failed to initialize avatar!');
+        return;
+    }
+
+    // Reset state
+    currentStepIndex = 0;
+    isExecutingStep = false;
+    currentHighlightTarget = null;
+
     if (window.diatonicCompassTutorial) {
-        console.log('Killing existing tutorial timeline');
         window.diatonicCompassTutorial.kill();
     }
-    
-    console.log('Creating new GSAP timeline');
-    const tl = gsap.timeline({ 
-        onComplete: () => {
-            console.log('Tutorial timeline completed');
-            window.diatonicCompassTutorial = null;
-        }
-    });
+
+    // Create a simple timeline just for setup animations
+    const tl = gsap.timeline();
     window.diatonicCompassTutorial = tl;
 
-    const doStep = (config: TutorialStep) => {
-        console.log('=== ADDING STEP TO TIMELINE ===', config.text);
-        tl.call(() => {
-            void (async () => {
-                console.log('=== EXECUTING STEP ===', config.text);
-                tl.pause();
-            
-            // Set tutorial text with detailed logging
-            const tutorialTextEl = document.getElementById('tutorial-text');
-            const tutorialBubbleEl = document.getElementById('tutorial-bubble');
-            
-            console.log('Tutorial elements during step execution:', {
-                textEl: !!tutorialTextEl,
-                bubbleEl: !!tutorialBubbleEl,
-                textElStyles: tutorialTextEl ? {
-                    opacity: tutorialTextEl.style.opacity,
-                    visibility: tutorialTextEl.style.visibility,
-                    display: getComputedStyle(tutorialTextEl).display,
-                    currentHTML: tutorialTextEl.innerHTML
-                } : null,
-                bubbleElStyles: tutorialBubbleEl ? {
-                    opacity: tutorialBubbleEl.style.opacity,
-                    visibility: tutorialBubbleEl.style.visibility,
-                    display: getComputedStyle(tutorialBubbleEl).display
-                } : null
-            });
-            
-            if (tutorialTextEl) {
-                console.log('BEFORE setting text - innerHTML:', tutorialTextEl.innerHTML);
-                tutorialTextEl.innerHTML = config.text;
-                tutorialTextEl.style.opacity = '1';
-                tutorialTextEl.style.visibility = 'visible';
-                console.log('AFTER setting text - innerHTML:', tutorialTextEl.innerHTML);
-                console.log('Text element computed styles after update:', {
-                    opacity: getComputedStyle(tutorialTextEl).opacity,
-                    visibility: getComputedStyle(tutorialTextEl).visibility,
-                    display: getComputedStyle(tutorialTextEl).display,
-                    fontSize: getComputedStyle(tutorialTextEl).fontSize,
-                    color: getComputedStyle(tutorialTextEl).color
-                });
-            } else {
-                console.error('Tutorial text element not found during step execution!');
-            }
-            
-            if (config.highlightTarget) {
-                console.log('Adding highlight to:', config.highlightTarget);
-                showSpotlight(config.highlightTarget);
-                addHighlight(config.highlightTarget);
-            }
-            
-            console.log('Starting speech synthesis for:', config.text);
-            await speak(config.text);
-            console.log('Speech synthesis completed');
-            
-            if (config.waitFor) {
-                console.log('Waiting for user interaction...');
-                await config.waitFor();
-                console.log('User interaction completed');
-            }
-            
-            if (config.highlightTarget) {
-                console.log('Removing highlight from:', config.highlightTarget);
-                removeHighlight(config.highlightTarget);
-                hideSpotlight();
-            }
-            
-                await new Promise<void>(resolve => setTimeout(resolve, 500));
-                console.log('Step completed, resuming timeline');
-                tl.resume();
-            })();
-        });
-    };
+    // Wire up navigation buttons
+    document.getElementById('tutorial-prev')?.addEventListener('click', handlePrevClick);
+    document.getElementById('tutorial-next')?.addEventListener('click', handleNextClick);
+    document.getElementById('tutorial-exit')?.addEventListener('click', handleExitClick);
 
     // Show tutorial elements
-    console.log('Adding tutorial mask animation to timeline');
     tl.to("#tutorial-mask", { autoAlpha: 1, duration: 0.3 });
     tl.call(() => {
-      console.log('=== SHOWING TUTORIAL BUBBLE ===');
-      // Show the dialog properly
-      const bubble = document.getElementById('tutorial-bubble');
-      const textEl = document.getElementById('tutorial-text');
-      
-      console.log('Bubble show elements check:', {
-        bubble: !!bubble,
-        textEl: !!textEl,
-        bubbleCurrentStyles: bubble ? {
-          opacity: bubble.style.opacity,
-          visibility: bubble.style.visibility,
-          display: getComputedStyle(bubble).display
-        } : null,
-        textCurrentStyles: textEl ? {
-          opacity: textEl.style.opacity,
-          visibility: textEl.style.visibility,
-          innerHTML: textEl.innerHTML
-        } : null
-      });
-      
-      if (bubble) {
-        console.log('Setting bubble visibility styles');
-        bubble.style.display = 'block';
-        bubble.style.opacity = '1';
-        bubble.style.visibility = 'visible';
-        bubble.setAttribute('aria-hidden', 'false');
-        
-        console.log('Bubble styles after setting:', {
-          opacity: bubble.style.opacity,
-          visibility: bubble.style.visibility,
-          computedOpacity: getComputedStyle(bubble).opacity,
-          computedVisibility: getComputedStyle(bubble).visibility,
-          computedDisplay: getComputedStyle(bubble).display
-        });
-        
-        console.log('Tutorial bubble shown successfully');
-      } else {
-        console.error('Tutorial bubble element not found during show!');
-      }
+        tutorialBubble.style.display = 'block';
+        tutorialBubble.style.opacity = '1';
+        tutorialBubble.style.visibility = 'visible';
+        tutorialBubble.setAttribute('aria-hidden', 'false');
+        updateNavButtons();
     });
 
-    doStep({ text: "Welcome to the <strong>Diatonic Compass!</strong>" });
-    doStep({ text: "Rotate the <strong>Pitch</strong> belt so we leave <strong>C Major.</strong>", highlightTarget: ".pitch-belt", waitFor: () => awaitInteractionAndAnimation('pitchClass') });
-    doStep({ text: "Nice! <br>Change the <strong>mode</strong> by spinning the <strong>Degree belt.</strong>", highlightTarget: ".degree-belt", waitFor: () => awaitInteractionAndAnimation('degree') });
-    doStep({ text: "Wonderful!<br>Now shift the perspective by spinning the <strong>Chromatic belt</strong>.", highlightTarget: ".chromatic-belt", waitFor: () => awaitInteractionAndAnimation('chromatic') });
-
-    // **THE FIX**: Animate the bubble up BEFORE the step starts.
-    tl.to("#tutorial-bubble", { bottom: '110px', duration: 0.3, ease: 'power2.out' });
-
-    doStep({
-        text: "Almost there!<br> Tap the <strong>result bar</strong> to <strong>hear your scale.</strong>",
-        highlightTarget: "#result-container",
-        waitFor: async () => {
-            await new Promise<void>(resolve => {
-                const check = () => appState.playback.isPlaying ? resolve() : requestAnimationFrame(check);
-                check();
-            });
-            await new Promise<void>(resolve => {
-                const check = () => !appState.playback.isPlaying ? resolve() : requestAnimationFrame(check);
-                check();
-            });
-        }
-    });
-
-    // **THE FIX**: Animate the bubble back down AFTER the step is complete.
-    tl.to("#tutorial-bubble", { bottom: '20px', duration: 0.3, ease: 'power2.in' });
-
-    doStep({ text: "You did it!<br><strong>Enjoy exploring.</strong>" });
-
-    tl.to(["#tutorial-mask", "#tutorial-bubble"], { autoAlpha: 0, duration: 0.4, delay: 1 });
+    // Enter the avatar and start first step
     tl.call(() => {
-        const bubble = document.getElementById('tutorial-bubble');
-        if (bubble) {
-            bubble.style.display = 'none';
-            console.log('Tutorial bubble hidden');
-        }
+        void (async () => {
+            if (avatar) {
+                await avatar.enter();
+            }
+            // Start the tutorial steps
+            goToStep(0);
+        })();
     });
 }

@@ -65,7 +65,6 @@ export class KeyboardManager {
       this.initFocusManagement();
       
       // Don't show ring highlighting by default - only when keyboard is actually used
-      console.log('Keyboard navigation initialized');
     } catch (error) {
       ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
     }
@@ -219,34 +218,14 @@ export class KeyboardManager {
    */
   static handleKeyDown(e: KeyboardEvent) {
     try {
-      console.log('=== KeyboardManager.handleKeyDown ===');
-      console.log('Key pressed:', e.key);
-      console.log('isEnabled:', this.isEnabled);
-
-      if (!this.isEnabled) {
-        console.log('Keyboard manager disabled, returning');
-        return;
-      }
-
-      // Don't interfere with text inputs
-      const isTextInput = this.isTextInputActive();
-      console.log('isTextInputActive:', isTextInput);
-      if (isTextInput) {
-        console.log('Text input active, returning');
-        return;
-      }
+      if (!this.isEnabled) return;
+      if (this.isTextInputActive()) return;
 
       const key = this.getKeyString(e);
-      console.log('Key string with modifiers:', key);
-
       const command = this.keyMap.get(key);
-      console.log('Command found:', command);
 
       if (command) {
-        console.log('Executing command:', command.action);
         this.executeCommand(command, e);
-      } else {
-        console.log('No command mapped for key:', key);
       }
     } catch (error) {
       console.error('Error in handleKeyDown:', error);
@@ -288,23 +267,13 @@ export class KeyboardManager {
    * Check if we should prevent default for this key event
    */
   static shouldPreventDefault(e: KeyboardEvent) {
-    console.log('=== shouldPreventDefault ===');
-    console.log('Key:', e.key);
-
-    if (this.isTextInputActive()) {
-      console.log('Text input active, not preventing default');
-      return false;
-    }
+    if (this.isTextInputActive()) return false;
 
     const key = this.getKeyString(e);
     const command = this.keyMap.get(key);
 
-    const shouldPrevent = !!command && !['Escape'].includes(e.key);
-    console.log('Command found:', !!command);
-    console.log('Should prevent default:', shouldPrevent);
-
     // Prevent default for our handled keys, but allow normal browser behavior for others
-    return shouldPrevent;
+    return !!command && !['Escape'].includes(e.key);
   }
 
   /**

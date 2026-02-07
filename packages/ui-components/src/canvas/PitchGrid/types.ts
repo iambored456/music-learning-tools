@@ -209,8 +209,8 @@ export interface PitchTrailConfig {
  * Configuration for singing/highway mode rendering.
  */
 export interface SingingModeConfig {
-  /** Current user pitch from microphone (null if not detected) */
-  userPitch: CurrentPitch | null;
+  /** Current user pitch from microphone (null if not detected). Optional — can be passed as separate prop to PitchGrid. */
+  userPitch?: CurrentPitch | null;
   /** History of recent pitch detections */
   pitchHistory: PitchHistoryPoint[];
   /** Target notes to display (for exercises) */

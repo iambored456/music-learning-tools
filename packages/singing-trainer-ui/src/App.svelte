@@ -7,16 +7,17 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     SingingCanvas,
-    TonicSelector,
     DroneControls,
     StartButton,
     PitchHighlightToggle,
+    ThemeSettings,
     LyricLabelControls,
     PitchReadout,
     RangeControl,
     ExerciseControls,
     UltrastarControls,
     SpeakingPitchPanel,
+    DifficultySettings,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
   import { ExerciseChooserModal } from './lib/components/chooser/index.js';
@@ -32,6 +33,19 @@
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
+
+  // Accordion state: only one sidebar section open at a time
+  let openSection: number | null = $state(null);
+
+  function handleToggle(index: number) {
+    return (e: ToggleEvent) => {
+      if (e.newState === 'open') {
+        openSection = index;
+      } else if (openSection === index) {
+        openSection = null;
+      }
+    };
+  }
 
   // Exercise Controls component reference
   let exerciseControlsRef: { handleLessonStart: (lessonId: string, settings: Record<string, number | boolean>) => void } | undefined;
@@ -191,37 +205,56 @@
 
   <main class="main">
     <aside class="sidebar sidebar--left">
-      <details class="settings-details">
-        <summary class="settings-summary">User Settings</summary>
+      <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
+        <summary class="settings-summary">Mic Settings</summary>
         <div class="settings-content">
           <StartButton />
           <PitchReadout />
-          <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
-          <RangeControl />
           <PitchHighlightToggle />
         </div>
       </details>
 
-      <details class="settings-details">
+      <details class="settings-details" open={openSection === 1} ontoggle={handleToggle(1)}>
+        <summary class="settings-summary">Theme Settings</summary>
+        <div class="settings-content">
+          <ThemeSettings />
+        </div>
+      </details>
+
+      <details class="settings-details" open={openSection === 2} ontoggle={handleToggle(2)}>
+        <summary class="settings-summary">User Settings</summary>
+        <div class="settings-content">
+          <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
+          <RangeControl />
+        </div>
+      </details>
+
+      <details class="settings-details" open={openSection === 3} ontoggle={handleToggle(3)}>
+        <summary class="settings-summary">Drone Controls</summary>
+        <div class="settings-content">
+          <DroneControls />
+        </div>
+      </details>
+
+      <details class="settings-details" open={openSection === 4} ontoggle={handleToggle(4)}>
+        <summary class="settings-summary">Difficulty Settings</summary>
+        <div class="settings-content">
+          <DifficultySettings />
+        </div>
+      </details>
+
+      <details class="settings-details" open={openSection === 5} ontoggle={handleToggle(5)}>
         <summary class="settings-summary">Exercises &amp; Lessons</summary>
         <div class="settings-content">
           <ExerciseControls bind:this={exerciseControlsRef} />
         </div>
       </details>
 
-      <details class="settings-details">
+      <details class="settings-details" open={openSection === 6} ontoggle={handleToggle(6)}>
         <summary class="settings-summary">UltraStar Karaoke</summary>
         <div class="settings-content">
           <UltrastarControls />
           <LyricLabelControls />
-        </div>
-      </details>
-
-      <details class="settings-details">
-        <summary class="settings-summary">Drone Controls</summary>
-        <div class="settings-content">
-          <TonicSelector />
-          <DroneControls />
         </div>
       </details>
 
@@ -250,6 +283,9 @@
       <SingingCanvas />
     </section>
   </main>
+
+  <!-- Avatar mount point for lesson instructions -->
+  <div id="lesson-avatar-mount" class="avatar-mount"></div>
 
   <!-- Lesson Chooser Modal -->
   <ExerciseChooserModal onstart={handleLessonStart} />
@@ -521,6 +557,26 @@
 
     .sidebar {
       max-height: 50vh;
+    }
+  }
+
+  /* Avatar mount point for lesson instructions */
+  .avatar-mount {
+    position: fixed;
+    bottom: 20px;
+    left: calc(33vw - 90px);
+    width: 180px;
+    height: 180px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  @media (max-width: 900px) {
+    .avatar-mount {
+      left: 20px;
+      bottom: 20px;
+      width: 120px;
+      height: 120px;
     }
   }
 </style>

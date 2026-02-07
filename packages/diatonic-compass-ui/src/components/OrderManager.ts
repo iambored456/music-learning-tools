@@ -45,7 +45,7 @@ export default class OrderManager {
       this._setupEventListeners();
       this._loadSavedOrder();
       this._updateDisplay();
-      
+
     } catch (error) {
       ErrorHandler.handle(error, 'OrderManager', () => {
         console.error('Failed to initialize Order Manager');
@@ -74,24 +74,19 @@ export default class OrderManager {
   }
 
   _handleDragStart(event: DragEvent) {
-    console.log('Drag start event triggered', event.target);
-
     // Check if drag started from the drag handle
     const target = event.target as HTMLElement | null;
     if (!target || !target.classList.contains('drag-handle')) {
-      console.log('Not a drag-handle, ignoring');
       return;
     }
 
     // Get the parent order-item
     this.draggedItem = target.closest('.order-item') as HTMLElement | null;
     if (!this.draggedItem) {
-      console.log('No parent order-item found, ignoring');
       return;
     }
 
     this.draggedItem.classList.add('dragging');
-    console.log('Dragging item:', this.draggedItem.dataset.component);
 
     // Set drag data
     if (!event.dataTransfer) {
@@ -133,21 +128,17 @@ export default class OrderManager {
 
   _handleDrop(event: DragEvent) {
     event.preventDefault();
-    console.log('Drop event triggered');
-    
+
     if (!this.draggedItem || !this.dragOverItem || this.dragOverItem === this.draggedItem) {
-      console.log('Drop cancelled - no valid target');
       return;
     }
-    
+
     const draggedId = this.draggedItem.dataset.component;
     const targetId = this.dragOverItem.dataset.component;
     if (!draggedId || !targetId) {
-      console.log('Drop cancelled - missing component id');
       return;
     }
-    console.log(`Dropping ${draggedId} onto ${targetId}`);
-    
+
     this._reorderComponents(draggedId, targetId);
     this._saveOrder();
     this._updateDisplay();
@@ -164,15 +155,15 @@ export default class OrderManager {
       this.draggedItem.classList.remove('dragging');
       this.draggedItem.style.opacity = ''; // Restore visibility
     }
-    
+
     // Remove all drag-over classes
     this.container.querySelectorAll('.drag-over').forEach(item => {
       item.classList.remove('drag-over');
     });
-    
+
     // Reset all animations
     this._resetAnimations();
-    
+
     this.draggedItem = null;
     this.dragOverItem = null;
   }
@@ -180,7 +171,7 @@ export default class OrderManager {
   _reorderComponents(draggedId: string, targetId: string) {
     const currentOrientation = appState.belts.orientation;
     const currentOrder = [...appState.belts.layoutOrder[currentOrientation]];
-    
+
     // Handle vertical layout special case for nested belts
     if (currentOrientation === 'vertical') {
       this._reorderVerticalLayout(draggedId, targetId, currentOrder);
@@ -192,131 +183,73 @@ export default class OrderManager {
   _reorderHorizontalLayout(draggedId: string, targetId: string, currentOrder: string[]) {
     const draggedIndex = currentOrder.indexOf(draggedId);
     const targetIndex = currentOrder.indexOf(targetId);
-    
-    console.log('=== HORIZONTAL REORDER DEBUG ===', {
-      draggedId,
-      targetId,
-      currentOrder: [...currentOrder],
-      draggedIndex,
-      targetIndex
-    });
-    
+
     if (draggedIndex === -1 || targetIndex === -1) {
-      console.log('Invalid indices - horizontal reorder cancelled');
       return;
     }
-    
+
     // Remove dragged item and insert at target position
     currentOrder.splice(draggedIndex, 1);
     // After removing the dragged item, adjust target index if needed
     // If we're moving forward (to a higher index), the target index shifts down by 1
     const adjustedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
 
-    console.log('Horizontal reorder calculation:', {
-      afterRemoval: [...currentOrder],
-      adjustedTargetIndex,
-      calculation: `${draggedIndex} < ${targetIndex} ? ${targetIndex - 1} : ${targetIndex}`,
-      explanation: draggedIndex < targetIndex ? 'Moving forward: target shifted down after removal' : 'Moving backward: target index unchanged'
-    });
-
     currentOrder.splice(adjustedTargetIndex, 0, draggedId);
-    
-    console.log('Final horizontal order:', [...currentOrder]);
+
     appState.belts.layoutOrder.horizontal = currentOrder;
   }
 
   _reorderVerticalLayout(draggedId: string, targetId: string, currentOrder: string[]) {
-    console.log('=== VERTICAL REORDER DEBUG ===', {
-      draggedId,
-      targetId,
-      currentOrder,
-      isCompassInvolved: draggedId === 'compass' || targetId === 'compass'
-    });
-    
-    // In vertical layout, only compass and result are top-level
-    // Belts are nested under result
-    if (draggedId === 'compass' || targetId === 'compass') {
-      // If compass is being dragged onto a belt, treat it as dropping onto result group
-      const beltIds = BELT_IDS;
-      let actualTargetId = targetId;
-      let actualDraggedId = draggedId;
-      
-      // Convert belt targets to 'result' since belts are nested under result
-      if (beltIds.includes(targetId as BeltId)) {
-        actualTargetId = 'result';
-        console.log(`Converting belt target '${targetId}' to 'result'`);
-      }
-      if (beltIds.includes(draggedId as BeltId)) {
-        actualDraggedId = 'result';
-        console.log(`Converting belt dragged '${draggedId}' to 'result'`);
-      }
-      
-      // Simple reorder for compass vs result group
-      const draggedIndex = currentOrder.indexOf(actualDraggedId);
-      const targetIndex = currentOrder.indexOf(actualTargetId);
-      
-      console.log('Compass reorder indices:', { draggedIndex, targetIndex, actualDraggedId, actualTargetId });
-      
-      if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
-        currentOrder.splice(draggedIndex, 1);
-        
-        // Special case: when compass is dragged onto a belt, it should go AFTER result group
-        let adjustedTargetIndex;
-        if (actualDraggedId === 'compass' && beltIds.includes(targetId as BeltId)) {
-          // Place compass after the result group (at the end)
-          adjustedTargetIndex = currentOrder.length;
-          console.log('Placing compass after result group at index:', adjustedTargetIndex);
-        } else {
-          // Normal reorder logic - adjust for the removed item
-          adjustedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-          console.log('Normal reorder to index:', adjustedTargetIndex);
-        }
+    // In vertical layout: 5 columns (compass + 4 belts), all freely reorderable.
+    // 'result' is nested under 'compass' — dragging result onto a column reorders compass group.
+    // Dragging a belt onto 'result' treats it as targeting 'compass'.
 
-        currentOrder.splice(adjustedTargetIndex, 0, actualDraggedId);
-        appState.belts.layoutOrder.vertical = currentOrder;
-        console.log('New vertical layout order:', currentOrder);
-      } else {
-        console.log('Invalid indices or same position - reorder cancelled');
-      }
-    } else {
-      console.log('Belt reorder within result group');
-      // Reordering belts within the result group
-      if (BELT_IDS.includes(draggedId as BeltId) && BELT_IDS.includes(targetId as BeltId)) {
-        this._reorderBelts(draggedId as BeltId, targetId as BeltId);
-      }
+    // Dragging result onto compass (or vice versa) toggles above/below
+    if ((draggedId === 'result' && targetId === 'compass') ||
+        (draggedId === 'compass' && targetId === 'result')) {
+      appState.belts.resultAboveCompass = !appState.belts.resultAboveCompass;
+      return;
     }
+
+    let actualDraggedId = draggedId;
+    let actualTargetId = targetId;
+
+    // Result is bound to compass — redirect to compass column
+    if (actualDraggedId === 'result') actualDraggedId = 'compass';
+    if (actualTargetId === 'result') actualTargetId = 'compass';
+
+    if (actualDraggedId === actualTargetId) return;
+
+    const draggedIndex = currentOrder.indexOf(actualDraggedId);
+    const targetIndex = currentOrder.indexOf(actualTargetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    currentOrder.splice(draggedIndex, 1);
+    const adjustedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    currentOrder.splice(adjustedTargetIndex, 0, actualDraggedId);
+
+    appState.belts.layoutOrder.vertical = currentOrder;
+
+    // Sync belts.order from the vertical layout order (belt items only, preserving order)
+    const beltOrder = currentOrder.filter(id => BELT_IDS.includes(id as BeltId)) as BeltId[];
+    appState.belts.order = beltOrder;
   }
 
   _reorderBelts(draggedBelt: BeltId, targetBelt: BeltId) {
     const currentOrder = [...appState.belts.order];
     const draggedIndex = currentOrder.indexOf(draggedBelt);
     const targetIndex = currentOrder.indexOf(targetBelt);
-    
-    console.log('=== BELT REORDER DEBUG ===', {
-      draggedBelt,
-      targetBelt,
-      currentOrder: [...currentOrder],
-      draggedIndex,
-      targetIndex
-    });
-    
+
     if (draggedIndex === -1 || targetIndex === -1) return;
-    
+
     // Remove dragged item and insert at target position
     currentOrder.splice(draggedIndex, 1);
     // After removing the dragged item, adjust target index if needed
     const adjustedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
 
-    console.log('Belt reorder calculation:', {
-      afterRemoval: [...currentOrder],
-      adjustedTargetIndex,
-      calculation: `${draggedIndex} < ${targetIndex} ? ${targetIndex - 1} : ${targetIndex}`,
-      explanation: draggedIndex < targetIndex ? 'Moving forward: target shifted down after removal' : 'Moving backward: target index unchanged'
-    });
-
     currentOrder.splice(adjustedTargetIndex, 0, draggedBelt);
-    
-    console.log('Final belt order:', [...currentOrder]);
+
     appState.belts.order = currentOrder;
   }
 
@@ -331,7 +264,7 @@ export default class OrderManager {
       return;
     }
     container.innerHTML = '';
-    
+
     if (currentOrientation === 'horizontal') {
       this._renderHorizontalLayout();
     } else {
@@ -346,7 +279,7 @@ export default class OrderManager {
     }
 
     const order = appState.belts.layoutOrder.horizontal as ComponentId[];
-    
+
     order.forEach(componentId => {
       const item = this._createOrderItem(componentId, this._getComponentLabel(componentId));
       container.appendChild(item);
@@ -360,42 +293,26 @@ export default class OrderManager {
     }
 
     const order = appState.belts.layoutOrder.vertical as ComponentId[];
-    
-    console.log('=== RENDERING VERTICAL LAYOUT ===', {
-      order,
-      beltOrder: appState.belts.order
-    });
-    
-    order.forEach((componentId, index) => {
-      console.log(`Rendering component ${index}: ${componentId}`);
-      
-      if (componentId === 'result') {
-        // Create result group with nested belts
-        const resultItem = this._createOrderItem('result', 'Mode Name', true);
-        container.appendChild(resultItem);
-        console.log('Added result group item');
-        
-        // Add nested belt items
-        appState.belts.order.forEach((beltId: BeltId, beltIndex: number) => {
-          const beltItem = this._createOrderItem(beltId, this._getComponentLabel(beltId), false, true);
-          container.appendChild(beltItem);
-          console.log(`Added nested belt item ${beltIndex}: ${beltId}`);
-        });
+
+    order.forEach((componentId) => {
+      if (componentId === 'compass') {
+        // Compass+Result group — result nested above or below compass
+        const above = appState.belts.resultAboveCompass;
+        if (above) {
+          const resultItem = this._createOrderItem('result', 'Mode Name', false, true);
+          container.appendChild(resultItem);
+        }
+        const compassItem = this._createOrderItem('compass', 'Compass', true);
+        container.appendChild(compassItem);
+        if (!above) {
+          const resultItem = this._createOrderItem('result', 'Mode Name', false, true);
+          container.appendChild(resultItem);
+        }
       } else {
         const item = this._createOrderItem(componentId, this._getComponentLabel(componentId));
         container.appendChild(item);
-        console.log(`Added regular item: ${componentId}`);
       }
     });
-    
-    console.log('Final sidebar structure:', Array.from(container.children).map(child => {
-      const element = child as HTMLElement;
-      return {
-        className: element.className,
-        textContent: element.textContent?.trim() || '',
-        dataComponent: element.dataset.component
-      };
-    }));
   }
 
   _createOrderItem(componentId: ComponentId, label: string, isGroup = false, isNested = false) {
@@ -435,7 +352,7 @@ export default class OrderManager {
       intervals: 'Intervals',
       chromatic: 'Chromatic'
     };
-    
+
     return labels[componentId];
   }
 
@@ -444,6 +361,7 @@ export default class OrderManager {
       const preferences: Partial<Preferences> = loadPreferences() || {};
       preferences.layoutOrder = appState.belts.layoutOrder;
       preferences.beltOrder = appState.belts.order;
+      preferences.resultAboveCompass = appState.belts.resultAboveCompass;
       savePreferences(preferences);
     } catch (error) {
       console.warn('Failed to save order preferences:', error);
@@ -454,10 +372,18 @@ export default class OrderManager {
     try {
       const preferences = loadPreferences();
       if (preferences && preferences.layoutOrder) {
+        // Validate vertical layout — old format was ['compass', 'result'], new has belt IDs
+        const vertical = preferences.layoutOrder.vertical;
+        if (vertical && !BELT_IDS.some(id => vertical.includes(id))) {
+          preferences.layoutOrder.vertical = ['compass', 'pitch', 'degree', 'intervals', 'chromatic'];
+        }
         appState.belts.layoutOrder = preferences.layoutOrder;
       }
       if (preferences && preferences.beltOrder) {
         appState.belts.order = preferences.beltOrder;
+      }
+      if (preferences && typeof preferences.resultAboveCompass === 'boolean') {
+        appState.belts.resultAboveCompass = preferences.resultAboveCompass;
       }
     } catch (error) {
       console.warn('Failed to load order preferences:', error);
@@ -485,25 +411,25 @@ export default class OrderManager {
    */
   _animateReorder(targetItem: HTMLElement) {
     if (!this.container || !this.draggedItem || !targetItem) return;
-    
+
     const draggedItem = this.draggedItem;
     const items = Array.from(this.container.querySelectorAll<HTMLElement>('.order-item'));
     const draggedIndex = items.indexOf(draggedItem);
     const targetIndex = items.indexOf(targetItem);
-    
+
     if (draggedIndex === -1 || targetIndex === -1) return;
-    
+
     // Determine drop position
     const insertBefore = draggedIndex > targetIndex;
-    
+
     items.forEach((item, index) => {
       if (item === draggedItem) {
         // Keep dragged item in place visually
         return;
       }
-      
+
       let translateY = 0;
-      
+
       if (insertBefore) {
         // Dragging from bottom to top
         if (index >= targetIndex && index < draggedIndex) {
@@ -515,12 +441,12 @@ export default class OrderManager {
           translateY = -(draggedItem.offsetHeight + 8); // negative height + gap
         }
       }
-      
+
       item.style.transform = `translateY(${translateY}px)`;
       item.style.transition = 'transform 0.2s ease';
     });
   }
-  
+
   /**
    * Reset all animation transforms
    */
@@ -586,8 +512,6 @@ export default class OrderManager {
     if (!this.draggedItem) {
       return;
     }
-
-    console.log('Touch start on drag handle:', this.draggedItem.dataset.component);
   }
 
   _handleTouchMove(event: TouchEvent) {
@@ -607,7 +531,6 @@ export default class OrderManager {
 
       // Create drag ghost
       this.dragGhost = this._createDragGhost(this.draggedItem, touch.clientX, touch.clientY);
-      console.log('Started touch dragging');
     }
 
     if (this.isDraggingTouch) {
@@ -641,7 +564,6 @@ export default class OrderManager {
 
     if (this.isDraggingTouch) {
       event.preventDefault();
-      console.log('Touch drag ended');
 
       // Perform the drop
       if (this.dragOverItem && this.dragOverItem !== this.draggedItem) {
@@ -650,7 +572,6 @@ export default class OrderManager {
         if (!draggedId || !targetId) {
           return;
         }
-        console.log(`Touch dropping ${draggedId} onto ${targetId}`);
 
         this._reorderComponents(draggedId, targetId);
         this._saveOrder();

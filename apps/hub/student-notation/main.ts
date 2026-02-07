@@ -6,7 +6,7 @@ const shouldInitDebug = (): boolean => {
   const override = (window as Window & { __initDebug?: boolean }).__initDebug;
   if (override === true) {return true;}
   if (override === false) {return false;}
-  return import.meta.env.DEV;
+  return false;
 };
 const log = (message: string, data?: unknown) => {
   if (!shouldInitDebug()) {return;}

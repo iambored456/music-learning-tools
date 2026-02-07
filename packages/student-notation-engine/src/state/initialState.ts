@@ -22,19 +22,19 @@ const DEFAULT_ADSR = {
  * Default filter settings
  */
 const DEFAULT_FILTER = {
-  enabled: false,
-  blend: 0.5,
-  cutoff: 0.5,
+  enabled: true,
+  blend: 1.0,
+  cutoff: 16,
   resonance: 0,
   type: 'lowpass',
-  mix: 1.0
+  mix: 0
 };
 
 /**
  * Default vibrato settings
  */
 const DEFAULT_VIBRATO = {
-  speed: 5,
+  speed: 0,
   span: 0
 };
 
@@ -42,7 +42,7 @@ const DEFAULT_VIBRATO = {
  * Default tremolo settings
  */
 const DEFAULT_TREMOLO = {
-  speed: 5,
+  speed: 0,
   span: 0
 };
 
@@ -52,13 +52,9 @@ const DEFAULT_TREMOLO = {
 function createDefaultTimbres(): TimbresMap {
   const colors = [
     '#4a90e2', // Blue
-    '#e24a4a', // Red
-    '#4ae24a', // Green
-    '#e2e24a', // Yellow
-    '#e24ae2', // Magenta
-    '#4ae2e2', // Cyan
-    '#e2a04a', // Orange
-    '#a04ae2'  // Purple
+    '#2d2d2d', // Black
+    '#d66573', // Red
+    '#68a03f'  // Green
   ];
 
   const timbres: TimbresMap = {};

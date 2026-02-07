@@ -20,7 +20,7 @@
 </script>
 
 <div class="tonic-selector">
-  <label for="tonic-select">Key:</label>
+  <label for="tonic-select">Pitch:</label>
   <select
     id="tonic-select"
     value={appState.state.tonic}

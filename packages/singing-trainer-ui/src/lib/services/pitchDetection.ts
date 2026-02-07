@@ -84,7 +84,6 @@ function animationLoop(): void {
     pitch > CONFIG.MIN_PITCH_HZ &&
     pitch < CONFIG.MAX_PITCH_HZ;
 
-  // Update pitch state
   if (isValidPitch) {
     const midi = frequencyToMidi(pitch);
     const detectedPitch: DetectedPitch = {

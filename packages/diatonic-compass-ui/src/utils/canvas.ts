@@ -93,34 +93,10 @@ export function checkCanvasSize(canvas: HTMLCanvasElement | null, dimensions: Ca
     const sizeChanged = currentSize === 0 || sizeDelta >= 2;
     const dprChanged = dimensions.dpr !== currentDpr;
 
-    if (sizeDelta > 50) { // Only log on significant changes
-      console.log('=== CANVAS CONTAINER DEBUG ===');
-      console.log('Vertical mode:', isVerticalMode);
-      console.log('Canvas size:', { width: canvas.width, height: canvas.height });
-      console.log('Container dimensions:', { containerWidth, containerHeight });
-      console.log('Viewport dimensions:', { viewportWidth, viewportHeight });
-      console.log('Calculated size:', newSize);
-      console.log('DOM Hierarchy (from canvas to body):');
-      hierarchy.forEach((elem, index) => {
-        console.log(`  ${index}: ${elem.tagName}${elem.id ? '#' + elem.id : ''}${elem.className ? '.' + elem.className.replace(/\s+/g, '.') : ''}`, {
-          dimensions: `${elem.width}x${elem.height}`,
-          styles: elem.style
-        });
-      });
-    }
-    
     // Skip if we have no meaningful change
     if (newSize === 0 || (!sizeChanged && !dprChanged)) {
       return false;
     }
-    
-    console.log('Canvas resize proceeding:', {
-      oldSize: dimensions.size,
-      newSize: newSize,
-      sizeChanged,
-      dprChanged,
-      difference: sizeDelta
-    });
 
     // Update dimensions
     dimensions.size = newSize;
@@ -132,14 +108,6 @@ export function checkCanvasSize(canvas: HTMLCanvasElement | null, dimensions: Ca
     const newBufferWidth = newSize * currentDpr;
     const newBufferHeight = newSize * currentDpr;
     
-    console.log('Setting canvas dimensions:', {
-      cssSize: `${newSize}px`,
-      bufferSize: `${newBufferWidth}x${newBufferHeight}`,
-      dpr: currentDpr,
-      beforeCSS: { width: canvas.style.width, height: canvas.style.height },
-      beforeBuffer: { width: canvas.width, height: canvas.height }
-    });
-    
     canvas.width = newBufferWidth;
     canvas.height = newBufferHeight;
 
@@ -147,12 +115,6 @@ export function checkCanvasSize(canvas: HTMLCanvasElement | null, dimensions: Ca
     canvas.style.width = `${newSize}px`;
     canvas.style.height = `${newSize}px`;
     
-    console.log('Canvas dimensions after setting:', {
-      cssSize: { width: canvas.style.width, height: canvas.style.height },
-      bufferSize: { width: canvas.width, height: canvas.height },
-      offsetSize: { width: canvas.offsetWidth, height: canvas.offsetHeight }
-    });
-
     return true;
 
   } catch (error) {
@@ -288,7 +250,6 @@ export function monitorCanvasContext(canvas: HTMLCanvasElement, onLost?: () => v
   };
   
   const handleContextRestored = () => {
-    console.log('Canvas context restored');
     if (onRestored) onRestored();
   };
   

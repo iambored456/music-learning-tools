@@ -41,10 +41,9 @@ export function initAudio(): Promise<void> {
     appState.playback.audioContext.addEventListener('statechange', () => {
       // Check if audioContext still exists (might be nulled during cleanup)
       if (!appState.playback.audioContext) return;
-      
+
       const state = appState.playback.audioContext.state;
-      console.log(`Audio context state changed to: ${state}`);
-      
+
       if (state === 'interrupted' || state === 'suspended') {
         // Try to resume after a brief delay
         setTimeout(() => {

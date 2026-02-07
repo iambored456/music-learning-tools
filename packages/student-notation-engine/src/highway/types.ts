@@ -58,6 +58,8 @@ export interface HighwayTargetNote {
   label?: string;
   /** Optional slide direction (for slide targets) */
   slideDirection?: SlideDirection;
+  /** If true, scrolling can pause at note start until valid input is detected */
+  waitForInput?: boolean;
   /** Start time in milliseconds from playback start */
   startTimeMs: number;
   /** Duration in milliseconds */
@@ -203,6 +205,11 @@ export interface NoteHighwayConfig {
   // === Input Configuration ===
   /** Enabled input sources */
   inputSources: InputSource[];
+  /**
+   * If true, highway can pause scroll progression at input targets until
+   * valid microphone input is detected for the target.
+   */
+  waitForInput?: boolean;
 
   // === Feedback Configuration ===
   /** Feedback collector configuration */
@@ -243,6 +250,10 @@ export interface NoteHighwayState {
   activeNotes: Set<string>;
   /** Playback start time from performance.now() */
   startTime: number | null;
+  /** Whether the highway is currently waiting for valid input before proceeding */
+  isWaitingForInput: boolean;
+  /** Current note id being waited on, if any */
+  waitingNoteId: string | null;
 }
 
 // ============================================================================
@@ -356,6 +367,8 @@ export type NoteHighwayEvent =
   | 'noteExited'      // Note exited judgment window
   | 'noteHit'         // Note was successfully hit
   | 'noteMissed'      // Note was missed
+  | 'waitStarted'     // Scroll wait started for a gated note
+  | 'waitEnded'       // Scroll wait ended after valid input
   | 'performanceComplete'; // All notes have been evaluated
 
 /**

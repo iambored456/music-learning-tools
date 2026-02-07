@@ -290,7 +290,6 @@
 </script>
 
 <div class="ultrastar-panel">
-  <h3 class="panel-title">Ultrastar Song</h3>
 
   <!-- Hidden file input -->
   <input
@@ -421,15 +420,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
-  }
-
-  .panel-title {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin: 0;
   }
 
   .upload-btn {

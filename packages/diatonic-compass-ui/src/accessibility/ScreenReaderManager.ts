@@ -85,7 +85,6 @@ export class ScreenReaderManager {
       this.enhanceExistingElements();
       this.setupStateMonitoring();
       
-      console.log('Screen reader support initialized');
     } catch (error) {
       ErrorHandler.handle(error, CONFIG.ERROR_HANDLING.CONTEXTS.UI);
     }

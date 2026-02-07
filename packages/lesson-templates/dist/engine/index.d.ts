@@ -6,7 +6,7 @@
  */
 import type { AnyLessonTemplate, LessonStep, LessonStepper } from '../types.js';
 import type { LessonContext } from './controllers.js';
-export type { GridController, GridOverlay, GridLabelMode, AudioController, UiController, UiOverlay, LessonContext, } from './controllers.js';
+export type { GridController, GridOverlay, GridLabelMode, AudioController, UiController, UiOverlay, LessonContext, AvatarExpression, AvatarSpeakOptions, } from './controllers.js';
 export { createStepper, LinearStepper } from './stepper.js';
 /** Engine state interface */
 export interface LessonEngineState {

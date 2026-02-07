@@ -99,10 +99,11 @@ export const appState: AppState = {
     init: false,            // Whether belts are initialized
     orientation: 'horizontal', // 'horizontal' or 'vertical'
     order: ['pitch', 'degree', 'intervals', 'chromatic'], // Order of belt display
+    resultAboveCompass: false, // In vertical mode: result (Mode Name) above or below compass
     // Layout order for all components
     layoutOrder: {
       horizontal: ['compass', 'pitch', 'degree', 'intervals', 'chromatic', 'result'],
-      vertical: ['compass', 'result'] // result contains the belts as children
+      vertical: ['compass', 'pitch', 'degree', 'intervals', 'chromatic'] // compass = compass+result column; belts are individual columns
     }
   },
   

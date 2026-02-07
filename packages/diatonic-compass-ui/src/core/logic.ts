@@ -354,7 +354,6 @@ export function clearLogicCaches() {
   try {
     generateDisplayLabels.clearCache();
     calculateMusicalResult.clearCache();
-    console.log('Logic caches cleared');
   } catch (error) {
     ErrorHandler.handle(error, 'Logic');
   }

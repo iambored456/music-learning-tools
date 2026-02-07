@@ -87,6 +87,8 @@ export function createTransportService(config: TransportConfig): TransportServic
   let timeMapCalculator: TimeMapCalculatorInstance | null = null;
   let drumManager: DrumManagerInstance | null = null;
   let lastAppliedTempoMultiplier = 1.0;
+  let rescheduleTimerId: ReturnType<typeof setTimeout> | null = null;
+  const RESCHEDULE_DEBOUNCE_MS = 50;
 
   // Event listener cleanup
   const eventCleanups: Array<() => void> = [];
@@ -181,6 +183,10 @@ export function createTransportService(config: TransportConfig): TransportServic
     });
 
     log.debug('TransportService', 'scheduleNotes', `Finished scheduling ${state.placedNotes.length} notes, ${stampPlaybackData.length} stamps, and ${tripletPlaybackData.length} triplets`);
+
+    if (typeof window !== 'undefined' && (window as any).__audioDiag) {
+      console.log(`[AudioDiag] SCHEDULE | notes=${state.placedNotes.length} stamps=${stampPlaybackData.length} triplets=${tripletPlaybackData.length} | ctx=${Tone.context?.state} | transport=${Tone.Transport.state}`);
+    }
   }
 
   /**
@@ -639,11 +645,19 @@ export function createTransportService(config: TransportConfig): TransportServic
       const transportState = Tone.Transport.state;
 
       if (transportState === 'started') {
-        log.debug('TransportService', 'handleStateChange: Notes or rhythm changed during playback. Rescheduling');
-        const currentPosition = Tone.Transport.position;
-        Tone.Transport.pause();
-        scheduleNotes();
-        Tone.Transport.start(undefined, currentPosition);
+        // Debounce rapid-fire state changes (e.g. placing many notes) to avoid
+        // repeated Transport.cancel() + scheduleNotes() cycles that saturate the audio thread.
+        if (rescheduleTimerId !== null) {
+          clearTimeout(rescheduleTimerId);
+        }
+        rescheduleTimerId = setTimeout(() => {
+          rescheduleTimerId = null;
+          log.debug('TransportService', 'handleStateChange: Rescheduling after debounce');
+          const currentPosition = Tone.Transport.position;
+          Tone.Transport.pause();
+          scheduleNotes();
+          Tone.Transport.start(undefined, currentPosition);
+        }, RESCHEDULE_DEBOUNCE_MS);
       } else {
         timeMapCalculator?.calculate(stateCallbacks.getState());
       }
@@ -723,6 +737,11 @@ export function createTransportService(config: TransportConfig): TransportServic
 
     stop(): void {
       log.info('TransportService', 'Stopping playback and clearing visuals');
+
+      if (rescheduleTimerId !== null) {
+        clearTimeout(rescheduleTimerId);
+        rescheduleTimerId = null;
+      }
 
       shouldAnimatePlayhead = false;
       if (playheadAnimationFrame) {

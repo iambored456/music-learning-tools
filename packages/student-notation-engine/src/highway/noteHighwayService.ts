@@ -31,6 +31,7 @@ const DEFAULT_CONFIG: Partial<NoteHighwayConfig> = {
   playTargetNotes: true,
   playMetronome: false,
   inputSources: ['microphone'],
+  waitForInput: false,
   feedbackConfig: {
     onsetToleranceMs: 100,
     releaseToleranceMs: 150,
@@ -70,6 +71,8 @@ export function createNoteHighwayService(
     targetNotes: [],
     activeNotes: new Set(),
     startTime: null,
+    isWaitingForInput: false,
+    waitingNoteId: null,
   };
 
   // Feedback collector
@@ -80,6 +83,8 @@ export function createNoteHighwayService(
 
   // Track which notes have entered/exited judgment window
   const notesInWindow = new Set<string>();
+  const waitSatisfiedNotes = new Set<string>();
+  let waitStartedAtPerf: number | null = null;
 
   // ============================================================================
   // Helper Functions
@@ -115,6 +120,114 @@ export function createNoteHighwayService(
     const adjustedTimeMs = timeMs + onrampDurationMs;
 
     return (adjustedTimeMs * pixelsPerMs) - judgmentLineX;
+  }
+
+  function isFiniteMidi(value: number | undefined): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
+  function getTargetKind(note: HighwayTargetNote) {
+    return note.targetKind ?? 'fixedPitch';
+  }
+
+  function isSampleVoiced(sample: PitchSample): boolean {
+    if (!isFiniteMidi(sample.midi) || sample.midi <= 0) {
+      return false;
+    }
+    if (
+      typeof sample.amplitudeDb === 'number' &&
+      typeof finalConfig.feedbackConfig.minAmplitudeDb === 'number'
+    ) {
+      return sample.amplitudeDb >= finalConfig.feedbackConfig.minAmplitudeDb;
+    }
+    return true;
+  }
+
+  function isSampleValidForWait(note: HighwayTargetNote, sample: PitchSample): boolean {
+    const targetKind = getTargetKind(note);
+    const pitchToleranceCents = finalConfig.feedbackConfig.pitchToleranceCents;
+
+    if (!isSampleVoiced(sample)) {
+      return false;
+    }
+
+    if (targetKind === 'fixedPitch') {
+      if (!isFiniteMidi(note.midi)) return false;
+      const centDeviation = Math.abs((sample.midi - note.midi) * 100);
+      return centDeviation <= pitchToleranceCents;
+    }
+
+    if (targetKind === 'windowBand') {
+      if (!isFiniteMidi(note.minMidi) || !isFiniteMidi(note.maxMidi)) return false;
+      const minMidi = Math.min(note.minMidi, note.maxMidi);
+      const maxMidi = Math.max(note.minMidi, note.maxMidi);
+      const tolerance = finalConfig.feedbackConfig.bandToleranceSemitones ?? 0;
+      return sample.midi >= minMidi - tolerance && sample.midi <= maxMidi + tolerance;
+    }
+
+    if (targetKind === 'windowAnyPitch') {
+      if (isFiniteMidi(note.minMidi) && isFiniteMidi(note.maxMidi)) {
+        const minMidi = Math.min(note.minMidi, note.maxMidi);
+        const maxMidi = Math.max(note.minMidi, note.maxMidi);
+        const tolerance = finalConfig.feedbackConfig.bandToleranceSemitones ?? 0;
+        return sample.midi >= minMidi - tolerance && sample.midi <= maxMidi + tolerance;
+      }
+      return true;
+    }
+
+    // slideWindow: any voiced sample qualifies to release wait gate.
+    return true;
+  }
+
+  function getWaitCandidateNote(): HighwayTargetNote | null {
+    if (!finalConfig.waitForInput || !state.onrampComplete) {
+      return null;
+    }
+
+    const tolerance = finalConfig.feedbackConfig.onsetToleranceMs;
+    for (const note of state.targetNotes) {
+      if (!note.waitForInput || waitSatisfiedNotes.has(note.id)) {
+        continue;
+      }
+      const noteEndMs = note.startTimeMs + note.durationMs + tolerance;
+      if (state.currentTimeMs >= note.startTimeMs && state.currentTimeMs <= noteEndMs) {
+        return note;
+      }
+    }
+    return null;
+  }
+
+  function beginWait(note: HighwayTargetNote): void {
+    if (state.isWaitingForInput) return;
+    state.currentTimeMs = note.startTimeMs;
+    state.scrollOffset = calculateScrollOffset(state.currentTimeMs);
+    state.isWaitingForInput = true;
+    state.waitingNoteId = note.id;
+    waitStartedAtPerf = performance.now();
+    eventCallbacks.emit('waitStarted', { noteId: note.id, note });
+    logger?.info('NoteHighway', `Wait started for note: ${note.id}`, {
+      noteId: note.id,
+      targetKind: note.targetKind,
+    });
+  }
+
+  function endWait(noteId: string, note: HighwayTargetNote): void {
+    if (!state.isWaitingForInput || state.waitingNoteId !== noteId) {
+      return;
+    }
+    if (state.startTime !== null && waitStartedAtPerf !== null) {
+      // Shift timeline origin so visual time does not jump after waiting.
+      state.startTime += performance.now() - waitStartedAtPerf;
+    }
+    state.isWaitingForInput = false;
+    state.waitingNoteId = null;
+    waitStartedAtPerf = null;
+    waitSatisfiedNotes.add(noteId);
+    eventCallbacks.emit('waitEnded', { noteId, note });
+    logger?.info('NoteHighway', `Wait ended for note: ${noteId}`, {
+      noteId,
+      targetKind: note.targetKind,
+    });
   }
 
   /**
@@ -237,11 +350,13 @@ export function createNoteHighwayService(
     const now = performance.now();
     const onrampDurationMs = getOnrampDurationMs();
 
-    // Calculate current time (can be negative during onramp)
-    state.currentTimeMs = (now - state.startTime) - onrampDurationMs;
+    if (!state.isWaitingForInput) {
+      // Calculate current time (can be negative during onramp)
+      state.currentTimeMs = (now - state.startTime) - onrampDurationMs;
 
-    // Update scroll offset
-    state.scrollOffset = calculateScrollOffset(state.currentTimeMs);
+      // Update scroll offset
+      state.scrollOffset = calculateScrollOffset(state.currentTimeMs);
+    }
 
     // Update onramp
     updateOnramp();
@@ -251,6 +366,14 @@ export function createNoteHighwayService(
 
     // Update judgment window
     updateJudgmentWindow();
+
+    // Engage wait gate after note becomes active at the judgment line.
+    if (!state.isWaitingForInput) {
+      const waitNote = getWaitCandidateNote();
+      if (waitNote) {
+        beginWait(waitNote);
+      }
+    }
 
     // Continue animation
     animationFrameId = requestAnimationFrame(animate);
@@ -294,8 +417,12 @@ export function createNoteHighwayService(
       state.onrampComplete = false;
       state.activeNotes.clear();
       state.startTime = performance.now();
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
+      waitStartedAtPerf = null;
 
       notesInWindow.clear();
+      waitSatisfiedNotes.clear();
       feedbackCollector.reset();
 
       startAnimation();
@@ -335,8 +462,12 @@ export function createNoteHighwayService(
       state.onrampComplete = false;
       state.activeNotes.clear();
       state.startTime = null;
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
+      waitStartedAtPerf = null;
 
       notesInWindow.clear();
+      waitSatisfiedNotes.clear();
       stopAnimation();
       visualCallbacks?.clearCanvas?.();
       visualCallbacks?.clearOnrampCountdown?.();
@@ -354,6 +485,9 @@ export function createNoteHighwayService(
     setScrollOffset(timeMs: number): void {
       state.currentTimeMs = timeMs;
       state.scrollOffset = calculateScrollOffset(timeMs);
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
+      waitStartedAtPerf = null;
 
       if (state.isPlaying) {
         // Adjust start time to sync with new position
@@ -375,6 +509,16 @@ export function createNoteHighwayService(
         amplitudeDb,
         source,
       };
+
+      if (state.isWaitingForInput && state.waitingNoteId) {
+        const waitingNote = state.targetNotes.find(n => n.id === state.waitingNoteId);
+        if (waitingNote && isSampleValidForWait(waitingNote, sample)) {
+          endWait(waitingNote.id, waitingNote);
+          feedbackCollector.recordPitchSample(sample);
+          return;
+        }
+        return;
+      }
 
       feedbackCollector.recordPitchSample(sample);
     },
@@ -410,7 +554,11 @@ export function createNoteHighwayService(
       feedbackCollector.dispose();
       state.targetNotes = [];
       state.activeNotes.clear();
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
       notesInWindow.clear();
+      waitSatisfiedNotes.clear();
+      waitStartedAtPerf = null;
       logger?.info('NoteHighway', 'Service disposed', null);
     },
   };

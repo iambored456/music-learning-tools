@@ -625,7 +625,7 @@
       resizeObserver.observe(canvasWrapper);
     }
 
-    console.log('[Svelte] PrintPreviewBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] PrintPreviewBridge mounted');
   });
 
   onDestroy(() => {
@@ -651,7 +651,7 @@
     // Disconnect resize observer
     resizeObserver?.disconnect();
 
-    console.log('[Svelte] PrintPreviewBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] PrintPreviewBridge unmounted');
   });
 </script>
 

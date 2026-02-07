@@ -51,6 +51,7 @@ export default class App {
     
     try {
       this._initializeApp();
+
     } catch (error) {
       ErrorHandler.handle(error, 'App', () => {
         console.error('Failed to initialize app');
@@ -129,7 +130,6 @@ export default class App {
         this._showKeyboardHelp();
       }, 'UI'),
       onOrderChange: ErrorHandler.wrap((layoutOrder: AppState['belts']['layoutOrder'], beltOrder?: BeltId[]) => {
-        console.log('Order change triggered:', { layoutOrder, beltOrder });
         this._applyComponentOrder(layoutOrder, beltOrder);
       }, 'UI'),
       onSetCursorColor: ErrorHandler.wrap((color: CursorColor, hasFill: boolean) => {
@@ -198,9 +198,8 @@ export default class App {
     try {
       // Try to load accessibility modules dynamically
       this._loadAccessibilityModules().then(() => {
-        console.log('Accessibility features loaded');
+        // Accessibility features loaded
       }).catch(() => {
-        console.log('Using basic accessibility features');
         this._setupBasicAccessibility();
       });
       
@@ -363,240 +362,83 @@ export default class App {
    * Apply component order changes to the actual layout
    */
   _applyComponentOrder(layoutOrder: AppState['belts']['layoutOrder'], beltOrder?: BeltId[]) {
-    console.log('Applying component order:', { layoutOrder, beltOrder });
-    
     const currentOrientation = this.state.belts.orientation;
     const order = layoutOrder[currentOrientation];
-    console.log(`Current orientation: ${currentOrientation}, order:`, order);
-    
-    // Always restore structure first before applying new layout
-    let container = this.container.querySelector<HTMLElement>('.main-container');
-    if (!container) {
-      container = document.querySelector<HTMLElement>('.main-container');
-    }
-    if (container) {
-      this._restoreOriginalStructure(container);
-    }
-    
-    if (currentOrientation === 'horizontal') {
-      console.log('Calling _applyHorizontalOrder');
-      this._applyHorizontalOrder(order);
-    } else {
-      console.log('Calling _applyVerticalOrder');
-      this._applyVerticalOrder(order);
-    }
-    
-    // Apply belt order within belts container (after structure is established)
-    if (beltOrder) {
-      console.log('Applying belt order:', beltOrder);
-      this._applyBeltOrder(beltOrder);
-    }
-  }
 
-  /**
-   * Apply horizontal layout order
-   */
-  _applyHorizontalOrder(order: string[]) {
-    console.log('_applyHorizontalOrder called with order:', order);
-    
-    // Try multiple ways to find the main container
-    let container = this.container.querySelector<HTMLElement>('.main-container');
-    if (!container) {
-      container = document.querySelector<HTMLElement>('.main-container');
-    }
-    if (!container) {
-      console.log('ERROR: main-container not found anywhere');
-      console.log('this.container is:', this.container);
-      return;
-    }
-
-    console.log('Container element:', container);
-    console.log('Container classes:', container.className);
-    console.log('Container computed styles before:', {
-      display: getComputedStyle(container).display,
-      flexDirection: getComputedStyle(container).flexDirection,
-      width: getComputedStyle(container).width,
-      height: getComputedStyle(container).height
-    });
-
-    // Get all components including individual belts
-    const beltsContainer = container.querySelector<HTMLElement>('.belts-container');
-    const components: Record<string, HTMLElement | null> = {
-      compass: container.querySelector<HTMLElement>('.wheel-container'),
-      result: container.querySelector<HTMLElement>('#result-container'),
-      pitch: beltsContainer?.querySelector<HTMLElement>('.pitch-belt') || null,
-      degree: beltsContainer?.querySelector<HTMLElement>('.degree-belt') || null,
-      intervals: beltsContainer?.querySelector<HTMLElement>('.interval-brackets-wrapper') || null,
-      chromatic: beltsContainer?.querySelector<HTMLElement>('.chromatic-belt') || null
-    };
-
-    console.log('Found components:', Object.keys(components).reduce((acc, key) => {
-      acc[key] = !!components[key];
-      return acc;
-    }, {} as Record<string, boolean>));
-
-    console.log('Components dimensions before flattening:', {
-      compass: components.compass ? {
-        width: components.compass.offsetWidth,
-        height: components.compass.offsetHeight,
-        display: getComputedStyle(components.compass).display
-      } : null,
-      beltsContainer: beltsContainer ? {
-        width: beltsContainer.offsetWidth,
-        height: beltsContainer.offsetHeight,
-        display: getComputedStyle(beltsContainer).display
-      } : null
-    });
-
-    // Temporarily move belts out of belts-container to be direct children
-    const belts = ['pitch', 'degree', 'intervals', 'chromatic'];
-    const beltElements: HTMLElement[] = [];
-    
-    belts.forEach(beltId => {
-      const element = components[beltId];
-      if (element) {
-        // Store original parent and position for later restoration
-        element._originalParent = element.parentNode;
-        element._originalNextSibling = element.nextSibling;
-        
-        // Move to main container temporarily
-        container.appendChild(element);
-        beltElements.push(element);
-      }
-    });
-
-    // Hide the now-empty belts container
-    if (beltsContainer) {
-      beltsContainer.style.display = 'none';
-    }
-
-    console.log('After flattening, container children:', Array.from(container.children).map(child => {
-      const element = child as HTMLElement;
-      return {
-        tagName: element.tagName,
-        className: element.className,
-        id: element.id,
-        display: getComputedStyle(element).display,
-        flex: getComputedStyle(element).flex,
-        width: element.offsetWidth,
-        height: element.offsetHeight
-      };
-    }));
-
-    // Apply order to all individual components
-    order.forEach((componentId: string, index: number) => {
-      const element = components[componentId];
-      if (element) {
-        element.style.setProperty('order', String(index + 1), 'important');
-        console.log(`Set order ${index + 1} for component:`, componentId);
-        console.log(`Element after order applied:`, {
-          width: element.offsetWidth,
-          height: element.offsetHeight,
-          display: getComputedStyle(element).display,
-          flex: getComputedStyle(element).flex,
-          order: getComputedStyle(element).order
-        });
-      }
-    });
-
-    console.log('Container computed styles after:', {
-      display: getComputedStyle(container).display,
-      flexDirection: getComputedStyle(container).flexDirection,
-      width: getComputedStyle(container).width,
-      height: getComputedStyle(container).height
-    });
-
-    // Store the flattened state so we can restore later
-    container._isFlattened = true;
-    container._beltElements = beltElements;
-    container._beltsContainer = beltsContainer;
-  }
-
-  /**
-   * Apply vertical layout order 
-   */
-  _applyVerticalOrder(order: string[]) {
-    // In vertical mode, restore DOM structure and only reorder compass vs belts group
     let container = this.container.querySelector<HTMLElement>('.main-container');
     if (!container) {
       container = document.querySelector<HTMLElement>('.main-container');
     }
     if (!container) return;
 
-    // First, restore the DOM structure if it was flattened
-    this._restoreOriginalStructure(container);
+    // With display:contents on wrappers, all 6 items participate in the parent flex layout.
+    // No DOM flattening needed — just set CSS order.
+    const compassResultContainer = container.querySelector<HTMLElement>('.compass-result-container');
+    const components: Record<string, HTMLElement | null> = {
+      compass: container.querySelector<HTMLElement>('.wheel-container'),
+      result: container.querySelector<HTMLElement>('#result-container'),
+      pitch: container.querySelector<HTMLElement>('.pitch-belt'),
+      degree: container.querySelector<HTMLElement>('.degree-belt'),
+      intervals: container.querySelector<HTMLElement>('.interval-brackets-wrapper'),
+      chromatic: container.querySelector<HTMLElement>('.chromatic-belt'),
+    };
 
-    const compassIndex = order.indexOf('compass');
-    const resultIndex = order.indexOf('result');
-    
-    console.log('Vertical layout indices:', {
-      order,
-      compassIndex,
-      resultIndex,
-      compassFirst: compassIndex < resultIndex
-    });
-    
-    // The mapping should be intuitive:
-    // - Sidebar TOP (compass first) → Main app LEFT 
-    // - Sidebar BOTTOM (compass last) → Main app RIGHT
-    // BUT user expects the opposite behavior based on feedback
-    
-    if (compassIndex > resultIndex) {
-      // Compass comes AFTER result in sidebar (bottom) → put compass on LEFT in main app
-      container.style.gridTemplateAreas = `
-        "wheel belts"
-        "wheel result"
-      `;
-      console.log('Applied vertical order: compass left, belts right (compass after result)');
+    if (currentOrientation === 'horizontal') {
+      // Horizontal: all 6 items are flat flex children (wrappers use display:contents)
+      // Clear any grid-template-areas from vertical mode
+      container.style.removeProperty('grid-template-areas');
+
+      order.forEach((componentId: string, index: number) => {
+        const element = components[componentId];
+        if (element) {
+          element.style.setProperty('order', String(index + 1), 'important');
+        }
+      });
     } else {
-      // Compass comes BEFORE result in sidebar (top) → put belts on LEFT in main app  
-      container.style.gridTemplateAreas = `
-        "belts wheel"
-        "result wheel"
-      `;
-      console.log('Applied vertical order: belts left, compass right (compass before result)');
+      // Vertical: 5 columns — compass-result-container + 4 belt columns
+      // order = ['compass', 'pitch', 'degree', 'intervals', 'chromatic']
+      // Clear horizontal order styles first
+      Object.values(components).forEach(el => {
+        if (el) el.style.removeProperty('order');
+      });
+
+      // Set compass-result-container order from compass position
+      if (compassResultContainer) {
+        const compassIdx = order.indexOf('compass');
+        compassResultContainer.style.setProperty('order', String(compassIdx + 1), 'important');
+      }
+
+      // Order individual belts
+      ['pitch', 'degree', 'intervals', 'chromatic'].forEach(id => {
+        const el = components[id];
+        const idx = order.indexOf(id);
+        if (el && idx >= 0) {
+          el.style.setProperty('order', String(idx + 1), 'important');
+        }
+      });
+
+      // Position result above or below compass within the wrapper
+      const resultEl = components.result;
+      const compassEl = components.compass;
+      if (resultEl && compassEl) {
+        const above = this.state.belts.resultAboveCompass;
+        resultEl.style.setProperty('order', above ? '1' : '10');
+        compassEl.style.setProperty('order', above ? '10' : '1');
+      }
+    }
+
+    // Apply belt order within belts container
+    if (beltOrder) {
+      this._applyBeltOrder(beltOrder);
     }
   }
 
-  /**
-   * Restore original DOM structure (belts back to belts-container)
-   */
-  _restoreOriginalStructure(container: HTMLElement) {
-    if (!container._isFlattened) return;
-
-    console.log('Restoring original DOM structure');
-    
-    // Restore belts to their original container
-    if (container._beltElements && container._beltsContainer) {
-      container._beltElements.forEach((element: HTMLElement) => {
-        // Clear the temporary order style
-        element.style.removeProperty('order');
-        
-        // Restore to original position
-        const originalParent = element._originalParent as ParentNode | null | undefined;
-        if (!originalParent) {
-          return;
-        }
-
-        if (element._originalNextSibling) {
-          originalParent.insertBefore(element, element._originalNextSibling);
-        } else {
-          originalParent.appendChild(element);
-        }
-        
-        // Clean up temp properties
-        delete element._originalParent;
-        delete element._originalNextSibling;
-      });
-
-      // Show the belts container again
-      container._beltsContainer.style.display = '';
-    }
-
-    // Clean up container temp properties
-    delete container._isFlattened;
-    delete container._beltElements;
-    delete container._beltsContainer;
+  _setBeltsOpacity(opacity: string) {
+    const beltsContainer = this.elements.beltsContainer;
+    if (!beltsContainer) return;
+    beltsContainer.querySelectorAll<HTMLElement>('.belt, .interval-brackets-wrapper').forEach(el => {
+      el.style.opacity = opacity;
+    });
   }
 
   /**
@@ -618,7 +460,7 @@ export default class App {
       const element = belts[beltId];
       if (element) {
         element.style.setProperty('order', String(index + 1), 'important');
-        console.log(`Set belt order ${index + 1} for belt:`, beltId);
+
       }
     });
   }
@@ -761,9 +603,7 @@ Focus the wheel or belts first, then use arrow keys to rotate rings.
       if (!isResizing) {
         isResizing = true;
         // Hide belts during resize to prevent misalignment
-        if (this.elements.beltsContainer) {
-          this.elements.beltsContainer.style.opacity = '0';
-        }
+        this._setBeltsOpacity('0');
       }
     };
 
@@ -786,9 +626,7 @@ Focus the wheel or belts first, then use arrow keys to rotate rings.
 
         // Show belts again after a short delay to allow recalculation
         requestAnimationFrame(() => {
-          if (this.elements.beltsContainer) {
-            this.elements.beltsContainer.style.opacity = '1';
-          }
+          this._setBeltsOpacity('1');
           isResizing = false;
         });
       } catch (error) {
@@ -796,9 +634,7 @@ Focus the wheel or belts first, then use arrow keys to rotate rings.
           console.warn('Resize handling failed');
         });
         // Ensure belts are shown even on error
-        if (this.elements.beltsContainer) {
-          this.elements.beltsContainer.style.opacity = '1';
-        }
+        this._setBeltsOpacity('1');
         isResizing = false;
       }
     }, 250); // 250ms debounce - increased for better performance on low-end devices
@@ -841,7 +677,6 @@ Focus the wheel or belts first, then use arrow keys to rotate rings.
         if (lowFPSCount >= FPS_CHECK_THRESHOLD && !this.state.performance.isLowPowerMode) {
           this.state.performance.isLowPowerMode = true;
           document.body.classList.add('low-power-mode');
-          console.log('Low-power mode enabled due to poor performance');
           this._announceChange('Performance mode adjusted for this device');
         }
       } else if (fps >= 50) {
@@ -852,7 +687,6 @@ Focus the wheel or belts first, then use arrow keys to rotate rings.
         if (lowFPSCount === 0 && this.state.performance.isLowPowerMode) {
           this.state.performance.isLowPowerMode = false;
           document.body.classList.remove('low-power-mode');
-          console.log('Low-power mode disabled - performance improved');
         }
       }
     }, 120); // Check every 2 seconds

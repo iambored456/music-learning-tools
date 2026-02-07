@@ -35,6 +35,8 @@ export default class Belts {
     diatonic: string | null;
   };
   _chromaticColorsApplied: boolean;
+  _beltCursors: HTMLElement[];
+  _beltFlashes: HTMLElement[];
 
   constructor(container: HTMLElement, state: AppState, onInteractionEnd: () => void) {
     this.container = container;
@@ -50,9 +52,28 @@ export default class Belts {
       intervalBracketsTrackContainer: container.querySelector<HTMLElement>('#intervalBracketsContainer'),
       intervalBracketsWrapper: container.querySelector<HTMLElement>('.interval-brackets-wrapper'),
       intervalBrackets: null, // Will be set after track is created
-      cursor: container.querySelector<HTMLElement>('#belt-cursor'),
-      flashOverlay: container.querySelector<HTMLElement>('#belt-flash-overlay'),
+      cursor: null, // Legacy single cursor removed — per-belt cursors used instead
+      flashOverlay: null, // Legacy single flash removed — per-belt flashes used instead
     };
+
+    // Create per-belt cursor and flash overlay elements
+    this._beltCursors = [];
+    this._beltFlashes = [];
+    const beltElements = [this.elements.pitchBelt, this.elements.degreeBelt, this.elements.chromaticBelt];
+    for (const belt of beltElements) {
+      if (!belt) continue;
+      const cursor = document.createElement('div');
+      cursor.className = 'belt-cursor';
+      cursor.setAttribute('aria-hidden', 'true');
+      belt.appendChild(cursor);
+      this._beltCursors.push(cursor);
+
+      const flash = document.createElement('div');
+      flash.className = 'belt-flash-overlay';
+      flash.setAttribute('aria-hidden', 'true');
+      belt.appendChild(flash);
+      this._beltFlashes.push(flash);
+    }
 
     this.state.belts.tracks = {};
 
@@ -109,25 +130,13 @@ export default class Belts {
       return label;
     }
 
-    const orientation = this.state.belts.orientation;
+    const w = cell.offsetWidth;
+    const h = cell.offsetHeight;
 
-    // Debug: Log first occurrence of each belt type
-    const beltType = cell.closest('.belt')?.className || 'unknown';
-    if (cell.dataset.originalIndex === '1') {
-      console.log(`🔍 Format check [${beltType}] (${orientation}):`, {
-        label,
-        orientation,
-        decision: orientation === 'vertical' ? 'SIDE-BY-SIDE (vertical mode)' : 'STACKED (horizontal mode)'
-      });
-    }
-
-    // In vertical orientation mode, cells are wider - use side-by-side
-    // In horizontal orientation mode, cells are taller - use stacked
-    if (orientation === 'vertical') {
-      // Replace slash with space for side-by-side display
+    // If cell is wider than tall, display side-by-side; otherwise stack
+    if (w > h) {
       return label.replace('/', ' ');
     } else {
-      // Default: replace slash with line break for stacked display
       return label.replace('/', '<br>');
     }
   }
@@ -138,13 +147,7 @@ export default class Belts {
     const { orientation } = this.state.belts;
     const { diatonicLabels, chromaticLabels } = labels;
 
-    console.log('=== Belts.update CALLED ===', {
-      init: this.state.belts.init,
-      orientation
-    });
-
     if (!this.state.belts.init) {
-      console.log('Belts not initialized - setting up...');
       // Reset caches when belts are being reinitialized (e.g., orientation change)
       this.cachedCells = {
         pitch: null,
@@ -163,7 +166,6 @@ export default class Belts {
       requestAnimationFrame(() => {
         const sizesCalculated = this._calculateAllBeltCellWidths(orientation);
         if (sizesCalculated) {
-          console.log('Belt sizes calculated, marking as initialized');
           this.state.belts.init = true;
           // Force a redraw after initialization to apply colors
           import('../utils/StateTracker.ts').then(({ StateTracker }) => {
@@ -173,8 +175,6 @@ export default class Belts {
       });
       return;
     }
-
-    console.log('Belts initialized, applying styles...');
 
     const { pitchClass, degree, chromatic, highlightPosition } = this.state.rings;
     const { tracks, itemSize } = this.state.belts;
@@ -388,8 +388,6 @@ export default class Belts {
   }
   
   _applyBeltStyles(highlightPattern: number[], diatonicLabels: string[], chromaticLabels: string[]) {
-    console.log('=== _applyBeltStyles CALLED ===');
-
     // PERFORMANCE: Check if labels have changed to avoid redundant updates
     const chromaticKey = chromaticLabels.join(',');
     const diatonicKey = diatonicLabels.join(',');
@@ -402,38 +400,22 @@ export default class Belts {
     // PERFORMANCE: Cache cell queries on first run
     if (!this.cachedCells.pitch && this.state.belts.tracks.pitchBelt) {
       this.cachedCells.pitch = this.state.belts.tracks.pitchBelt.querySelectorAll<HTMLElement>('.belt-cell');
-      console.log('Cached pitch cells:', this.cachedCells.pitch.length);
     }
     if (!this.cachedCells.degree && this.state.belts.tracks.degreeBelt) {
       this.cachedCells.degree = this.state.belts.tracks.degreeBelt.querySelectorAll<HTMLElement>('.belt-cell');
-      console.log('Cached degree cells:', this.cachedCells.degree.length);
     }
     if (!this.cachedCells.chromaticColors && this.elements.chromaticColorsTrack) {
       this.cachedCells.chromaticColors = this.elements.chromaticColorsTrack.querySelectorAll<HTMLElement>('.belt-cell');
-      console.log('Cached chromatic color cells:', this.cachedCells.chromaticColors.length);
     }
     if (!this.cachedCells.chromaticNumbers && this.elements.chromaticNumbersTrack) {
       this.cachedCells.chromaticNumbers = this.elements.chromaticNumbersTrack.querySelectorAll<HTMLElement>('.belt-cell');
-      console.log('Cached chromatic number cells:', this.cachedCells.chromaticNumbers.length);
     }
-
-    console.log('Belt styling state:', {
-      isFirstRun,
-      labelsChanged,
-      hasPitchCells: !!this.cachedCells.pitch,
-      pitchCellCount: this.cachedCells.pitch?.length || 0,
-      hasDegreeCells: !!this.cachedCells.degree,
-      degreeCellCount: this.cachedCells.degree?.length || 0,
-      hasChromaticColors: !!this.cachedCells.chromaticColors,
-      chromaticColorCount: this.cachedCells.chromaticColors?.length || 0
-    });
 
     // Update pitch belt - always update labels to handle dimension changes
     const shouldUpdatePitch = (labelsChanged || isFirstRun) && this.cachedCells.pitch;
     const needsInitialColors = this.cachedCells.pitch && this.cachedCells.pitch.length > 0 && !this.cachedCells.pitch[0].style.background;
 
     if ((shouldUpdatePitch || needsInitialColors) && this.cachedCells.pitch) {
-      console.log('APPLYING PITCH BELT COLORS!', { shouldUpdatePitch, needsInitialColors, cellCount: this.cachedCells.pitch.length });
       this.cachedCells.pitch.forEach(cell => {
         const idx = this._getCellOriginalIndex(cell);
         if (idx === null) {
@@ -447,7 +429,6 @@ export default class Belts {
       });
     } else if (this.cachedCells.pitch && labelsChanged) {
       // Update labels even if colors don't need updating
-      console.log('UPDATING PITCH LABELS ONLY');
       this.cachedCells.pitch.forEach(cell => {
         const idx = this._getCellOriginalIndex(cell);
         if (idx === null) {
@@ -456,7 +437,6 @@ export default class Belts {
         cell.innerHTML = this._formatLabelForCell(chromaticLabels[idx], cell);
       });
     } else {
-      console.log('SKIPPED pitch belt colors:', { shouldUpdatePitch, needsInitialColors, hasCells: !!this.cachedCells.pitch });
     }
 
     // Update degree belt if labels changed OR first run OR cells just became available
@@ -464,7 +444,6 @@ export default class Belts {
     const needsInitialDegreeColors = this.cachedCells.degree && this.cachedCells.degree.length > 0 && !this.cachedCells.degree[0].style.background;
 
     if ((shouldUpdateDegree || needsInitialDegreeColors) && this.cachedCells.degree) {
-      console.log('APPLYING DEGREE BELT COLORS!', { shouldUpdateDegree, needsInitialDegreeColors, cellCount: this.cachedCells.degree.length });
       this.cachedCells.degree.forEach(cell => {
         const idx = this._getCellOriginalIndex(cell);
         if (idx === null) {
@@ -477,7 +456,6 @@ export default class Belts {
       });
     } else if (this.cachedCells.degree && labelsChanged) {
       // Update labels even if colors don't need updating
-      console.log('UPDATING DEGREE LABELS ONLY');
       this.cachedCells.degree.forEach(cell => {
         const idx = this._getCellOriginalIndex(cell);
         if (idx === null) {
@@ -486,19 +464,12 @@ export default class Belts {
         cell.innerHTML = this._formatLabelForCell(diatonicLabels[idx], cell);
       });
     } else {
-      console.log('SKIPPED degree belt colors:', { shouldUpdateDegree, needsInitialDegreeColors, hasCells: !!this.cachedCells.degree });
     }
 
     // Chromatic colors - apply on first run or when cells just became available
     const needsInitialChromatic = this.cachedCells.chromaticColors && this.cachedCells.chromaticColors.length > 0 && !this.cachedCells.chromaticColors[0].style.background;
 
     if ((!this._chromaticColorsApplied || isFirstRun || needsInitialChromatic) && this.cachedCells.chromaticColors) {
-      console.log('APPLYING CHROMATIC COLORS!', {
-        chromaticColorsApplied: this._chromaticColorsApplied,
-        isFirstRun,
-        needsInitialChromatic,
-        cellCount: this.cachedCells.chromaticColors.length
-      });
       this.cachedCells.chromaticColors.forEach(cell => {
         const idx = this._getCellOriginalIndex(cell);
         if (idx === null) {
@@ -508,12 +479,6 @@ export default class Belts {
       });
       this._chromaticColorsApplied = true;
     } else {
-      console.log('SKIPPED chromatic colors:', {
-        chromaticColorsApplied: this._chromaticColorsApplied,
-        isFirstRun,
-        needsInitialChromatic,
-        hasCells: !!this.cachedCells.chromaticColors
-      });
     }
 
     // Chromatic numbers need update each frame (ring-dependent)
@@ -586,26 +551,15 @@ export default class Belts {
   }
   
   _positionBeltCursorFromRingAngle(chromaticRingAngle: number, beltCellWidth: number, orientation: BeltOrientation) {
-    const beltCursor = this.elements.cursor;
-    console.log('=== Positioning belt cursor ===', {
-      hasCursor: !!beltCursor,
-      beltCellWidth,
-      orientation,
-      chromaticRingAngle
-    });
-
-    if (!beltCursor || !beltCellWidth) {
+    if (!this._beltCursors.length || !beltCellWidth) {
       console.warn('Cannot position cursor - missing element or cell width');
       return;
     }
 
-    // Update cursor colors from state
-    this._updateBeltCursorColors(beltCursor);
-
     const ringAngleToBeltPixels = this._calculateRingAngleToBeltPixelsRatio(beltCellWidth);
     if (ringAngleToBeltPixels === 0) {
       console.warn('Cannot position cursor - invalid pixel ratio');
-      return; // Early exit for invalid calculations
+      return;
     }
 
     const ringAngleAsBeltPixels = chromaticRingAngle * ringAngleToBeltPixels;
@@ -619,8 +573,10 @@ export default class Belts {
     }
 
     const transform = orientation === 'vertical' ? `translateY(${cursorBeltPosition}px)` : `translateX(${cursorBeltPosition}px)`;
-    beltCursor.style.transform = transform;
-    console.log('Belt cursor positioned:', { transform, cursorBeltPosition });
+    for (const cursor of this._beltCursors) {
+      this._updateBeltCursorColors(cursor);
+      cursor.style.transform = transform;
+    }
   }
 
   _updateBeltCursorColors(beltCursor: HTMLElement) {
@@ -641,25 +597,22 @@ export default class Belts {
   
   _updatePlaybackFlashOnBelt() {
       const { rings, playback, belts } = this.state;
-      const beltFlashOverlay = this.elements.flashOverlay;
       const beltCellWidth = belts.itemSize.chromaticBelt;
       const orientation = belts.orientation;
 
-      if (!beltFlashOverlay) {
+      if (!this._beltFlashes.length) return;
+
+      if (!beltCellWidth || !playback.isPlaying || playback.currentNoteIndex === null || playback.rootNoteIndexForPlayback === null) {
+        for (const flash of this._beltFlashes) flash.style.display = 'none';
         return;
       }
 
-      if (!beltCellWidth || !playback.isPlaying || playback.currentNoteIndex === null || playback.rootNoteIndexForPlayback === null) {
-        beltFlashOverlay.style.display = 'none';
-        return;
-      }
-      
       const ringAngleToBeltPixels = this._calculateRingAngleToBeltPixelsRatio(beltCellWidth);
       if (ringAngleToBeltPixels === 0) {
-        beltFlashOverlay.style.display = 'none';
-        return; // Early exit for invalid calculations
+        for (const flash of this._beltFlashes) flash.style.display = 'none';
+        return;
       }
-      
+
       let flashBeltPosition;
 
       if (orientation === 'vertical') {
@@ -673,10 +626,12 @@ export default class Belts {
           const totalRingAngle = rings.chromatic + (playback.currentNoteIndex - playback.rootNoteIndexForPlayback) * ANGLE_STEP;
           flashBeltPosition = totalRingAngle * ringAngleToBeltPixels;
       }
-      
+
       const transform = orientation === 'vertical' ? `translateY(${flashBeltPosition}px)` : `translateX(${flashBeltPosition}px)`;
-      beltFlashOverlay.style.transform = transform;
-      beltFlashOverlay.style.display = 'block';
+      for (const flash of this._beltFlashes) {
+        flash.style.transform = transform;
+        flash.style.display = 'block';
+      }
   }
 
   destroy() {

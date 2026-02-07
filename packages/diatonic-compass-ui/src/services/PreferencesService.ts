@@ -78,7 +78,6 @@ export function loadPreferences(): Preferences | null {
     
     // If validation changed the preferences, save the corrected version
     if (JSON.stringify(validated) !== json) {
-      console.log('Preferences were corrected during load - saving updated version');
       savePreferences(validated);
     }
     
@@ -89,7 +88,6 @@ export function loadPreferences(): Preferences | null {
       // Try to load from backup
       const backup = loadBackupPreferences();
       if (backup) {
-        console.log('Loaded preferences from backup');
         return backup;
       }
     });

@@ -34,6 +34,7 @@ export interface ExerciseConfig {
   bandHighMaxOffsetSemis?: number;
   holdBandSemitones?: number;
   minSlideSemitones?: number;
+  waitForInput?: boolean;
   showImmediateFeedback?: boolean;
   showScore?: boolean;
 }
@@ -47,6 +48,10 @@ export interface ExerciseState {
   currentLoop: number;
   currentInputIndex: number;
   currentPhase: ExercisePhase;
+  currentPhaseIndex: number;
+  currentPhaseLabel: string | null;
+  currentSegmentId: string | null;
+  currentSegmentName: string | null;
   currentPitch: number | null;
   generatedNotes: TargetNote[];
   results: ExerciseResult[];
@@ -58,8 +63,19 @@ export interface ExerciseResult {
   loopIndex: number;
   targetPitch: number | null;
   targetLabel?: string;
+  targetSegmentId?: string;
+  targetSegmentName?: string;
   performance: NotePerformance | null;
   accuracy: number; // 0-100%
+}
+
+export interface SegmentSummary {
+  segmentId: string;
+  segmentName: string;
+  total: number;
+  completed: number;
+  hits: number;
+  averageAccuracy: number;
 }
 
 const DEFAULT_CONFIG: ExerciseConfig = {
@@ -80,6 +96,7 @@ const DEFAULT_CONFIG: ExerciseConfig = {
   bandHighMaxOffsetSemis: 8,
   holdBandSemitones: 1,
   minSlideSemitones: 3,
+  waitForInput: false,
   showImmediateFeedback: true,
   showScore: true,
 };
@@ -91,6 +108,10 @@ const DEFAULT_STATE: ExerciseState = {
   currentLoop: 0,
   currentInputIndex: 0,
   currentPhase: 'reference',
+  currentPhaseIndex: 0,
+  currentPhaseLabel: null,
+  currentSegmentId: null,
+  currentSegmentName: null,
   currentPitch: null,
   generatedNotes: [],
   results: [],
@@ -158,6 +179,13 @@ function applyPitchMapping(config: ExerciseConfig): { minMidi: number; maxMidi: 
 function createExerciseState() {
   let state = $state<ExerciseState>({ ...DEFAULT_STATE });
 
+  type LessonMode =
+    | 'fixedPitch'
+    | 'windowAnyPitch'
+    | 'windowBand'
+    | 'slideWindow'
+    | 'holdSteady';
+
   function getActiveTemplate(config: ExerciseConfig): AnyLessonTemplate | null {
     if (!config.templateId) return null;
     return getTemplate(config.templateId) ?? null;
@@ -185,12 +213,28 @@ function createExerciseState() {
     return Math.round((minMidi + maxMidi) / 2);
   }
 
-  function getLessonMode(templateId?: string):
-    | 'fixedPitch'
-    | 'windowAnyPitch'
-    | 'windowBand'
-    | 'slideWindow'
-    | 'holdSteady' {
+  function isMergedFoundationsTemplate(templateId?: string): boolean {
+    return templateId === 'foundations-1-merged';
+  }
+
+  function getFoundationsBounds(
+    templateId: string | undefined,
+    speakingPitch: number | null
+  ): { min: number; max: number } | null {
+    if (!isMergedFoundationsTemplate(templateId)) {
+      return null;
+    }
+    if (typeof speakingPitch !== 'number' || !Number.isFinite(speakingPitch)) {
+      return null;
+    }
+    return { min: speakingPitch, max: speakingPitch + 17 };
+  }
+
+  function clampMidi(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function getLessonMode(templateId?: string): LessonMode {
     switch (templateId) {
       case 'foundations-1-1-vocal-on-off':
         return 'windowAnyPitch';
@@ -203,6 +247,20 @@ function createExerciseState() {
       default:
         return 'fixedPitch';
     }
+  }
+
+  function getPhaseMode(phase: ExercisePattern['phases'][number], fallbackMode: LessonMode): LessonMode {
+    const overrideMode = phase.targetMode;
+    if (
+      overrideMode === 'fixedPitch' ||
+      overrideMode === 'windowAnyPitch' ||
+      overrideMode === 'windowBand' ||
+      overrideMode === 'slideWindow' ||
+      overrideMode === 'holdSteady'
+    ) {
+      return overrideMode;
+    }
+    return fallbackMode;
   }
 
   function getBandOffsets(config: ExerciseConfig): {
@@ -229,18 +287,28 @@ function createExerciseState() {
     const loopDurationMicrobeats = getLoopDurationMicrobeats(pattern);
 
     // Apply speaking pitch mapping
-    const { minMidi, maxMidi } = applyPitchMapping(config);
-    const anchorPitch = getAnchorPitch(config, minMidi, maxMidi);
+    const mappedRange = applyPitchMapping(config);
+    const speakingPitch = preferencesStore.speakingPitchMidi;
+    const foundationsBounds = getFoundationsBounds(config.templateId, speakingPitch);
+    const minMidi = foundationsBounds
+      ? Math.max(mappedRange.minMidi, foundationsBounds.min)
+      : mappedRange.minMidi;
+    const maxMidi = foundationsBounds
+      ? Math.min(mappedRange.maxMidi, foundationsBounds.max)
+      : mappedRange.maxMidi;
+    const safeMaxMidi = Math.max(minMidi, maxMidi);
+    const anchorPitch = getAnchorPitch(config, minMidi, safeMaxMidi);
     const lessonMode = getLessonMode(config.templateId);
     const bandOffsets = getBandOffsets(config);
     const holdBandSemitones = config.holdBandSemitones ?? 1;
+    const waitForInputEnabled = config.waitForInput ?? false;
 
     // Add lead-in so notes don't start immediately
     const leadInMs = getLeadInMs(config);
     const loopDurationMs = loopDurationMicrobeats * microbeatDurationMs;
 
     for (let loop = 0; loop < config.numLoops; loop++) {
-      const pitch = randomPitch(minMidi, maxMidi);
+      const pitch = randomPitch(minMidi, safeMaxMidi);
       const loopStartTime = leadInMs + (loop * loopDurationMs);
       let cursorMs = loopStartTime;
       let bandIndex = 0;
@@ -248,6 +316,9 @@ function createExerciseState() {
 
       for (const phase of pattern.phases) {
         const durationMs = phase.durationMicrobeats * microbeatDurationMs;
+        const phaseMode = getPhaseMode(phase, lessonMode);
+        const phaseSegmentId = phase.segmentId;
+        const phaseSegmentName = phase.segmentName;
 
         if (phase.type === 'rest') {
           cursorMs += durationMs;
@@ -260,56 +331,103 @@ function createExerciseState() {
           durationMs,
           role,
           lyric: phase.emoji,
-          label: phase.emoji ? undefined : phase.label,
+          label: phase.label,
+          segmentId: phaseSegmentId,
+          segmentName: phaseSegmentName,
         };
 
-        if (lessonMode === 'fixedPitch') {
-          note.midi = pitch;
+        if (role === 'input') {
+          note.waitForInput = waitForInputEnabled && (phase.waitForInput ?? true);
+        }
+
+        if (phaseMode === 'fixedPitch') {
+          note.midi = foundationsBounds
+            ? clampMidi(pitch, foundationsBounds.min, foundationsBounds.max)
+            : pitch;
           note.targetKind = 'fixedPitch';
-        } else if (lessonMode === 'windowAnyPitch') {
+        } else if (phaseMode === 'windowAnyPitch') {
           if (role === 'reference') {
-            note.midi = anchorPitch;
+            note.midi = foundationsBounds
+              ? clampMidi(anchorPitch, foundationsBounds.min, foundationsBounds.max)
+              : anchorPitch;
             note.targetKind = 'fixedPitch';
           } else {
             note.targetKind = 'windowAnyPitch';
+            if (foundationsBounds) {
+              note.minMidi = foundationsBounds.min;
+              note.maxMidi = foundationsBounds.max;
+            }
           }
-        } else if (lessonMode === 'windowBand') {
-          const isLowBand = bandIndex % 2 === 0;
+        } else if (phaseMode === 'windowBand') {
+          const isLowBand = phase.bandRole
+            ? phase.bandRole === 'low'
+            : bandIndex % 2 === 0;
           const minOffset = isLowBand ? bandOffsets.lowMin : bandOffsets.highMin;
           const maxOffset = isLowBand ? bandOffsets.lowMax : bandOffsets.highMax;
-          const bandMin = anchorPitch + Math.min(minOffset, maxOffset);
-          const bandMax = anchorPitch + Math.max(minOffset, maxOffset);
+          let bandMin = anchorPitch + Math.min(minOffset, maxOffset);
+          let bandMax = anchorPitch + Math.max(minOffset, maxOffset);
+          if (foundationsBounds) {
+            bandMin = clampMidi(bandMin, foundationsBounds.min, foundationsBounds.max);
+            bandMax = clampMidi(bandMax, foundationsBounds.min, foundationsBounds.max);
+            if (bandMin > bandMax) {
+              const fixed = bandMax;
+              bandMin = fixed;
+              bandMax = fixed;
+            }
+          }
           const bandCenter = (bandMin + bandMax) / 2;
 
           if (role === 'reference') {
-            note.midi = bandCenter;
+            note.midi = foundationsBounds
+              ? clampMidi(bandCenter, foundationsBounds.min, foundationsBounds.max)
+              : bandCenter;
             note.targetKind = 'fixedPitch';
           } else {
             note.targetKind = 'windowBand';
             note.minMidi = bandMin;
             note.maxMidi = bandMax;
-            note.label = isLowBand ? 'LOW' : 'HIGH';
-            bandIndex += 1;
+            note.label = note.label ?? (isLowBand ? 'LOW' : 'HIGH');
+            if (!phase.bandRole) {
+              bandIndex += 1;
+            }
           }
-        } else if (lessonMode === 'slideWindow') {
+        } else if (phaseMode === 'slideWindow') {
           if (role === 'reference') {
-            note.midi = anchorPitch;
+            note.midi = foundationsBounds
+              ? clampMidi(anchorPitch, foundationsBounds.min, foundationsBounds.max)
+              : anchorPitch;
             note.targetKind = 'fixedPitch';
           } else {
             note.targetKind = 'slideWindow';
-            note.slideDirection = slideIndex % 2 === 0 ? 'up' : 'down';
-            note.label = slideIndex % 2 === 0 ? 'SLIDE UP' : 'SLIDE DOWN';
-            slideIndex += 1;
+            const slideDirection = phase.slideDirection ?? (slideIndex % 2 === 0 ? 'up' : 'down');
+            note.slideDirection = slideDirection;
+            note.label = note.label ?? (slideDirection === 'up' ? 'SLIDE UP' : 'SLIDE DOWN');
+            if (!phase.slideDirection) {
+              slideIndex += 1;
+            }
           }
-        } else if (lessonMode === 'holdSteady') {
+        } else if (phaseMode === 'holdSteady') {
           if (role === 'reference') {
-            note.midi = anchorPitch;
+            note.midi = foundationsBounds
+              ? clampMidi(anchorPitch, foundationsBounds.min, foundationsBounds.max)
+              : anchorPitch;
             note.targetKind = 'fixedPitch';
           } else {
+            let holdMin = anchorPitch - holdBandSemitones;
+            let holdMax = anchorPitch + holdBandSemitones;
+            if (foundationsBounds) {
+              holdMin = clampMidi(holdMin, foundationsBounds.min, foundationsBounds.max);
+              holdMax = clampMidi(holdMax, foundationsBounds.min, foundationsBounds.max);
+              if (holdMin > holdMax) {
+                const fixed = holdMax;
+                holdMin = fixed;
+                holdMax = fixed;
+              }
+            }
             note.targetKind = 'windowBand';
-            note.minMidi = anchorPitch - holdBandSemitones;
-            note.maxMidi = anchorPitch + holdBandSemitones;
-            note.label = 'HOLD STEADY';
+            note.minMidi = holdMin;
+            note.maxMidi = holdMax;
+            note.label = note.label ?? 'HOLD STEADY';
           }
         }
 
@@ -329,7 +447,7 @@ function createExerciseState() {
     tempo: number,
     pattern: ExercisePattern,
     leadInMs: number
-  ): { loop: number; phase: ExercisePhase } {
+  ): { loop: number; phase: ExercisePhase; phaseIndex: number; phaseLabel: string | null } {
     const microbeatDurationMs = getMicrobeatDurationMs(tempo);
     const loopDurationMicrobeats = getLoopDurationMicrobeats(pattern);
     const loopDurationMs = loopDurationMicrobeats * microbeatDurationMs;
@@ -339,23 +457,31 @@ function createExerciseState() {
 
     // During lead-in, show as rest
     if (adjustedTimeMs < 0) {
-      return { loop: 0, phase: 'rest' };
+      return { loop: 0, phase: 'rest', phaseIndex: -1, phaseLabel: null };
     }
 
     const currentLoop = Math.floor(adjustedTimeMs / loopDurationMs);
     const timeInLoop = adjustedTimeMs % loopDurationMs;
 
     let elapsedMs = 0;
-    for (const phase of pattern.phases) {
+    for (let i = 0; i < pattern.phases.length; i++) {
+      const phase = pattern.phases[i];
       const phaseDurationMs = phase.durationMicrobeats * microbeatDurationMs;
       if (timeInLoop < elapsedMs + phaseDurationMs) {
-        return { loop: currentLoop, phase: phase.type };
+        return {
+          loop: currentLoop,
+          phase: phase.type,
+          phaseIndex: i,
+          phaseLabel: phase.label ?? null,
+        };
       }
       elapsedMs += phaseDurationMs;
     }
 
     const fallbackPhase = pattern.phases[pattern.phases.length - 1]?.type ?? 'rest';
-    return { loop: currentLoop, phase: fallbackPhase };
+    const fallbackIndex = Math.max(0, pattern.phases.length - 1);
+    const fallbackLabel = pattern.phases[fallbackIndex]?.label ?? null;
+    return { loop: currentLoop, phase: fallbackPhase, phaseIndex: fallbackIndex, phaseLabel: fallbackLabel };
   }
 
   return {
@@ -395,6 +521,10 @@ function createExerciseState() {
       state.currentLoop = 0;
       state.currentInputIndex = 0;
       state.currentPhase = pattern.phases[0]?.type ?? 'rest';
+      state.currentPhaseIndex = 0;
+      state.currentPhaseLabel = pattern.phases[0]?.label ?? null;
+      state.currentSegmentId = pattern.phases[0]?.segmentId ?? null;
+      state.currentSegmentName = pattern.phases[0]?.segmentName ?? null;
       state.currentPitch = notes.length > 0 ? (notes[0].midi ?? null) : null;
       state.results = [];
     },
@@ -408,6 +538,10 @@ function createExerciseState() {
       state.currentLoop = 0;
       state.currentInputIndex = 0;
       state.currentPhase = 'reference';
+      state.currentPhaseIndex = 0;
+      state.currentPhaseLabel = null;
+      state.currentSegmentId = null;
+      state.currentSegmentName = null;
       state.currentPitch = null;
     },
 
@@ -422,7 +556,7 @@ function createExerciseState() {
      * Update current phase based on time
      */
     updatePhase(currentTimeMs: number) {
-      const { loop, phase } = getPhaseFromTime(
+      const { loop, phase, phaseIndex, phaseLabel } = getPhaseFromTime(
         currentTimeMs,
         state.config.tempo,
         state.pattern,
@@ -430,6 +564,10 @@ function createExerciseState() {
       );
       state.currentLoop = loop;
       state.currentPhase = phase;
+      state.currentPhaseIndex = phaseIndex;
+      state.currentPhaseLabel = phaseLabel;
+      state.currentSegmentId = phaseIndex >= 0 ? (state.pattern.phases[phaseIndex]?.segmentId ?? null) : null;
+      state.currentSegmentName = phaseIndex >= 0 ? (state.pattern.phases[phaseIndex]?.segmentName ?? null) : null;
 
       const inputNotes = state.generatedNotes.filter(
         note => note.role === 'input'
@@ -443,6 +581,18 @@ function createExerciseState() {
         }
       }
       state.currentInputIndex = completedInputs;
+
+      const currentInputNote =
+        inputNotes.find(note =>
+          currentTimeMs >= note.startTimeMs && currentTimeMs <= note.startTimeMs + note.durationMs
+        ) ??
+        inputNotes.find(note => currentTimeMs <= note.startTimeMs + note.durationMs) ??
+        inputNotes[inputNotes.length - 1];
+
+      if (currentInputNote) {
+        state.currentSegmentId = currentInputNote.segmentId ?? state.currentSegmentId;
+        state.currentSegmentName = currentInputNote.segmentName ?? state.currentSegmentName;
+      }
     },
 
     /**
@@ -450,6 +600,13 @@ function createExerciseState() {
      */
     addResult(result: ExerciseResult) {
       state.results.push(result);
+    },
+
+    /**
+     * Clear collected performance results.
+     */
+    clearResults() {
+      state.results = [];
     },
 
     /**
@@ -488,6 +645,62 @@ function createExerciseState() {
      */
     getGeneratedNotes(): TargetNote[] {
       return state.generatedNotes;
+    },
+
+    getCurrentPhaseMeta() {
+      if (state.currentPhaseIndex < 0) {
+        return null;
+      }
+      return state.pattern.phases[state.currentPhaseIndex] ?? null;
+    },
+
+    getSegmentSummaries(): SegmentSummary[] {
+      const inputNotes = state.generatedNotes.filter(note => note.role === 'input');
+      if (inputNotes.length === 0) {
+        return [];
+      }
+
+      const summaryOrder: string[] = [];
+      const noteCounts = new Map<string, { segmentName: string; total: number }>();
+
+      for (const note of inputNotes) {
+        const segmentId = note.segmentId ?? 'ungrouped';
+        const segmentName = note.segmentName ?? 'Segment';
+        if (!noteCounts.has(segmentId)) {
+          noteCounts.set(segmentId, { segmentName, total: 0 });
+          summaryOrder.push(segmentId);
+        }
+        const entry = noteCounts.get(segmentId);
+        if (entry) {
+          entry.total += 1;
+        }
+      }
+
+      const resultGroups = new Map<string, ExerciseResult[]>();
+      for (const result of state.results) {
+        const segmentId = result.targetSegmentId ?? 'ungrouped';
+        if (!resultGroups.has(segmentId)) {
+          resultGroups.set(segmentId, []);
+        }
+        resultGroups.get(segmentId)?.push(result);
+      }
+
+      return summaryOrder.map((segmentId) => {
+        const noteInfo = noteCounts.get(segmentId) ?? { segmentName: 'Segment', total: 0 };
+        const segmentResults = resultGroups.get(segmentId) ?? [];
+        const hits = segmentResults.filter(r => r.performance?.hitStatus === 'hit').length;
+        const averageAccuracy = segmentResults.length > 0
+          ? segmentResults.reduce((sum, r) => sum + r.accuracy, 0) / segmentResults.length
+          : 0;
+        return {
+          segmentId,
+          segmentName: noteInfo.segmentName,
+          total: noteInfo.total,
+          completed: segmentResults.length,
+          hits,
+          averageAccuracy,
+        };
+      });
     },
 
     /**

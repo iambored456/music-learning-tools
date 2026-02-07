@@ -22,6 +22,12 @@ interface Voice {
  * Vibrato Audio Effect
  * Handles audio-only vibrato implementation using Tone.js
  * Extracted from synthEngine.js for clean separation
+ *
+ * [PERF:SHARED-LFO] Vibrato modulation is now handled by shared per-color LFOs
+ * in synthEngine.ts, not per-voice. applyToVoice() calls voice._setVibrato() which
+ * is a no-op — the actual modulation happens via shared LFO → oscillator.detune.
+ * This class still stores settings and is called by audioEffectsManager for
+ * backwards compatibility, but the real work happens in synthEngine.updateSharedVibrato().
  */
 class VibratoAudioEffect {
   private currentSettings = new Map<string, VibratoSettings>();

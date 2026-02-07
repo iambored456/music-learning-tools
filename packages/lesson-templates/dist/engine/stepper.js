@@ -38,10 +38,25 @@ export function createStepper(steps, context) {
         switch (step.type) {
             case 'instruction': {
                 const config = step.config;
-                context.ui.showInstruction(config.message, {
-                    title: config.title,
-                    dismissAfterMs: config.dismissAfterMs,
-                });
+                // If avatar speech is requested and available, use it
+                if (config.speakWithAvatar && context.ui.speakInstruction) {
+                    // Show instruction text as well (for accessibility)
+                    context.ui.showInstruction(config.message, {
+                        title: config.title,
+                        dismissAfterMs: config.dismissAfterMs,
+                    });
+                    // Speak with avatar (fire and forget - step progression handled separately)
+                    void context.ui.speakInstruction(config.message, {
+                        expression: config.avatarExpression,
+                    });
+                }
+                else {
+                    // Fallback to text-only instruction
+                    context.ui.showInstruction(config.message, {
+                        title: config.title,
+                        dismissAfterMs: config.dismissAfterMs,
+                    });
+                }
                 break;
             }
             case 'configure': {
@@ -126,6 +141,8 @@ export function createStepper(steps, context) {
             const prevStep = getCurrentStep();
             if (prevStep?.type === 'instruction') {
                 context.ui.hideInstruction();
+                // Cancel any ongoing avatar speech
+                context.ui.cancelSpeech?.();
             }
             currentIndex++;
             const step = getCurrentStep();
@@ -154,12 +171,16 @@ export function createStepper(steps, context) {
             isRunning = false;
             context.ui.hideInstruction();
             context.ui.hideAllOverlays();
+            // Cancel any ongoing avatar speech
+            context.ui.cancelSpeech?.();
         },
         reset() {
             isRunning = false;
             currentIndex = -1;
             context.ui.hideInstruction();
             context.ui.hideAllOverlays();
+            // Cancel any ongoing avatar speech
+            context.ui.cancelSpeech?.();
         },
     };
 }
@@ -250,6 +271,8 @@ export class LinearStepper {
         this._isRunning = false;
         this.context.ui.hideInstruction();
         this.context.ui.hideAllOverlays();
+        // Cancel any ongoing avatar speech
+        this.context.ui.cancelSpeech?.();
         this.onStop();
     }
     reset() {
@@ -257,6 +280,8 @@ export class LinearStepper {
         this._currentIndex = -1;
         this.context.ui.hideInstruction();
         this.context.ui.hideAllOverlays();
+        // Cancel any ongoing avatar speech
+        this.context.ui.cancelSpeech?.();
     }
     /** Override to customize step execution */
     executeStep(step) {
@@ -264,7 +289,22 @@ export class LinearStepper {
         switch (step.type) {
             case 'instruction': {
                 const config = step.config;
-                this.context.ui.showInstruction(config.message, { title: config.title });
+                // If avatar speech is requested and available, use it
+                if (config.speakWithAvatar && this.context.ui.speakInstruction) {
+                    // Show instruction text as well (for accessibility)
+                    this.context.ui.showInstruction(config.message, {
+                        title: config.title,
+                        dismissAfterMs: config.dismissAfterMs,
+                    });
+                    // Speak with avatar
+                    void this.context.ui.speakInstruction(config.message, {
+                        expression: config.avatarExpression,
+                    });
+                }
+                else {
+                    // Fallback to text-only instruction
+                    this.context.ui.showInstruction(config.message, { title: config.title });
+                }
                 break;
             }
             case 'configure':
@@ -281,6 +321,8 @@ export class LinearStepper {
         // Clean up step-specific state
         if (step.type === 'instruction') {
             this.context.ui.hideInstruction();
+            // Cancel any ongoing avatar speech
+            this.context.ui.cancelSpeech?.();
         }
     }
     /** Called when the lesson is stopped - override for cleanup */

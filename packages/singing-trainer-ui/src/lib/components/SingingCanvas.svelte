@@ -5,7 +5,7 @@
    * Wraps the shared PitchGrid component for singing/highway visualization modes.
    */
 
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import {
     PitchGrid,
     calculateViewportWindow,
@@ -13,6 +13,7 @@
     drawUserPitchTrace,
   } from '@mlt/ui-components/canvas';
   import type {
+    CurrentPitch,
     LegendHighlightConfig,
     PitchGridMode,
     PitchGridViewport,
@@ -30,6 +31,8 @@
   import { exerciseState } from '../stores/exerciseState.svelte.js';
   import { ultrastarState } from '../stores/ultrastarState.svelte.js';
   import { LyricsDisplay } from './karaoke/index.js';
+  import YAxisDragZones from './YAxisDragZones.svelte';
+  import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';
 
   // Container element for measuring size
   let container: HTMLDivElement | undefined = $state(undefined);
@@ -40,10 +43,6 @@
   let trailCanvas: HTMLCanvasElement | undefined = $state(undefined);
   let trailCtx: CanvasRenderingContext2D | null = $state(null);
   let trailAnimationId: number | null = $state(null);
-
-  let lastTrailLogAt = 0;
-  let trailFrameSamples = 0;
-  let trailFrameTimeTotal = 0;
 
   const cellWidth = 20;
   const showOctaveLabels = true;
@@ -58,14 +57,6 @@
   const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
   const gridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
   const gridOffsetX = $derived(showLegends ? legendCanvasWidth : 0);
-  const getDebugTrailFlag = (): boolean => {
-    try {
-      const win = globalThis as typeof globalThis & { __ST_DEBUG_TRAIL?: boolean };
-      return Boolean(win.__ST_DEBUG_TRAIL);
-    } catch {
-      return false;
-    }
-  };
 
   // Generate row data for the pitch grid based on y-axis range
   // Uses the shared pitch data package which includes proper colors, frequencies, and enharmonic spellings
@@ -121,10 +112,16 @@
     }));
   })());
 
+  // Build MIDI → hex color lookup from fullRowData
+  const midiToHex = $derived<Map<number, string>>(
+    new Map(fullRowData.map((row) => [row.midi, row.hex]))
+  );
+
   // Convert local target notes to shared format
   function convertTargetNotes(): SharedTargetNote[] {
     const degrees = appState.state.noteScaleDegrees;
     const showDegrees = appState.state.useDegrees && degrees.length > 0;
+    const usePitchColors = appState.state.noteColorMode === 'pitchColor';
     return highwayState.state.targetNotes.map((n, i) => ({
       id: `target-${i}`,
       targetKind: n.targetKind,
@@ -135,19 +132,43 @@
       startTimeMs: n.startTimeMs,
       durationMs: n.durationMs,
       label: n.label ?? ((showDegrees && typeof n.midi === 'number') ? degrees[i] : n.lyric),
+      color: usePitchColors && typeof n.midi === 'number' ? midiToHex.get(n.midi) : undefined,
     }));
   }
 
+  // Cache target notes separately — only recalculates when targetNotes array or degree settings change
+  // (NOT on every mic frame or currentTimeMs update)
+  const cachedTargetNotes = $derived.by<SharedTargetNote[]>(() => {
+    // Track only array length (changes on song load), not deep properties like .hit
+    void highwayState.state.targetNotes.length;
+    void appState.state.noteScaleDegrees;
+    void appState.state.useDegrees;
+    void appState.state.noteColorMode;
+    return untrack(() => convertTargetNotes());
+  });
+
+  // Separate userPitch derived — lightweight, doesn't trigger expensive config recalc
+  const userPitch = $derived<CurrentPitch | null>(
+    pitchState.state.currentPitch
+      ? {
+          frequency: pitchState.state.currentPitch.frequency,
+          midi: pitchState.state.currentPitch.midi,
+          clarity: pitchState.state.currentPitch.clarity,
+          pitchClass: pitchState.state.currentPitch.pitchClass,
+        }
+      : null
+  );
+
   // Get pitch trail configuration with tonic-relative colors
   const trailConfig = $derived<PitchTrailConfig>({
-    timeWindowMs: 4000,
+    timeWindowMs: Infinity,
     pixelsPerSecond: 200,
     circleRadius: 9.5,
     proximityThreshold: 35,
     maxConnections: 3,
     connectorLineWidth: 2.5,
     connectorColor: 'rgba(0,0,0,0.4)',
-    useTonicRelativeColors: true,
+    useTonicRelativeColors: false,
     tonicPitchClass: getTonicPitchClass(appState.state.tonic),
     clarityThreshold: 0.5,
     maxOpacity: 0.9,
@@ -159,42 +180,26 @@
     fixedPx: appState.state.lyricLabelFixedPx,
   });
 
-  // Build singing mode config
+  // Build singing mode config (no userPitch — passed as separate prop)
   const singingConfig = $derived<SingingModeConfig | undefined>(
     mode === 'singing'
       ? {
-          userPitch: pitchState.state.currentPitch
-            ? {
-                frequency: pitchState.state.currentPitch.frequency,
-                midi: pitchState.state.currentPitch.midi,
-                clarity: pitchState.state.currentPitch.clarity,
-                pitchClass: pitchState.state.currentPitch.pitchClass,
-              }
-            : null,
           pitchHistory: [],
           targetNotes: [],
           pixelsPerSecond: 200,
-          timeWindowMs: 4000,
+          timeWindowMs: Infinity,
           trailConfig,
           labelConfig,
         }
       : undefined
   );
 
-  // Build highway mode config
+  // Build highway mode config (no userPitch, no convertTargetNotes — both moved out)
   const highwayConfig = $derived<HighwayModeConfig | undefined>(
     mode === 'highway'
       ? {
-          userPitch: pitchState.state.currentPitch
-            ? {
-                frequency: pitchState.state.currentPitch.frequency,
-                midi: pitchState.state.currentPitch.midi,
-                clarity: pitchState.state.currentPitch.clarity,
-                pitchClass: pitchState.state.currentPitch.pitchClass,
-              }
-            : null,
           pitchHistory: [],
-          targetNotes: convertTargetNotes(),
+          targetNotes: cachedTargetNotes,
           nowLineX: highwayState.state.nowLineX,
           pixelsPerSecond: highwayState.state.pixelsPerSecond,
           currentTimeMs: highwayState.state.currentTimeMs,
@@ -246,9 +251,6 @@
     const activeConfig = mode === 'singing' ? singingConfig : highwayConfig;
     if (!activeConfig) return;
 
-    const debugTrail = getDebugTrailFlag();
-    const frameStart = debugTrail ? performance.now() : 0;
-
     // Use appropriate nowLineX based on mode
     const nowLineX = mode === 'highway' && highwayConfig
       ? highwayConfig.nowLineX
@@ -292,21 +294,6 @@
       userPitchConfig,
       fullRowData
     );
-
-    if (debugTrail) {
-      const now = performance.now();
-      trailFrameSamples += 1;
-      trailFrameTimeTotal += (now - frameStart);
-      if (now - lastTrailLogAt >= 1000) {
-        const avgMs = trailFrameSamples > 0 ? (trailFrameTimeTotal / trailFrameSamples) : 0;
-        console.log(
-          `[SingingTrail] points=${trailHistory.length} avgMs=${avgMs.toFixed(2)} gridWidth=${gridWidth}`
-        );
-        lastTrailLogAt = now;
-        trailFrameSamples = 0;
-        trailFrameTimeTotal = 0;
-      }
-    }
   }
 
   function startTrailLoop(): void {
@@ -356,6 +343,11 @@
     setupTrailCanvas();
   });
 
+  // Keep highway state aware of actual viewport width
+  $effect(() => {
+    highwayState.setViewportWidth(gridWidth);
+  });
+
   $effect(() => {
     void mode;
     void trailCtx;
@@ -373,6 +365,18 @@
 </script>
 
 <div class="singing-canvas-container" bind:this={container}>
+  {#if showLegends}
+    <div class="legend-overlay legend-overlay--left" style:width="{legendCanvasWidth}px" style:height="{containerHeight}px">
+      <YAxisDragZones gridHeight={containerHeight} cellHeight={viewportWindow.cellHeight} />
+    </div>
+  {/if}
+
+  {#if showLegends && showRightLegend}
+    <div class="legend-overlay legend-overlay--right" style:width="{legendCanvasWidth}px" style:height="{containerHeight}px">
+      <YAxisDragZones gridHeight={containerHeight} cellHeight={viewportWindow.cellHeight} />
+    </div>
+  {/if}
+
   <PitchGrid
     {mode}
     {fullRowData}
@@ -385,6 +389,7 @@
     {showRightLegend}
     {singingConfig}
     {highwayConfig}
+    {userPitch}
     legendHighlight={legendHighlight}
     beatIntervalMs={gridBeatIntervalMs}
     {beatTimeOffsetMs}
@@ -393,6 +398,12 @@
     bind:this={trailCanvas}
     class="pitch-trail-canvas"
   ></canvas>
+
+  {#if mode === 'highway'}
+    <div class="judgement-line-overlay" style:left="{gridOffsetX}px" style:width="{gridWidth}px">
+      <JudgementLineDragHandle canvasWidth={gridWidth} gridHeight={containerHeight} />
+    </div>
+  {/if}
 
   <!-- Karaoke lyrics display (only shown during Ultrastar playback) -->
   {#if isUltrastarActive && mode === 'highway'}
@@ -411,6 +422,32 @@
     background-image: linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02));
     border-radius: var(--radius-md);
     overflow: hidden;
+  }
+
+  .legend-overlay {
+    position: absolute;
+    top: 0;
+    z-index: 5;
+  }
+
+  .legend-overlay--left {
+    left: 0;
+  }
+
+  .legend-overlay--right {
+    right: 0;
+  }
+
+  .judgement-line-overlay {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    z-index: 12;
+    pointer-events: none;
+  }
+
+  .judgement-line-overlay > :global(*) {
+    pointer-events: auto;
   }
 
   .pitch-trail-canvas {

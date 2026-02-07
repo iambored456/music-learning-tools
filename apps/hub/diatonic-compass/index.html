@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Diatonic Compass - Music Learning Tools</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('diatonicCompassPreferences');
+          if (!stored) return;
+          var prefs = JSON.parse(stored);
+          if (prefs && prefs.darkMode === true) {
+            document.documentElement.classList.add('dark-mode-preload');
+          }
+        } catch (e) {
+          // Ignore storage or parsing errors for early theme setup.
+        }
+      })();
+    </script>
+    <style>
+      html.dark-mode-preload,
+      html.dark-mode-preload body,
+      body.dark-mode {
+        background-color: #121212;
+        color-scheme: dark;
+      }
+    </style>
     <style>
       html, body {
         margin: 0;
@@ -19,6 +41,12 @@
     </style>
   </head>
   <body>
+    <script>
+      if (document.documentElement.classList.contains('dark-mode-preload')) {
+        document.body.classList.add('dark-mode');
+        document.documentElement.classList.remove('dark-mode-preload');
+      }
+    </script>
     <div id="app"></div>
     <script type="module" src="./main.ts"></script>
   </body>

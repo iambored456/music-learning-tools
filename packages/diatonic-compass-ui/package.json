@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@mlt/talking-avatar": "workspace:*",
     "gsap": "^3.13.0"
   },
   "devDependencies": {

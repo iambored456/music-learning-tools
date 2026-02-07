@@ -38,6 +38,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
   // Internal state
   const synths: Record<string, Tone.PolySynth> = {};
+  const effectsTracked: Record<string, WeakSet<object>> = {};
   let masterGain: Tone.Gain | null = null;
   let volumeControl: Tone.Volume | null = null;
   let compressor: Tone.Compressor | null = null;
@@ -49,6 +50,162 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
   // Copy of timbres for internal mutation
   const internalTimbres: Record<string, InternalTimbreState> = { ...timbres };
+
+  // Audio diagnostics (gated behind window.__audioDiag)
+  let diagIntervalId: ReturnType<typeof setInterval> | null = null;
+  const isDiag = (): boolean => typeof window !== 'undefined' && (window as any).__audioDiag === true;
+
+  // [PERF:SHARED-LFO] Shared per-color LFOs for vibrato and tremolo.
+  // One LFO per color modulates ALL voices of that color, saving ~40 native nodes per voice.
+  // Vibrato: LFO → voice.oscillator.detune (cents-based, frequency-proportional)
+  // Tremolo: LFO → voice.tremoloGain.gain (amplitude modulation)
+  const sharedVibratoLFOs: Record<string, Tone.LFO | null> = {};
+  const sharedTremoloLFOs: Record<string, Tone.LFO | null> = {};
+
+  // Voice count supplier — reads true count from Tone.js PolySynth instances
+  function getTotalActiveVoices(): number {
+    let total = 0;
+    for (const c in synths) {
+      total += (synths[c] as any)?.activeVoices ?? 0;
+    }
+    return total;
+  }
+
+  // [PERF:SHARED-LFO] Get all voices from a PolySynth (active + pool)
+  function getAllVoicesFromSynth(synth: any): any[] {
+    const voices: any[] = [];
+    const seen = new Set();
+
+    const activeVoices: any[] | undefined = synth?._activeVoices;
+    if (activeVoices) {
+      activeVoices.forEach((entry: any) => {
+        const voice = entry?.voice ?? entry;
+        if (voice && !seen.has(voice)) {
+          seen.add(voice);
+          voices.push(voice);
+        }
+      });
+    }
+
+    const poolVoices: any[] | undefined = synth?._voices;
+    if (poolVoices) {
+      poolVoices.forEach((voice: any) => {
+        if (voice && !seen.has(voice)) {
+          seen.add(voice);
+          voices.push(voice);
+        }
+      });
+    }
+
+    return voices;
+  }
+
+  // [PERF:SHARED-LFO] Update or create/destroy shared vibrato LFO for a color.
+  // Vibrato modulates oscillator.detune in cents — frequency-proportional, more musically
+  // correct than the old per-voice Hz-based approach.
+  function updateSharedVibrato(color: string, params: { speed: number; span: number }): void {
+    const isActive = params.speed > 0 && params.span > 0;
+
+    if (isActive) {
+      const freqHz = (params.speed / 100) * 16;       // 0-100% → 0-16 Hz
+      const depthCents = (params.span / 100) * 50;     // 0-100% → 0-50 cents
+
+      if (!sharedVibratoLFOs[color]) {
+        const lfo = new Tone.LFO({ frequency: freqHz, min: -depthCents, max: depthCents, type: 'sine' });
+        lfo.start();
+        sharedVibratoLFOs[color] = lfo;
+
+        // Connect to all existing voices of this color (idempotent in Web Audio)
+        const synth = synths[color];
+        if (synth) {
+          getAllVoicesFromSynth(synth).forEach(voice => {
+            try { lfo.connect(voice.oscillator.detune); } catch { /* voice may be disposed */ }
+          });
+        }
+        log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared vibrato LFO for ${color}`, { freqHz, depthCents }, 'audio');
+      } else {
+        // Update existing LFO parameters
+        const lfo = sharedVibratoLFOs[color]!;
+        lfo.frequency.value = freqHz;
+        lfo.min = -depthCents;
+        lfo.max = depthCents;
+      }
+    } else {
+      // Disable: dispose shared vibrato LFO
+      if (sharedVibratoLFOs[color]) {
+        sharedVibratoLFOs[color]!.stop();
+        sharedVibratoLFOs[color]!.dispose();
+        sharedVibratoLFOs[color] = null;
+        log.debug('SynthEngine', `[PERF:SHARED-LFO] Disposed shared vibrato LFO for ${color}`, null, 'audio');
+      }
+    }
+  }
+
+  // [PERF:SHARED-LFO] Update or create/destroy shared tremolo LFO for a color.
+  // Tremolo LFO outputs (-depth, 0) which adds to tremoloGain.gain (intrinsic=1),
+  // so effective gain oscillates between (1-depth) and 1.
+  function updateSharedTremolo(color: string, params: { speed: number; span: number }): void {
+    const isActive = params.speed > 0 && params.span > 0;
+
+    if (isActive) {
+      const freqHz = (params.speed / 100) * 16;       // 0-100% → 0-16 Hz
+      const depth = params.span / 100;                  // 0-100% → 0-1
+
+      if (!sharedTremoloLFOs[color]) {
+        const lfo = new Tone.LFO({ frequency: freqHz, min: -depth, max: 0, type: 'sine' });
+        lfo.start();
+        sharedTremoloLFOs[color] = lfo;
+
+        // Connect to all existing voices of this color
+        const synth = synths[color];
+        if (synth) {
+          getAllVoicesFromSynth(synth).forEach(voice => {
+            try { lfo.connect(voice.tremoloGain.gain.input); } catch { /* voice may be disposed */ }
+          });
+        }
+        log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared tremolo LFO for ${color}`, { freqHz, depth }, 'audio');
+      } else {
+        // Update existing LFO parameters
+        const lfo = sharedTremoloLFOs[color]!;
+        lfo.frequency.value = freqHz;
+        lfo.min = -depth;
+        lfo.max = 0;
+      }
+    } else {
+      // Disable: dispose shared tremolo LFO, reset voice gains to pass-through
+      if (sharedTremoloLFOs[color]) {
+        sharedTremoloLFOs[color]!.stop();
+        sharedTremoloLFOs[color]!.dispose();
+        sharedTremoloLFOs[color] = null;
+
+        // Reset tremoloGain on all voices to 1.0 (pass-through)
+        const synth = synths[color];
+        if (synth) {
+          getAllVoicesFromSynth(synth).forEach(voice => {
+            try { voice._resetTremoloGain?.(); } catch { /* voice may be disposed */ }
+          });
+        }
+        log.debug('SynthEngine', `[PERF:SHARED-LFO] Disposed shared tremolo LFO for ${color}`, null, 'audio');
+      }
+    }
+  }
+
+  // [PERF:SHARED-LFO] Connect shared LFOs to a newly created voice
+  function connectSharedLFOsToVoice(voice: any, color: string): void {
+    try {
+      const vibratoLFO = sharedVibratoLFOs[color];
+      if (vibratoLFO) {
+        vibratoLFO.connect(voice.oscillator.detune);
+      }
+
+      const tremoloLFO = sharedTremoloLFOs[color];
+      if (tremoloLFO) {
+        tremoloLFO.connect(voice.tremoloGain.gain.input);
+      }
+    } catch (e) {
+      log.warn('SynthEngine', `[PERF:SHARED-LFO] Failed to connect shared LFOs to voice for ${color}`, e, 'audio');
+    }
+  }
 
   // Logger helper
   const log: SynthLogger = logger ?? {
@@ -94,7 +251,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
       // 1. Master gain node (polyphony-aware scaling with smoothing)
       masterGain = new Tone.Gain(getPerVoiceBaselineGain());
-      gainManager = new GainManager(masterGain);
+      gainManager = new GainManager(masterGain, {}, getTotalActiveVoices);
       gainManager.start();
 
       // 2. User volume control (independent of automatic gain scaling)
@@ -167,6 +324,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         }
 
         // Hook into voice creation to apply vibrato/tremolo to new voices
+        effectsTracked[color] = new WeakSet();
         const originalTriggerAttack = synth.triggerAttack.bind(synth);
         synth.triggerAttack = function(...args: any[]) {
           const result = originalTriggerAttack(...args);
@@ -176,51 +334,28 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
           // Schedule slightly after the attack time to ensure voice exists
           const triggerTime = args[1] ?? Tone.now();
           const effectApplicationTime = triggerTime + 0.005; // 5ms after attack in audio time
+          const tracked = effectsTracked[color];
 
           Tone.Draw.schedule(() => {
-            const activeVoices = this._activeVoices;
+            // Tone.js v15: _activeVoices is Array<{midi, voice, released}>, use .length not .size
+            const activeVoices: any[] | undefined = this._activeVoices;
 
-            if (effectsManager) {
-              if (activeVoices && activeVoices.size > 0) {
-                activeVoices.forEach((voice: any) => {
-                  if (!voice.effectsApplied) {
-                    effectsManager.applyEffectsToVoice(voice, color);
-                    voice.effectsApplied = true;
-                  }
-                });
-              } else if (this._voices && Array.isArray(this._voices)) {
-                this._voices.forEach((voice: any) => {
-                  if (voice && !voice.effectsApplied) {
-                    effectsManager.applyEffectsToVoice(voice, color);
-                    voice.effectsApplied = true;
-                  }
-                });
+            // [PERF:SHARED-LFO] Connect shared LFOs and apply effects to newly created voices.
+            // Vibrato/tremolo are handled by shared per-color LFOs (not per-voice).
+            // effectsManager.applyEffectsToVoice still runs for other effects (delay, etc.).
+            const applyToNewVoice = (voice: any) => {
+              if (!voice || tracked.has(voice)) return;
+              connectSharedLFOsToVoice(voice, color);
+              if (effectsManager) {
+                effectsManager.applyEffectsToVoice(voice, color);
               }
-            } else {
-              // Fallback to legacy approach
-              if (activeVoices && activeVoices.size > 0) {
-                activeVoices.forEach((voice: any) => {
-                  if (voice._setVibrato && voice.vibratoApplied !== true) {
-                    voice._setVibrato(this._currentVibrato);
-                    voice.vibratoApplied = true;
-                  }
-                  if (voice._setTremolo && voice.tremoloApplied !== true) {
-                    voice._setTremolo(this._currentTremolo);
-                    voice.tremoloApplied = true;
-                  }
-                });
-              } else if (this._voices && Array.isArray(this._voices)) {
-                this._voices.forEach((voice: any) => {
-                  if (voice?._setVibrato && voice.vibratoApplied !== true) {
-                    voice._setVibrato(this._currentVibrato);
-                    voice.vibratoApplied = true;
-                  }
-                  if (voice?._setTremolo && voice.tremoloApplied !== true) {
-                    voice._setTremolo(this._currentTremolo);
-                    voice.tremoloApplied = true;
-                  }
-                });
-              }
+              tracked.add(voice);
+            };
+
+            if (activeVoices && activeVoices.length > 0) {
+              activeVoices.forEach((entry: any) => applyToNewVoice(entry?.voice ?? entry));
+            } else if (this._voices && Array.isArray(this._voices)) {
+              this._voices.forEach((voice: any) => applyToNewVoice(voice));
             }
           }, effectApplicationTime);
 
@@ -233,8 +368,49 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         synth._currentFilter = timbre.filter;
 
         synths[color] = synth;
+
+        // [PERF:SHARED-LFO] Initialize shared vibrato/tremolo LFOs with current settings
+        updateSharedVibrato(color, timbre.vibrato!);
+        updateSharedTremolo(color, timbre.tremelo!);
+
         log.debug('SynthEngine', `Created filtered synth for color: ${color}`, null, 'audio');
       }
+
+      // AudioContext state change listener (always active — fires on crash)
+      try {
+        const rawCtx = (Tone.context as any).rawContext as AudioContext | undefined;
+        rawCtx?.addEventListener?.('statechange', () => {
+          console.warn('[AudioDiag] AudioContext state →', rawCtx.state);
+        });
+      } catch { /* ignore if rawContext unavailable */ }
+
+      // Periodic audio health monitor (gated behind window.__audioDiag)
+      if (diagIntervalId) { clearInterval(diagIntervalId); diagIntervalId = null; }
+      diagIntervalId = setInterval(() => {
+        if (!isDiag()) return;
+        let actualTotal = 0;
+        const perColor: string[] = [];
+        for (const c in synths) {
+          const sz = (synths[c] as any)?.activeVoices ?? 0;
+          actualTotal += sz;
+          perColor.push(`${c.slice(1, 4)}:${sz}`);
+        }
+        const gmCount = gainManager?.getActiveVoiceCount() ?? -1;
+        const gainVal = masterGain?.gain.value?.toFixed(4) ?? '?';
+        const ctxState = Tone.context?.state ?? '?';
+        let meterDb = '?';
+        try {
+          const lvl = clippingMeter?.getValue();
+          const v = Array.isArray(lvl) ? lvl[0] : lvl;
+          if (v !== undefined) meterDb = (v as number).toFixed(1);
+        } catch { /* meter may be disposed */ }
+        const drift = gmCount - actualTotal;
+        console.log(
+          `[AudioDiag] HEALTH | voices: GM=${gmCount} actual=${actualTotal} (${perColor.join(' ')})` +
+          ` | gain: ${gainVal} | ctx: ${ctxState} | meter: ${meterDb}dB` +
+          (Math.abs(drift) > 5 ? ` | ⚠ DRIFT=${drift}` : '')
+        );
+      }, 2000);
 
       log.info('SynthEngine', 'Initialized with multi-timbral support', null, 'audio');
     },
@@ -269,57 +445,22 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         effectsManager.applySynthEffects(synth, color, masterGain);
       }
 
-      // Update stored settings on synth for future voices
-      // @ts-expect-error - Custom runtime properties added to synth
-      synth._currentVibrato = timbre.vibrato;
-      // @ts-expect-error - Custom runtime properties added to synth
-      synth._currentTremolo = timbre.tremelo;
-      // @ts-expect-error - Custom runtime properties added to synth
-      synth._currentFilter = timbre.filter;
+      // [PERF:SHARED-LFO] Update shared vibrato/tremolo LFOs for this color.
+      // This replaces per-voice _setVibrato/_setTremolo calls — one LFO modulates all voices.
+      updateSharedVibrato(color, timbre.vibrato!);
+      updateSharedTremolo(color, timbre.tremelo!);
 
-      // Try setting parameters on existing voices
-      // @ts-expect-error - Accessing private Tone.js property
-      const activeVoices = synth._activeVoices;
-
-      if (activeVoices && activeVoices.size > 0) {
-        activeVoices.forEach((voice: any) => {
-          if (voice._setFilter) {
-            voice._setFilter(timbre.filter);
-          }
-          if (voice._setVibrato) {
-            voice._setVibrato(timbre.vibrato);
-            voice.vibratoApplied = true;
-          }
-          if (voice._setTremolo) {
-            voice._setTremolo(timbre.tremelo);
-            voice.tremoloApplied = true;
-          }
-          if (voice._setPresetGain) {
-            const presetGain = timbre.gain || 1.0;
-            voice._setPresetGain(presetGain);
-          }
-        });
-        // @ts-expect-error - Accessing private Tone.js property
-      } else if (synth._voices && Array.isArray(synth._voices)) {
-        // @ts-expect-error - Accessing private Tone.js property
-        synth._voices.forEach((voice: any) => {
-          if (voice?._setVibrato) {
-            voice._setVibrato(timbre.vibrato);
-            voice.vibratoApplied = true;
-          }
-          if (voice?._setTremolo) {
-            voice._setTremolo(timbre.tremelo);
-            voice.tremoloApplied = true;
-          }
-          if (voice?._setFilter) {
-            voice._setFilter(timbre.filter);
-          }
-          if (voice?._setPresetGain) {
-            const presetGain = timbre.gain || 1.0;
-            voice._setPresetGain(presetGain);
-          }
-        });
-      }
+      // Update filter and preset gain on existing voices (still per-voice)
+      const allVoices = getAllVoicesFromSynth(synth);
+      allVoices.forEach((voice: any) => {
+        if (voice?._setFilter) {
+          voice._setFilter(timbre.filter);
+        }
+        if (voice?._setPresetGain) {
+          const presetGain = timbre.gain || 1.0;
+          voice._setPresetGain(presetGain);
+        }
+      });
     },
 
     setBpm(tempo: number) {
@@ -364,8 +505,11 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       const synth = synths[color];
       if (!synth) return;
 
-      // Increment active voice count
-      gainManager?.noteOn(1);
+      if (isDiag()) {
+        const gm = gainManager?.getActiveVoiceCount() ?? -1;
+        const actual = getTotalActiveVoices();
+        console.log(`[AudioDiag] ATTACK | color=${color} pitch=${pitch} | GM=${gm} actual=${actual} | ctx=${Tone.context?.state}`);
+      }
 
       if (isDrum && getDrumVolume) {
         // Apply drum volume by temporarily adjusting synth volume
@@ -396,6 +540,10 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
      * Use this for mouse clicks, keyboard presses, or other immediate UI triggers.
      */
     triggerAttackInteractive(pitch: string | number, color: string) {
+      // Resume context if suspended (e.g., after audio overload)
+      if (Tone.context.state !== 'running') {
+        void Tone.context.resume();
+      }
       // Small offset helps avoid performance-related audio pops
       // 20ms is imperceptible but gives the audio thread breathing room
       instance.triggerAttack(pitch, color, Tone.now() + 0.02);
@@ -418,10 +566,6 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         pitches.forEach(pitch => {
           synth.triggerRelease(pitch, Tone.now());
         });
-
-        // Clamp active voice count to current synth voices after quick release
-        const currentVoices = (synth as any)._activeVoices?.size ?? (synth as any)._voices?.length ?? gainManager?.getActiveVoiceCount() ?? 0;
-        gainManager?.clampActiveVoiceCountToAtMost(currentVoices);
       } catch (err) {
         log.warn('SynthEngine', 'quickReleasePitches failed', { err, color, pitches }, 'audio');
       } finally {
@@ -441,12 +585,13 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
       synth.triggerRelease(pitch, time);
 
-      // Decrement active voice count
-      gainManager?.noteOff(1);
-
-      // Clamp to actual synth voices to avoid drift
-      const currentVoices = (synth as any)._activeVoices?.size ?? (synth as any)._voices?.length ?? gainManager?.getActiveVoiceCount() ?? 0;
-      gainManager?.clampActiveVoiceCountToAtMost(currentVoices);
+      if (isDiag()) {
+        const gm = gainManager?.getActiveVoiceCount() ?? -1;
+        const actual = getTotalActiveVoices();
+        const drift = gm - actual;
+        console.log(`[AudioDiag] RELEASE | color=${color} pitch=${pitch} | GM=${gm} actual=${actual}` +
+          (Math.abs(drift) > 5 ? ` | ⚠ DRIFT=${drift}` : ''));
+      }
     },
 
     releaseAll() {
@@ -529,11 +674,22 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     stopBackgroundMonitors() {
       clippingMonitor?.stop();
       gainManager?.stop();
+      if (diagIntervalId) { clearInterval(diagIntervalId); diagIntervalId = null; }
     },
 
     dispose() {
       this.stopBackgroundMonitors();
       this.disposeAllWaveformAnalyzers();
+
+      // [PERF:SHARED-LFO] Dispose shared LFOs before synths (LFOs reference voice nodes)
+      for (const color in sharedVibratoLFOs) {
+        sharedVibratoLFOs[color]?.dispose();
+        sharedVibratoLFOs[color] = null;
+      }
+      for (const color in sharedTremoloLFOs) {
+        sharedTremoloLFOs[color]?.dispose();
+        sharedTremoloLFOs[color] = null;
+      }
 
       // Dispose synths
       for (const color in synths) {

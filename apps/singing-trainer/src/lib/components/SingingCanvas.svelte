@@ -141,7 +141,7 @@
     maxConnections: 3,
     connectorLineWidth: 2.5,
     connectorColor: 'rgba(0,0,0,0.4)',
-    useTonicRelativeColors: true,
+    useTonicRelativeColors: false,
     tonicPitchClass: getTonicPitchClass(appState.state.tonic),
     clarityThreshold: 0.5,
     maxOpacity: 0.9,

@@ -153,8 +153,6 @@ export default class Wheel {
     labels: { chromaticLabels: string[]; diatonicLabels: string[] },
     playbackState: AppState['playback']
   ) {
-    console.log('=== Wheel._draw CALLED ===', { size, dpr });
-
     const ctx = this.ctx;
     ctx.save();
 
@@ -298,19 +296,12 @@ export default class Wheel {
     };
 
     // --- Execute drawing ---
-    console.log('Drawing outer ring...');
     drawOuterRing();
-    console.log('Drawing middle ring...');
     drawMiddleRing();
-    console.log('Drawing inner circle...');
     drawInner();
-    console.log('Drawing labels...');
     drawLabels();
-    console.log('Drawing playback highlight...');
     drawPlaybackHighlight();
-    console.log('Drawing tonal center marker...');
     drawTonalCenterMarker();
-    console.log('Wheel drawing complete');
 
     ctx.restore();
   }

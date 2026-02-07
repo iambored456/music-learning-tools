@@ -9,3 +9,5 @@ export { default as ExerciseControls } from './ExerciseControls.svelte';
 export { default as UltrastarControls } from './UltrastarControls.svelte';
 export { default as SyncControls } from './SyncControls.svelte';
 export { default as SpeakingPitchPanel } from './SpeakingPitchPanel.svelte';
+export { default as ThemeSettings } from './ThemeSettings.svelte';
+export { default as DifficultySettings } from './DifficultySettings.svelte';

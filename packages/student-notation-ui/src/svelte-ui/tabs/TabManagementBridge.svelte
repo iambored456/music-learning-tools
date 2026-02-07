@@ -698,7 +698,7 @@
       startSizingAutoLog();
     }
 
-    console.log('[Svelte 5] TabManagementBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte 5] TabManagementBridge mounted');
 
     // Cleanup on unmount
     return () => {
@@ -723,7 +723,7 @@
       // Stop sizing observers
       stopSizingAutoLog();
 
-      console.log('[Svelte 5] TabManagementBridge unmounted');
+      if ((window as any).__initDebug) console.log('[Svelte 5] TabManagementBridge unmounted');
     };
   });
 </script>

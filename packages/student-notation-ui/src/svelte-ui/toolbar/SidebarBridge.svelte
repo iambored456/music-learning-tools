@@ -405,7 +405,7 @@
       });
     }
 
-    console.log('[Svelte] SidebarBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] SidebarBridge mounted');
   });
 
   onDestroy(() => {
@@ -431,7 +431,7 @@
     leftLegendToggleBtn?.removeEventListener('click', handleLeftLegendToggle);
     rightLegendToggleBtn?.removeEventListener('click', handleRightLegendToggle);
 
-    console.log('[Svelte] SidebarBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] SidebarBridge unmounted');
   });
 </script>
 

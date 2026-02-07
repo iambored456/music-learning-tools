@@ -472,7 +472,7 @@ const DEFAULT_TRAIL_CONFIG: Required<PitchTrailConfig> = {
   maxConnections: 3,
   connectorLineWidth: 2.5,
   connectorColor: 'rgba(0,0,0,0.4)',
-  useTonicRelativeColors: true,
+  useTonicRelativeColors: false,
   tonicPitchClass: 0,
   clarityThreshold: 0.5,
   maxOpacity: 0.9,
@@ -513,7 +513,7 @@ export function drawUserPitchIndicator(
   const color: RGB =
     colorMode === 'bw'
       ? [128, 128, 128]
-      : getInterpolatedPitchColor(midi, trail.tonicPitchClass);
+      : getInterpolatedPitchColor(midi, trail.useTonicRelativeColors ? trail.tonicPitchClass : 0);
 
   ctx.save();
 
@@ -620,7 +620,7 @@ export function drawUserPitchTrace(
       const color: RGB =
         colorMode === 'bw'
           ? [128, 128, 128]
-          : getInterpolatedPitchColor(point.midi, trail.tonicPitchClass);
+          : getInterpolatedPitchColor(point.midi, trail.useTonicRelativeColors ? trail.tonicPitchClass : 0);
 
       return {
         x,

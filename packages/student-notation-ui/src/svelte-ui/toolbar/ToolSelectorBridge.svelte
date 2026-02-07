@@ -766,11 +766,11 @@
     updateIntervalButtonSelection();
     updateChordPositionToggleState();
 
-    console.log('[Svelte] ToolSelectorBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] ToolSelectorBridge mounted');
   });
 
   onDestroy(() => {
-    console.log('[Svelte] ToolSelectorBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] ToolSelectorBridge unmounted');
   });
 </script>
 

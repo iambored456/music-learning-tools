@@ -143,7 +143,7 @@
     updateLoopButton();
     updateHistoryButtons();
 
-    console.log('[Svelte] PlaybackControlsBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] PlaybackControlsBridge mounted');
   });
 
   onDestroy(() => {
@@ -155,7 +155,7 @@
     undoBtn?.removeEventListener('click', handleUndo);
     redoBtn?.removeEventListener('click', handleRedo);
 
-    console.log('[Svelte] PlaybackControlsBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] PlaybackControlsBridge unmounted');
   });
 </script>
 

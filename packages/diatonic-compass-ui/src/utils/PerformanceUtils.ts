@@ -135,11 +135,10 @@ export class PerformanceUtils {
    */
   static startMeasure(label: string): () => number {
     const startTime = performance.now();
-    
+
     return () => {
       const endTime = performance.now();
       const duration = endTime - startTime;
-      console.log(`[Performance] ${label}: ${duration.toFixed(2)}ms`);
       return duration;
     };
   }

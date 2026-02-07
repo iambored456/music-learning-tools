@@ -86,6 +86,10 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
   let configuredLoopStart = 0;
   let configuredLoopEnd = 0;
 
+  // Cached modulation data (populated once per calculate(), used by applyModulationToTime)
+  let cachedSortedMarkers: Array<{ measureIndex: number; ratio: number }> | null = null;
+  let cachedMarkerMacrobeatInfo: Map<number, MacrobeatInfo | null> | null = null;
+
   // Logger helper
   const log: TransportLogger = logger ?? {
     debug: () => {}
@@ -146,7 +150,7 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
   /**
    * Calculate and cache the modulation-adjusted musical end time.
    */
-  function calculateMusicalEndTime(state: TimeMapState): void {
+  function calculateMusicalEndTime(_state: TimeMapState): void {
     const baseEndTime = timeMap.length > 0 ? (timeMap[timeMap.length - 1] ?? 0) : 0;
 
     if (!Number.isFinite(baseEndTime) || baseEndTime === 0) {
@@ -154,18 +158,16 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
       return;
     }
 
-    const tempoModulationMarkers = state.tempoModulationMarkers?.filter(m => m.active) || [];
-
-    if (tempoModulationMarkers.length === 0) {
+    // Use cached markers from calculate() to avoid repeated filter+sort
+    if (!cachedSortedMarkers || cachedSortedMarkers.length === 0) {
       cachedMusicalEndTime = baseEndTime;
       return;
     }
 
-    const sortedMarkers = [...tempoModulationMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
     let adjustedEndTime = baseEndTime;
 
-    for (const marker of sortedMarkers) {
-      const macrobeatInfo = getMacrobeatInfo(marker.measureIndex);
+    for (const marker of cachedSortedMarkers) {
+      const macrobeatInfo = cachedMarkerMacrobeatInfo?.get(marker.measureIndex) ?? null;
 
       if (macrobeatInfo) {
         const modulationStartColumn = macrobeatInfo.endColumn - 1;
@@ -193,6 +195,19 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
       calculateRegularTimeMap(microbeatDuration, columnWidths, placedTonicSigns);
 
       log.timing?.('TimeMapCalculator', 'calculate', { totalDuration: `${timeMap[timeMap.length - 1]?.toFixed(2)}s` });
+
+      // Cache sorted active modulation markers and their macrobeat info
+      const activeMarkers = state.tempoModulationMarkers?.filter(m => m.active) || [];
+      if (activeMarkers.length > 0) {
+        cachedSortedMarkers = [...activeMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
+        cachedMarkerMacrobeatInfo = new Map();
+        for (const marker of cachedSortedMarkers) {
+          cachedMarkerMacrobeatInfo.set(marker.measureIndex, getMacrobeatInfo(marker.measureIndex));
+        }
+      } else {
+        cachedSortedMarkers = null;
+        cachedMarkerMacrobeatInfo = null;
+      }
 
       calculateMusicalEndTime(state);
       const musicalEnd = cachedMusicalEndTime;
@@ -235,22 +250,20 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
       return 0;
     },
 
-    applyModulationToTime(baseTime: number, columnIndex: number, state: TimeMapState): number {
-      const tempoModulationMarkers = state.tempoModulationMarkers?.filter(m => m.active) || [];
-
-      if (tempoModulationMarkers.length === 0) {
+    applyModulationToTime(baseTime: number, columnIndex: number, _state: TimeMapState): number {
+      // Use cached markers from calculate() to avoid repeated filter+sort per note
+      if (!cachedSortedMarkers || cachedSortedMarkers.length === 0) {
         return baseTime;
       }
 
-      const sortedMarkers = [...tempoModulationMarkers].sort((a, b) => a.measureIndex - b.measureIndex);
       let adjustedTime = baseTime;
 
       if (columnIndex < 5) {
-        log.debug('TimeMapCalculator', `[MODULATION] Column ${columnIndex}: baseTime ${baseTime.toFixed(3)}s, ${sortedMarkers.length} active markers`);
+        log.debug('TimeMapCalculator', `[MODULATION] Column ${columnIndex}: baseTime ${baseTime.toFixed(3)}s, ${cachedSortedMarkers.length} active markers`);
       }
 
-      for (const marker of sortedMarkers) {
-        const macrobeatInfo = getMacrobeatInfo(marker.measureIndex);
+      for (const marker of cachedSortedMarkers) {
+        const macrobeatInfo = cachedMarkerMacrobeatInfo?.get(marker.measureIndex) ?? null;
 
         if (macrobeatInfo) {
           const modulationStartColumn = macrobeatInfo.endColumn;

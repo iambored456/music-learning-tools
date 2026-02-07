@@ -19,6 +19,9 @@ export type {
   UiController,
   UiOverlay,
   LessonContext,
+  // Avatar types
+  AvatarExpression,
+  AvatarSpeakOptions,
 } from './controllers.js';
 
 // Re-export stepper

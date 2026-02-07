@@ -7,6 +7,7 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     SingingCanvas,
+    StartButton,
     TonicSelector,
     DroneControls,
     PitchHighlightToggle,
@@ -157,12 +158,19 @@
   <main class="main">
     <aside class="sidebar sidebar--left">
       <details class="settings-details">
+        <summary class="settings-summary">Mic Settings</summary>
+        <div class="settings-content">
+          <StartButton />
+          <PitchReadout />
+          <PitchHighlightToggle />
+        </div>
+      </details>
+
+      <details class="settings-details">
         <summary class="settings-summary">User Settings</summary>
         <div class="settings-content">
-          <PitchReadout />
           <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
           <RangeControl />
-          <PitchHighlightToggle />
         </div>
       </details>
 

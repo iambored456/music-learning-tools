@@ -64,11 +64,18 @@ export type LessonStepType =
   | 'feedback' // Show feedback on performance
   | 'complete'; // Lesson complete
 
+/** Avatar expression for instruction steps */
+export type InstructionAvatarExpression = 'neutral' | 'encouraging';
+
 /** Configuration for instruction step */
 export interface InstructionStepConfig {
   message: string;
   title?: string;
   dismissAfterMs?: number;
+  /** Whether to speak the message with the avatar (if available) */
+  speakWithAvatar?: boolean;
+  /** Avatar expression to use while speaking */
+  avatarExpression?: InstructionAvatarExpression;
 }
 
 /** Configuration for configure step */
@@ -200,6 +207,11 @@ export interface PitchMatchingConfig {
   holdBandSemitones?: number;
   /** Minimum slide span in semitones */
   minSlideSemitones?: number;
+  /**
+   * If true, scroll waits at input windows until valid mic input is detected.
+   * This removes strict rhythmic timing pressure for pitch-shaping exercises.
+   */
+  waitForInput?: boolean;
   /** Toggle immediate feedback (UI scaffold) */
   showImmediateFeedback?: boolean;
   /** Toggle score display (UI scaffold) */
@@ -208,6 +220,14 @@ export interface PitchMatchingConfig {
 
 /** Phase type in an exercise loop */
 export type LoopPhaseType = 'reference' | 'rest' | 'input';
+
+/** Optional target behavior override for a loop phase */
+export type LoopPhaseTargetMode =
+  | 'fixedPitch'
+  | 'windowAnyPitch'
+  | 'windowBand'
+  | 'slideWindow'
+  | 'holdSteady';
 
 /** Single phase in an exercise loop */
 export interface LoopPhase {
@@ -219,6 +239,22 @@ export interface LoopPhase {
   emoji?: string;
   /** Optional text label for UI */
   label?: string;
+  /** Optional segment identifier for grouped scoring/instructions */
+  segmentId?: string;
+  /** Optional segment name for grouped scoring/instructions */
+  segmentName?: string;
+  /** Optional target-mode override for this phase */
+  targetMode?: LoopPhaseTargetMode;
+  /** Optional LOW/HIGH role hint for windowBand phases */
+  bandRole?: 'low' | 'high';
+  /** Optional slide direction hint for slideWindow phases */
+  slideDirection?: 'up' | 'down';
+  /** Optional spoken/visual instruction when this phase begins */
+  instructionMessage?: string;
+  /** If true, avatar should speak instructionMessage (when available) */
+  speakInstruction?: boolean;
+  /** If true, this input phase participates in wait-for-input gating */
+  waitForInput?: boolean;
 }
 
 /** Exercise loop pattern definition */

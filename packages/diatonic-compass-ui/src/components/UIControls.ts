@@ -128,15 +128,11 @@ export default class UIControls {
     
     if (orientationToggle) {
       orientationToggle.addEventListener('click', (e) => {
-      console.log('Orientation toggle clicked', e.target);
       // Always toggle, regardless of what was clicked
       const currentChecked = this.elements.orientationHorizontal.checked;
-      console.log('Current orientation horizontal checked:', currentChecked);
       if (currentChecked) {
-        console.log('Switching to vertical');
         this.callbacks.onToggleOrientation('vertical');
       } else {
-        console.log('Switching to horizontal');
         this.callbacks.onToggleOrientation('horizontal');
       }
       });
@@ -144,15 +140,11 @@ export default class UIControls {
     
     if (themeToggle) {
       themeToggle.addEventListener('click', (e) => {
-      console.log('Theme toggle clicked', e.target);
       // Always toggle, regardless of what was clicked
       const currentChecked = this.elements.themeLight.checked;
-      console.log('Current theme light checked:', currentChecked);
       if (currentChecked) {
-        console.log('Switching to dark mode');
         this.callbacks.onToggleDarkMode(true);
       } else {
-        console.log('Switching to light mode');
         this.callbacks.onToggleDarkMode(false);
       }
       });

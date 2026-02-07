@@ -6,6 +6,7 @@
 
 export type VisualizationMode = 'stationary' | 'highway';
 export type LyricLabelMode = 'auto' | 'fixed';
+export type NoteColorMode = 'green' | 'pitchColor';
 export type TonicNote =
   | 'C'
   | 'C#'
@@ -57,6 +58,7 @@ export interface AppState {
   lyricLabelMode: LyricLabelMode;
   lyricLabelScale: number;
   lyricLabelFixedPx: number;
+  noteColorMode: NoteColorMode;
 }
 
 const DEFAULT_STATE: AppState = {
@@ -73,6 +75,7 @@ const DEFAULT_STATE: AppState = {
   lyricLabelMode: 'auto',
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
+  noteColorMode: 'green',
 };
 
 function createAppState() {
@@ -147,6 +150,10 @@ function createAppState() {
     setLyricLabelFixedPx(px: number) {
       if (!Number.isFinite(px)) return;
       state.lyricLabelFixedPx = Math.max(8, Math.min(48, Math.round(px)));
+    },
+
+    setNoteColorMode(mode: NoteColorMode) {
+      state.noteColorMode = mode;
     },
 
     setYAxisRange(range: YAxisRange) {

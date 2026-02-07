@@ -182,6 +182,21 @@ function validatePhase(phase: LoopPhase, index: number): string[] {
     errors.push(`${prefix} durationMicrobeats must be a positive number`);
   }
 
+  if (phase.targetMode) {
+    const validTargetModes = ['fixedPitch', 'windowAnyPitch', 'windowBand', 'slideWindow', 'holdSteady'];
+    if (!validTargetModes.includes(phase.targetMode)) {
+      errors.push(`${prefix} has invalid targetMode: ${phase.targetMode}`);
+    }
+  }
+
+  if (phase.bandRole && !['low', 'high'].includes(phase.bandRole)) {
+    errors.push(`${prefix} has invalid bandRole: ${phase.bandRole}`);
+  }
+
+  if (phase.slideDirection && !['up', 'down'].includes(phase.slideDirection)) {
+    errors.push(`${prefix} has invalid slideDirection: ${phase.slideDirection}`);
+  }
+
   return errors;
 }
 

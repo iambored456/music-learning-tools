@@ -27,6 +27,7 @@
     "@mlt/pitch-data": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
     "@mlt/student-notation-engine": "workspace:*",
+    "@mlt/talking-avatar": "workspace:*",
     "@mlt/types": "workspace:*",
     "@mlt/ui-components": "workspace:*",
     "pitchy": "^4.1.0",

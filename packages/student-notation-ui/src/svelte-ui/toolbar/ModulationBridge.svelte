@@ -128,7 +128,7 @@
     updateClearButton();
 
     logger.info('ModulationBridge', 'Modulation controls initialized', null, 'ui');
-    console.log('[Svelte] ModulationBridge mounted');
+    if ((window as any).__initDebug) console.log('[Svelte] ModulationBridge mounted');
   });
 
   onDestroy(() => {
@@ -137,7 +137,7 @@
     modulation32Btn?.removeEventListener('click', handle32Click);
     modulationClearBtn?.removeEventListener('click', handleClearClick);
 
-    console.log('[Svelte] ModulationBridge unmounted');
+    if ((window as any).__initDebug) console.log('[Svelte] ModulationBridge unmounted');
   });
 </script>
 

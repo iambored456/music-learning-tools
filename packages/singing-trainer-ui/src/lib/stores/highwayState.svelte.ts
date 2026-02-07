@@ -27,6 +27,9 @@ export interface TargetNote {
   label?: string;
   slideDirection?: SlideDirection;
   role?: 'reference' | 'input';
+  segmentId?: string;
+  segmentName?: string;
+  waitForInput?: boolean;
 }
 
 export interface HighwayState {
@@ -38,6 +41,9 @@ export interface HighwayState {
   pixelsPerSecond: number;
   timeWindowMs: number;
   feedbackConfig: FeedbackCollectorConfig;
+  waitForInput: boolean;
+  isWaitingForInput: boolean;
+  waitingNoteId: string | null;
 }
 
 const DEFAULT_STATE: HighwayState = {
@@ -59,6 +65,9 @@ const DEFAULT_STATE: HighwayState = {
     bandToleranceSemitones: 0,
     minSlideSemitones: 3,
   },
+  waitForInput: false,
+  isWaitingForInput: false,
+  waitingNoteId: null,
 };
 
 function createHighwayState() {
@@ -66,6 +75,7 @@ function createHighwayState() {
   let engineService: NoteHighwayServiceInstance | null = null;
   let animationFrameId: number | null = null;
   let performanceCompleteCallback: ((results: Map<string, NotePerformance>) => void) | null = null;
+  let viewportWidth = 800;
 
   // Convert local TargetNote to engine HighwayTargetNote
   function convertToEngineFormat(notes: TargetNote[]): HighwayTargetNote[] {
@@ -77,6 +87,7 @@ function createHighwayState() {
       maxMidi: note.maxMidi,
       label: note.label,
       slideDirection: note.slideDirection,
+      waitForInput: note.waitForInput,
       startTimeMs: note.startTimeMs,
       durationMs: note.durationMs,
       startColumn: 0, // Not used in target notes mode
@@ -94,6 +105,8 @@ function createHighwayState() {
     const engineState = engineService.getState();
     state.isPlaying = engineState.isPlaying && !engineState.isPaused;
     state.currentTimeMs = engineState.currentTimeMs;
+    state.isWaitingForInput = engineState.isWaitingForInput;
+    state.waitingNoteId = engineState.waitingNoteId;
 
     // Update hit status from engine performance
     const performances = engineService.getPerformanceResults();
@@ -117,14 +130,14 @@ function createHighwayState() {
     }
   }
 
-  function initializeEngine() {
+  function initializeEngine(): NoteHighwayServiceInstance | null {
     if (engineService) {
       engineService.dispose();
     }
 
     // Create engine service with minimal config
     engineService = createNoteHighwayService({
-      judgmentLinePosition: state.nowLineX / 800, // Assume 800px viewport
+      judgmentLinePosition: state.nowLineX / viewportWidth,
       pixelsPerSecond: state.pixelsPerSecond,
       lookAheadMs: state.timeWindowMs,
       scrollMode: 'constant-speed',
@@ -133,11 +146,12 @@ function createHighwayState() {
       playTargetNotes: false,
       playMetronome: false,
       inputSources: ['microphone'],
+      waitForInput: state.waitForInput,
       feedbackConfig: state.feedbackConfig,
       stateCallbacks: {
         getTempo: () => 120,
         getCellWidth: () => 20,
-        getViewportWidth: () => 800,
+        getViewportWidth: () => viewportWidth,
       },
       eventCallbacks: {
         emit: (event, data) => {
@@ -171,6 +185,7 @@ function createHighwayState() {
     // Initialize with target notes
     const engineNotes = convertToEngineFormat(state.targetNotes);
     engineService.init(engineNotes);
+    return engineService;
   }
 
   return {
@@ -201,6 +216,8 @@ function createHighwayState() {
         engineService.stop();
       }
       state.isPlaying = false;
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
@@ -212,6 +229,8 @@ function createHighwayState() {
         engineService.pause();
       }
       state.isPlaying = false;
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
@@ -248,6 +267,10 @@ function createHighwayState() {
       state.nowLineX = x;
     },
 
+    setViewportWidth(width: number) {
+      viewportWidth = width;
+    },
+
     setPixelsPerSecond(pps: number) {
       state.pixelsPerSecond = pps;
     },
@@ -259,6 +282,17 @@ function createHighwayState() {
     setFeedbackConfig(config: Partial<FeedbackCollectorConfig>) {
       state.feedbackConfig = { ...state.feedbackConfig, ...config };
 
+      if (engineService && !state.isPlaying) {
+        const engineNotes = convertToEngineFormat(state.targetNotes);
+        initializeEngine();
+        if (engineService) {
+          engineService.init(engineNotes);
+        }
+      }
+    },
+
+    setWaitForInput(waitForInput: boolean) {
+      state.waitForInput = waitForInput;
       if (engineService && !state.isPlaying) {
         const engineNotes = convertToEngineFormat(state.targetNotes);
         initializeEngine();
@@ -285,6 +319,54 @@ function createHighwayState() {
       state.currentTimeMs = timeMs;
       if (engineService) {
         engineService.setScrollOffset(timeMs);
+      }
+    },
+
+    /**
+     * Hard-cut playback to a timeline position.
+     * Rebuilds the engine so wait-gates and note evaluation restart cleanly.
+     */
+    hardCutTo(timeMs: number, resumePlayback: boolean = true) {
+      const targetTimeMs = Math.max(0, timeMs);
+
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+
+      if (engineService) {
+        engineService.dispose();
+        engineService = null;
+      }
+
+      state.targetNotes = state.targetNotes.map((note) => ({
+        ...note,
+        hit: false,
+      }));
+      state.currentTimeMs = targetTimeMs;
+      state.isPlaying = false;
+      state.isWaitingForInput = false;
+      state.waitingNoteId = null;
+
+      if (state.targetNotes.length === 0) {
+        return;
+      }
+
+      const service = initializeEngine();
+      if (!service) {
+        return;
+      }
+
+      service.start();
+      service.setScrollOffset(targetTimeMs);
+      syncEngineState();
+
+      if (resumePlayback) {
+        state.isPlaying = true;
+        animate();
+      } else {
+        service.pause();
+        state.isPlaying = false;
       }
     },
 

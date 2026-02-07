@@ -22,15 +22,13 @@
   /* transform is applied dynamically via JS - don't set static value */
 }
 
-#belt-cursor,
-#belt-flash-overlay {
+.belt-cursor,
+.belt-flash-overlay {
   will-change: transform;
   backface-visibility: hidden;
-  /* transform is applied dynamically via JS - don't set static value */
 }
 
 /* Optimize containers that change orientation */
-.belts-container,
 .main-container {
   /* Hint browser about layout changes */
   contain: layout style;
@@ -60,8 +58,8 @@
   /* Remove will-change to reduce GPU usage */
   .belt-track,
   .interval-brackets-track,
-  #belt-cursor,
-  #belt-flash-overlay,
+  .belt-cursor,
+  .belt-flash-overlay,
   #sidebar {
     will-change: auto;
   }
@@ -101,8 +99,11 @@ body.low-power-mode #chromaWheel {
 
 /* Paint containment for independent components */
 .wheel-container,
-.belts-container,
 #result-container {
-  /* Isolate paint to improve performance */
+  contain: paint layout;
+}
+
+/* Paint containment on individual belts (belts-container uses display:contents) */
+.belt {
   contain: paint layout;
 }

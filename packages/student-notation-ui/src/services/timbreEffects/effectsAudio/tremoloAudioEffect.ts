@@ -22,6 +22,12 @@ interface Voice {
  * Tremolo Audio Effect
  * Handles audio-only tremolo implementation using Tone.js
  * Extracted from synthEngine.js for clean separation
+ *
+ * [PERF:SHARED-LFO] Tremolo modulation is now handled by shared per-color LFOs
+ * in synthEngine.ts, not per-voice. applyToVoice() calls voice._setTremolo() which
+ * is a no-op — the actual modulation happens via shared LFO → tremoloGain.gain.
+ * This class still stores settings and is called by audioEffectsManager for
+ * backwards compatibility, but the real work happens in synthEngine.updateSharedTremolo().
  */
 class TremoloAudioEffect {
   private currentSettings = new Map<string, TremoloSettings>();

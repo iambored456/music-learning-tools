@@ -40,7 +40,7 @@ const HIGH_LOW_PATTERN: ExercisePattern = {
 
 export const FOUNDATIONS_1_2_HIGH_LOW_CONTRAST: PitchMatchingTemplate = {
   id: 'foundations-1-2-high-low-contrast',
-  name: 'High vs Low Contrast',
+  name: '1.2 High vs Low Contrast',
   description: 'Sing within a low band, then within a higher band relative to your speaking pitch.',
   type: 'pitch-matching',
   difficulty: 1,

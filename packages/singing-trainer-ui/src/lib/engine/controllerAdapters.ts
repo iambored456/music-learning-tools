@@ -14,7 +14,15 @@ import type {
   UiController,
   UiOverlay,
   LessonContext,
+  AvatarSpeakOptions,
+  AvatarExpression,
 } from '@mlt/lesson-templates';
+
+import {
+  createTalkingAvatarController,
+  defaultAvatarAssets,
+  type TalkingAvatarController,
+} from '@mlt/talking-avatar';
 
 import { appState, type TonicNote } from '../stores/appState.svelte.js';
 import { resultsState } from '../stores/resultsState.svelte.js';
@@ -182,6 +190,20 @@ let instructionTimeoutId: ReturnType<typeof setTimeout> | null = null;
 // Track active overlays
 const activeOverlays = new Map<string, UiOverlay>();
 
+// Avatar instance (lazily created when mounted)
+let avatar: TalkingAvatarController | null = null;
+
+function getSafeSpeakOptions(options?: AvatarSpeakOptions): { lang?: string; rate?: number } {
+  const speakOptions: { lang?: string; rate?: number } = {};
+  if (typeof options?.lang === 'string' && options.lang.trim().length > 0) {
+    speakOptions.lang = options.lang;
+  }
+  if (typeof options?.rate === 'number' && Number.isFinite(options.rate)) {
+    speakOptions.rate = options.rate;
+  }
+  return speakOptions;
+}
+
 /**
  * Create a UiController adapter that controls UI overlays and modals.
  */
@@ -247,6 +269,87 @@ export function createUiControllerAdapter(): UiController {
     hideResults(): void {
       resultsState.hide();
     },
+
+    // =========================================================================
+    // Avatar Methods
+    // =========================================================================
+
+    async mountAvatar(container: HTMLElement): Promise<void> {
+      if (avatar) {
+        console.log('[UiController] Avatar already mounted');
+        return;
+      }
+
+      avatar = createTalkingAvatarController({
+        assets: defaultAvatarAssets,
+        mount: container,
+      });
+      console.log('[UiController] Avatar mounted');
+    },
+
+    async showAvatar(): Promise<void> {
+      if (!avatar) {
+        console.warn('[UiController] Cannot show avatar - not mounted');
+        return;
+      }
+      await avatar.enter();
+      console.log('[UiController] Avatar shown');
+    },
+
+    hideAvatar(): void {
+      if (avatar) {
+        avatar.setVisible(false);
+        console.log('[UiController] Avatar hidden');
+      }
+    },
+
+    async speakInstruction(message: string, options?: AvatarSpeakOptions): Promise<void> {
+      const controller = avatar;
+      if (!controller) {
+        console.warn('[UiController] Cannot speak - avatar not mounted');
+        return;
+      }
+
+      // Set expression before speaking
+      if (options?.expression === 'feedback_bad') {
+        controller.setFeedbackBad(true);
+      } else {
+        controller.setFeedbackBad(false);
+      }
+
+      try {
+        await controller.speak(message, getSafeSpeakOptions(options));
+      } catch (error) {
+        console.warn('[UiController] Avatar speakInstruction failed:', error);
+      } finally {
+        try {
+          controller.setFeedbackBad(false);
+        } catch {
+          // Avatar may be disposed during async speech; ignore cleanup errors.
+        }
+      }
+    },
+
+    cancelSpeech(): void {
+      if (avatar) {
+        avatar.cancel();
+        console.log('[UiController] Avatar speech cancelled');
+      }
+    },
+
+    setAvatarFeedback(state: AvatarExpression): void {
+      if (!avatar) return;
+      avatar.setFeedbackBad(state === 'feedback_bad');
+    },
+
+    disposeAvatar(): void {
+      if (avatar) {
+        avatar.cancel();
+        avatar.dispose();
+        avatar = null;
+        console.log('[UiController] Avatar disposed');
+      }
+    },
   };
 }
 
@@ -281,4 +384,93 @@ export function getCurrentInstruction(): { message: string; title?: string } | n
 
 export function getActiveOverlays(): UiOverlay[] {
   return Array.from(activeOverlays.values());
+}
+
+// ============================================================================
+// Avatar Lifecycle Helpers
+// ============================================================================
+
+/**
+ * Mount and show the lesson avatar.
+ * Call this when a lesson starts.
+ *
+ * @param containerId - The DOM element ID to mount the avatar into (default: 'lesson-avatar-mount')
+ */
+export async function mountAndShowLessonAvatar(
+  containerId: string = 'lesson-avatar-mount'
+): Promise<void> {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.warn(`[Avatar] Container #${containerId} not found`);
+    return;
+  }
+
+  // Create avatar if not already created
+  if (!avatar) {
+    avatar = createTalkingAvatarController({
+      assets: defaultAvatarAssets,
+      mount: container,
+    });
+    console.log('[Avatar] Created and mounted');
+  }
+
+  // Show with enter animation
+  await avatar.enter();
+  console.log('[Avatar] Shown');
+}
+
+/**
+ * Dispose the lesson avatar.
+ * Call this when a lesson stops.
+ */
+export function disposeLessonAvatar(): void {
+  if (avatar) {
+    avatar.cancel();
+    avatar.dispose();
+    avatar = null;
+    console.log('[Avatar] Disposed');
+  }
+}
+
+/**
+ * Speak through the mounted lesson avatar, if available.
+ */
+export async function speakWithLessonAvatar(
+  message: string,
+  options?: AvatarSpeakOptions
+): Promise<void> {
+  const controller = avatar;
+  if (!controller) return;
+
+  if (options?.expression === 'feedback_bad') {
+    controller.setFeedbackBad(true);
+  } else {
+    controller.setFeedbackBad(false);
+  }
+
+  try {
+    await controller.speak(message, getSafeSpeakOptions(options));
+  } catch (error) {
+    console.warn('[Avatar] speak failed:', error);
+  } finally {
+    try {
+      controller.setFeedbackBad(false);
+    } catch {
+      // Avatar may be disposed during async speech; ignore cleanup errors.
+    }
+  }
+}
+
+/**
+ * Cancel current lesson-avatar speech, if any.
+ */
+export function cancelLessonAvatarSpeech(): void {
+  avatar?.cancel();
+}
+
+/**
+ * Get the current avatar instance (for direct access if needed).
+ */
+export function getLessonAvatar(): TalkingAvatarController | null {
+  return avatar;
 }

@@ -15,6 +15,7 @@ export type {
   LessonTemplate,
   PitchMatchingConfig,
   LoopPhaseType,
+  LoopPhaseTargetMode,
   LoopPhase,
   ExercisePattern,
   TemplateVariation,
@@ -31,6 +32,7 @@ export type {
   LessonStep,
   LessonStepper,
   InstructionStepConfig,
+  InstructionAvatarExpression,
   ConfigureStepConfig,
   ListenStepConfig,
   InputStepConfig,
@@ -78,6 +80,9 @@ export {
   type AudioController,
   type UiController,
   type UiOverlay,
+  // Avatar types
+  type AvatarExpression,
+  type AvatarSpeakOptions,
 } from './engine/index.js';
 
 // Pitch mapping utilities
@@ -113,7 +118,7 @@ export {
 
 // Lessons
 export {
-  INTRO_PITCH_MATCHING,
   ANCHORED_PITCH_MATCHING,
+  FOUNDATIONS_1_MERGED,
   ALL_LESSONS,
 } from './lessons/index.js';

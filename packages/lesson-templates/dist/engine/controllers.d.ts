@@ -146,6 +146,17 @@ export interface UiOverlay {
     /** Allow user to dismiss */
     dismissible?: boolean;
 }
+/** Avatar expression states */
+export type AvatarExpression = 'neutral' | 'encouraging' | 'feedback_bad';
+/** Options for avatar speech */
+export interface AvatarSpeakOptions {
+    /** Expression to show during speech */
+    expression?: AvatarExpression;
+    /** Language code (e.g., 'en-CA') */
+    lang?: string;
+    /** Speech rate (0.1 to 2.0, default ~0.92) */
+    rate?: number;
+}
 /** Controller interface for UI overlays and modals */
 export interface UiController {
     /**
@@ -184,6 +195,38 @@ export interface UiController {
      * Hide the results modal
      */
     hideResults(): void;
+    /**
+     * Mount the avatar to a container element
+     * @param container DOM element to mount avatar in
+     */
+    mountAvatar?(container: HTMLElement): Promise<void>;
+    /**
+     * Show the avatar (enter animation)
+     */
+    showAvatar?(): Promise<void>;
+    /**
+     * Hide the avatar
+     */
+    hideAvatar?(): void;
+    /**
+     * Speak an instruction with the avatar
+     * @param message Message to speak (can contain HTML)
+     * @param options Optional speech configuration
+     */
+    speakInstruction?(message: string, options?: AvatarSpeakOptions): Promise<void>;
+    /**
+     * Cancel any ongoing avatar speech
+     */
+    cancelSpeech?(): void;
+    /**
+     * Set the avatar's visual feedback state
+     * @param state Expression state to show
+     */
+    setAvatarFeedback?(state: AvatarExpression): void;
+    /**
+     * Dispose and clean up the avatar
+     */
+    disposeAvatar?(): void;
 }
 /** Context provided to lessons for controlling the app */
 export interface LessonContext {
