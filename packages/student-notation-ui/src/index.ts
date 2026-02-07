@@ -49,6 +49,17 @@ function rewriteAssetUrls(container: HTMLElement): void {
   });
 }
 
+function ensureMountContainerLayout(container: HTMLElement): void {
+  // Some host pages do not provide explicit root sizing. Enforce a full-size
+  // flex mount container so notation can expand to the available viewport.
+  container.style.width = '100%';
+  container.style.height = '100%';
+  container.style.display = 'flex';
+  container.style.flex = '1 1 auto';
+  container.style.minWidth = '0';
+  container.style.minHeight = '0';
+}
+
 export function mountStudentNotation(container: HTMLElement): StudentNotationInstance {
   initDebug('[StudentNotation] mount:start', {
     hasTemplate: Boolean(template),
@@ -56,6 +67,7 @@ export function mountStudentNotation(container: HTMLElement): StudentNotationIns
     containerId: container.id || null,
   });
 
+  ensureMountContainerLayout(container);
   container.innerHTML = template;
   initDebug('[StudentNotation] template injected');
 
