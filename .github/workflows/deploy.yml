@@ -51,6 +51,7 @@ jobs:
         run: pnpm build
         env:
           NODE_ENV: production
+          BASE_URL: /${{ github.event.repository.name }}/
 
       - name: Assemble Pages output
         run: node scripts/assemble-pages.js
