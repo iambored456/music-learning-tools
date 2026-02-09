@@ -19,6 +19,7 @@ export interface ZoomToFitOptions {
     baseUnit: number;
     paddingRows?: number;
 }
+export type SpanLadderSnapMode = ZoomDirection | 'nearest';
 export declare const DEFAULT_MIN_VIEWPORT_ROWS = 9;
 export declare const DEFAULT_ZOOM_STEP_ROWS = 2;
 export declare const MAX_ADAPTIVE_ZOOM_STEP_ROWS = 5;
@@ -59,6 +60,29 @@ export declare function shiftRangeBy(current: PitchRange, deltaRows: number, tot
  * Zooms the range in/out by moving both endpoints.
  */
 export declare function zoomRange(current: PitchRange, direction: ZoomDirection, { totalRanks, minSpan, zoomStep }: ViewportMathOptions): PitchRange;
+/**
+ * Build a deterministic ladder of allowed spans for discrete zoom/preset states.
+ * The ladder is sorted largest -> smallest and always includes full span and min span.
+ */
+export declare function buildSpanLadder(totalRanks: number, minSpan?: number): number[];
+/**
+ * Snap a span to the closest ladder value or step in a zoom direction.
+ */
+export declare function snapSpanToLadder(span: number, ladder: number[], mode?: SpanLadderSnapMode): number;
+export interface SpanLadderRangeOptions {
+    totalRanks: number;
+    minSpan?: number;
+    ladder?: number[];
+    mode?: SpanLadderSnapMode;
+}
+/**
+ * Snap a range's span to the shared span ladder while preserving center.
+ */
+export declare function snapRangeToSpanLadder(range: PitchRange, { totalRanks, minSpan, ladder, mode }: SpanLadderRangeOptions): PitchRange;
+/**
+ * Perform one zoom step by moving to the next span rung.
+ */
+export declare function zoomRangeOnSpanLadder(current: PitchRange, direction: ZoomDirection, { totalRanks, minSpan, ladder }: Omit<SpanLadderRangeOptions, 'mode'>): PitchRange;
 /**
  * Calculate the zoom level needed to fit a given number of rows in a container.
  */

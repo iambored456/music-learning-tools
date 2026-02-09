@@ -6,4 +6,3 @@
  * calibrated speaking pitch.
  */
 export {};
-// Future: | IntervalTemplate | RhythmTemplate | MelodyTemplate

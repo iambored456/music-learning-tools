@@ -16,4 +16,6 @@ export { validateTemplate, calculateLoopDurationMicrobeats, calculateLoopDuratio
 // Presets
 export { STANDARD_4_PHASE_PATTERN, QUICK_RESPONSE_PATTERN, EXTENDED_HOLD_PATTERN, BASIC_PITCH_MATCHING, QUICK_PITCH_MATCHING, SUSTAINED_PITCH_MATCHING, CENTERED_RANGE_MATCHING, PITCH_MATCHING_PRESETS, registerAllPresets, getAllPresets, } from './presets/index.js';
 // Lessons
-export { ANCHORED_PITCH_MATCHING, FOUNDATIONS_1_MERGED, ALL_LESSONS, } from './lessons/index.js';
+export { ANCHORED_PITCH_MATCHING, FOUNDATIONS_1_MERGED, ALL_LESSONS, 
+// Overdub exercises
+SIMPLE_UNISON, ALL_OVERDUB_EXERCISES, } from './lessons/index.js';

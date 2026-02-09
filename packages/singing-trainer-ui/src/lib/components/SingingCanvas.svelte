@@ -10,11 +10,16 @@
     PitchGrid,
     calculateViewportWindow,
     createTimeCoordinates,
+    drawUserPitchIndicator,
     drawUserPitchTrace,
   } from '@mlt/ui-components/canvas';
   import type {
+    CoordinateUtils,
     CurrentPitch,
     LegendHighlightConfig,
+    PitchHistoryPoint,
+    PitchRowHighlightConfig,
+    PitchRowHighlightEntry,
     PitchGridMode,
     PitchGridViewport,
     SingingModeConfig,
@@ -30,6 +35,8 @@
   import { highwayState } from '../stores/highwayState.svelte.js';
   import { exerciseState } from '../stores/exerciseState.svelte.js';
   import { ultrastarState } from '../stores/ultrastarState.svelte.js';
+  import { overdubState } from '../stores/overdubState.svelte.js';
+  import { MODE_SCALE_DEGREES } from '../constants/modes.js';
   import { LyricsDisplay } from './karaoke/index.js';
   import YAxisDragZones from './YAxisDragZones.svelte';
   import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';
@@ -81,14 +88,12 @@
 
   // Check if ultrastar mode is active (for lyrics display)
   const isUltrastarActive = $derived(ultrastarState.state.isActive && ultrastarState.state.isPlaying);
+  const isExerciseActive = $derived(exerciseState.state.isActive || exerciseState.state.isPlaying);
 
   // Calculate beat interval based on exercise tempo
   // 1 beat = 2 microbeats, beatIntervalMs = 60000 / tempo
   const beatIntervalMs = $derived<number>(
     (60 / exerciseState.state.config.tempo) * 1000 // ms per beat (quarter note)
-  );
-  const gridBeatIntervalMs = $derived<number>(
-    ultrastarState.state.isActive ? 0 : beatIntervalMs
   );
 
   // Lead-in time offset for beat line alignment (matches exerciseState)
@@ -112,10 +117,70 @@
     }));
   })());
 
+  const droneHighlightEntry = $derived<PitchRowHighlightEntry | null>((() => {
+    if (!appState.state.drone.isPlaying) return null;
+
+    const droneMidi = ((appState.state.drone.octave + 1) * 12) + getTonicPitchClass(appState.state.tonic);
+    const droneRow = fullRowData.find((row) => row.midi === droneMidi);
+    if (!droneRow) return null;
+
+    return {
+      midi: droneMidi,
+      color: droneRow.hex,
+      opacity: 0.52,
+      glow: 1,
+      pulse: true,
+      heightScale: 0.5,
+    };
+  })());
+
+  const modeRowHighlights = $derived<PitchRowHighlightEntry[]>((() => {
+    const drone = appState.state.drone;
+    if (!drone.modeEnabled || !drone.isPlaying) return [];
+
+    const tonicPc = getTonicPitchClass(appState.state.tonic);
+    const offsets = MODE_SCALE_DEGREES[drone.selectedMode];
+    if (!offsets) return [];
+
+    const modePitchClasses = new Set(offsets.map(offset => (tonicPc + offset) % 12));
+    const droneMidi = ((drone.octave + 1) * 12) + tonicPc;
+    const highlights: PitchRowHighlightEntry[] = [];
+
+    for (const row of fullRowData) {
+      if (row.isBoundary) continue;
+      if (typeof row.midi !== 'number' || typeof row.pitchClass !== 'number') continue;
+      if (row.midi === droneMidi) continue;
+      if (!modePitchClasses.has(row.pitchClass)) continue;
+
+      highlights.push({
+        midi: row.midi,
+        opacity: 0.2,
+        glow: 0,
+        pulse: false,
+        heightScale: 0.5,
+      });
+    }
+
+    return highlights;
+  })());
+
+  const combinedRowHighlight = $derived<PitchRowHighlightConfig | undefined>((() => {
+    const entries: PitchRowHighlightEntry[] = [];
+    if (modeRowHighlights.length > 0) entries.push(...modeRowHighlights);
+    if (droneHighlightEntry) entries.push(droneHighlightEntry);
+    return entries.length > 0 ? entries : undefined;
+  })());
+
   // Build MIDI → hex color lookup from fullRowData
-  const midiToHex = $derived<Map<number, string>>(
-    new Map(fullRowData.map((row) => [row.midi, row.hex]))
-  );
+  const midiToHex = $derived.by<Map<number, string>>(() => {
+    const map = new Map<number, string>();
+    for (const row of fullRowData) {
+      if (typeof row.midi === 'number') {
+        map.set(row.midi, row.hex);
+      }
+    }
+    return map;
+  });
 
   // Convert local target notes to shared format
   function convertTargetNotes(): SharedTargetNote[] {
@@ -132,7 +197,7 @@
       startTimeMs: n.startTimeMs,
       durationMs: n.durationMs,
       label: n.label ?? ((showDegrees && typeof n.midi === 'number') ? degrees[i] : n.lyric),
-      color: usePitchColors && typeof n.midi === 'number' ? midiToHex.get(n.midi) : undefined,
+      color: usePitchColors && typeof n.midi === 'number' ? midiToHex.get(n.midi) : n.color,
     }));
   }
 
@@ -165,7 +230,7 @@
     pixelsPerSecond: 200,
     circleRadius: 9.5,
     proximityThreshold: 35,
-    maxConnections: 3,
+    maxConnections: 0,
     connectorLineWidth: 2.5,
     connectorColor: 'rgba(0,0,0,0.4)',
     useTonicRelativeColors: false,
@@ -180,9 +245,31 @@
     fixedPx: appState.state.lyricLabelFixedPx,
   });
 
+  const persistentOverdubTrails = $derived(overdubState.getRenderableTrails());
+  const loopDurationMs = $derived(Math.max(1, overdubState.captureDurationMs));
+  const overdubRecordingActive = $derived(
+    overdubState.state.isCountInActive || overdubState.state.isRecordingActive
+  );
+  const forwardCursorModeEnabled = $derived(overdubState.state.forwardCursorModeEnabled);
+  const useLoopTimeline = $derived(
+    mode === 'highway'
+      && forwardCursorModeEnabled
+      && overdubRecordingActive
+      && !isUltrastarActive
+      && !isExerciseActive
+  );
+  const showTimingGridLines = $derived<boolean>(
+    mode === 'highway'
+      && !useLoopTimeline
+      && !ultrastarState.state.isActive
+      && highwayState.state.isPlaying
+  );
+  const gridBeatIntervalMs = $derived<number>(showTimingGridLines ? beatIntervalMs : 0);
+  const effectiveGridMode = $derived<PitchGridMode>(useLoopTimeline ? 'singing' : mode);
+
   // Build singing mode config (no userPitch — passed as separate prop)
   const singingConfig = $derived<SingingModeConfig | undefined>(
-    mode === 'singing'
+    mode === 'singing' || useLoopTimeline
       ? {
           pitchHistory: [],
           targetNotes: [],
@@ -195,7 +282,7 @@
   );
 
   // Build highway mode config (no userPitch, no convertTargetNotes — both moved out)
-  const highwayConfig = $derived<HighwayModeConfig | undefined>(
+  const rawHighwayConfig = $derived<HighwayModeConfig | undefined>(
     mode === 'highway'
       ? {
           pitchHistory: [],
@@ -209,6 +296,8 @@
         }
       : undefined
   );
+
+  const highwayConfig = $derived<HighwayModeConfig | undefined>(rawHighwayConfig);
 
   // Viewport configuration using calculated window
   const viewport = $derived<PitchGridViewport>({
@@ -242,7 +331,14 @@
   function renderTrail(): void {
     if (!trailCtx || gridWidth <= 0) return;
 
+    const currentTime = performance.now();
     trailCtx.clearRect(0, 0, gridWidth, containerHeight);
+    if (useLoopTimeline) {
+      drawPersistentOverdubTrails(trailCtx, currentTime);
+      drawLoopTimelineMicTrail(trailCtx, currentTime);
+      drawLoopPlaybackCursor(trailCtx, currentTime);
+      return;
+    }
 
     const trailHistory = pitchState.state.history;
     if (trailHistory.length === 0) return;
@@ -284,8 +380,6 @@
         : trailConfig,
     };
 
-    const currentTime = performance.now();
-
     drawUserPitchTrace(
       trailCtx,
       coords,
@@ -294,6 +388,193 @@
       userPitchConfig,
       fullRowData
     );
+  }
+
+  function isLoopTransportActive(): boolean {
+    const overdub = overdubState.state;
+    return overdub.isCountInActive
+      || overdub.isRecordingActive
+      || overdub.engine.mode === 'playing'
+      || overdub.engine.mode === 'exporting';
+  }
+
+  function getLoopTransportProgressMs(phraseDurationMs: number, currentTime: number): number {
+    const overdub = overdubState.state;
+    if (overdub.isCountInActive || overdub.isRecordingActive) {
+      if (typeof overdub.recordingStartPerfMs === 'number') {
+        const elapsedMs = currentTime - overdub.recordingStartPerfMs;
+        return Math.max(0, Math.min(elapsedMs, phraseDurationMs));
+      }
+      return Math.max(0, Math.min(overdub.captureProgressMs, phraseDurationMs));
+    }
+    if (overdub.engine.mode === 'playing' || overdub.engine.mode === 'exporting') {
+      return Math.max(0, Math.min(overdub.engine.playbackTimeMs, phraseDurationMs));
+    }
+    return 0;
+  }
+
+  function drawLoopTimelineMicTrail(ctx: CanvasRenderingContext2D, currentTime: number): void {
+    const phraseDurationMs = loopDurationMs;
+    if (phraseDurationMs <= 0) return;
+
+    const pitchHistory = pitchState.state.history;
+    if (pitchHistory.length === 0) return;
+
+    const recordingProgressMs = isLoopTransportActive()
+      ? getLoopTransportProgressMs(phraseDurationMs, currentTime)
+      : currentTime % phraseDurationMs;
+
+    const loopStartMs = currentTime - recordingProgressMs;
+    const loopPixelsPerSecond = Math.max(1, (gridWidth / phraseDurationMs) * 1000);
+    const coords = createTimeCoordinates({
+      cellWidth,
+      cellHeight: viewportWindow.cellHeight,
+      viewport,
+      pixelsPerSecond: loopPixelsPerSecond,
+      nowLineX: gridWidth,
+      currentTimeMs: phraseDurationMs,
+    });
+
+    const remappedHistory: PitchHistoryPoint[] = [];
+    for (const point of pitchHistory) {
+      if (point.time < loopStartMs || point.time > currentTime) continue;
+      const elapsedMs = point.time - loopStartMs;
+      if (elapsedMs < 0 || elapsedMs > phraseDurationMs) continue;
+      remappedHistory.push({
+        frequency: point.frequency,
+        midi: point.midi,
+        clarity: point.clarity,
+        time: currentTime - (phraseDurationMs - elapsedMs),
+      });
+    }
+
+    if (remappedHistory.length === 0) return;
+
+    const userPitchConfig: UserPitchRenderConfig = {
+      cellHeight: viewportWindow.cellHeight,
+      viewportWidth: gridWidth,
+      nowLineX: gridWidth,
+      pixelsPerSecond: loopPixelsPerSecond,
+      timeWindowMs: phraseDurationMs,
+      colorMode: 'color',
+      trailConfig: {
+        ...trailConfig,
+        timeWindowMs: phraseDurationMs,
+        pixelsPerSecond: loopPixelsPerSecond,
+      },
+    };
+
+    drawUserPitchTrace(ctx, coords, remappedHistory, currentTime, userPitchConfig, fullRowData);
+    drawLoopCurrentPitchIndicator(ctx, coords, userPitchConfig, phraseDurationMs, currentTime);
+  }
+
+  function drawLoopCurrentPitchIndicator(
+    ctx: CanvasRenderingContext2D,
+    coords: CoordinateUtils,
+    config: UserPitchRenderConfig,
+    phraseDurationMs: number,
+    currentTime: number
+  ): void {
+    if (!isLoopTransportActive()) return;
+    const currentPitch = pitchState.state.currentPitch;
+    if (!currentPitch) return;
+
+    const progressMs = getLoopTransportProgressMs(phraseDurationMs, currentTime);
+    const x = (progressMs / phraseDurationMs) * gridWidth;
+    drawUserPitchIndicator(
+      ctx,
+      coords,
+      currentPitch.midi,
+      currentPitch.clarity,
+      x,
+      config,
+      fullRowData
+    );
+  }
+
+  function drawLoopPlaybackCursor(ctx: CanvasRenderingContext2D, currentTime: number): void {
+    const phraseDurationMs = loopDurationMs;
+    if (phraseDurationMs <= 0 || gridWidth <= 0) return;
+
+    const isActive = isLoopTransportActive();
+    if (!isActive) return;
+    const progressMs = getLoopTransportProgressMs(phraseDurationMs, currentTime);
+    const x = (progressMs / phraseDurationMs) * gridWidth;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 90, 90, 0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, containerHeight);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 120, 120, 0.95)';
+    ctx.beginPath();
+    ctx.moveTo(x - 6, 0);
+    ctx.lineTo(x + 6, 0);
+    ctx.lineTo(x, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPersistentOverdubTrails(ctx: CanvasRenderingContext2D, currentTime: number): void {
+    const trails = persistentOverdubTrails;
+    if (trails.length === 0) return;
+
+    const phraseDurationMs = Math.max(1, overdubState.captureDurationMs);
+    const loopPixelsPerSecond = Math.max(1, (gridWidth / phraseDurationMs) * 1000);
+    const coords = createTimeCoordinates({
+      cellWidth,
+      cellHeight: viewportWindow.cellHeight,
+      viewport,
+      pixelsPerSecond: loopPixelsPerSecond,
+      nowLineX: gridWidth,
+      currentTimeMs: phraseDurationMs,
+    });
+
+    const persistentTrailConfig: UserPitchRenderConfig = {
+      cellHeight: viewportWindow.cellHeight,
+      viewportWidth: gridWidth,
+      nowLineX: gridWidth,
+      pixelsPerSecond: loopPixelsPerSecond,
+      timeWindowMs: phraseDurationMs,
+      colorMode: 'color',
+      trailConfig: {
+        ...trailConfig,
+        timeWindowMs: phraseDurationMs,
+        pixelsPerSecond: loopPixelsPerSecond,
+        circleRadius: 4.5,
+        connectorLineWidth: 1.5,
+        maxConnections: 2,
+        maxOpacity: 0.78,
+      },
+    };
+
+    for (const trail of trails) {
+      if (!trail.points || trail.points.length === 0) continue;
+      const remappedHistory: PitchHistoryPoint[] = [];
+      for (const point of trail.points) {
+        if (point.offsetMs < 0 || point.offsetMs > phraseDurationMs) continue;
+        remappedHistory.push({
+          frequency: point.frequency,
+          midi: point.midi,
+          clarity: point.clarity,
+          time: currentTime - (phraseDurationMs - point.offsetMs),
+        });
+      }
+      if (remappedHistory.length === 0) continue;
+
+      drawUserPitchTrace(
+        ctx,
+        coords,
+        remappedHistory,
+        currentTime,
+        persistentTrailConfig,
+        fullRowData
+      );
+    }
   }
 
   function startTrailLoop(): void {
@@ -378,7 +659,7 @@
   {/if}
 
   <PitchGrid
-    {mode}
+    mode={effectiveGridMode}
     {fullRowData}
     {viewport}
     cellWidth={cellWidth}
@@ -389,8 +670,9 @@
     {showRightLegend}
     {singingConfig}
     {highwayConfig}
-    {userPitch}
+    userPitch={useLoopTimeline ? null : userPitch}
     legendHighlight={legendHighlight}
+    rowHighlight={combinedRowHighlight}
     beatIntervalMs={gridBeatIntervalMs}
     {beatTimeOffsetMs}
   />
@@ -399,7 +681,7 @@
     class="pitch-trail-canvas"
   ></canvas>
 
-  {#if mode === 'highway'}
+  {#if mode === 'highway' && !useLoopTimeline}
     <div class="judgement-line-overlay" style:left="{gridOffsetX}px" style:width="{gridWidth}px">
       <JudgementLineDragHandle canvasWidth={gridWidth} gridHeight={containerHeight} />
     </div>

@@ -30,3 +30,16 @@ export {
   type ExercisePhase,
 } from './exerciseState.svelte.js';
 export { chooserState, type ChooserState } from './chooserState.svelte.js';
+export {
+  overdubState,
+  type OverdubUiState,
+  type RenderableTakeTrail,
+} from './overdubState.svelte.js';
+export {
+  overdubExerciseState,
+  type OverdubExerciseSessionState,
+} from './overdubExerciseState.svelte.js';
+export {
+  overdubExerciseChooserState,
+  type OverdubExerciseChooserState,
+} from './overdubExerciseChooserState.svelte.js';

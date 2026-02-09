@@ -49,6 +49,8 @@ export interface ScheduleEvent {
   duration: Tone.Unit.Time;
   rowOffset: number;
   slot?: number;
+  shapeKey?: string;
+  noteId?: string;
 }
 
 /** Measure boundary information for modulation */

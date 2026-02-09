@@ -208,6 +208,16 @@ function getTrebleClefPresetRange() {
   return resolveRangeFromToneNotes(TREBLE_CLEF_PRESET_TONES);
 }
 
+function isFullGamutRange(range: { topIndex?: number; bottomIndex?: number } | null | undefined): boolean {
+  if (!range) {
+    return true;
+  }
+  const maxIndex = Math.max(0, fullRowData.length - 1);
+  const topIndex = typeof range.topIndex === 'number' ? range.topIndex : 0;
+  const bottomIndex = typeof range.bottomIndex === 'number' ? range.bottomIndex : maxIndex;
+  return topIndex <= 0 && bottomIndex >= maxIndex;
+}
+
 function markComponentReady(componentName: keyof ComponentReadiness) {
   componentReadiness[componentName] = true;
   // Component ready
@@ -330,10 +340,15 @@ async function startStudentNotation(): Promise<void> {
     snapshotState(store.state);
 
     // TEMPORARY: This is the one allowed direct state mutation during initialization
-    const initialPitchRange = store.state.pitchRange || {
+    const treblePresetRange = getTrebleClefPresetRange();
+    const fullGamutFallback = {
       topIndex: 0,
       bottomIndex: fullRowData.length - 1
     };
+    const preferredPitchRange = isFullGamutRange(store.state.pitchRange)
+      ? (treblePresetRange ?? store.state.pitchRange ?? fullGamutFallback)
+      : (store.state.pitchRange ?? fullGamutFallback);
+    const initialPitchRange = preferredPitchRange;
     const clampedTop =
         Math.max(0, Math.min(fullRowData.length - 1, initialPitchRange.topIndex ?? 0));
     const clampedBottom =
@@ -506,7 +521,13 @@ async function startStudentNotation(): Promise<void> {
       if (!treblePresetRange) {
         logger.warn('Main.js', 'Treble Clef preset range could not be resolved during cold start');
       } else {
-        pitchGridViewportService.setPitchViewportRange(treblePresetRange, { animateMs: 0, source: 'coldStart:treble' });
+        const currentRange = store.state.pitchRange;
+        const alreadyTreble = currentRange
+          && currentRange.topIndex === treblePresetRange.topIndex
+          && currentRange.bottomIndex === treblePresetRange.bottomIndex;
+        if (!alreadyTreble) {
+          pitchGridViewportService.setPitchViewportRange(treblePresetRange, { animateMs: 0, source: 'coldStart:treble' });
+        }
       }
     }
 

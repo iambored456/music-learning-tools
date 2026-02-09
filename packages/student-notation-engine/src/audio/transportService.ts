@@ -319,17 +319,28 @@ export function createTransportService(config: TransportConfig): TransportServic
 
     const shapeRow = baseRow + event.rowOffset;
     const shapePitch = getPitchFromRow(shapeRow, state);
+    const noteId = event.noteId;
 
     // Schedule attack
     Tone.Transport.schedule(time => {
       if (stateCallbacks.getState().isPaused) return;
       synthEngine.triggerAttack(shapePitch, color, time);
+      if (noteId) {
+        Tone.Draw.schedule(() => {
+          eventCallbacks.emit('noteAttack', { noteId, color });
+        }, time);
+      }
     }, triggerTime);
 
     // Schedule release
     Tone.Transport.schedule(time => {
       if (stateCallbacks.getState().isPaused) return;
       synthEngine.triggerRelease(shapePitch, color, time);
+      if (noteId) {
+        Tone.Draw.schedule(() => {
+          eventCallbacks.emit('noteRelease', { noteId, color });
+        }, time);
+      }
     }, releaseTime);
   }
 

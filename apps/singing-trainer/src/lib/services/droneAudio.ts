@@ -20,13 +20,17 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
  */
 function ensureSynth(): Tone.PolySynth {
   if (!synth) {
-    synth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sawtooth' },
-      envelope: {
-        attack: 0.3,
-        decay: 0.1,
-        sustain: 0.8,
-        release: 0.5,
+    synth = new Tone.PolySynth({
+      maxPolyphony: Infinity,
+      voice: Tone.Synth,
+      options: {
+        oscillator: { type: 'sawtooth' },
+        envelope: {
+          attack: 0.3,
+          decay: 0.1,
+          sustain: 0.8,
+          release: 0.5,
+        },
       },
     }).toDestination();
     const oscillatorType = synth.get().oscillator?.type ?? 'unknown';

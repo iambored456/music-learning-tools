@@ -96,6 +96,20 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
   // 1. Get the range of rows that are actually visible
   const { startRow, endRow } = getVisibleRowRange();
 
+  const findRenderableRow = (
+    rows: Array<{ isDummy?: boolean; isBoundary?: boolean } | undefined>,
+    fromIndex: number,
+    direction: -1 | 1
+  ): number | null => {
+    for (let i = fromIndex; i >= 0 && i < rows.length; i += direction) {
+      const row = rows[i];
+      if (!row) {continue;}
+      if (row.isDummy || row.isBoundary) {continue;}
+      return i;
+    }
+    return null;
+  };
+
   // ROW COVERAGE NOTE (viewport vs draw range)
   // ------------------------------------------
   // Pitch rows are spaced at `halfUnit = cellHeight / 2`, but each row cell we draw is `cellHeight` tall.
@@ -111,23 +125,33 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
   const paddedStartRow = Math.max(0, startRow - 1);
   const maxRowIndex = Math.max(0, (fullOptions.fullRowData?.length ?? 1) - 1);
   const paddedEndRow = Math.min(maxRowIndex, endRow + 1);
+  const extraStartRow = findRenderableRow(fullOptions.fullRowData, paddedStartRow - 1, -1);
+  const extraEndRow = findRenderableRow(fullOptions.fullRowData, paddedEndRow + 1, 1);
+  const renderStartRow = extraStartRow ?? paddedStartRow;
+  const renderEndRow = extraEndRow ?? paddedEndRow;
 
+  const canvasHeight = getLogicalCanvasHeight(ctx.canvas);
+  const halfUnit = fullOptions.cellHeight / 2;
+  const visibleBottomEdge = getRowY(endRow, fullOptions) + halfUnit;
+  const renderBottomEdge = getRowY(renderEndRow, fullOptions) + halfUnit;
+  const startRowData = fullOptions.fullRowData?.[startRow];
+  const endRowData = fullOptions.fullRowData?.[endRow];
+  const renderStartRowData = fullOptions.fullRowData?.[renderStartRow];
+  const renderEndRowData = fullOptions.fullRowData?.[renderEndRow];
   // Compare main canvas height to the row math (helps diagnose legend-only blank bands).
   if (isViewportDebugEnabled()) {
-    const canvasHeight = getLogicalCanvasHeight(ctx.canvas);
-    const halfUnit = fullOptions.cellHeight / 2;
     const yEnd = getRowY(endRow, fullOptions);
     const bottomEdge = yEnd + halfUnit;
     const totalRows = fullOptions.fullRowData?.length ?? 0;
     const atTopGamutEdge = startRow <= 0;
     const atBottomGamutEdge = totalRows > 0 ? endRow >= totalRows - 1 : false;
-    const startRowData = fullOptions.fullRowData?.[startRow];
-    const endRowData = fullOptions.fullRowData?.[endRow];
     logViewportDebug('pitchCanvasCoverage', {
       startRow,
       endRow,
       paddedStartRow,
       paddedEndRow,
+      renderStartRow,
+      renderEndRow,
       atTopGamutEdge,
       atBottomGamutEdge,
       canvasHeight,
@@ -170,10 +194,10 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
   // 2. Draw pitch-to-Y-axis labels (left/right sidebars; historically called "legend" canvases)
   const legendLeftCtx = CanvasContextService.getLegendLeftContext();
   const legendRightCtx = CanvasContextService.getLegendRightContext();
-  drawLegendsToSeparateCanvases(legendLeftCtx, legendRightCtx, fullOptions, paddedStartRow, paddedEndRow);
+  drawLegendsToSeparateCanvases(legendLeftCtx, legendRightCtx, fullOptions, renderStartRow, renderEndRow);
 
   // 3. Pass the visible range to the renderers that draw row-based elements
-  drawHorizontalLines(ctx, fullOptions, paddedStartRow, paddedEndRow);
+  drawHorizontalLines(ctx, fullOptions, renderStartRow, renderEndRow);
   drawVerticalLines(ctx, fullOptions); // Vertical lines are not virtualized
 
   // 4. Filter notes and signs to only those that are visible before drawing

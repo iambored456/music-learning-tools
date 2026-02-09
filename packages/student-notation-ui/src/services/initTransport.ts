@@ -22,6 +22,7 @@ import { getTripletStampPlaybackData } from '@/rhythm/tripletStampPlacements.js'
 import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js';
 import { getColumnStartX, getColumnWidth, getCanvasWidth, getMacrobeatHighlightRectForCanvasColumn } from '@services/playheadModel.ts';
 import { timeToCanvas } from '@services/columnMapService.ts';
+import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 
 logger.moduleLoaded('EngineTransport', 'general');
 
@@ -79,7 +80,15 @@ const TransportService = {
           if (!Number.isFinite(resolvedStampId)) {
             return [];
           }
-          return getSixteenthStampScheduleEvents(resolvedStampId, placement ?? null);
+          const scheduleEvents = getSixteenthStampScheduleEvents(resolvedStampId, placement ?? null);
+          const placementId = typeof placement?.id === 'string' ? placement.id : null;
+          if (!placementId) {
+            return scheduleEvents;
+          }
+          return scheduleEvents.map((event) => ({
+            ...event,
+            noteId: buildSixteenthStampShapeNoteId(placementId, event.shapeKey)
+          }));
         },
         getTripletPlaybackData: () => getTripletStampPlaybackData().map((triplet) => ({
           tripletStampId: String(triplet.tripletStampId),
@@ -93,7 +102,15 @@ const TransportService = {
           if (!Number.isFinite(resolvedTripletId)) {
             return [];
           }
-          return getTripletStampScheduleEvents(resolvedTripletId, placement ?? null);
+          const scheduleEvents = getTripletStampScheduleEvents(resolvedTripletId, placement ?? null);
+          const placementId = typeof placement?.id === 'string' ? placement.id : null;
+          if (!placementId) {
+            return scheduleEvents;
+          }
+          return scheduleEvents.map((event) => ({
+            ...event,
+            noteId: buildTripletStampShapeNoteId(placementId, event.shapeKey)
+          }));
         },
         timeToCanvas: (timeIndex, state) => timeToCanvas(timeIndex, state as any),
         getPlacedTonicSigns: () => getPlacedTonicSigns(store.state),

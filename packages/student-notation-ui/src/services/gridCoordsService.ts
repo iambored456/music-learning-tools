@@ -1,7 +1,6 @@
 // js/services/gridCoordsService.ts
 import store from '@state/initStore.ts';
 import pitchGridViewportService from './pitchGridViewportService.ts';
-import { BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR } from '@/core/constants.ts';
 import { getColumnFromX } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
 import type { CanvasSpaceColumn } from '@app-types/state.js';
 import { createCanvasSpaceColumn } from '@utils/coordinateTypes.ts';
@@ -68,8 +67,8 @@ const GridCoordsService = {
   },
 
   getDrumRowIndex(y: number): number {
-    // Use the same drum row height calculation as LayoutService
-    const drumRowHeight = Math.max(BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR * store.state.cellHeight);
+    // Use the same drum row height calculation as LayoutService (strict 1:1 with cellWidth).
+    const drumRowHeight = Math.max(1, Math.round(store.state.cellWidth));
     if (drumRowHeight === 0) {return -1;}
     const rowIndex = Math.floor(y / drumRowHeight);
     return rowIndex;

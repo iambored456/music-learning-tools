@@ -247,3 +247,57 @@ describe('noteActions.updateMultipleNoteRows', () => {
     expect(mockStore.emit).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('noteActions.eraseInPitchArea', () => {
+  let mockStore: Store;
+
+  beforeEach(() => {
+    mockStore = createMockStore();
+  });
+
+  it('uses globalRow for hit-testing when available', () => {
+    const note = createMockNote({
+      row: 10,
+      globalRow: 20,
+      startColumnIndex: 5,
+      endColumnIndex: 6,
+      shape: 'circle'
+    });
+
+    mockStore.state.placedNotes = [note];
+
+    const wasErased = noteActions.eraseInPitchArea.call(
+      mockStore,
+      createCanvasSpaceColumn(5),
+      20,
+      2,
+      false
+    );
+
+    expect(wasErased).toBe(true);
+    expect(mockStore.state.placedNotes).toHaveLength(0);
+  });
+
+  it('does not erase when only row matches but globalRow does not', () => {
+    const note = createMockNote({
+      row: 20,
+      globalRow: 10,
+      startColumnIndex: 5,
+      endColumnIndex: 6,
+      shape: 'circle'
+    });
+
+    mockStore.state.placedNotes = [note];
+
+    const wasErased = noteActions.eraseInPitchArea.call(
+      mockStore,
+      createCanvasSpaceColumn(5),
+      20,
+      2,
+      false
+    );
+
+    expect(wasErased).toBe(false);
+    expect(mockStore.state.placedNotes).toHaveLength(1);
+  });
+});

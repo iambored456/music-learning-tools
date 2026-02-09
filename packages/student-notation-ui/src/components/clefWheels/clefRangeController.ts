@@ -3,9 +3,11 @@ import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import logger from '@utils/logger.ts';
 import {
+  buildSpanLadder,
   computeConstrainedTopIndex,
   computeConstrainedBottomIndex,
-  DEFAULT_MIN_VIEWPORT_ROWS
+  DEFAULT_MIN_VIEWPORT_ROWS,
+  snapRangeToSpanLadder
 } from '@utils/pitchViewport.ts';
 
 interface WheelOption {
@@ -427,14 +429,26 @@ class ClefViewportController {
       return { topIndex: Math.min(topIndex, bottomIndex), bottomIndex: Math.max(topIndex, bottomIndex) };
     };
 
+    const totalRanks = this.masterOptions.length;
+    const spanLadder = buildSpanLadder(totalRanks, DEFAULT_MIN_VIEWPORT_ROWS);
+    const snapToLadder = (range: { topIndex: number; bottomIndex: number } | null) => {
+      if (!range) {return null;}
+      return snapRangeToSpanLadder(range, {
+        totalRanks,
+        minSpan: DEFAULT_MIN_VIEWPORT_ROWS,
+        ladder: spanLadder,
+        mode: 'nearest'
+      });
+    };
+
     this.presetRanges = {
       full: { topIndex: 0, bottomIndex: Math.max(0, this.masterOptions.length - 1) },
-      treble: resolvePresetFromToneNotes('G5', 'C4'),
-      alto: resolvePresetFromToneNotes('A4', 'D3'),
-      bass: resolvePresetFromToneNotes('C4', 'F2'),
-      voice1: resolvePresetFromToneNotes('A5', 'A3'),  // Voice I
-      voice2: resolvePresetFromToneNotes('C5', 'C3'),  // Voice II
-      voice3: resolvePresetFromToneNotes('E4', 'E2')   // Voice III
+      treble: snapToLadder(resolvePresetFromToneNotes('G5', 'C4')),
+      alto: snapToLadder(resolvePresetFromToneNotes('A4', 'D3')),
+      bass: snapToLadder(resolvePresetFromToneNotes('C4', 'F2')),
+      voice1: snapToLadder(resolvePresetFromToneNotes('A5', 'A3')),  // Voice I
+      voice2: snapToLadder(resolvePresetFromToneNotes('C5', 'C3')),  // Voice II
+      voice3: snapToLadder(resolvePresetFromToneNotes('E4', 'E2'))   // Voice III
     };
   }
 

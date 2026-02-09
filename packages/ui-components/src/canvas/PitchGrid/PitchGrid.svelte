@@ -16,6 +16,8 @@
     CoordinateUtils,
     CurrentPitch,
     LegendHighlightConfig,
+    PitchRowHighlightConfig,
+    PitchRowHighlightEntry,
     SingingModeConfig,
     HighwayModeConfig,
     PitchHistoryPoint,
@@ -80,6 +82,7 @@
     showOctaveLabels?: boolean;
     showRightLegend?: boolean;
     legendHighlight?: LegendHighlightConfig;
+    rowHighlight?: PitchRowHighlightConfig;
 
     // Notation/Playback mode props
     placedNotes?: PlacedNote[];
@@ -114,6 +117,7 @@
     showOctaveLabels = true,
     showRightLegend = true,
     legendHighlight,
+    rowHighlight,
     placedNotes = [],
     placedTonicSigns = [],
     columnWidths = [],
@@ -155,6 +159,16 @@
   const isNotationMode = $derived(mode === 'notation' || mode === 'playback');
   const isSingingMode = $derived(mode === 'singing');
   const isHighwayMode = $derived(mode === 'highway');
+  const midiToRowIndex = $derived.by<Map<number, number>>(() => {
+    const map = new Map<number, number>();
+    for (let rowIndex = 0; rowIndex < fullRowData.length; rowIndex++) {
+      const midi = fullRowData[rowIndex]?.midi;
+      if (typeof midi === 'number') {
+        map.set(midi, rowIndex);
+      }
+    }
+    return map;
+  });
 
   // ============================================================================
   // Coordinate Utilities
@@ -205,6 +219,7 @@
       colorMode,
     };
     drawHorizontalLines(ctx, horizontalConfig, coords, paddedStartRow, paddedEndRow);
+    drawRowHighlights(ctx, coords, paddedStartRow, paddedEndRow);
 
     // Mode-specific rendering
     if (isNotationMode) {
@@ -219,6 +234,130 @@
     if (showLegends && (leftCtx || rightCtx)) {
       renderLegends(coords, paddedStartRow, paddedEndRow);
     }
+  }
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function toRgba(color: string, alpha: number): string {
+    const normalizedAlpha = clamp(alpha, 0, 1);
+    const shortHex = color.match(/^#([0-9a-fA-F]{3})$/);
+    if (shortHex) {
+      const [r, g, b] = shortHex[1].split('').map((char) => Number.parseInt(char + char, 16));
+      return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+    }
+
+    const longHex = color.match(/^#([0-9a-fA-F]{6})$/);
+    if (longHex) {
+      const hexValue = longHex[1];
+      const r = Number.parseInt(hexValue.slice(0, 2), 16);
+      const g = Number.parseInt(hexValue.slice(2, 4), 16);
+      const b = Number.parseInt(hexValue.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+    }
+
+    const rgbMatch = color.match(/^rgba?\(([^)]+)\)$/);
+    if (rgbMatch) {
+      const parts = rgbMatch[1].split(',').map((value) => Number.parseFloat(value.trim()));
+      const r = clamp(parts[0] ?? 255, 0, 255);
+      const g = clamp(parts[1] ?? 255, 0, 255);
+      const b = clamp(parts[2] ?? 255, 0, 255);
+      return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+    }
+
+    return `rgba(255, 255, 255, ${normalizedAlpha})`;
+  }
+
+  function normalizeRowHighlights(
+    highlights: PitchRowHighlightConfig | undefined
+  ): PitchRowHighlightEntry[] {
+    if (!highlights) return [];
+    return Array.isArray(highlights) ? highlights : [highlights];
+  }
+
+  function resolveHighlightRowIndex(highlight: PitchRowHighlightEntry): number | null {
+    if (typeof highlight.rowIndex === 'number' && Number.isFinite(highlight.rowIndex)) {
+      return Math.round(highlight.rowIndex);
+    }
+
+    if (typeof highlight.midi === 'number' && Number.isFinite(highlight.midi)) {
+      return midiToRowIndex.get(Math.round(highlight.midi)) ?? null;
+    }
+
+    return null;
+  }
+
+  function drawRowHighlights(
+    renderCtx: CanvasRenderingContext2D,
+    coords: CoordinateUtils,
+    startRow: number,
+    endRow: number
+  ): void {
+    const highlights = normalizeRowHighlights(rowHighlight);
+    if (highlights.length === 0 || gridWidth <= 0) return;
+
+    const now = performance.now();
+    const shimmerWidth = Math.max(60, Math.min(220, gridWidth * 0.2));
+
+    renderCtx.save();
+    for (const highlight of highlights) {
+      const rowIndex = resolveHighlightRowIndex(highlight);
+      if (rowIndex === null || rowIndex < startRow || rowIndex > endRow) continue;
+
+      const row = fullRowData[rowIndex];
+      if (!row || row.isBoundary) continue;
+
+      const y = coords.getRowY(rowIndex);
+      if (y < -cellHeight || y > viewport.containerHeight + cellHeight) continue;
+
+      const color = highlight.color ?? row.hex;
+      const pulse = highlight.pulse ? (Math.sin(now / 260) + 1) / 2 : 0;
+      const baseOpacity = clamp(highlight.opacity ?? 0.23, 0.05, 0.9);
+      const glowStrength = clamp(highlight.glow ?? 0.9, 0, 1);
+      const rowOpacity = clamp(baseOpacity + pulse * 0.05, 0, 1);
+      const glowOpacity = clamp((0.14 + pulse * 0.08) * glowStrength, 0, 1);
+      const scale = clamp(highlight.heightScale ?? 1, 0.1, 1);
+      const halfHeight = (cellHeight / 2) * scale;
+      const fillHeight = halfHeight * 2;
+
+      const glowTop = y - cellHeight * scale;
+      const glowHeight = cellHeight * 2 * scale;
+      const glowGradient = renderCtx.createLinearGradient(0, glowTop, 0, glowTop + glowHeight);
+      glowGradient.addColorStop(0, toRgba(color, 0));
+      glowGradient.addColorStop(0.3, toRgba(color, glowOpacity * 0.45));
+      glowGradient.addColorStop(0.5, toRgba(color, glowOpacity));
+      glowGradient.addColorStop(0.7, toRgba(color, glowOpacity * 0.45));
+      glowGradient.addColorStop(1, toRgba(color, 0));
+      renderCtx.fillStyle = glowGradient;
+      renderCtx.fillRect(0, glowTop, gridWidth, glowHeight);
+
+      renderCtx.fillStyle = toRgba(color, rowOpacity);
+      renderCtx.fillRect(0, y - halfHeight, gridWidth, fillHeight);
+
+      const shimmerX = ((now * 0.18) % (gridWidth + shimmerWidth * 2)) - shimmerWidth;
+      const shimmerGradient = renderCtx.createLinearGradient(
+        shimmerX - shimmerWidth,
+        0,
+        shimmerX + shimmerWidth,
+        0
+      );
+      shimmerGradient.addColorStop(0, toRgba('#ffffff', 0));
+      shimmerGradient.addColorStop(0.5, toRgba('#ffffff', 0.16 + pulse * 0.04));
+      shimmerGradient.addColorStop(1, toRgba('#ffffff', 0));
+      renderCtx.fillStyle = shimmerGradient;
+      renderCtx.fillRect(0, y - halfHeight, gridWidth, fillHeight);
+
+      renderCtx.strokeStyle = toRgba(color, Math.min(1, rowOpacity + 0.45));
+      renderCtx.lineWidth = 1.6;
+      renderCtx.beginPath();
+      renderCtx.moveTo(0, y - halfHeight + 0.5);
+      renderCtx.lineTo(gridWidth, y - halfHeight + 0.5);
+      renderCtx.moveTo(0, y + halfHeight - 0.5);
+      renderCtx.lineTo(gridWidth, y + halfHeight - 0.5);
+      renderCtx.stroke();
+    }
+    renderCtx.restore();
   }
 
   function renderNotationMode(
@@ -643,6 +782,7 @@
     void placedNotes;
     void placedTonicSigns;
     void columnWidths;
+    void rowHighlight;
 
     if (ctx && isNotationMode) {
       render();

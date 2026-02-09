@@ -8,11 +8,11 @@
 /** How a lesson uses the calibrated speaking pitch */
 export type SpeakingPitchUsage = 'none' | 'asTonic' | 'asFloorNote' | 'custom';
 /** Lesson types */
-export type LessonType = 'pitch-matching' | 'interval' | 'rhythm' | 'melody';
+export type LessonType = 'pitch-matching' | 'interval' | 'rhythm' | 'melody' | 'overdub';
 /** Difficulty levels */
 export type DifficultyLevel = 1 | 2 | 3;
 /** Lesson categories for browsing/filtering */
-export type LessonCategory = 'foundations' | 'beginning';
+export type LessonCategory = 'foundations' | 'beginning' | 'overdub-exercises';
 /** Supported setting field types */
 export type SettingFieldType = 'integer' | 'boolean';
 /** Single setting field definition */
@@ -262,6 +262,65 @@ export interface ResolvedConfig extends PitchMatchingConfig {
     /** Whether speaking pitch was applied */
     speakingPitchApplied: boolean;
 }
+/** A note within an overdub exercise voice */
+export interface ExerciseNote {
+    /** Start position in microbeat columns (0-indexed, inclusive) */
+    startMicrobeatCol: number;
+    /** End position in microbeat columns (inclusive) */
+    endMicrobeatCol: number;
+    /** MIDI pitch number (e.g., 60 = C4) */
+    midiPitch: number;
+    /** Display name (e.g., "C4", "Bb3") */
+    pitchName: string;
+}
+/** A voice within an overdub exercise */
+export interface ExerciseVoice {
+    /** Unique identifier for the voice */
+    voiceId: string;
+    /** Display color (hex code) */
+    color: string;
+    /** Role: 'guide' voices play as reference audio; 'student' is the part to sing */
+    role: 'guide' | 'student';
+    /** Display name (e.g., "Melody", "Your Part") */
+    name: string;
+    /** Array of notes in this voice (monophonic within voice) */
+    notes: ExerciseNote[];
+}
+/** Time grid structure for an overdub exercise */
+export interface ExerciseTimeGrid {
+    /** Total number of microbeat columns */
+    microbeatCount: number;
+    /** Number of microbeats per macrobeat */
+    microbeatsPerMacrobeat: 2 | 3;
+    /** Per-macrobeat subdivision groupings */
+    macrobeatGroupings: (2 | 3)[];
+}
+/** Configuration for an overdub exercise */
+export interface OverdubExerciseConfig {
+    /** Tempo in BPM */
+    tempo: number;
+    /** Time grid defining the rhythmic structure */
+    timeGrid: ExerciseTimeGrid;
+    /** Voices in the exercise */
+    voices: ExerciseVoice[];
+    /** Minimum MIDI pitch for viewport */
+    minMidiPitch: number;
+    /** Maximum MIDI pitch for viewport */
+    maxMidiPitch: number;
+    /** Optional tonal center */
+    tonalCenter?: {
+        pitchClass: string;
+        mode?: string;
+    };
+    /** Count-in beats before exercise starts */
+    countInBeats?: number;
+}
+/** Overdub exercise template */
+export interface OverdubExerciseTemplate extends LessonTemplate {
+    type: 'overdub';
+    /** Exercise configuration with multi-voice data */
+    config: OverdubExerciseConfig;
+}
 /** Union type for all template types */
-export type AnyLessonTemplate = PitchMatchingTemplate;
+export type AnyLessonTemplate = PitchMatchingTemplate | OverdubExerciseTemplate;
 //# sourceMappingURL=types.d.ts.map

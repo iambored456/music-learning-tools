@@ -178,6 +178,19 @@ function isPositionWithinPitchGrid(colIndex: number, rowIndex: number): boolean 
   return getPitchForRow(rowIndex) !== null;
 }
 
+function isEraserPositionWithinPitchGrid(colIndex: number, rowIndex: number): boolean {
+  const musicalColumnWidths = (store.state.musicalColumnWidths && store.state.musicalColumnWidths.length > 0)
+    ? store.state.musicalColumnWidths
+    : store.state.columnWidths || [];
+  const musicalColumns = musicalColumnWidths.length;
+
+  if (colIndex < 0 || colIndex >= musicalColumns) {
+    return false;
+  }
+
+  return getPitchForRow(rowIndex) !== null;
+}
+
 // --- Hover Drawing Logic ---
 function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
   if (!pitchHoverCtx) {return;}
@@ -354,15 +367,11 @@ function handleMouseDown(e: MouseEvent) {
   const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft);
   const rowIndex = GridCoordsService.getPitchRowIndex(y);
 
-  // Check boundaries - circle notes need more space than other tools
-  if (!isPositionWithinPitchGrid(colIndex, rowIndex)) {
-    if (store.state.selectedTool === 'note') {
-      debugNotePlacement('blocked - outside pitch grid', { colIndex, rowIndex });
-    }
-    return;
-  }
-
   if (e.button === 2) {
+    if (!isEraserPositionWithinPitchGrid(colIndex, rowIndex)) {
+      return;
+    }
+
     const handled = rightClickEraserInteractor.handleMouseDown({
       event: e,
       colIndex: colIndex as CanvasSpaceColumn,
@@ -372,8 +381,16 @@ function handleMouseDown(e: MouseEvent) {
     if (handled) {
       pitchHoverCtx.clearRect(0, 0, getLogicalCanvasWidth(pitchHoverCtx.canvas), getLogicalCanvasHeight(pitchHoverCtx.canvas));
       drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
-      return;
     }
+    return;
+  }
+
+  // Check boundaries - circle notes need more space than other tools
+  if (!isPositionWithinPitchGrid(colIndex, rowIndex)) {
+    if (store.state.selectedTool === 'note') {
+      debugNotePlacement('blocked - outside pitch grid', { colIndex, rowIndex });
+    }
+    return;
   }
 
   if (e.button === 0) {
@@ -723,49 +740,50 @@ function handleGlobalMouseUp() {
     return;
   }
 
-  // MODIFIED: Release any pitches that were triggered for preview
+  const hasSustainedPreview = Boolean(activeNote) || activeChordNotes.length > 0;
   if (activePreviewPitches.length > 0) {
-    // Stop any active rhythm pattern playback
-    rhythmPlaybackService.stopCurrentPattern();
+    if (hasSustainedPreview) {
+      // Stop any active rhythm pattern playback that was triggered as a sustained preview.
+      rhythmPlaybackService.stopCurrentPattern();
 
-    const previewColor = activeNote?.color
-      ?? activeChordNotes[0]?.color
-      ?? store.state.selectedNote?.color;
+      const previewColor = activeNote?.color
+        ?? activeChordNotes[0]?.color
+        ?? store.state.selectedNote?.color;
 
-    if (previewColor) {
-      audioPreviewService.releasePitches(activePreviewPitches, previewColor);
-    }
-
-    // Determine which ADSR visual to release
-    const note = activeNote;
-    if (note && previewColor) {
-      const adsr = store.state.timbres[previewColor]?.adsr;
-      if (adsr) {
-        const pitchColor = store.state.fullRowData[note.row]?.hex || '#888888';
-        GlobalService.adsrComponent?.playheadManager.trigger(note.uuid, 'release', pitchColor, adsr);
+      if (previewColor) {
+        audioPreviewService.releasePitches(activePreviewPitches, previewColor);
       }
-    } else if (previewColor) { // It was a chord preview
-      const rootPitch = activePreviewPitches[0];
-      if (!rootPitch) {
-        activePreviewPitches = [];
-        return;
-      }
-      const rootRow = store.state.fullRowData.find(row => row.toneNote === rootPitch);
-      if (rootRow) {
+
+      // Determine which ADSR visual to release.
+      const note = activeNote;
+      if (note && previewColor) {
         const adsr = store.state.timbres[previewColor]?.adsr;
         if (adsr) {
-          const pitchColor = rootRow.hex;
-          GlobalService.adsrComponent?.playheadManager.trigger('chord_preview', 'release', pitchColor, adsr);
+          const pitchColor = store.state.fullRowData[note.row]?.hex || '#888888';
+          GlobalService.adsrComponent?.playheadManager.trigger(note.uuid, 'release', pitchColor, adsr);
+        }
+      } else if (previewColor) { // It was a chord preview.
+        const rootPitch = activePreviewPitches[0];
+        if (rootPitch) {
+          const rootRow = store.state.fullRowData.find(row => row.toneNote === rootPitch);
+          if (rootRow) {
+            const adsr = store.state.timbres[previewColor]?.adsr;
+            if (adsr) {
+              const pitchColor = rootRow.hex;
+              GlobalService.adsrComponent?.playheadManager.trigger('chord_preview', 'release', pitchColor, adsr);
+            }
+          }
         }
       }
-    }
-    activePreviewPitches = [];
 
-    // Stop dynamic waveform visualization when releasing note
-    const staticWaveform = window.waveformVisualizer;
-    if (staticWaveform) {
-      staticWaveform.stopLiveVisualization();
+      // Stop dynamic waveform visualization when releasing note/chord previews.
+      const staticWaveform = window.waveformVisualizer;
+      if (staticWaveform) {
+        staticWaveform.stopLiveVisualization();
+      }
     }
+
+    activePreviewPitches = [];
   }
 
   if (activeNote?.uuid && placementFillNoteIds.has(activeNote.uuid)) {

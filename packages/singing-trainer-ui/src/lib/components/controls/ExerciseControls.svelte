@@ -16,6 +16,7 @@
   import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
   import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
   import { chooserState } from '../../stores/chooserState.svelte.js';
+  import { overdubExerciseChooserState } from '../../stores/overdubExerciseChooserState.svelte.js';
   import { referenceAudio } from '../../services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
   import { onDestroy } from 'svelte';
@@ -732,6 +733,13 @@
   }
 
   /**
+   * Open the overdub exercise chooser modal
+   */
+  function handleOpenExerciseChooser() {
+    overdubExerciseChooserState.show();
+  }
+
+  /**
    * Handle starting an exercise from the chooser
    */
   export function handleLessonStart(
@@ -825,11 +833,16 @@
 </script>
 
 <div class="exercise-panel">
-  <!-- Choose Lesson Button -->
+  <!-- Choose Lesson / Exercise Buttons -->
   {#if !isActive}
-    <button class="choose-exercise-btn" onclick={handleOpenChooser}>
-      Choose Lesson
-    </button>
+    <div class="chooser-buttons">
+      <button class="choose-exercise-btn" onclick={handleOpenChooser}>
+        Choose Lesson
+      </button>
+      <button class="choose-exercise-btn choose-exercise-btn--exercise" onclick={handleOpenExerciseChooser}>
+        Choose Exercise
+      </button>
+    </div>
   {/if}
 
   <!-- Speaking Pitch Anchor Label (when lesson using speaking pitch is active) -->
@@ -972,7 +985,13 @@
     gap: var(--spacing-md);
   }
 
+  .chooser-buttons {
+    display: flex;
+    gap: var(--spacing-sm);
+  }
+
   .choose-exercise-btn {
+    flex: 1;
     padding: var(--spacing-md);
     font-size: var(--font-size-md);
     font-weight: 600;
@@ -986,6 +1005,14 @@
 
   .choose-exercise-btn:hover {
     background-color: var(--color-primary-dark, #4a7bc8);
+  }
+
+  .choose-exercise-btn--exercise {
+    background-color: #6b5b95;
+  }
+
+  .choose-exercise-btn--exercise:hover {
+    background-color: #574a7a;
   }
 
   .speaking-pitch-anchor {

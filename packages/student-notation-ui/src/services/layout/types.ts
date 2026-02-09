@@ -56,8 +56,6 @@ export interface LayoutDOMElements {
   hoverCanvas: HTMLCanvasElement | null;
   drumHoverCanvas: HTMLCanvasElement | null;
   buttonGridWrapper: HTMLElement | null;
-  gridScrollbarProxy: HTMLElement | null;
-  gridScrollbarInner: HTMLElement | null;
 }
 
 /**

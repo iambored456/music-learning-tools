@@ -11,3 +11,4 @@ export { default as SyncControls } from './SyncControls.svelte';
 export { default as SpeakingPitchPanel } from './SpeakingPitchPanel.svelte';
 export { default as ThemeSettings } from './ThemeSettings.svelte';
 export { default as DifficultySettings } from './DifficultySettings.svelte';
+export { default as OverdubControls } from './OverdubControls.svelte';

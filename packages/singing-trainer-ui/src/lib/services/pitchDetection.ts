@@ -15,6 +15,7 @@ import { referenceAudio } from './referenceAudio.js';
 // Configuration
 const CONFIG = {
   FFT_SIZE: 2048,
+  ANALYSER_CHANNELS: 2,
   CLARITY_THRESHOLD: 0.8,
   MIN_PITCH_HZ: 60,
   MAX_PITCH_HZ: 1600,
@@ -39,16 +40,45 @@ function frequencyToMidi(frequency: number): number {
   return 12 * Math.log2(frequency / 440) + 69;
 }
 
-function calculateRmsDb(waveform: Float32Array): number {
-  if (waveform.length === 0) return CONFIG.MIN_VOLUME_DB;
+function calculateRms(waveform: Float32Array): number {
+  if (waveform.length === 0) return 0;
   let sumSquares = 0;
   for (let i = 0; i < waveform.length; i++) {
     const sample = waveform[i] ?? 0;
     sumSquares += sample * sample;
   }
-  const rms = Math.sqrt(sumSquares / waveform.length);
+  return Math.sqrt(sumSquares / waveform.length);
+}
+
+function calculateRmsDb(waveform: Float32Array): number {
+  const rms = calculateRms(waveform);
   if (!Number.isFinite(rms) || rms <= 0) return CONFIG.MIN_VOLUME_DB;
   return Math.max(CONFIG.MIN_VOLUME_DB, 20 * Math.log10(rms));
+}
+
+function selectWaveform(analyserValue: Float32Array | Float32Array[]): Float32Array {
+  if (analyserValue instanceof Float32Array) {
+    return analyserValue;
+  }
+
+  if (Array.isArray(analyserValue) && analyserValue.length > 0) {
+    let bestWaveform: Float32Array | null = null;
+    let bestRms = Number.NEGATIVE_INFINITY;
+
+    for (const channel of analyserValue) {
+      if (!(channel instanceof Float32Array)) continue;
+
+      const rms = calculateRms(channel);
+      if (rms > bestRms) {
+        bestRms = rms;
+        bestWaveform = channel;
+      }
+    }
+
+    if (bestWaveform) return bestWaveform;
+  }
+
+  return new Float32Array(CONFIG.FFT_SIZE);
 }
 
 /**
@@ -74,7 +104,8 @@ function animationLoop(): void {
   }
 
   // Get pitch from audio
-  const waveform = analyser.getValue() as Float32Array;
+  const analyserValue = analyser.getValue() as Float32Array | Float32Array[];
+  const waveform = selectWaveform(analyserValue);
   const amplitudeDb = calculateRmsDb(waveform);
   const [pitch, clarity] = detector.findPitch(waveform, Tone.getContext().sampleRate);
 
@@ -175,12 +206,18 @@ export async function startDetection(): Promise<void> {
 
   // Create audio nodes
   mic = new Tone.UserMedia();
-  analyser = new Tone.Analyser('waveform', CONFIG.FFT_SIZE);
+  analyser = new Tone.Analyser({
+    type: 'waveform',
+    size: CONFIG.FFT_SIZE,
+    channels: CONFIG.ANALYSER_CHANNELS,
+  });
   detector = PitchDetector.forFloat32Array(analyser.size);
 
   try {
-    await Tone.start(); // Initialize audio context
+    // Open capture first so browsers can treat this as an active media capture
+    // session before attempting to resume the audio context.
     await mic.open();
+    await Tone.start(); // Initialize audio context
     mic.connect(analyser);
     isRunning = true;
     animationLoop();
@@ -251,12 +288,16 @@ export async function collectPitchSamples(
 
   // Set up dedicated mic and analyser for calibration
   const calibrationMic = new Tone.UserMedia();
-  const calibrationAnalyser = new Tone.Analyser('waveform', CONFIG.FFT_SIZE);
+  const calibrationAnalyser = new Tone.Analyser({
+    type: 'waveform',
+    size: CONFIG.FFT_SIZE,
+    channels: CONFIG.ANALYSER_CHANNELS,
+  });
   const calibrationDetector = PitchDetector.forFloat32Array(calibrationAnalyser.size);
 
   try {
-    await Tone.start();
     await calibrationMic.open();
+    await Tone.start();
     calibrationMic.connect(calibrationAnalyser);
   } catch (err) {
     console.error('[collectPitchSamples] Microphone access failed:', err);
@@ -282,7 +323,8 @@ export async function collectPitchSamples(
       }
 
       // Get pitch from audio
-      const waveform = calibrationAnalyser.getValue() as Float32Array;
+      const analyserValue = calibrationAnalyser.getValue() as Float32Array | Float32Array[];
+      const waveform = selectWaveform(analyserValue);
       const [pitch, clarity] = calibrationDetector.findPitch(
         waveform,
         Tone.getContext().sampleRate

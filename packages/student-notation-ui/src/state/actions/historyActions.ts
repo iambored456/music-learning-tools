@@ -1,5 +1,6 @@
 // js/state/actions/historyActions.ts
 import type { Store, TimbreState } from '@app-types/state.js';
+import { isStampLayoutDebugEnabled, logStampLayout } from '@utils/stampLayoutDebug.ts';
 
 // Helper to safely restore timbres, ensuring coeffs are Float32Array
 function restoreTimbres(timbresSnapshot: Record<string, TimbreState>): Record<string, TimbreState> {
@@ -17,6 +18,19 @@ function restoreTimbres(timbresSnapshot: Record<string, TimbreState>): Record<st
 
 export const historyActions = {
   recordState(this: Store): void {
+    let stack: string[] | undefined;
+    if (isStampLayoutDebugEnabled()) {
+      stack = (new Error().stack || '')
+        .split('\n')
+        .slice(2, 8)
+        .map(line => line.trim());
+      logStampLayout('history:recordState:start', {
+        historyIndexBefore: this.state.historyIndex,
+        historyLengthBefore: this.state.history.length,
+        stack
+      });
+    }
+
     this.state.history = this.state.history.slice(0, this.state.historyIndex + 1);
 
     // Create a snapshot that is safe for JSON stringify/parse
@@ -35,6 +49,14 @@ export const historyActions = {
     this.state.history.push(newSnapshot);
     this.state.historyIndex++;
     this.emit('historyChanged');
+
+    if (isStampLayoutDebugEnabled()) {
+      logStampLayout('history:recordState:complete', {
+        historyIndexAfter: this.state.historyIndex,
+        historyLengthAfter: this.state.history.length,
+        stack
+      });
+    }
   },
 
   undo(this: Store): void {
@@ -83,6 +105,5 @@ export const historyActions = {
     }
   }
 };
-
 
 

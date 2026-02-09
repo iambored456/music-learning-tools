@@ -40,13 +40,6 @@ export class PitchGridNoteToolInteractor {
       return { handled: true, state };
     }
 
-    const staticWaveform = window.waveformVisualizer;
-    if (staticWaveform) {
-      staticWaveform.currentColor = existingNote.color;
-      staticWaveform.generateWaveform();
-      staticWaveform.startSingleNoteVisualization(existingNote.color);
-    }
-
     const stamp = rhythmPlaybackService.getSixteenthStampAtPosition(colIndex, rowIndex);
     if (stamp) {
       rhythmPlaybackService.playRhythmPattern(stamp.sixteenthStampId, pitch, existingNote.color, existingNote.shape, stamp);
@@ -54,10 +47,18 @@ export class PitchGridNoteToolInteractor {
         handled: true,
         state: {
           ...state,
-          activePreviewPitches: [pitch],
-          activeNote: existingNote
+          activePreviewPitches: [],
+          activeNote: null,
+          lastDragRow: null
         }
       };
+    }
+
+    const staticWaveform = window.waveformVisualizer;
+    if (staticWaveform) {
+      staticWaveform.currentColor = existingNote.color;
+      staticWaveform.generateWaveform();
+      staticWaveform.startSingleNoteVisualization(existingNote.color);
     }
 
     audioPreviewService.triggerAttack(pitch, existingNote.color, { kind: 'single', bypassThrottle: true });

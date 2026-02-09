@@ -125,6 +125,31 @@ export interface LegendHighlightEntry {
 export type LegendHighlightConfig = LegendHighlightEntry | LegendHighlightEntry[];
 
 /**
+ * Highlight overlay configuration for one pitch row on the grid.
+ */
+export interface PitchRowHighlightEntry {
+  /** Specific MIDI note to highlight (e.g., 60 = C4). */
+  midi?: number;
+  /** Explicit row index in fullRowData. Overrides midi when provided. */
+  rowIndex?: number;
+  /** Highlight color (defaults to the row's pitch color). */
+  color?: string;
+  /** Base fill opacity (0-1). */
+  opacity?: number;
+  /** Glow intensity multiplier (0-1). */
+  glow?: number;
+  /** Whether to pulse the highlight over time. */
+  pulse?: boolean;
+  /** Vertical scale factor for highlight height (0-1). 1 = full cell height, 0.5 = half. Default: 1. */
+  heightScale?: number;
+}
+
+/**
+ * Single row highlight or list of row highlights.
+ */
+export type PitchRowHighlightConfig = PitchRowHighlightEntry | PitchRowHighlightEntry[];
+
+/**
  * A target note to display on the note highway.
  */
 export type TargetNoteKind = 'fixedPitch' | 'windowAnyPitch' | 'windowBand' | 'slideWindow';

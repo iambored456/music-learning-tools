@@ -75,7 +75,6 @@ class ReferenceAudioService {
       // Schedule the note start
       const startTimeoutId = window.setTimeout(() => {
         if (this.synth) {
-          console.log(`[ReferenceAudio] Playing ${note.midi} at ${performance.now() - this.startTime}ms`);
           this._isPlaying = true;
           this.synth.triggerAttackRelease(frequency, duration);
         }
@@ -88,8 +87,6 @@ class ReferenceAudioService {
 
       this.scheduledTimeouts.push(startTimeoutId, endTimeoutId);
     });
-
-    console.log(`[ReferenceAudio] Scheduled ${notes.length} reference tones`);
   }
 
   /**
@@ -114,6 +111,7 @@ class ReferenceAudioService {
       window.clearTimeout(timeoutId);
     });
     this.scheduledTimeouts = [];
+    this._isPlaying = false;
   }
 
   /**

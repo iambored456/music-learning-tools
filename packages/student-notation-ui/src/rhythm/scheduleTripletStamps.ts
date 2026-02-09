@@ -13,6 +13,7 @@ export interface TripletStampScheduleEvent {
   slot: number;
   shapeKey: string;
   rowOffset: number;
+  noteId?: string;
 }
 
 interface RhythmPlacement {
@@ -194,5 +195,4 @@ export function canPlaceTripletGroup(startTimeIndex: number, tripletStampId: num
 
   return true;
 }
-
 

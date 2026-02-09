@@ -5,6 +5,7 @@ import { placeSixteenthStamp } from '@/rhythm/sixteenthStampPlacements.js';
 import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
 import { hitTestAnySixteenthStampShape } from '@utils/sixteenthStampHitTest.ts';
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
+import { isStampLayoutDebugEnabled, logStampLayout } from '@utils/stampLayoutDebug.ts';
 import type { SixteenthStampPlacement } from '@app-types/state.js';
 
 interface DraggedStampShape {
@@ -49,7 +50,7 @@ export class PitchGridSixteenthStampToolInteractor {
   }): { handled: boolean; activePreviewPitches?: string[] } {
     // First, check if clicking on an individual shape within an existing stamp.
     if (this.tryStartShapeDrag({ actualX: opts.actualX, canvasY: opts.canvasY })) {
-      return { handled: true };
+      return { handled: true, activePreviewPitches: [] };
     }
 
     if (store.state.selectedTool !== 'sixteenthStamp') {
@@ -61,7 +62,7 @@ export class PitchGridSixteenthStampToolInteractor {
     if (existingStamp) {
       const pitch = opts.getPitchForRow(opts.rowIndex);
       if (!pitch) {
-        return { handled: true };
+        return { handled: true, activePreviewPitches: [] };
       }
 
       const noteAtStamp = store.state.placedNotes.find(note =>
@@ -73,37 +74,86 @@ export class PitchGridSixteenthStampToolInteractor {
 
       const shape = noteAtStamp ? noteAtStamp.shape : 'oval';
       rhythmPlaybackService.playRhythmPattern(existingStamp.sixteenthStampId, pitch, existingStamp.color, shape, existingStamp);
-      return { handled: true, activePreviewPitches: [pitch] };
+      return { handled: true, activePreviewPitches: [] };
     }
 
     // No existing stamp - place new stamp.
     const selectedStamp = SixteenthStampsToolbar.getSelectedSixteenthStamp();
     if (!selectedStamp) {
-      return { handled: true };
+      return { handled: true, activePreviewPitches: [] };
     }
 
     const alignedCol = opts.getTimeAlignedCanvasColumn(opts.colIndex);
     if (alignedCol === null) {
-      return { handled: true };
+      return { handled: true, activePreviewPitches: [] };
     }
 
     const selectedNote = store.state.selectedNote;
     if (!selectedNote) {
-      return { handled: true };
+      return { handled: true, activePreviewPitches: [] };
     }
 
     const { color, shape } = selectedNote;
-    placeSixteenthStamp(selectedStamp.id, alignedCol, opts.rowIndex, color);
+    if (isStampLayoutDebugEnabled()) {
+      logStampLayout('sixteenth:place-attempt', {
+        rowIndex: opts.rowIndex,
+        colIndex: opts.colIndex,
+        alignedCol,
+        selectedStampId: selectedStamp.id,
+        color,
+        shape,
+        historyIndexBefore: store.state.historyIndex,
+        historyLengthBefore: store.state.history.length
+      });
+    }
+    const placement = placeSixteenthStamp(selectedStamp.id, alignedCol, opts.rowIndex, color);
+    if (!placement) {
+      if (isStampLayoutDebugEnabled()) {
+        logStampLayout('sixteenth:place-blocked', {
+          rowIndex: opts.rowIndex,
+          colIndex: opts.colIndex,
+          alignedCol,
+          selectedStampId: selectedStamp.id
+        });
+      }
+      return { handled: true, activePreviewPitches: [] };
+    }
+
+    if (isStampLayoutDebugEnabled()) {
+      logStampLayout('sixteenth:placed', {
+        placementId: placement.id,
+        startColumn: placement.startColumn,
+        endColumn: placement.endColumn,
+        row: placement.row,
+        historyIndexPreRecord: store.state.historyIndex,
+        historyLengthPreRecord: store.state.history.length
+      });
+    }
 
     const pitch = opts.getPitchForRow(opts.rowIndex);
     if (pitch) {
-      rhythmPlaybackService.playRhythmPattern(selectedStamp.id, pitch, color, shape);
+      rhythmPlaybackService.playRhythmPattern(selectedStamp.id, pitch, color, shape, placement);
       store.recordState();
-      return { handled: true, activePreviewPitches: [pitch] };
+      if (isStampLayoutDebugEnabled()) {
+        logStampLayout('sixteenth:recordState-after-playback', {
+          placementId: placement.id,
+          pitch,
+          historyIndexAfter: store.state.historyIndex,
+          historyLengthAfter: store.state.history.length
+        });
+      }
+      return { handled: true, activePreviewPitches: [] };
     }
 
     store.recordState();
-    return { handled: true };
+    if (isStampLayoutDebugEnabled()) {
+      logStampLayout('sixteenth:recordState-no-pitch', {
+        placementId: placement.id,
+        historyIndexAfter: store.state.historyIndex,
+        historyLengthAfter: store.state.history.length
+      });
+    }
+    return { handled: true, activePreviewPitches: [] };
   }
 
   handleMouseMove(opts: {
@@ -204,7 +254,3 @@ function isOverSixteenthStamp(
 
   return false;
 }
-
-
-
-

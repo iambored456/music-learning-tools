@@ -3,7 +3,6 @@ import * as Tone from 'tone';
 import store from '@state/initStore.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
 import { drawDrumShape, type VolumeIconState } from './drumGridRenderer.ts';
-import { BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR } from '../../../core/constants.js';
 import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { isPlayableColumn } from '@services/columnMapService.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
@@ -89,7 +88,7 @@ const getModulatedCellWidth = (colIndex: number): number => {
 };
 
 const getDrumRowHeight = (): number =>
-  Math.max(BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR * store.state.cellHeight);
+  Math.max(1, Math.round(store.state.cellWidth));
 
 const clearHover = (): void => {
   if (drumHoverCtx) {

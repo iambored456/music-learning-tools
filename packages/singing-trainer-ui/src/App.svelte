@@ -18,9 +18,11 @@
     UltrastarControls,
     SpeakingPitchPanel,
     DifficultySettings,
+    OverdubControls,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
-  import { ExerciseChooserModal } from './lib/components/chooser/index.js';
+  import { ExerciseChooserModal, OverdubExerciseChooserModal } from './lib/components/chooser/index.js';
+  import { overdubExerciseState } from './lib/stores/overdubExerciseState.svelte.js';
   import { CalibrationWizard } from './lib/calibration/index.js';
   import { handoffState } from './lib/stores/handoffState.svelte.js';
   import { appState } from './lib/stores/appState.svelte.js';
@@ -28,6 +30,7 @@
   import { ultrastarState } from './lib/stores/ultrastarState.svelte.js';
   import { resultsState } from './lib/stores/resultsState.svelte.js';
   import { exerciseState } from './lib/stores/exerciseState.svelte.js';
+  import { overdubState } from './lib/stores/overdubState.svelte.js';
   import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
   import { registerTemplates, ALL_LESSONS } from '@mlt/lesson-templates';
 
@@ -38,8 +41,8 @@
   let openSection: number | null = $state(null);
 
   function handleToggle(index: number) {
-    return (e: ToggleEvent) => {
-      if (e.newState === 'open') {
+    return (event: Event & { currentTarget: EventTarget & HTMLDetailsElement }) => {
+      if (event.currentTarget.open) {
         openSection = index;
       } else if (openSection === index) {
         openSection = null;
@@ -117,17 +120,13 @@
     // Register lesson templates
     try {
       registerTemplates(ALL_LESSONS);
-      console.log('[App] Registered', ALL_LESSONS.length, 'lesson templates');
-    } catch (err) {
-      // Templates might already be registered
-      console.log('[App] Lesson templates already registered or error:', err);
+    } catch {
+      // Templates might already be registered.
     }
 
     const wasHandoff = await handoffState.checkAndConsumeHandoff();
 
     if (wasHandoff) {
-      console.log('[App] Handoff detected and processed');
-
       // Update the pitch range based on imported data
       const suggestedRange = handoffState.suggestedPitchRange;
       if (suggestedRange) {
@@ -139,7 +138,6 @@
     try {
       await startDetection();
       appState.setDetecting(true);
-      console.log('[App] Pitch detection auto-started');
     } catch (err) {
       console.error('[App] Failed to auto-start pitch detection:', err);
     }
@@ -148,6 +146,7 @@
   // Clean up on unmount
   onDestroy(() => {
     stopDetection();
+    void overdubState.dispose();
   });
 
   // Reactive state
@@ -171,8 +170,15 @@
    * Handle starting a lesson from the chooser modal
    */
   function handleLessonStart(lessonId: string, settings: Record<string, number | boolean>) {
-    console.log('[App] Lesson start requested:', lessonId, settings);
     exerciseControlsRef?.handleLessonStart(lessonId, settings);
+  }
+
+  /**
+   * Handle starting an overdub exercise from the exercise chooser modal
+   */
+  function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
+    overdubExerciseState.loadExercise(exerciseId, settings);
+    overdubExerciseState.start();
   }
 </script>
 
@@ -244,13 +250,20 @@
       </details>
 
       <details class="settings-details" open={openSection === 5} ontoggle={handleToggle(5)}>
+        <summary class="settings-summary">Overdub Builder</summary>
+        <div class="settings-content">
+          <OverdubControls />
+        </div>
+      </details>
+
+      <details class="settings-details" open={openSection === 6} ontoggle={handleToggle(6)}>
         <summary class="settings-summary">Exercises &amp; Lessons</summary>
         <div class="settings-content">
           <ExerciseControls bind:this={exerciseControlsRef} />
         </div>
       </details>
 
-      <details class="settings-details" open={openSection === 6} ontoggle={handleToggle(6)}>
+      <details class="settings-details" open={openSection === 7} ontoggle={handleToggle(7)}>
         <summary class="settings-summary">UltraStar Karaoke</summary>
         <div class="settings-content">
           <UltrastarControls />
@@ -289,6 +302,9 @@
 
   <!-- Lesson Chooser Modal -->
   <ExerciseChooserModal onstart={handleLessonStart} />
+
+  <!-- Overdub Exercise Chooser Modal -->
+  <OverdubExerciseChooserModal onstart={handleExerciseStart} />
 
   <!-- Results Modal -->
   <ResultsModal onRetry={handleResultsRetry} onClose={handleResultsClose} />

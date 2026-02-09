@@ -16,6 +16,7 @@ export interface SixteenthStampScheduleEvent {
   slot: number;
   shapeKey: string;
   rowOffset: number;
+  noteId?: string;
 }
 
 /**
@@ -87,5 +88,4 @@ export function getCellDuration(bpm: number): number {
 }
 
 export { SLOT_OFFSETS };
-
 

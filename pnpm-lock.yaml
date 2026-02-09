@@ -200,19 +200,6 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  packages/musicxml-import:
-    dependencies:
-      fast-xml-parser:
-        specifier: ^5.2.5
-        version: 5.3.4
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.4(@types/node@24.10.4)
-
   packages/note-highway:
     dependencies:
       '@mlt/pitch-data':
@@ -224,6 +211,12 @@ importers:
       '@mlt/types':
         specifier: workspace:*
         version: link:../types
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/overdub-engine:
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -286,6 +279,9 @@ importers:
       '@mlt/lesson-templates':
         specifier: workspace:*
         version: link:../lesson-templates
+      '@mlt/overdub-engine':
+        specifier: workspace:*
+        version: link:../overdub-engine
       '@mlt/pitch-data':
         specifier: workspace:*
         version: link:../pitch-data
@@ -1547,10 +1543,6 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-xml-parser@5.3.4:
-    resolution: {integrity: sha512-EFd6afGmXlCx8H8WTZHhAoDaWaGyuIBoZJ2mknrNxug+aZKjkp0a0dlars9Izl+jF+7Gu1/5f/2h68cQpe0IiA==}
-    hasBin: true
-
   fastest-levenshtein@1.0.16:
     resolution: {integrity: sha512-eRnCtTTtGZFpQCwhJiUOuxPQWRXVKYDn0b2PeHfXL6/Zi53SLAzAHfVhVWK2AryC/WH05kGfxhFIPvTF0SXQzg==}
     engines: {node: '>= 4.9.1'}
@@ -2044,9 +2036,6 @@ packages:
 
   strip-literal@3.1.0:
     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
-
-  strnum@2.1.2:
-    resolution: {integrity: sha512-l63NF9y/cLROq/yqKXSLtcMeeyOfnSQlfMSlzFt/K73oIaD8DGaQWd7Z34X9GPiKqP5rbSh84Hl4bOlLcjiSrQ==}
 
   stylelint-config-recommended@17.0.0:
     resolution: {integrity: sha512-WaMSdEiPfZTSFVoYmJbxorJfA610O0tlYuU2aEwY33UQhSPgFbClrVJYWvy3jGJx+XW37O+LyNLiZOEXhKhJmA==}
@@ -3492,10 +3481,6 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-xml-parser@5.3.4:
-    dependencies:
-      strnum: 2.1.2
-
   fastest-levenshtein@1.0.16: {}
 
   fastq@1.20.1:
@@ -3940,8 +3925,6 @@ snapshots:
   strip-literal@3.1.0:
     dependencies:
       js-tokens: 9.0.1
-
-  strnum@2.1.2: {}
 
   stylelint-config-recommended@17.0.0(stylelint@16.26.1(typescript@5.9.3)):
     dependencies:

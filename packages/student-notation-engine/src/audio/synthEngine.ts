@@ -307,6 +307,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         const presetGain = timbre.gain || 1.0;
 
         const synth = new Tone.PolySynth({
+          maxPolyphony: Infinity,
           voice: FilteredVoice,
           options: {
             oscillator: { type: 'custom', partials: normalizedCoeffs },

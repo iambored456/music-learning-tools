@@ -212,6 +212,8 @@ export interface StampScheduleEvent {
   duration: Tone.Unit.Time;
   rowOffset: number;
   slot?: number;
+  shapeKey?: string;
+  noteId?: string;
 }
 
 /**

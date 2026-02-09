@@ -141,8 +141,10 @@ function drawHorizontalMusicLines(ctx: CanvasRenderingContext2D, options: GridRe
     }
 
     const y = getRowY(rowIndex, options);
-    // Add a small buffer to prevent lines from disappearing at the very edge
-    if (y < -10 || y > options.viewportHeight + 10) {
+    const rowTop = y - (options.cellHeight / 2);
+    const rowBottom = y + (options.cellHeight / 2);
+    // Cull rows only when fully outside the viewport so edge rows still render while partially visible.
+    if (rowBottom < 0 || rowTop > options.viewportHeight) {
       continue;
     }
 

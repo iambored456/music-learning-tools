@@ -86,8 +86,6 @@
     const wasHandoff = await handoffState.checkAndConsumeHandoff();
 
     if (wasHandoff) {
-      console.log('[App] Handoff detected and processed');
-
       // Update the pitch range based on imported data
       const suggestedRange = handoffState.suggestedPitchRange;
       if (suggestedRange) {
@@ -99,7 +97,6 @@
     try {
       await startDetection();
       appState.setDetecting(true);
-      console.log('[App] Pitch detection auto-started');
     } catch (err) {
       console.error('[App] Failed to auto-start pitch detection:', err);
     }

@@ -30,6 +30,8 @@ export interface DroneState {
   isPlaying: boolean;
   octave: number;
   volume: number;
+  modeEnabled: boolean;
+  selectedMode: string;
 }
 
 export interface YAxisRange {
@@ -71,7 +73,7 @@ const DEFAULT_STATE: AppState = {
   showAccidentals: true,
   pitchHighlightEnabled: true,
   yAxisRange: { minMidi: 40, maxMidi: 72 }, // E2 to C5
-  drone: { isPlaying: false, octave: 3, volume: -12 },
+  drone: { isPlaying: false, octave: 3, volume: -12, modeEnabled: false, selectedMode: '1' },
   lyricLabelMode: 'auto',
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
@@ -194,6 +196,14 @@ function createAppState() {
 
     setDroneVolume(volume: number) {
       state.drone = { ...state.drone, volume };
+    },
+
+    setDroneModeEnabled(enabled: boolean) {
+      state.drone = { ...state.drone, modeEnabled: enabled };
+    },
+
+    setDroneSelectedMode(modeKey: string) {
+      state.drone = { ...state.drone, selectedMode: modeKey };
     },
 
     reset() {

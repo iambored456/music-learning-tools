@@ -241,6 +241,7 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
       const initialNoteCount = this.state.placedNotes.length;
       this.state.placedNotes = this.state.placedNotes.filter(note => {
         if (note.isDrum) return true;
+        const noteRow = typeof note.globalRow === 'number' ? note.globalRow : note.row;
 
         // For circle notes, check if their 2×1 footprint intersects with eraser's 2×3 area
         if (note.shape === 'circle') {
@@ -252,14 +253,14 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
 
           // Check for any overlap between note's 2×1 area and eraser's 2×3 area
           const horizontalOverlap = note.startColumnIndex <= eraseEndCol && noteEndCol >= col;
-          const verticalOverlap = note.row >= eraseStartRow && note.row <= eraseEndRow;
+          const verticalOverlap = noteRow >= eraseStartRow && noteRow <= eraseEndRow;
 
           if (horizontalOverlap && verticalOverlap) {
             return false; // Remove this note
           }
         } else {
           // For non-circle notes, check if note overlaps with eraser's 2×3 coverage area
-          const noteInEraseArea = note.row >= eraseStartRow && note.row <= eraseEndRow &&
+          const noteInEraseArea = noteRow >= eraseStartRow && noteRow <= eraseEndRow &&
             note.startColumnIndex <= eraseEndCol && note.endColumnIndex >= col;
 
           if (noteInEraseArea) {

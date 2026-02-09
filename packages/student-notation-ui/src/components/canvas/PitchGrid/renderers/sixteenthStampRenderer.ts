@@ -6,6 +6,7 @@ import store from '@state/initStore.ts';
 import logger from '../../../../utils/logger.js';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { canvasToTime, timeToCanvas } from '../../../../services/columnMapService.ts';
+import { buildSixteenthStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 import type { ModulationMarker, SixteenthStampPlacement } from '@app-types/state.js';
 import type { SixteenthStampShape } from '../../../../utils/sixteenthStampRenderer.ts';
 
@@ -19,6 +20,45 @@ interface SixteenthStampRenderOptions {
 }
 
 logger.moduleLoaded('SixteenthStampRenderer', 'stamps');
+
+interface AnimationEffectsManager {
+  shouldFillNote(note: { color: string; uuid?: string }): boolean;
+  getFillLevel(note: { color: string; uuid?: string }): number;
+}
+
+const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
+  const effectsWindow = window as Window & { animationEffectsManager?: AnimationEffectsManager };
+  return effectsWindow.animationEffectsManager;
+};
+
+function getShapeFillLevels(placement: SixteenthStampPlacement, stamp: SixteenthStampShape): Record<string, number> | null {
+  const manager = getAnimationEffectsManager();
+  if (!manager) {
+    return null;
+  }
+
+  const shapeFillLevels: Record<string, number> = {};
+
+  stamp.ovals.forEach((slot) => {
+    const shapeKey = `oval_${slot}`;
+    const noteId = buildSixteenthStampShapeNoteId(placement.id, shapeKey);
+    const note = { uuid: noteId, color: placement.color };
+    if (manager.shouldFillNote(note)) {
+      shapeFillLevels[shapeKey] = manager.getFillLevel(note);
+    }
+  });
+
+  stamp.diamonds.forEach((slot) => {
+    const shapeKey = `diamond_${slot}`;
+    const noteId = buildSixteenthStampShapeNoteId(placement.id, shapeKey);
+    const note = { uuid: noteId, color: placement.color };
+    if (manager.shouldFillNote(note)) {
+      shapeFillLevels[shapeKey] = manager.getFillLevel(note);
+    }
+  });
+
+  return Object.keys(shapeFillLevels).length > 0 ? shapeFillLevels : null;
+}
 
 export function renderSixteenthStamps(ctx: CanvasRenderingContext2D, options: SixteenthStampRenderOptions): void {
   const stamps: SixteenthStampPlacement[] =
@@ -69,6 +109,7 @@ function renderSixteenthStamp(ctx: CanvasRenderingContext2D, placement: Sixteent
   if (stampX + stampWidth < 0 || stampX > canvasWidth) {return;}
 
   const getRowYWithOptions = (rowIndex: number) => getRowY(rowIndex, options);
+  const shapeFillLevels = getShapeFillLevels(placement, stamp);
 
   defaultSixteenthStampRenderer.renderToCanvas(
     ctx,
@@ -79,7 +120,8 @@ function renderSixteenthStamp(ctx: CanvasRenderingContext2D, placement: Sixteent
     stampHeight,
     color,
     placement,
-    getRowYWithOptions
+    getRowYWithOptions,
+    shapeFillLevels
   );
 
   ctx.save();

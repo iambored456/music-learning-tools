@@ -39,6 +39,12 @@ export type {
   FeedbackStepConfig,
   CompleteStepConfig,
   LessonStepConfig,
+  // Overdub exercise types
+  ExerciseNote,
+  ExerciseVoice,
+  ExerciseTimeGrid,
+  OverdubExerciseConfig,
+  OverdubExerciseTemplate,
 } from './types.js';
 
 // Registry
@@ -121,4 +127,7 @@ export {
   ANCHORED_PITCH_MATCHING,
   FOUNDATIONS_1_MERGED,
   ALL_LESSONS,
+  // Overdub exercises
+  SIMPLE_UNISON,
+  ALL_OVERDUB_EXERCISES,
 } from './lessons/index.js';

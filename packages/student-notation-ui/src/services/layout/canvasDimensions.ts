@@ -107,8 +107,6 @@ export function initDOMElements(): LayoutDOMElements {
   const hoverCanvas = document.getElementById('hover-canvas') as HTMLCanvasElement | null;
   const drumHoverCanvas = document.getElementById('drum-hover-canvas') as HTMLCanvasElement | null;
   const buttonGridWrapper = document.getElementById('beat-line-ui');
-  const gridScrollbarProxy = document.getElementById('grid-scrollbar-proxy');
-  const gridScrollbarInner = document.getElementById('grid-scrollbar-inner');
 
   return {
     pitchGridWrapper,
@@ -123,9 +121,7 @@ export function initDOMElements(): LayoutDOMElements {
     playheadCanvas,
     hoverCanvas,
     drumHoverCanvas,
-    buttonGridWrapper,
-    gridScrollbarProxy,
-    gridScrollbarInner
+    buttonGridWrapper
   };
 }
 

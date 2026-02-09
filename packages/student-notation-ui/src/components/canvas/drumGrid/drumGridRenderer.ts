@@ -1,5 +1,4 @@
 // js/components/canvas/drumGrid/drumGridRenderer.ts
-import { BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR } from '../../../core/constants.js';
 import { shouldDrawVerticalLineAtColumn, isTonicColumn } from '../../../utils/tonicColumnUtils.ts';
 import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { renderModulationMarkers } from '@components/canvas/PitchGrid/renderers/modulationRenderer.ts';
@@ -233,11 +232,11 @@ function drawVerticalGridLines(ctx: CanvasRenderingContext2D, options: DrumGridR
 }
 
 export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRenderOptions): void {
-  const { placedNotes, columnWidths, cellWidth, cellHeight, placedTonicSigns } = options;
+  const { placedNotes, columnWidths, cellWidth, placedTonicSigns } = options;
 
   ctx.clearRect(0, 0, getLogicalCanvasWidth(ctx.canvas), getLogicalCanvasHeight(ctx.canvas));
 
-  const drumRowHeight = Math.max(BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR * cellHeight);
+  const drumRowHeight = Math.max(1, Math.round(cellWidth));
   // columnWidths is canvas-space (musical columns only, no legends)
   const totalColumns = columnWidths.length;
   const drumLabels = ['H', 'M', 'L'];

@@ -5,6 +5,7 @@ import store from '@state/initStore.ts';
 import logger from '../../../../utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { timeToCanvas } from '../../../../services/columnMapService.ts';
+import { buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 import type { TripletStampPlacement } from '@app-types/state.js';
 import type { TripletStamp } from '../../../../rhythm/tripletStamps.js';
 import type { ModulationMarker } from '@app-types/state.js';
@@ -18,6 +19,16 @@ interface TripletStampRenderOptions {
 }
 
 logger.moduleLoaded('TripletStampRenderer', 'triplets');
+
+interface AnimationEffectsManager {
+  shouldFillNote(note: { color: string; uuid?: string }): boolean;
+  getFillLevel(note: { color: string; uuid?: string }): number;
+}
+
+const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
+  const effectsWindow = window as Window & { animationEffectsManager?: AnimationEffectsManager };
+  return effectsWindow.animationEffectsManager;
+};
 
 /**
  * Renders all placed triplet groups on the pitch grid
@@ -123,16 +134,17 @@ function renderTripletNoteheads(
   const scaleX = (groupWidth / 100) * 0.8;
   const scaleY = (groupHeight / 100) * 0.8;
   const strokeWidth = Math.max(1, 3 * scaleY);
+  const animationManager = getAnimationEffectsManager();
 
   // Draw noteheads for each active slot
   stamp.hits.forEach(slot => {
     const centerPercent = tripletCenterPercents[slot] ?? 50;
     const noteheadX = groupX + (groupWidth * centerPercent / 100);
+    const shapeKey = `triplet_${slot}`;
 
     // Calculate Y position with per-shape offset
     let noteheadY = centerY;
     if (placement && getRowY) {
-      const shapeKey = `triplet_${slot}`;
       const rowOffset = (placement.shapeOffsets?.[shapeKey]) || 0;
       const shapeRow = placement.row + rowOffset;
       noteheadY = getRowY(shapeRow);
@@ -149,7 +161,16 @@ function renderTripletNoteheads(
       }
     }
 
-    drawTripletNotehead(ctx, noteheadX, noteheadY, color, strokeWidth, scaleX, scaleY);
+    let fillLevel = 0;
+    if (animationManager && placement?.id) {
+      const noteId = buildTripletStampShapeNoteId(placement.id, shapeKey);
+      const note = { uuid: noteId, color };
+      if (animationManager.shouldFillNote(note)) {
+        fillLevel = animationManager.getFillLevel(note);
+      }
+    }
+
+    drawTripletNotehead(ctx, noteheadX, noteheadY, color, strokeWidth, scaleX, scaleY, fillLevel);
   });
 }
 
@@ -165,9 +186,35 @@ function renderTripletNoteheads(
  * @param {number} scaleX - Horizontal scale factor
  * @param {number} scaleY - Vertical scale factor
  */
-function drawTripletNotehead(ctx: CanvasRenderingContext2D, cx: number, cy: number, stroke = 'currentColor', strokeWidth = 4, scaleX = 1, scaleY = 1): void {
+function drawTripletNotehead(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  stroke = 'currentColor',
+  strokeWidth = 4,
+  scaleX = 1,
+  scaleY = 1,
+  fillLevel = 0
+): void {
   const rx = 20 * scaleX;
   const ry = 60 * scaleY;
+
+  if (fillLevel > 0) {
+    const innerRatio = 1 - fillLevel;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(Math.max(0, innerRatio - 0.05), 'transparent');
+    gradient.addColorStop(innerRatio, `${stroke}1F`);
+    gradient.addColorStop(1, `${stroke}BF`);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+    ctx.clip();
+    ctx.fillStyle = gradient;
+    ctx.fillRect(cx - rx - 10, cy - ry - 10, (rx + 10) * 2, (ry + 10) * 2);
+    ctx.restore();
+  }
 
   ctx.strokeStyle = stroke;
   ctx.lineWidth = strokeWidth;

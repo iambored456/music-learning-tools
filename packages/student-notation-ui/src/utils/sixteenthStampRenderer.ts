@@ -20,6 +20,8 @@ export interface SixteenthStampRendererOptions {
   strokeWidth?: number;
 }
 
+type ShapeFillLevels = Record<string, number>;
+
 /**
  * Shared stamp rendering utility for both canvas and SVG contexts.
  */
@@ -37,6 +39,58 @@ export class SixteenthStampRenderer {
     };
   }
 
+  private drawEnvelopeFillEllipse(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    color: string,
+    fillLevel: number
+  ): void {
+    if (fillLevel <= 0) {return;}
+
+    const innerRatio = 1 - fillLevel;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(Math.max(0, innerRatio - 0.05), 'transparent');
+    gradient.addColorStop(innerRatio, `${color}1F`);
+    gradient.addColorStop(1, `${color}BF`);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = gradient;
+    ctx.fillRect(cx - rx - 10, cy - ry - 10, (rx + 10) * 2, (ry + 10) * 2);
+    ctx.restore();
+  }
+
+  private drawEnvelopeFillPath(
+    ctx: CanvasRenderingContext2D,
+    pathObj: Path2D,
+    cx: number,
+    cy: number,
+    radius: number,
+    color: string,
+    fillLevel: number
+  ): void {
+    if (fillLevel <= 0) {return;}
+
+    const innerRatio = 1 - fillLevel;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(Math.max(0, innerRatio - 0.05), 'transparent');
+    gradient.addColorStop(innerRatio, `${color}1F`);
+    gradient.addColorStop(1, `${color}BF`);
+
+    ctx.save();
+    ctx.clip(pathObj);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(cx - radius - 10, cy - radius - 10, (radius + 10) * 2, (radius + 10) * 2);
+    ctx.restore();
+  }
+
   /**
    * Renders a stamp to a canvas context.
    */
@@ -49,7 +103,8 @@ export class SixteenthStampRenderer {
     height: number,
     color = '#000',
     placement: (SixteenthStampPlacementLike & { shapeOffsets?: Record<string, number> }) | null = null,
-    getRowY: GetRowY | null = null
+    getRowY: GetRowY | null = null,
+    shapeFillLevels: ShapeFillLevels | null = null
   ): void {
     // Separate horizontal and vertical scaling to support modulation stretch
     const scaleX = (width / 100) * 0.8;
@@ -72,14 +127,17 @@ export class SixteenthStampRenderer {
     // Draw ovals (8th notes) with individual offsets if available
     stamp.ovals.forEach(ovalStart => {
       const cx = ovalStart === 0 ? x + 0.25 * width : x + 0.75 * width;
+      const shapeKey = `oval_${ovalStart}`;
 
       let ovalY = centerY;
       if (placement && getRowY) {
-        const shapeKey = `oval_${ovalStart}`;
         const rowOffset = (placement.shapeOffsets?.[shapeKey]) || 0;
         const shapeRow = placement.row + rowOffset;
         ovalY = getRowY(shapeRow);
       }
+
+      const fillLevel = shapeFillLevels?.[shapeKey] ?? 0;
+      this.drawEnvelopeFillEllipse(ctx, cx, ovalY, ovalRx, ovalRy, color, fillLevel);
 
       ctx.beginPath();
       ctx.ellipse(cx, ovalY, ovalRx, ovalRy, 0, 0, Math.PI * 2);
@@ -92,10 +150,10 @@ export class SixteenthStampRenderer {
       if (cx === undefined) {
         return;
       }
+      const shapeKey = `diamond_${slot}`;
 
       let diamondY = centerY;
       if (placement && getRowY) {
-        const shapeKey = `diamond_${slot}`;
         const rowOffset = (placement.shapeOffsets?.[shapeKey]) || 0;
         const shapeRow = placement.row + rowOffset;
         diamondY = getRowY(shapeRow);
@@ -103,6 +161,8 @@ export class SixteenthStampRenderer {
 
       const path = diamondPath(cx, diamondY, diamondW, diamondH);
       const pathObj = new Path2D(path);
+      const fillLevel = shapeFillLevels?.[shapeKey] ?? 0;
+      this.drawEnvelopeFillPath(ctx, pathObj, cx, diamondY, Math.max(diamondW, diamondH) / 2, color, fillLevel);
       ctx.stroke(pathObj);
     });
 
@@ -163,4 +223,3 @@ export class SixteenthStampRenderer {
 }
 
 export const defaultSixteenthStampRenderer = new SixteenthStampRenderer();
-

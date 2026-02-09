@@ -29,6 +29,8 @@ export interface ZoomToFitOptions {
   paddingRows?: number;
 }
 
+export type SpanLadderSnapMode = ZoomDirection | 'nearest';
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -271,6 +273,122 @@ export function zoomRange(
   const bottomIndex = clampInt(expandedBottom, 0, maxIndex);
 
   return normalizeRange({ topIndex, bottomIndex }, totalRanks, normalizedMinSpan);
+}
+
+/**
+ * Build a deterministic ladder of allowed spans for discrete zoom/preset states.
+ * The ladder is sorted largest -> smallest and always includes full span and min span.
+ */
+export function buildSpanLadder(
+  totalRanks: number,
+  minSpan: number = DEFAULT_MIN_VIEWPORT_ROWS
+): number[] {
+  const normalizedTotal = Math.max(1, Math.round(totalRanks));
+  const normalizedMin = Math.max(1, Math.min(normalizedTotal, Math.round(minSpan)));
+
+  const ladder: number[] = [normalizedTotal];
+  let cursor = normalizedTotal;
+
+  while (cursor > normalizedMin) {
+    const adaptiveStep = Math.max(1, getAdaptiveZoomStep(cursor, normalizedTotal));
+    const next = Math.max(normalizedMin, cursor - (2 * adaptiveStep));
+    if (next === cursor) {
+      break;
+    }
+    ladder.push(next);
+    cursor = next;
+  }
+
+  if (!ladder.includes(normalizedMin)) {
+    ladder.push(normalizedMin);
+  }
+
+  return Array.from(new Set(ladder)).sort((a, b) => b - a);
+}
+
+/**
+ * Snap a span to the closest ladder value or step in a zoom direction.
+ */
+export function snapSpanToLadder(
+  span: number,
+  ladder: number[],
+  mode: SpanLadderSnapMode = 'nearest'
+): number {
+  if (!ladder.length) {
+    return Math.max(1, Math.round(span));
+  }
+
+  const ascending = Array.from(new Set(ladder.map(value => Math.max(1, Math.round(value))))).sort((a, b) => a - b);
+  const min = ascending[0];
+  const max = ascending[ascending.length - 1];
+  const normalizedSpan = clampInt(span, min, max);
+
+  if (mode === 'nearest') {
+    return ascending.reduce((best, candidate) => {
+      const bestDelta = Math.abs(best - normalizedSpan);
+      const candidateDelta = Math.abs(candidate - normalizedSpan);
+      return candidateDelta < bestDelta ? candidate : best;
+    }, ascending[0]);
+  }
+
+  if (mode === 'in') {
+    for (let i = ascending.length - 1; i >= 0; i -= 1) {
+      if (ascending[i] < normalizedSpan) {
+        return ascending[i];
+      }
+    }
+    return min;
+  }
+
+  for (let i = 0; i < ascending.length; i += 1) {
+    if (ascending[i] > normalizedSpan) {
+      return ascending[i];
+    }
+  }
+  return max;
+}
+
+export interface SpanLadderRangeOptions {
+  totalRanks: number;
+  minSpan?: number;
+  ladder?: number[];
+  mode?: SpanLadderSnapMode;
+}
+
+/**
+ * Snap a range's span to the shared span ladder while preserving center.
+ */
+export function snapRangeToSpanLadder(
+  range: PitchRange,
+  { totalRanks, minSpan = DEFAULT_MIN_VIEWPORT_ROWS, ladder, mode = 'nearest' }: SpanLadderRangeOptions
+): PitchRange {
+  const normalized = normalizeRange(range, totalRanks, minSpan);
+  const currentSpan = getSpan(normalized);
+  const resolvedLadder = ladder ?? buildSpanLadder(totalRanks, minSpan);
+  const snappedSpan = snapSpanToLadder(currentSpan, resolvedLadder, mode);
+
+  if (snappedSpan === currentSpan) {
+    return normalized;
+  }
+
+  const center = (normalized.topIndex + normalized.bottomIndex) / 2;
+  return rangeFromCenter(center, snappedSpan, totalRanks);
+}
+
+/**
+ * Perform one zoom step by moving to the next span rung.
+ */
+export function zoomRangeOnSpanLadder(
+  current: PitchRange,
+  direction: ZoomDirection,
+  { totalRanks, minSpan = DEFAULT_MIN_VIEWPORT_ROWS, ladder }: Omit<SpanLadderRangeOptions, 'mode'>
+): PitchRange {
+  return snapRangeToSpanLadder(current, {
+    totalRanks,
+    minSpan,
+    ladder,
+    mode: direction
+  });
 }
 
 // ============================================================================

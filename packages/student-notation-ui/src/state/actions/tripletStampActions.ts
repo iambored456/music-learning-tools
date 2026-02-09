@@ -63,9 +63,6 @@ export const tripletStampActions = {
     this.state.tripletStampPlacements.push(finalPlacement);
     this.emit('tripletStampPlacementsChanged');
 
-    // Force grid refresh
-    this.emit('rhythmStructureChanged');
-
     logger.debug('TripletStampActions', `Added triplet stamp ${placement.tripletStampId} at time ${placement.startTimeIndex}, row ${placement.row}`, {
       tripletStampId: placement.tripletStampId,
       startTimeIndex: placement.startTimeIndex,
@@ -249,7 +246,6 @@ export const tripletStampActions = {
     return placement.row + rowOffset;
   }
 };
-
 
 
 

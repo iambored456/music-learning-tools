@@ -193,7 +193,10 @@ function createExerciseState() {
 
   function getActivePattern(config: ExerciseConfig): ExercisePattern {
     const template = getActiveTemplate(config);
-    return template?.pattern ?? STANDARD_4_PHASE_PATTERN;
+    if (template && template.type === 'pitch-matching') {
+      return template.pattern;
+    }
+    return STANDARD_4_PHASE_PATTERN;
   }
 
   function getLeadInMs(config: ExerciseConfig): number {

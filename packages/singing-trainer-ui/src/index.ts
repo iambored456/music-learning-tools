@@ -26,6 +26,7 @@ export type { HighwayState, TargetNote } from './lib/stores/highwayState.svelte'
 export type { UltrastarState } from './lib/stores/ultrastarState.svelte';
 export type { YouTubeState } from './lib/stores/youtubeState.svelte';
 export type { ResultsState, ResultsSummary, PhraseResult } from './lib/stores/resultsState.svelte';
+export type { OverdubUiState, RenderableTakeTrail } from './lib/stores/overdubState.svelte';
 
 // Calibration exports
 export * from './lib/calibration/index.js';
@@ -42,6 +43,7 @@ export { collectPitchSamples, type CalibrationPitchSample } from './lib/services
 // Chooser state and components
 export { chooserState, type ChooserState } from './lib/stores/chooserState.svelte.js';
 export { ExerciseChooserModal } from './lib/components/chooser/index.js';
+export { overdubState } from './lib/stores/overdubState.svelte.js';
 
 // Lesson engine adapters
 export {

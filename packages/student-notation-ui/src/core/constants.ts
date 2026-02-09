@@ -77,7 +77,6 @@ export const SHADE_WHITE_VALUE = 255;
 // Audio/Synth Constants
 export const LIMITER_THRESHOLD_DB = -1;
 export const DEFAULT_VOLUME_DB = -15;
-export const SYNTH_POLYPHONY = 8;
 export const FILTER_CUTOFF_OFFSET = 35;
 export const RESONANCE_MULTIPLIER = 12;
 export const MIN_Q_VALUE = 0.1;

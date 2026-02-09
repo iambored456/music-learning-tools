@@ -24,6 +24,7 @@
   "dependencies": {
     "@mlt/handoff": "workspace:*",
     "@mlt/lesson-templates": "workspace:*",
+    "@mlt/overdub-engine": "workspace:*",
     "@mlt/pitch-data": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
     "@mlt/student-notation-engine": "workspace:*",

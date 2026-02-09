@@ -207,14 +207,18 @@ export function getPitchClass(pitchWithOctave: string): string {
  * Get line style for a pitch class.
  * Used for horizontal grid lines.
  */
+const BASE_C_LINE_WIDTH = 3.33;
+const EMPHASIZED_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.5;
+const G_ROW_FILL_ALPHA = 0.42;
+
 export function getLineStyleFromPitchClass(pitchClass: string): LineStyle {
   switch (pitchClass) {
     case 'C':
-      return { lineWidth: 3.33, dash: [], color: '#adb5bd' };
+      return { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [], color: '#adb5bd' };
     case 'E':
-      return { lineWidth: 1, dash: [5, 5], color: '#adb5bd' };
+      return { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [5, 5], color: '#adb5bd' };
     case 'G':
-      return { lineWidth: 1, dash: [], color: '#dee2e6' };
+      return { lineWidth: 1, dash: [], color: `rgba(222, 226, 230, ${G_ROW_FILL_ALPHA})` };
     case 'B':
     case 'A':
     case 'F':

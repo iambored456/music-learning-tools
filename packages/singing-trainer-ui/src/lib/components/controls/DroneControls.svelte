@@ -8,6 +8,7 @@
   import { appState, type TonicNote } from '../../stores/appState.svelte.js';
   import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
   import { toggleDrone, updateDrone } from '../../services/droneAudio.js';
+  import { MODE_NAMES, MODE_KEYS } from '../../constants/modes.js';
 
   const TONIC_OPTIONS: TonicNote[] = [
     'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'
@@ -45,6 +46,15 @@
   function handleSpeakingPitchToggle() {
     if (!speakingPitchAvailable) return;
     useSpeakingPitch = !useSpeakingPitch;
+  }
+
+  function handleModeToggle() {
+    appState.setDroneModeEnabled(!appState.state.drone.modeEnabled);
+  }
+
+  function handleModeChange(event: Event) {
+    const target = event.target as HTMLSelectElement;
+    appState.setDroneSelectedMode(target.value);
   }
 
   function midiToTonicAndOctave(midi: number): { tonic: TonicNote; octave: number } {
@@ -136,6 +146,28 @@
       oninput={handleVolumeChange}
     />
   </label>
+
+  <div class="mode-row">
+    <button
+      class="mode-toggle"
+      class:active={appState.state.drone.modeEnabled}
+      onclick={handleModeToggle}
+      aria-pressed={appState.state.drone.modeEnabled}
+      title="Highlight diatonic mode pitches on the grid"
+    >
+      Mode
+    </button>
+    <select
+      class="mode-select"
+      value={appState.state.drone.selectedMode}
+      onchange={handleModeChange}
+      disabled={!appState.state.drone.modeEnabled}
+    >
+      {#each MODE_KEYS as key}
+        <option value={key}>{MODE_NAMES[key]}</option>
+      {/each}
+    </select>
+  </div>
 </div>
 
 <style>
@@ -261,5 +293,38 @@
     height: 4px;
     cursor: pointer;
     max-width: 100%;
+  }
+
+  .mode-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .mode-toggle {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text);
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mode-toggle:hover {
+    border-color: var(--color-secondary);
+  }
+
+  .mode-toggle.active {
+    background-color: var(--color-secondary);
+    color: var(--color-bg);
+    border-color: var(--color-secondary);
+  }
+
+  .mode-select {
+    flex: 1;
+    min-width: 0;
   }
 </style>

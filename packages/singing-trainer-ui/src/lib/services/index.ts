@@ -36,3 +36,25 @@ export {
   createTransportSync,
   type TransportSyncInstance,
 } from './transportSync.js';
+
+export {
+  OverdubPcmRecorder,
+  resampleFloat32,
+  type PcmCaptureResult,
+} from './overdubPcmRecorder.js';
+
+export {
+  loadLatestOverdubSnapshot,
+  loadOverdubSnapshot,
+  saveOverdubSnapshot,
+  type PersistedProjectSnapshot,
+  type PersistedTakeAudio,
+} from './overdubPersistence.js';
+
+export {
+  convertExerciseVoicesToTargetNotes,
+  calculateExerciseDurationMs,
+  type VoiceRoleFilter,
+} from './exerciseVoiceConverter.js';
+
+export { guideVoicePlayer } from './guideVoicePlayer.js';

@@ -27,7 +27,7 @@ import {
 export function calculateZoomToFitRowCount(containerHeight: number, rowCount: number): number {
   return calculateZoomToFitRowCountBase(containerHeight, rowCount, {
     baseUnit: BASE_ABSTRACT_UNIT,
-    paddingRows: 1,
+    paddingRows: 0,
   });
 }
 

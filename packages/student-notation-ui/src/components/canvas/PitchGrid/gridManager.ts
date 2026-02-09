@@ -5,6 +5,7 @@ import DrumGridController from '../drumGrid/drumGrid.js';
 import { initPitchGridInteraction } from './interactors/pitchGridInteractor.js';
 import { initDrumGridInteraction } from '../drumGrid/drumGridInteractor.js';
 import logger from '@utils/logger.ts';
+import { logStampLayout } from '@utils/stampLayoutDebug.ts';
 
 
 /**
@@ -18,7 +19,11 @@ const GridManager = {
     initDrumGridInteraction();
 
     // Listen for canvas resize events from layoutService
-    document.addEventListener('canvasResized', () => {
+    document.addEventListener('canvasResized', (event: Event) => {
+      const canvasEvent = event as CustomEvent<{ source?: string }>;
+      logStampLayout('gridManager:canvasResized', {
+        source: canvasEvent.detail?.source ?? 'unknown'
+      });
       this.renderPitchGrid();
       this.renderDrumGrid();
     });

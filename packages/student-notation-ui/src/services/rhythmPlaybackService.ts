@@ -6,6 +6,7 @@ import store from '@state/initStore.ts';
 import SynthEngine from './initAudio.js';
 import logger from '@utils/logger.ts';
 import type { SixteenthStampPlacement, TripletStampPlacement } from '@app-types/state.js';
+import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 
 logger.moduleLoaded('RhythmPlaybackService');
 
@@ -14,6 +15,7 @@ interface ScheduledEvent {
   color: string;
   attackTime: number;
   releaseTime: number;
+  noteId?: string;
 }
 
 /**
@@ -23,10 +25,12 @@ interface ScheduledEvent {
 class RhythmPlaybackService {
   private scheduledEvents: ScheduledEvent[] = [];
   private isInitialized = false;
+  private scheduleToken = 0;
 
   constructor() {
     this.scheduledEvents = [];
     this.isInitialized = false;
+    this.scheduleToken = 0;
   }
 
   // Convenience aliases used elsewhere
@@ -91,6 +95,7 @@ class RhythmPlaybackService {
 
     // Use direct SynthEngine calls with absolute timing
     const now = Tone.now();
+    const scheduleToken = this.scheduleToken;
 
     // Get the base row for calculating per-shape pitches
     // Use globalRow for pitch lookups (fullRowData is never sliced)
@@ -99,12 +104,12 @@ class RhythmPlaybackService {
     events.forEach((event, index) => {
       try {
         // Convert Tone.js time notation to absolute time
-        const offsetSeconds = Tone.Time(String(event.offset)).toSeconds();
+        const offsetSeconds = Tone.Time(event.offset as Tone.Unit.Time).toSeconds();
         const attackTime = now + offsetSeconds;
 
         // Adjust duration based on note shape
         // Circle notes (quarter notes) are twice as long as oval notes (eighth notes)
-        const baseDuration = Tone.Time(String(event.duration)).toSeconds();
+        const baseDuration = Tone.Time(event.duration as Tone.Unit.Time).toSeconds();
         const duration = noteShape === 'circle' ? baseDuration * 2 : baseDuration;
 
         const releaseTime = attackTime + duration;
@@ -119,20 +124,37 @@ class RhythmPlaybackService {
             shapePitch = rowData.toneNote.replace('♭', 'b').replace('♯', '#');
           }
         }
+        shapePitch = shapePitch.replace('\u266D', 'b').replace('\u266F', '#');
+        const noteId = placement?.id && event.shapeKey
+          ? buildSixteenthStampShapeNoteId(placement.id, event.shapeKey)
+          : undefined;
 
         // SynthEngine.triggerAttack accepts a time parameter
         // This schedules the note in Web Audio's future
         SynthEngine.triggerAttack(shapePitch, color, attackTime);
+        if (noteId) {
+          Tone.Draw.schedule(() => {
+            if (this.scheduleToken !== scheduleToken) {return;}
+            store.emit('noteAttack', { noteId, color });
+          }, attackTime);
+        }
 
         // Schedule the release
         SynthEngine.triggerRelease(shapePitch, color, releaseTime);
+        if (noteId) {
+          Tone.Draw.schedule(() => {
+            if (this.scheduleToken !== scheduleToken) {return;}
+            store.emit('noteRelease', { noteId, color });
+          }, releaseTime);
+        }
 
         // Store the timing info for potential cancellation
         this.scheduledEvents.push({
           pitch: shapePitch,
           color,
           attackTime,
-          releaseTime
+          releaseTime,
+          noteId
         });
 
       } catch (error) {
@@ -150,11 +172,21 @@ class RhythmPlaybackService {
     if (this.scheduledEvents.length === 0) {return;}
 
     logger.debug('RhythmPlaybackService', `Clearing ${this.scheduledEvents.length} scheduled events`);
+    this.scheduleToken += 1;
 
     // Release all notes immediately
     // Note: We can't cancel future-scheduled Web Audio events,
     // but we can release all currently playing notes
     SynthEngine.releaseAll();
+
+    const activeShapeNoteIds = Array.from(new Set(
+      this.scheduledEvents
+        .map(event => event.noteId)
+        .filter((noteId): noteId is string => typeof noteId === 'string' && noteId.length > 0)
+    ));
+    activeShapeNoteIds.forEach((noteId) => {
+      store.emit('noteRelease', { noteId });
+    });
 
     this.scheduledEvents = [];
   }
@@ -207,6 +239,7 @@ class RhythmPlaybackService {
 
     // Use direct SynthEngine calls with absolute timing
     const now = Tone.now();
+    const scheduleToken = this.scheduleToken;
     // Get the base row for calculating per-shape pitches
     // Use globalRow for pitch lookups (fullRowData is never sliced)
     const baseRow = placement?.globalRow ?? placement?.row;
@@ -225,20 +258,35 @@ class RhythmPlaybackService {
           const shapeRow = baseRow + event.rowOffset;
           const rowData = store.state.fullRowData[shapeRow];
           if (rowData) {
-            shapePitch = rowData.toneNote.replace('?T-', 'b').replace('?T_', '#');
+            shapePitch = rowData.toneNote;
           }
         }
+        shapePitch = shapePitch.replace('\u266D', 'b').replace('\u266F', '#');
+        const noteId = placement?.id && event.shapeKey
+          ? buildTripletStampShapeNoteId(placement.id, event.shapeKey)
+          : undefined;
 
         // Schedule the note
         SynthEngine.triggerAttack(shapePitch, color, attackTime);
         SynthEngine.triggerRelease(shapePitch, color, releaseTime);
+        if (noteId) {
+          Tone.Draw.schedule(() => {
+            if (this.scheduleToken !== scheduleToken) {return;}
+            store.emit('noteAttack', { noteId, color });
+          }, attackTime);
+          Tone.Draw.schedule(() => {
+            if (this.scheduleToken !== scheduleToken) {return;}
+            store.emit('noteRelease', { noteId, color });
+          }, releaseTime);
+        }
 
         // Store the timing info for potential cancellation
         this.scheduledEvents.push({
           pitch: shapePitch,
           color,
           attackTime,
-          releaseTime
+          releaseTime,
+          noteId
         });
 
       } catch (error) {
@@ -276,8 +324,4 @@ class RhythmPlaybackService {
 const rhythmPlaybackService = new RhythmPlaybackService();
 
 export default rhythmPlaybackService;
-
-
-
-
 

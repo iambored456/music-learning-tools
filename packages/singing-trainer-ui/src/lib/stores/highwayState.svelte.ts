@@ -30,6 +30,7 @@ export interface TargetNote {
   segmentId?: string;
   segmentName?: string;
   waitForInput?: boolean;
+  color?: string;
 }
 
 export interface HighwayState {
@@ -92,7 +93,7 @@ function createHighwayState() {
       durationMs: note.durationMs,
       startColumn: 0, // Not used in target notes mode
       endColumn: 0,   // Not used in target notes mode
-      color: '#3b82f6',
+      color: note.color ?? '#3b82f6',
       shape: 'oval' as const,
       globalRow: 0,
     }));
