@@ -8,16 +8,20 @@
 import {
   DEFAULT_ENGINE_CONFIG,
   computePhraseDurationMs,
+  createLayer,
   createOverdubEngine,
   type OverdubEngineState,
   type OverdubLayer,
   type OverdubPitchTrailPoint,
+  type OverdubProject,
   type OverdubTake,
   type PhraseSettings,
 } from '@mlt/overdub-engine';
+import type { OverdubExerciseTemplate } from '@mlt/lesson-templates';
 import { pitchState } from './pitchState.svelte.js';
 import { OverdubPcmRecorder, resampleFloat32 } from '../services/overdubPcmRecorder.js';
 import {
+  loadOverdubSnapshot,
   loadLatestOverdubSnapshot,
   saveOverdubSnapshot,
   type PersistedTakeAudio,
@@ -37,12 +41,20 @@ export interface OverdubUiState {
   isBusy: boolean;
   isCountInActive: boolean;
   isRecordingActive: boolean;
+  isPendingTakePreviewActive: boolean;
   captureProgressMs: number;
   recordingStartPerfMs: number | null;
   pendingTakeId: string | null;
   warning: string | null;
   hiddenLayerTrailId: string | null;
   forwardCursorModeEnabled: boolean;
+}
+
+interface RecordingScheduleInfo {
+  startDelayMs: number;
+  startAtPerfMs: number;
+  phraseDurationMs: number;
+  countInMs: number;
 }
 
 const machine = createOverdubEngine(DEFAULT_ENGINE_CONFIG);
@@ -61,6 +73,11 @@ const LAYER_COLORS = [
   '#83f0d2',
   '#ff8a7b',
 ];
+const DEFAULT_LAYER_GAIN = 1.1;
+const RECORD_CAPTURE_LEAD_IN_MS = 500;
+const RECORD_CAPTURE_LEAD_OUT_MS = 500;
+const RECORD_CAPTURE_MIN_START_DELAY_SEC = 0.08;
+const MAX_TAKE_START_OFFSET_MS = 4_000;
 
 let recordingProgressIntervalId: ReturnType<typeof setInterval> | null = null;
 let recordingStartTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -74,6 +91,39 @@ let recordingAbortRequested = false;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampFinite(value: number | null | undefined, fallback: number, min: number, max: number): number {
+  const safeValue = Number.isFinite(value) ? (value as number) : fallback;
+  return clamp(safeValue, min, max);
+}
+
+function getTakeStartOffsetMs(take: Pick<OverdubTake, 'startOffsetMs'>): number {
+  return Math.round(clampFinite(take.startOffsetMs, 0, 0, MAX_TAKE_START_OFFSET_MS));
+}
+
+function getTakeTailAfterPhraseMs(
+  take: Pick<OverdubTake, 'startOffsetMs'>,
+  audio: PersistedTakeAudio,
+  phraseDurationMs: number,
+): number {
+  const startOffsetMs = getTakeStartOffsetMs(take);
+  const relativeEndMs = Math.max(0, Math.round(audio.durationMs) - startOffsetMs);
+  return Math.max(0, relativeEndMs - Math.max(0, Math.round(phraseDurationMs)));
+}
+
+function estimateAudioPeak(samples: Float32Array): number {
+  if (!samples || samples.length === 0) return 0;
+  const targetSamples = 4096;
+  const step = Math.max(1, Math.floor(samples.length / targetSamples));
+  let peak = 0;
+  for (let i = 0; i < samples.length; i += step) {
+    const value = Math.abs(samples[i] ?? 0);
+    if (value > peak) {
+      peak = value;
+    }
+  }
+  return peak;
 }
 
 function cloneEngineState(): OverdubEngineState {
@@ -91,6 +141,7 @@ function createStateSnapshot(): OverdubUiState {
     isBusy: false,
     isCountInActive: false,
     isRecordingActive: false,
+    isPendingTakePreviewActive: false,
     captureProgressMs: 0,
     recordingStartPerfMs: null,
     pendingTakeId: null,
@@ -158,6 +209,152 @@ function createOverdubState() {
     return ids;
   }
 
+  function getMaxActiveTakeStartOffsetMs(): number {
+    let maxStartOffsetMs = 0;
+    for (const layer of state.engine.project.layers) {
+      if (!layer.activeTakeId) continue;
+      const take = layer.takes.find((entry) => entry.id === layer.activeTakeId);
+      if (!take) continue;
+      const audio = takeAudioById.get(take.id);
+      if (!audio) continue;
+      const startOffsetMs = getTakeStartOffsetMs(take);
+      if (startOffsetMs > maxStartOffsetMs) {
+        maxStartOffsetMs = startOffsetMs;
+      }
+    }
+    return maxStartOffsetMs;
+  }
+
+  function getMaxActiveTakeTailAfterPhraseMs(phraseDurationMs: number): number {
+    let maxTailMs = 0;
+    for (const layer of state.engine.project.layers) {
+      if (!layer.activeTakeId) continue;
+      const take = layer.takes.find((entry) => entry.id === layer.activeTakeId);
+      if (!take) continue;
+      const audio = takeAudioById.get(take.id);
+      if (!audio) continue;
+      const tailMs = getTakeTailAfterPhraseMs(take, audio, phraseDurationMs);
+      if (tailMs > maxTailMs) {
+        maxTailMs = tailMs;
+      }
+    }
+    return maxTailMs;
+  }
+
+  function getSnapshotStats(): {
+    layerCount: number;
+    totalTakes: number;
+    totalTakeAudioSamples: number;
+  } {
+    let totalTakes = 0;
+    for (const layer of state.engine.project.layers) {
+      totalTakes += layer.takes.length;
+    }
+
+    let totalTakeAudioSamples = 0;
+    for (const audio of takeAudioById.values()) {
+      totalTakeAudioSamples += audio.samples.length;
+    }
+
+    return {
+      layerCount: state.engine.project.layers.length,
+      totalTakes,
+      totalTakeAudioSamples,
+    };
+  }
+
+  function getProjectTakeIds(project = state.engine.project): string[] {
+    const ids: string[] = [];
+    for (const layer of project.layers) {
+      for (const take of layer.takes) {
+        ids.push(take.id);
+      }
+    }
+    return ids;
+  }
+
+  function getProjectTakeIdSet(project = state.engine.project): Set<string> {
+    return new Set(getProjectTakeIds(project));
+  }
+
+  function stripTakesMissingAudio(
+    project: OverdubProject,
+    audioByTakeId: Map<string, PersistedTakeAudio>
+  ): { project: OverdubProject; removedTakeIds: string[] } {
+    let nextProject: OverdubProject;
+    try {
+      if (typeof structuredClone === 'function') {
+        nextProject = structuredClone(project);
+      } else {
+        nextProject = JSON.parse(JSON.stringify(project)) as OverdubProject;
+      }
+    } catch {
+      nextProject = JSON.parse(JSON.stringify(project)) as OverdubProject;
+    }
+
+    const removedTakeIds: string[] = [];
+
+    for (const layer of nextProject.layers) {
+      const kept: OverdubTake[] = [];
+      for (const take of layer.takes) {
+        if (audioByTakeId.has(take.id)) {
+          kept.push(take);
+        } else {
+          removedTakeIds.push(take.id);
+        }
+      }
+      layer.takes = kept;
+      if (layer.activeTakeId && !kept.some((take) => take.id === layer.activeTakeId)) {
+        layer.activeTakeId = kept[kept.length - 1]?.id ?? null;
+      }
+    }
+
+    return { project: nextProject, removedTakeIds };
+  }
+
+  function getMissingAudioTakeIds(project = state.engine.project): string[] {
+    return getProjectTakeIds(project).filter((takeId) => !takeAudioById.has(takeId));
+  }
+
+  function hasTakeAudio(takeId: string): boolean {
+    return takeAudioById.has(takeId);
+  }
+
+  async function hydrateMissingTakeAudioFromPersistence(): Promise<{ hydrated: number; missingAfterHydration: string[] }> {
+    const missingBefore = getMissingAudioTakeIds();
+    if (missingBefore.length === 0) {
+      return { hydrated: 0, missingAfterHydration: [] };
+    }
+
+    const snapshot = await loadOverdubSnapshot(state.engine.project.id);
+    if (!snapshot) {
+      console.warn('[OverdubState] hydrateMissingTakeAudioFromPersistence: no snapshot for current project.', {
+        projectId: state.engine.project.id,
+        missingBefore,
+      });
+      return { hydrated: 0, missingAfterHydration: missingBefore };
+    }
+
+    let hydrated = 0;
+    for (const takeId of missingBefore) {
+      const audio = snapshot.audioByTakeId.get(takeId);
+      if (!audio) continue;
+      takeAudioById.set(takeId, audio);
+      hydrated += 1;
+    }
+
+    const missingAfterHydration = getMissingAudioTakeIds();
+    console.debug('[OverdubState] hydrateMissingTakeAudioFromPersistence', {
+      projectId: state.engine.project.id,
+      missingBeforeCount: missingBefore.length,
+      hydrated,
+      missingAfterCount: missingAfterHydration.length,
+      missingAfterTakeIds: missingAfterHydration.slice(0, 10),
+    });
+
+    return { hydrated, missingAfterHydration };
+  }
+
   function pruneTakeAudioToProject(): void {
     const activeTakeIds = getActiveTakeIds();
     for (const takeId of takeAudioById.keys()) {
@@ -165,6 +362,37 @@ function createOverdubState() {
         takeAudioById.delete(takeId);
       }
     }
+  }
+
+  function normalizeProjectMixState(project: OverdubProject): OverdubProject {
+    let normalized: OverdubProject;
+    try {
+      if (typeof structuredClone === 'function') {
+        normalized = structuredClone(project);
+      } else {
+        normalized = JSON.parse(JSON.stringify(project)) as OverdubProject;
+      }
+    } catch {
+      normalized = JSON.parse(JSON.stringify(project)) as OverdubProject;
+    }
+
+    for (const layer of normalized.layers) {
+      layer.gain = clampFinite(layer.gain, DEFAULT_LAYER_GAIN, 0, 2);
+      layer.pan = clampFinite(layer.pan, 0, -1, 1);
+      layer.muted = !!layer.muted;
+      layer.solo = !!layer.solo;
+
+      for (const take of layer.takes) {
+        take.gain = clampFinite(take.gain, 1, 0, 2);
+        take.pan = clampFinite(take.pan, 0, -1, 1);
+      }
+
+      if (layer.activeTakeId && !layer.takes.some((take) => take.id === layer.activeTakeId)) {
+        layer.activeTakeId = layer.takes[layer.takes.length - 1]?.id ?? null;
+      }
+    }
+
+    return normalized;
   }
 
   async function persistCurrentProject(): Promise<void> {
@@ -314,12 +542,8 @@ function createOverdubState() {
     countInStartSec: number,
     phraseDurationMs: number
   ): void {
-    const phrase = state.engine.project.phrase;
     if (!state.engine.project.clickEnabled) return;
-    const monitoringMode = state.engine.project.monitoringMode;
-    if (monitoringMode === 'none' && !state.isRecordingActive && !state.isCountInActive) {
-      return;
-    }
+    const phrase = state.engine.project.phrase;
 
     const beatDurationSec = getBeatDurationMs(phrase) / 1000;
     const phraseBeats = phrase.measures * phrase.timeSignatureNumerator * (4 / phrase.timeSignatureDenominator);
@@ -349,45 +573,281 @@ function createOverdubState() {
   function scheduleLayerPlayback(
     context: AudioContext,
     startSec: number,
-    phraseDurationMs: number
+    phraseDurationMs: number,
+    options?: {
+      respectMonitoringMode?: boolean;
+      excludedLayerIds?: Iterable<string>;
+    }
   ): void {
     const layers = state.engine.project.layers;
     const monitoringMode = state.engine.project.monitoringMode;
-    if (monitoringMode === 'none') return;
+    const respectMonitoringMode = options?.respectMonitoringMode ?? true;
+    const excludedLayerIds = new Set(options?.excludedLayerIds ?? []);
+    if (respectMonitoringMode && monitoringMode === 'none') return;
 
     const anySolo = layers.some((layer) => layer.solo);
+    const playableSoloLayers = layers.filter((layer) => {
+      if (!layer.solo || layer.muted || !layer.activeTakeId) return false;
+      const take = layer.takes.find((entry) => entry.id === layer.activeTakeId);
+      if (!take) return false;
+      const audio = takeAudioById.get(take.id);
+      return !!audio;
+    });
+    const enforceSolo = anySolo && playableSoloLayers.length > 0;
+    if (anySolo && !enforceSolo) {
+      console.warn('[OverdubState] Solo gating ignored because no solo layer has playable audio.', {
+        layerCount: layers.length,
+        soloLayerCount: layers.filter((layer) => layer.solo).length,
+      });
+    }
+
     const phraseDurationSec = phraseDurationMs / 1000;
+    const plannedLayers: Array<{
+      layerId: string;
+      layerName: string;
+      activeTakeId: string | null;
+      muted: boolean;
+      solo: boolean;
+      skippedReason: string | null;
+      audioSamples: number;
+      peak: number;
+      gain: number;
+      pan: number;
+      startOffsetMs?: number;
+    }> = [];
+    let scheduledSourceCount = 0;
 
     for (const layer of layers) {
-      if (!layer.activeTakeId) continue;
-      if (layer.muted) continue;
-      if (anySolo && !layer.solo) continue;
+      if (excludedLayerIds.has(layer.id)) {
+        plannedLayers.push({
+          layerId: layer.id,
+          layerName: layer.name,
+          activeTakeId: layer.activeTakeId,
+          muted: layer.muted,
+          solo: layer.solo,
+          skippedReason: 'excluded',
+          audioSamples: 0,
+          peak: 0,
+          gain: layer.gain,
+          pan: layer.pan,
+        });
+        continue;
+      }
+
+      if (!layer.activeTakeId) {
+        plannedLayers.push({
+          layerId: layer.id,
+          layerName: layer.name,
+          activeTakeId: null,
+          muted: layer.muted,
+          solo: layer.solo,
+          skippedReason: 'no-active-take',
+          audioSamples: 0,
+          peak: 0,
+          gain: layer.gain,
+          pan: layer.pan,
+        });
+        continue;
+      }
+
+      if (layer.muted) {
+        plannedLayers.push({
+          layerId: layer.id,
+          layerName: layer.name,
+          activeTakeId: layer.activeTakeId,
+          muted: true,
+          solo: layer.solo,
+          skippedReason: 'muted',
+          audioSamples: 0,
+          peak: 0,
+          gain: layer.gain,
+          pan: layer.pan,
+        });
+        continue;
+      }
+
+      if (enforceSolo && !layer.solo) {
+        plannedLayers.push({
+          layerId: layer.id,
+          layerName: layer.name,
+          activeTakeId: layer.activeTakeId,
+          muted: layer.muted,
+          solo: layer.solo,
+          skippedReason: 'solo-gated',
+          audioSamples: 0,
+          peak: 0,
+          gain: layer.gain,
+          pan: layer.pan,
+        });
+        continue;
+      }
 
       const take = layer.takes.find((entry) => entry.id === layer.activeTakeId);
-      if (!take) continue;
+      if (!take) {
+        plannedLayers.push({
+          layerId: layer.id,
+          layerName: layer.name,
+          activeTakeId: layer.activeTakeId,
+          muted: layer.muted,
+          solo: layer.solo,
+          skippedReason: 'active-take-missing',
+          audioSamples: 0,
+          peak: 0,
+          gain: layer.gain,
+          pan: layer.pan,
+        });
+        continue;
+      }
+
       const audio = takeAudioById.get(take.id);
-      if (!audio) continue;
+      if (!audio) {
+        plannedLayers.push({
+          layerId: layer.id,
+          layerName: layer.name,
+          activeTakeId: layer.activeTakeId,
+          muted: layer.muted,
+          solo: layer.solo,
+          skippedReason: 'audio-missing',
+          audioSamples: 0,
+          peak: 0,
+          gain: layer.gain,
+          pan: layer.pan,
+        });
+        continue;
+      }
 
       const source = context.createBufferSource();
       source.buffer = createAudioBufferFromTake(context, audio);
 
       const gain = context.createGain();
-      gain.gain.value = clamp(layer.gain * take.gain, 0, 2);
+      const layerGain = clampFinite(layer.gain, 1, 0, 2);
+      const takeGain = clampFinite(take.gain, 1, 0, 2);
+      gain.gain.value = clamp(layerGain * takeGain, 0, 2);
 
       const panner = context.createStereoPanner();
-      panner.pan.value = clamp(layer.pan + take.pan, -1, 1);
+      const layerPan = clampFinite(layer.pan, 0, -1, 1);
+      const takePan = clampFinite(take.pan, 0, -1, 1);
+      panner.pan.value = clamp(layerPan + takePan, -1, 1);
 
       source.connect(gain);
       gain.connect(panner);
       panner.connect(context.destination);
 
-      const startWithOffset = Math.max(context.currentTime + 0.01, startSec - (take.startOffsetMs / 1000));
+      const startOffsetMs = getTakeStartOffsetMs(take);
+      const startOffsetSec = startOffsetMs / 1000;
+      const takeBufferDurationSec = source.buffer.duration;
+      const playbackDurationSec = Math.max(
+        phraseDurationSec,
+        Math.min(
+          takeBufferDurationSec,
+          phraseDurationSec + startOffsetSec + (RECORD_CAPTURE_LEAD_OUT_MS / 1000),
+        ),
+      );
+      const startWithOffset = Math.max(context.currentTime + 0.01, startSec - startOffsetSec);
       source.start(startWithOffset);
-      source.stop(startWithOffset + phraseDurationSec);
+      source.stop(startWithOffset + playbackDurationSec);
 
       activePlaybackNodes.push(source);
       activePlaybackAuxNodes.push(gain, panner);
+      scheduledSourceCount += 1;
+      plannedLayers.push({
+        layerId: layer.id,
+        layerName: layer.name,
+        activeTakeId: layer.activeTakeId,
+        muted: layer.muted,
+        solo: layer.solo,
+        skippedReason: null,
+        audioSamples: audio.samples.length,
+        peak: Number(estimateAudioPeak(audio.samples).toFixed(5)),
+        gain: Number(layerGain.toFixed(3)),
+        pan: Number(layerPan.toFixed(3)),
+        startOffsetMs,
+      });
     }
+
+    if (scheduledSourceCount === 0) {
+      console.warn('[OverdubState] scheduleLayerPlayback: no sources scheduled', {
+        monitoringMode,
+        respectMonitoringMode,
+        enforceSolo,
+        anySolo,
+        phraseDurationMs,
+        plannedLayers,
+      });
+    } else {
+      console.debug('[OverdubState] scheduleLayerPlayback', {
+        monitoringMode,
+        respectMonitoringMode,
+        enforceSolo,
+        anySolo,
+        phraseDurationMs,
+        scheduledSourceCount,
+        plannedLayers,
+      });
+    }
+  }
+
+  function schedulePendingTakePlayback(
+    context: AudioContext,
+    startSec: number,
+    phraseDurationMs: number
+  ): void {
+    const pendingTake = state.engine.pendingTake;
+    if (!pendingTake || !pendingTakeAudio) {
+      console.warn('[OverdubState] schedulePendingTakePlayback skipped: missing pending take audio.', {
+        hasPendingTake: !!pendingTake,
+        hasPendingTakeAudio: !!pendingTakeAudio,
+      });
+      return;
+    }
+
+    const source = context.createBufferSource();
+    source.buffer = createAudioBufferFromTake(context, pendingTakeAudio);
+
+    const gain = context.createGain();
+    const parentLayer = getLayerById(pendingTake.layerId);
+    const layerGain = clampFinite(parentLayer?.gain, 1, 0, 2);
+    const takeGain = clampFinite(pendingTake.gain, 1, 0, 2);
+    gain.gain.value = clamp(layerGain * takeGain, 0, 2);
+
+    const panner = context.createStereoPanner();
+    const layerPan = clampFinite(parentLayer?.pan, 0, -1, 1);
+    const takePan = clampFinite(pendingTake.pan, 0, -1, 1);
+    panner.pan.value = clamp(layerPan + takePan, -1, 1);
+
+    source.connect(gain);
+    gain.connect(panner);
+    panner.connect(context.destination);
+
+    const phraseDurationSec = phraseDurationMs / 1000;
+    const startOffsetMs = getTakeStartOffsetMs(pendingTake);
+    const startOffsetSec = startOffsetMs / 1000;
+    const takeBufferDurationSec = source.buffer.duration;
+    const playbackDurationSec = Math.max(
+      phraseDurationSec,
+      Math.min(
+        takeBufferDurationSec,
+        phraseDurationSec + startOffsetSec + (RECORD_CAPTURE_LEAD_OUT_MS / 1000),
+      ),
+    );
+    const startWithOffset = Math.max(context.currentTime + 0.01, startSec - startOffsetSec);
+    source.start(startWithOffset);
+    source.stop(startWithOffset + playbackDurationSec);
+
+    activePlaybackNodes.push(source);
+    activePlaybackAuxNodes.push(gain, panner);
+    console.debug('[OverdubState] schedulePendingTakePlayback', {
+      layerId: pendingTake.layerId,
+      takeId: pendingTake.id,
+      sampleRate: pendingTakeAudio.sampleRate,
+      sampleCount: pendingTakeAudio.samples.length,
+      peak: Number(estimateAudioPeak(pendingTakeAudio.samples).toFixed(5)),
+      gain: Number(layerGain.toFixed(3)),
+      pan: Number(layerPan.toFixed(3)),
+      phraseDurationMs,
+      startOffsetMs,
+      playbackDurationMs: Math.round(playbackDurationSec * 1000),
+    });
   }
 
   function startPlaybackClock(context: AudioContext, startSec: number, phraseDurationMs: number): void {
@@ -431,16 +891,50 @@ function createOverdubState() {
   async function initialize(): Promise<void> {
     if (state.initialized) return;
     state.isBusy = true;
+    const startedAt = performance.now();
+    console.debug('[OverdubState] initialize:start');
     try {
       const snapshot = await loadLatestOverdubSnapshot();
       if (snapshot) {
-        machine.dispatch({ type: 'NEW_PROJECT', project: snapshot.project });
+        const normalizedProject = normalizeProjectMixState(snapshot.project);
+        const { project: playableProject, removedTakeIds } = stripTakesMissingAudio(
+          normalizedProject,
+          snapshot.audioByTakeId
+        );
+        machine.dispatch({ type: 'NEW_PROJECT', project: playableProject });
         takeAudioById.clear();
+        const playableTakeIds = getProjectTakeIdSet(playableProject);
         for (const [takeId, audio] of snapshot.audioByTakeId) {
+          if (!playableTakeIds.has(takeId)) continue;
           takeAudioById.set(takeId, audio);
         }
+        const takeIds = new Set<string>();
+        for (const layer of playableProject.layers) {
+          for (const take of layer.takes) {
+            takeIds.add(take.id);
+          }
+        }
+        const missingAudioTakeIds = Array.from(takeIds).filter((takeId) => !snapshot.audioByTakeId.has(takeId));
+        const orphanAudioTakeIds = Array.from(snapshot.audioByTakeId.keys()).filter((takeId) => !takeIds.has(takeId));
+        console.debug('[OverdubState] initialize:snapshotLoaded', {
+          projectId: snapshot.project.id,
+          layerCount: playableProject.layers.length,
+          takeCount: Array.from(playableProject.layers).reduce((count, layer) => count + layer.takes.length, 0),
+          audioEntries: snapshot.audioByTakeId.size,
+          removedTakeCount: removedTakeIds.length,
+          removedTakeIds: removedTakeIds.slice(0, 10),
+          missingAudioTakeCount: missingAudioTakeIds.length,
+          orphanAudioTakeCount: orphanAudioTakeIds.length,
+          missingAudioTakeIds: missingAudioTakeIds.slice(0, 10),
+          orphanAudioTakeIds: orphanAudioTakeIds.slice(0, 10),
+        });
       } else {
         machine.reset(DEFAULT_ENGINE_CONFIG);
+        const baseLayerId = machine.getState().project.layers[0]?.id;
+        if (baseLayerId) {
+          machine.dispatch({ type: 'SET_LAYER_GAIN', layerId: baseLayerId, gain: DEFAULT_LAYER_GAIN });
+        }
+        console.debug('[OverdubState] initialize:noSnapshot');
       }
       syncFromMachine();
       pruneTakeAudioToProject();
@@ -450,17 +944,119 @@ function createOverdubState() {
       state.warning = error instanceof Error ? error.message : 'Failed to initialize overdub project.';
     } finally {
       state.isBusy = false;
+      const stats = getSnapshotStats();
+      console.debug('[OverdubState] initialize:done', {
+        elapsedMs: Math.round(performance.now() - startedAt),
+        ...stats,
+      });
     }
   }
 
   async function createNewProject(): Promise<void> {
+    await stopCompositePlayback();
     dispatch({ type: 'NEW_PROJECT' });
+    const baseLayerId = state.engine.project.layers[0]?.id;
+    if (baseLayerId) {
+      dispatch({ type: 'SET_LAYER_GAIN', layerId: baseLayerId, gain: DEFAULT_LAYER_GAIN });
+    }
     takeAudioById.clear();
     pendingTakeAudio = null;
     state.hiddenLayerTrailId = null;
     state.forwardCursorModeEnabled = false;
+    state.isPendingTakePreviewActive = false;
     clearWarningIfNoError();
     await persistCurrentProject();
+  }
+
+  function inferTimeSignatureNumerator(totalBeats: number): number {
+    const preferred = [4, 3, 6, 2, 5, 7, 8, 9, 10, 11, 12];
+    for (const candidate of preferred) {
+      if (totalBeats % candidate === 0) return candidate;
+    }
+    return clamp(totalBeats, 1, 12);
+  }
+
+  function buildPhraseFromExercise(template: OverdubExerciseTemplate): PhraseSettings {
+    const existing = state.engine.project.phrase;
+    const tempoBpm = clamp(Math.round(template.config.tempo), 20, 320);
+    const countInBeats = clamp(Math.round(template.config.countInBeats ?? 4), 0, 32);
+
+    // In this time grid model, one macrobeat is an eighth-note unit.
+    // A quarter-note beat contains 2 macrobeats.
+    const macrobeatsPerBeat = 2;
+    const microbeatsPerMacrobeat = template.config.timeGrid.microbeatsPerMacrobeat;
+    const totalMacrobeats = template.config.timeGrid.microbeatCount / microbeatsPerMacrobeat;
+    const totalBeats = Math.max(
+      1,
+      Math.round(totalMacrobeats / macrobeatsPerBeat)
+    );
+    const timeSignatureNumerator = inferTimeSignatureNumerator(totalBeats);
+    const measures = Math.max(1, Math.ceil(totalBeats / timeSignatureNumerator));
+
+    return {
+      ...existing,
+      tempoBpm,
+      timeSignatureNumerator,
+      timeSignatureDenominator: 4,
+      measures,
+      countInBeats,
+    };
+  }
+
+  async function loadExerciseScaffold(template: OverdubExerciseTemplate): Promise<void> {
+    const voices = template.config.voices;
+    if (!voices || voices.length === 0) {
+      state.warning = 'Selected exercise has no voices to scaffold into the overdub builder.';
+      return;
+    }
+
+    const startedAt = performance.now();
+    const beforeStats = getSnapshotStats();
+    console.debug('[OverdubState] loadExerciseScaffold:start', {
+      templateId: template.id,
+      templateName: template.name,
+      voiceCount: voices.length,
+      ...beforeStats,
+    });
+
+    await stopCompositePlayback();
+    const defaultLayerGain = clamp(DEFAULT_LAYER_GAIN, 0.5, 2);
+    const layers = voices.map((voice, index) => {
+      const layer = createLayer(index, voice.name);
+      layer.gain = defaultLayerGain;
+      return layer;
+    });
+    const phrase = buildPhraseFromExercise(template);
+
+    dispatch({
+      type: 'NEW_PROJECT',
+      project: {
+        title: `${template.name} Takes`,
+        phrase,
+        layers,
+      },
+    });
+
+    const firstLayerId = state.engine.project.layers[0]?.id;
+    if (firstLayerId) {
+      dispatch({ type: 'ARM', layerId: firstLayerId });
+    }
+
+    takeAudioById.clear();
+    pendingTakeAudio = null;
+    state.hiddenLayerTrailId = null;
+    state.forwardCursorModeEnabled = false;
+    state.isPendingTakePreviewActive = false;
+    clearWarningIfNoError();
+    await persistCurrentProject();
+
+    const afterStats = getSnapshotStats();
+    console.debug('[OverdubState] loadExerciseScaffold:done', {
+      templateId: template.id,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      defaultLayerGain,
+      ...afterStats,
+    });
   }
 
   function setPhraseSettings(phrase: Partial<PhraseSettings>): void {
@@ -480,6 +1076,10 @@ function createOverdubState() {
 
   function addLayer(name?: string): void {
     dispatch({ type: 'ADD_LAYER', name });
+    const createdLayerId = state.engine.project.layers[state.engine.project.layers.length - 1]?.id;
+    if (createdLayerId) {
+      dispatch({ type: 'SET_LAYER_GAIN', layerId: createdLayerId, gain: DEFAULT_LAYER_GAIN });
+    }
     void persistCurrentProject();
   }
 
@@ -522,8 +1122,11 @@ function createOverdubState() {
     state.forwardCursorModeEnabled = enabled;
   }
 
-  async function startRecordingCycle(): Promise<void> {
+  async function startRecordingCycle(options?: {
+    onScheduled?: (info: RecordingScheduleInfo) => void;
+  }): Promise<void> {
     if (state.isBusy || state.isRecordingActive || state.isCountInActive) return;
+    await stopCompositePlayback();
 
     const layerId = state.engine.armedLayerId ?? getDefaultLayerId();
     if (!layerId) {
@@ -561,12 +1164,31 @@ function createOverdubState() {
       playbackContext = context;
       const phraseDurationMs = computePhraseDurationMs(state.engine.project.phrase);
       const countInMs = getCountInDurationMs(state.engine.project.phrase);
+      const captureLeadInMs = RECORD_CAPTURE_LEAD_IN_MS;
+      const captureLeadOutMs = RECORD_CAPTURE_LEAD_OUT_MS;
+      const captureDurationMs = phraseDurationMs + captureLeadInMs + captureLeadOutMs;
+      const captureLeadInSec = captureLeadInMs / 1000;
       const countInSec = countInMs / 1000;
-      const recordStartSec = context.currentTime + Math.max(0.08, countInSec);
+      const recordStartSec = context.currentTime + Math.max(
+        RECORD_CAPTURE_MIN_START_DELAY_SEC + captureLeadInSec,
+        countInSec,
+      );
+      const captureStartSec = recordStartSec - captureLeadInSec;
       const countInStartSec = recordStartSec - countInSec;
+      const recordStartDelayMs = Math.max(0, Math.round((recordStartSec - context.currentTime) * 1000));
       const recordStartPerfMs = performance.now() + (recordStartSec - context.currentTime) * 1000;
       const recordStopPerfMs = recordStartPerfMs + phraseDurationMs;
       state.recordingStartPerfMs = recordStartPerfMs;
+      try {
+        options?.onScheduled?.({
+          startDelayMs: recordStartDelayMs,
+          startAtPerfMs: recordStartPerfMs,
+          phraseDurationMs,
+          countInMs,
+        });
+      } catch (error) {
+        console.error('[OverdubState] startRecordingCycle onScheduled callback failed', error);
+      }
 
       // Monitoring playback + click during count-in and recording.
       scheduleLayerPlayback(context, recordStartSec, phraseDurationMs);
@@ -581,7 +1203,7 @@ function createOverdubState() {
         dispatch({ type: 'START_REC' });
         state.isCountInActive = false;
         state.isRecordingActive = true;
-      }, Math.max(0, Math.round((recordStartSec - context.currentTime) * 1000)));
+      }, recordStartDelayMs);
 
       recordingProgressIntervalId = setInterval(() => {
         if (!state.isRecordingActive && !state.isCountInActive) return;
@@ -598,8 +1220,8 @@ function createOverdubState() {
 
       assertNotAborted();
       const capture = await recorder.recordWindow({
-        startAtContextTimeSec: recordStartSec,
-        durationMs: phraseDurationMs,
+        startAtContextTimeSec: captureStartSec,
+        durationMs: captureDurationMs,
       });
 
       stopRecordTimers();
@@ -623,7 +1245,7 @@ function createOverdubState() {
         layerId,
         createdAt: new Date().toISOString(),
         durationMs: normalizedDurationMs,
-        startOffsetMs: 0,
+        startOffsetMs: captureLeadInMs,
         sampleRate: targetSampleRate,
         channelCount: 1,
         audioBlobId: takeId,
@@ -685,6 +1307,7 @@ function createOverdubState() {
     state.recordingStartPerfMs = null;
     state.hiddenLayerTrailId = null;
     state.forwardCursorModeEnabled = false;
+    state.isPendingTakePreviewActive = false;
     dispatch({ type: 'CANCEL_REC' });
     clearWarningIfNoError();
   }
@@ -692,6 +1315,7 @@ function createOverdubState() {
   async function keepPendingTake(): Promise<void> {
     const pendingTake = state.engine.pendingTake;
     if (!pendingTake || !pendingTakeAudio) return;
+    await stopCompositePlayback();
 
     state.isBusy = true;
     try {
@@ -709,41 +1333,153 @@ function createOverdubState() {
   }
 
   function redoPendingTake(): void {
+    void stopCompositePlayback();
     pendingTakeAudio = null;
     dispatch({ type: 'REDO_TAKE' });
   }
 
   async function undoLastLayer(): Promise<void> {
+    await stopCompositePlayback();
     dispatch({ type: 'UNDO_LAYER' });
     pruneTakeAudioToProject();
     await persistCurrentProject();
   }
 
-  async function playComposite(): Promise<void> {
-    if (state.engine.mode === 'playing') return;
+  async function previewPendingTake(): Promise<void> {
+    if (state.isBusy || state.isRecordingActive || state.isCountInActive) return;
+
+    const pendingTake = state.engine.pendingTake;
+    if (!pendingTake || !pendingTakeAudio) {
+      state.warning = 'No pending take available to preview.';
+      return;
+    }
+
+    try {
+      const context = await ensurePlaybackContext();
+      const phraseDurationMs = computePhraseDurationMs(state.engine.project.phrase);
+      const pendingTakeStartOffsetMs = getTakeStartOffsetMs(pendingTake);
+      const pendingTakeTailAfterPhraseMs = getTakeTailAfterPhraseMs(
+        pendingTake,
+        pendingTakeAudio,
+        phraseDurationMs,
+      );
+      const startDelayMs = Math.max(50, pendingTakeStartOffsetMs + 40);
+      const startSec = context.currentTime + (startDelayMs / 1000);
+
+      stopPlaybackTimers();
+      stopPlaybackNodes();
+      state.isPendingTakePreviewActive = true;
+
+      scheduleLayerPlayback(context, startSec, phraseDurationMs, {
+        respectMonitoringMode: false,
+        excludedLayerIds: [pendingTake.layerId],
+      });
+      schedulePendingTakePlayback(context, startSec, phraseDurationMs);
+
+      playbackStopTimeoutId = setTimeout(() => {
+        void stopCompositePlayback();
+      }, phraseDurationMs + pendingTakeTailAfterPhraseMs + startDelayMs + 150);
+    } catch (error) {
+      stopPlaybackTimers();
+      stopPlaybackNodes();
+      state.isPendingTakePreviewActive = false;
+      state.warning = error instanceof Error ? error.message : 'Failed to preview pending take.';
+    }
+  }
+
+  async function playComposite(): Promise<{ startDelayMs: number; startAtPerfMs: number }> {
+    if (state.engine.mode === 'playing') {
+      return { startDelayMs: 0, startAtPerfMs: performance.now() };
+    }
+
+    const missingBefore = getMissingAudioTakeIds();
+    if (missingBefore.length > 0) {
+      console.warn('[OverdubState] playComposite detected missing take audio before scheduling; attempting hydration.', {
+        projectId: state.engine.project.id,
+        missingTakeCount: missingBefore.length,
+        missingTakeIds: missingBefore.slice(0, 10),
+      });
+      try {
+        await hydrateMissingTakeAudioFromPersistence();
+      } catch (error) {
+        console.error('[OverdubState] playComposite hydration attempt failed', error);
+      }
+    }
+
     const context = await ensurePlaybackContext();
-    const phraseDurationMs = computePhraseDurationMs(state.engine.project.phrase);
+    const phrase = state.engine.project.phrase;
+    const phraseDurationMs = computePhraseDurationMs(phrase);
+    const countInMs = getCountInDurationMs(phrase);
+    const maxStartOffsetMs = getMaxActiveTakeStartOffsetMs();
+    const maxTailAfterPhraseMs = getMaxActiveTakeTailAfterPhraseMs(phraseDurationMs);
 
     stopPlaybackNodes();
     stopPlaybackTimers();
+    state.isPendingTakePreviewActive = false;
 
     dispatch({ type: 'START_PLAYBACK' });
 
-    const startSec = context.currentTime + 0.06;
-    scheduleLayerPlayback(context, startSec, phraseDurationMs);
+    const startDelaySec = Math.max(
+      0.06,
+      countInMs / 1000,
+      (maxStartOffsetMs + 20) / 1000,
+    );
+    const startDelayMs = Math.round(startDelaySec * 1000);
+    const startSec = context.currentTime + startDelaySec;
+    const countInStartSec = startSec - (countInMs / 1000);
+    const startAtPerfMs = performance.now() + ((startSec - context.currentTime) * 1000);
+    console.log('[Timing] OverdubState.playComposite', {
+      tempoBpm: phrase.tempoBpm,
+      timeSignatureNumerator: phrase.timeSignatureNumerator,
+      timeSignatureDenominator: phrase.timeSignatureDenominator,
+      countInBeats: phrase.countInBeats,
+      beatDurationMs: Math.round(getBeatDurationMs(phrase)),
+      countInMs,
+      phraseDurationMs: Math.round(phraseDurationMs),
+      startDelayMs,
+      startAtPerfMs: Math.round(startAtPerfMs),
+      maxStartOffsetMs,
+      maxTailAfterPhraseMs,
+      projectTakeCount: getProjectTakeIds().length,
+      missingAudioTakeCount: getMissingAudioTakeIds().length,
+      layerMixState: state.engine.project.layers.map((layer) => {
+        const activeTake = layer.activeTakeId
+          ? layer.takes.find((take) => take.id === layer.activeTakeId)
+          : null;
+        const audio = activeTake ? takeAudioById.get(activeTake.id) : null;
+        return {
+          layerId: layer.id,
+          name: layer.name,
+          muted: layer.muted,
+          solo: layer.solo,
+          layerGain: Number(clampFinite(layer.gain, 1, 0, 2).toFixed(3)),
+          layerPan: Number(clampFinite(layer.pan, 0, -1, 1).toFixed(3)),
+          activeTakeId: layer.activeTakeId,
+          activeTakeGain: activeTake ? Number(clampFinite(activeTake.gain, 1, 0, 2).toFixed(3)) : null,
+          activeTakePan: activeTake ? Number(clampFinite(activeTake.pan, 0, -1, 1).toFixed(3)) : null,
+          hasAudio: !!audio,
+          audioSampleCount: audio?.samples.length ?? 0,
+          audioPeak: audio ? Number(estimateAudioPeak(audio.samples).toFixed(5)) : 0,
+        };
+      }),
+    });
+    scheduleLayerPlayback(context, startSec, phraseDurationMs, { respectMonitoringMode: false });
     if (state.engine.project.clickEnabled) {
-      scheduleMetronome(context, startSec, phraseDurationMs);
+      scheduleMetronome(context, countInStartSec, phraseDurationMs);
     }
     startPlaybackClock(context, startSec, phraseDurationMs);
 
     playbackStopTimeoutId = setTimeout(() => {
       void stopCompositePlayback();
-    }, phraseDurationMs + 200);
+    }, phraseDurationMs + maxTailAfterPhraseMs + startDelayMs + 220);
+
+    return { startDelayMs, startAtPerfMs };
   }
 
   async function stopCompositePlayback(): Promise<void> {
     stopPlaybackTimers();
     stopPlaybackNodes();
+    state.isPendingTakePreviewActive = false;
     if (state.engine.mode === 'playing' || state.engine.mode === 'exporting') {
       dispatch({ type: 'STOP_PLAYBACK' });
     }
@@ -790,6 +1526,7 @@ function createOverdubState() {
     stopRecordTimers();
     stopTrailCapture();
     state.recordingStartPerfMs = null;
+    state.isPendingTakePreviewActive = false;
     await recorder.dispose();
     if (playbackContext) {
       await playbackContext.close();
@@ -830,6 +1567,7 @@ function createOverdubState() {
 
     initialize,
     createNewProject,
+    loadExerciseScaffold,
     setPhraseSettings,
     setMonitoringMode,
     setClickEnabled,
@@ -847,6 +1585,8 @@ function createOverdubState() {
     keepPendingTake,
     redoPendingTake,
     undoLastLayer,
+    hasTakeAudio,
+    previewPendingTake,
     playComposite,
     stopCompositePlayback,
     getRenderableTrails,

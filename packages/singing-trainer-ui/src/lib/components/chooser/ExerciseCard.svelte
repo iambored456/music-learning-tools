@@ -15,6 +15,7 @@
     onselect: () => void;
     onsettingchange: (key: string, value: number | boolean) => void;
     onstart: () => void;
+    showSettings?: boolean;
   }
 
   let {
@@ -24,6 +25,7 @@
     onselect,
     onsettingchange,
     onstart,
+    showSettings = true,
   }: Props = $props();
 
   const template = $derived(entry.template);
@@ -85,14 +87,16 @@
   <!-- Expanded content when selected -->
   {#if isSelected}
     <div class="card-expanded">
-      <div class="settings-section">
-        <h5 class="settings-title">Settings</h5>
-        <SettingsRenderer
-          schema={template.settingsSchema}
-          values={localSettings}
-          onchange={onsettingchange}
-        />
-      </div>
+      {#if showSettings}
+        <div class="settings-section">
+          <h5 class="settings-title">Settings</h5>
+          <SettingsRenderer
+            schema={template.settingsSchema}
+            values={localSettings}
+            onchange={onsettingchange}
+          />
+        </div>
+      {/if}
 
       <button class="start-btn" onclick={handleStartClick}>
         Start Lesson

@@ -33,7 +33,6 @@ export const SIMPLE_UNISON: OverdubExerciseTemplate = {
       {
         voiceId: 'guide-melody',
         color: '#4a90e2',
-        role: 'guide',
         name: 'Guide',
         notes: [
           { startMicrobeatCol: 0, endMicrobeatCol: 1, midiPitch: 60, pitchName: 'C4' },
@@ -49,7 +48,6 @@ export const SIMPLE_UNISON: OverdubExerciseTemplate = {
       {
         voiceId: 'student-melody',
         color: '#d66573',
-        role: 'student',
         name: 'Your Part',
         notes: [
           { startMicrobeatCol: 0, endMicrobeatCol: 1, midiPitch: 60, pitchName: 'C4' },

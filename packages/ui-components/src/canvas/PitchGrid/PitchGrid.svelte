@@ -83,6 +83,10 @@
     showRightLegend?: boolean;
     legendHighlight?: LegendHighlightConfig;
     rowHighlight?: PitchRowHighlightConfig;
+    showHorizontalGridLines?: boolean;
+    focusedPitchClasses?: Set<number> | null;
+    focusColorsEnabled?: boolean;
+    legendLabelOverrides?: Map<number, string>;
 
     // Notation/Playback mode props
     placedNotes?: PlacedNote[];
@@ -101,6 +105,7 @@
     /** User pitch from mic — separate prop to avoid expensive config recalculation */
     userPitch?: CurrentPitch | null;
     beatIntervalMs?: number;
+    measureIntervalMs?: number;
     beatTimeOffsetMs?: number;
   }
 
@@ -118,6 +123,10 @@
     showRightLegend = true,
     legendHighlight,
     rowHighlight,
+    showHorizontalGridLines = true,
+    focusedPitchClasses = null,
+    focusColorsEnabled = false,
+    legendLabelOverrides,
     placedNotes = [],
     placedTonicSigns = [],
     columnWidths = [],
@@ -129,6 +138,7 @@
     highwayConfig,
     userPitch,
     beatIntervalMs = 500,
+    measureIntervalMs = beatIntervalMs * 4,
     beatTimeOffsetMs = 0,
   }: Props = $props();
 
@@ -210,15 +220,17 @@
     // Clear canvas
     ctx.clearRect(0, 0, gridWidth, viewport.containerHeight);
 
-    // Draw horizontal grid lines
-    const horizontalConfig: HorizontalLinesConfig = {
-      fullRowData,
-      cellHeight,
-      viewportHeight: viewport.containerHeight,
-      viewportWidth: gridWidth,
-      colorMode,
-    };
-    drawHorizontalLines(ctx, horizontalConfig, coords, paddedStartRow, paddedEndRow);
+    if (showHorizontalGridLines) {
+      // Draw horizontal grid lines
+      const horizontalConfig: HorizontalLinesConfig = {
+        fullRowData,
+        cellHeight,
+        viewportHeight: viewport.containerHeight,
+        viewportWidth: gridWidth,
+        colorMode,
+      };
+      drawHorizontalLines(ctx, horizontalConfig, coords, paddedStartRow, paddedEndRow);
+    }
     drawRowHighlights(ctx, coords, paddedStartRow, paddedEndRow);
 
     // Mode-specific rendering
@@ -507,6 +519,7 @@
           viewportWidth: gridWidth,
           viewportHeight: viewport.containerHeight,
           beatIntervalMs,
+          measureIntervalMs,
           visibleTimeRange,
           nowLineX: highwayConfig.nowLineX,
           beatTimeOffsetMs,
@@ -656,9 +669,10 @@
       showFrequencyLabels,
       showOctaveLabels,
       accidentalMode,
-      focusedPitchClasses: null, // No focus filtering in basic mode
-      focusColorsEnabled: false,
+      focusedPitchClasses: focusedPitchClasses ?? null,
+      focusColorsEnabled,
       highlight: legendHighlight,
+      labelOverrides: legendLabelOverrides,
     };
 
     const legendOptions = {
@@ -783,6 +797,7 @@
     void placedTonicSigns;
     void columnWidths;
     void rowHighlight;
+    void showHorizontalGridLines;
 
     if (ctx && isNotationMode) {
       render();

@@ -1,5 +1,14 @@
 <script lang="ts">
+  import { appState } from '../../stores/appState.svelte.js';
   import { overdubState } from '../../stores/overdubState.svelte.js';
+  import { overdubExerciseState } from '../../stores/overdubExerciseState.svelte.js';
+  import { highwayState } from '../../stores/highwayState.svelte.js';
+
+  interface Props {
+    compact?: boolean;
+  }
+
+  let { compact = false }: Props = $props();
 
   const machine = $derived(overdubState.state.engine);
   const project = $derived(machine.project);
@@ -13,30 +22,177 @@
   const captureDurationMs = $derived(overdubState.captureDurationMs);
   const pendingTake = $derived(machine.pendingTake);
   const renderableTrails = $derived(overdubState.getRenderableTrails());
+  const overdubIsActive = $derived(overdubExerciseState.state.isActive);
+  const overdubExerciseName = $derived(overdubExerciseState.state.template?.name ?? '');
+  const overdubExerciseId = $derived(overdubExerciseState.state.exerciseId);
+  const overdubVoices = $derived(overdubExerciseState.getVoiceList());
+  const overdubActiveVoiceId = $derived(overdubExerciseState.state.activeVoiceId);
+  const overdubExercisePlaying = $derived(overdubExerciseState.state.isPlaying);
+  const beatLineMode = $derived(appState.state.beatLineMode);
+  const DEFAULT_VOICE_GAIN = 1.1;
+  const DEFAULT_SYNTH_GAIN = 1;
+  let voiceSettingsVoiceId = $state<string | null>(null);
+  let hasRecordedInCurrentExerciseSession = $state(false);
+  let lastSeenExerciseId = $state<string | null>(null);
+
+  function getVoiceById(voiceId: string) {
+    return overdubVoices.find((voice) => voice.voiceId === voiceId) ?? null;
+  }
+
+  function getLayerByVoiceId(voiceId: string) {
+    const voice = getVoiceById(voiceId);
+    if (!voice) return null;
+    return layers.find((layer) => layer.name === voice.name) ?? null;
+  }
+
+  const hasExerciseRecordTarget = $derived.by(() => {
+    if (!overdubIsActive) return true;
+    if (!overdubActiveVoiceId) return false;
+    return getLayerByVoiceId(overdubActiveVoiceId) !== null;
+  });
 
   const canKeep = $derived(mode === 'reviewing' && !!pendingTake);
-  const canStopCapture = $derived(isCountIn || isRecording);
-  const canRecord = $derived(
-    canStopCapture || (!isBusy && !isRecording && mode !== 'playing' && mode !== 'exporting')
+  const canRedoPendingTake = $derived(
+    canKeep && (!overdubIsActive || hasRecordedInCurrentExerciseSession)
   );
+  const canStopCapture = $derived(isCountIn || isRecording);
+  const isPendingTakePreviewActive = $derived(overdubState.state.isPendingTakePreviewActive);
+  const isPlaybackRunning = $derived(overdubExercisePlaying || mode === 'playing' || isPendingTakePreviewActive);
+  const canRecord = $derived(
+    canStopCapture
+    || canRedoPendingTake
+    || (
+      !isBusy
+      && !isRecording
+      && mode !== 'playing'
+      && mode !== 'exporting'
+      && !overdubExercisePlaying
+      && hasExerciseRecordTarget
+    )
+  );
+  let scaffoldInFlight = $state(false);
+  let mountDiagnosticLogged = $state(false);
 
   function clampNumber(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function fitTimelineToExerciseDuration() {
+    if (!overdubIsActive) return;
+    const durationMs = overdubExerciseState.state.durationMs || overdubState.captureDurationMs;
+    if (durationMs > 0) {
+      highwayState.fitTimelineToDuration(durationMs);
+    }
+  }
+
+  type PlaybackTempoContext = {
+    denominator: number;
+    phraseTempoBpm: number;
+    exerciseTempoBpm: number;
+    effectiveTempoBpm: number;
+    highwayTempoBpm: number;
+    clickBeatDurationMs: number;
+    highwayBeatDurationMs: number;
+  };
+
+  function getPlaybackTempoContext(): PlaybackTempoContext {
+    const denominator = Math.max(1, project.phrase.timeSignatureDenominator);
+    const phraseTempoBpm = Math.max(20, Math.round(project.phrase.tempoBpm));
+    const exerciseTempoBpm = Math.max(20, Math.round(overdubExerciseState.state.tempo || phraseTempoBpm));
+    const effectiveTempoBpm = overdubIsActive ? exerciseTempoBpm : phraseTempoBpm;
+    const highwayTempoBpm = effectiveTempoBpm * (denominator / 4);
+    const clickBeatDurationMs = (60_000 / effectiveTempoBpm) * (4 / denominator);
+    const highwayBeatDurationMs = 60_000 / Math.max(20, highwayTempoBpm);
+    return {
+      denominator,
+      phraseTempoBpm,
+      exerciseTempoBpm,
+      effectiveTempoBpm,
+      highwayTempoBpm,
+      clickBeatDurationMs,
+      highwayBeatDurationMs,
+    };
+  }
+
+  function syncProjectTempoWithExercise(): PlaybackTempoContext {
+    const context = getPlaybackTempoContext();
+    if (overdubIsActive && context.phraseTempoBpm !== context.effectiveTempoBpm) {
+      overdubState.setPhraseSettings({ tempoBpm: context.effectiveTempoBpm });
+    }
+    return context;
+  }
+
+  function logTempoFlow(scope: 'play' | 'record', context: PlaybackTempoContext) {
+    console.log('[Timing] TempoFlow', {
+      scope,
+      overdubIsActive,
+      phraseTempoBpm: context.phraseTempoBpm,
+      exerciseTempoBpm: context.exerciseTempoBpm,
+      effectiveTempoBpm: context.effectiveTempoBpm,
+      denominator: context.denominator,
+      highwayTempoBpm: Number(context.highwayTempoBpm.toFixed(3)),
+      clickBeatDurationMs: Math.round(context.clickBeatDurationMs),
+      highwayBeatDurationMs: Math.round(context.highwayBeatDurationMs),
+      beatDurationDeltaMs: Math.round(context.highwayBeatDurationMs - context.clickBeatDurationMs),
+    });
   }
 
   async function handleInitialize() {
     await overdubState.initialize();
   }
 
-  async function handleNewProject() {
-    await overdubState.createNewProject();
-  }
-
   async function handleRecord() {
     if (isCountIn || isRecording) {
+      if (overdubIsActive) {
+        overdubExerciseState.stop();
+      }
       await overdubState.stopAndRedoCurrentTake();
+      fitTimelineToExerciseDuration();
       return;
     }
+
+    if (canRedoPendingTake) {
+      handleRedoTake();
+      return;
+    }
+
+    if (overdubIsActive && overdubActiveVoiceId) {
+      const layer = getLayerByVoiceId(overdubActiveVoiceId);
+      if (layer) {
+        overdubState.armLayer(layer.id);
+      }
+    }
+
+    if (overdubIsActive) {
+      const tempoContext = syncProjectTempoWithExercise();
+      logTempoFlow('record', tempoContext);
+      try {
+        await overdubState.startRecordingCycle({
+          onScheduled: (schedule) => {
+            hasRecordedInCurrentExerciseSession = true;
+            console.log('[Timing] OverdubControls.recordScheduled', {
+              startDelayMs: schedule.startDelayMs,
+              startAtPerfMs: Math.round(schedule.startAtPerfMs),
+              phraseDurationMs: schedule.phraseDurationMs,
+              countInMs: schedule.countInMs,
+              tempoBpm: project.phrase.tempoBpm,
+              countInBeats: project.phrase.countInBeats,
+            });
+            void overdubExerciseState.start({
+              startDelayMs: schedule.startDelayMs,
+              startAtPerfMs: schedule.startAtPerfMs,
+              leadInBeats: Math.max(0, Math.round(project.phrase.countInBeats)),
+              tempoBpm: tempoContext.highwayTempoBpm,
+            });
+          },
+        });
+      } finally {
+        overdubExerciseState.stop();
+        fitTimelineToExerciseDuration();
+      }
+      return;
+    }
+
     await overdubState.startRecordingCycle();
   }
 
@@ -44,51 +200,65 @@
     await overdubState.keepPendingTake();
   }
 
+  async function handlePreviewTake() {
+    if (isPendingTakePreviewActive) {
+      await overdubState.stopCompositePlayback();
+      return;
+    }
+    await overdubState.previewPendingTake();
+  }
+
   function handleRedoTake() {
     overdubState.redoPendingTake();
   }
 
-  async function handleUndoLayer() {
-    await overdubState.undoLastLayer();
-  }
-
-  async function handlePlay() {
-    if (mode === 'playing') {
+  async function handlePlayback() {
+    if (isPlaybackRunning) {
+      overdubExerciseState.stop();
       await overdubState.stopCompositePlayback();
       return;
     }
+
+    if (canRedoPendingTake) {
+      await overdubState.previewPendingTake();
+      return;
+    }
+
+    if (overdubIsActive) {
+      const tempoContext = syncProjectTempoWithExercise();
+      logTempoFlow('play', tempoContext);
+      const playback = await overdubState.playComposite();
+      console.log('[Timing] OverdubControls.playRequested', {
+        startDelayMs: playback.startDelayMs,
+        startAtPerfMs: Math.round(playback.startAtPerfMs),
+        tempoBpm: tempoContext.effectiveTempoBpm,
+        countInBeats: project.phrase.countInBeats,
+      });
+      await overdubExerciseState.start({
+        startDelayMs: playback.startDelayMs,
+        startAtPerfMs: playback.startAtPerfMs,
+        leadInBeats: Math.max(0, Math.round(project.phrase.countInBeats)),
+        tempoBpm: tempoContext.highwayTempoBpm,
+      });
+      return;
+    }
+
     await overdubState.playComposite();
   }
 
-  function handlePhraseTempoInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const tempo = clampNumber(Number.parseInt(target.value, 10) || 120, 20, 320);
-    overdubState.setPhraseSettings({ tempoBpm: tempo });
-  }
+  const COUNT_IN_OPTIONS = [0, 4, 8] as const;
+  const BEAT_LINE_OPTIONS = [
+    { value: 'none', label: 'None' },
+    { value: 'beat', label: 'Beat' },
+    { value: 'bar', label: 'Bar' },
+  ] as const;
 
-  function handleTimeSigNumeratorInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const numerator = clampNumber(Number.parseInt(target.value, 10) || 4, 1, 12);
-    overdubState.setPhraseSettings({ timeSignatureNumerator: numerator });
-  }
-
-  function handleTimeSigDenominatorChange(event: Event) {
-    const target = event.target as HTMLSelectElement;
-    const denominator = Number.parseInt(target.value, 10) || 4;
-    overdubState.setPhraseSettings({ timeSignatureDenominator: denominator });
-  }
-
-  function handleCountInInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const countInBeats = clampNumber(Number.parseInt(target.value, 10) || 4, 0, 32);
+  function handleCountInSelect(countInBeats: number) {
     overdubState.setPhraseSettings({ countInBeats });
   }
 
-  function handleMonitoringMode(event: Event) {
-    const target = event.target as HTMLSelectElement;
-    if (target.value === 'layers-and-click' || target.value === 'layers-only' || target.value === 'none') {
-      overdubState.setMonitoringMode(target.value);
-    }
+  function handleBeatLineModeSelect(mode: 'none' | 'beat' | 'bar') {
+    appState.setBeatLineMode(mode);
   }
 
   function handleClickEnabled(event: Event) {
@@ -96,229 +266,540 @@
     overdubState.setClickEnabled(target.checked);
   }
 
-  function handleAddLayer() {
-    overdubState.addLayer();
+  function handleOverdubReset() {
+    overdubExerciseState.reset();
+    void overdubState.stopCompositePlayback();
   }
 
-  function handleRemoveLayer(layerId: string) {
-    overdubState.removeLayer(layerId);
+  function handleVoiceSelect(voiceId: string) {
+    const nextVoiceId = overdubActiveVoiceId === voiceId ? null : voiceId;
+    overdubExerciseState.setActiveVoice(nextVoiceId);
+
+    if (!nextVoiceId) return;
+    const layer = getLayerByVoiceId(nextVoiceId);
+    if (layer) {
+      overdubState.armLayer(layer.id);
+    }
   }
 
-  function handleArmLayer(layerId: string) {
-    overdubState.armLayer(layerId);
+  function isGuideEnabled(voiceId: string): boolean {
+    return overdubExerciseState.isGuideVoiceEnabled(voiceId);
   }
 
-  function handleLayerMuted(layerId: string, event: Event) {
+  function isVoiceVisible(voiceId: string): boolean {
+    return overdubExerciseState.isVoiceVisible(voiceId);
+  }
+
+  function isVoiceHiddenAndMuted(voiceId: string): boolean {
+    return !isVoiceVisible(voiceId) && !isGuideEnabled(voiceId);
+  }
+
+  function handleVoiceHideMuteToggle(voiceId: string) {
+    const shouldShowAndUnmute = isVoiceHiddenAndMuted(voiceId);
+    overdubExerciseState.setGuideVoiceEnabled(voiceId, shouldShowAndUnmute);
+    overdubExerciseState.setVoiceVisible(voiceId, shouldShowAndUnmute);
+  }
+
+  function isVoiceSettingsOpen(voiceId: string): boolean {
+    return voiceSettingsVoiceId === voiceId;
+  }
+
+  function toggleVoiceSettings(voiceId: string) {
+    voiceSettingsVoiceId = voiceSettingsVoiceId === voiceId ? null : voiceId;
+  }
+
+  function getVoiceLayerGain(voiceId: string): number {
+    const layer = getLayerByVoiceId(voiceId);
+    if (!layer) return DEFAULT_VOICE_GAIN;
+    const gain = Number.isFinite(layer.gain) ? layer.gain : DEFAULT_VOICE_GAIN;
+    return clampNumber(gain, 0, 2);
+  }
+
+  function getVoiceLayerPan(voiceId: string): number {
+    const layer = getLayerByVoiceId(voiceId);
+    if (!layer) return 0;
+    const pan = Number.isFinite(layer.pan) ? layer.pan : 0;
+    return clampNumber(pan, -1, 1);
+  }
+
+  function getVoiceSynthGain(voiceId: string): number {
+    const gain = overdubExerciseState.getSynthGain(voiceId);
+    if (!Number.isFinite(gain)) return DEFAULT_SYNTH_GAIN;
+    return clampNumber(gain, 0, 2);
+  }
+
+  function getVoiceSynthPan(voiceId: string): number {
+    const pan = overdubExerciseState.getSynthPan(voiceId);
+    if (!Number.isFinite(pan)) return 0;
+    return clampNumber(pan, -1, 1);
+  }
+
+  function formatPanLabel(pan: number): string {
+    const clamped = clampNumber(pan, -1, 1);
+    if (Math.abs(clamped) < 0.01) return 'C';
+    if (clamped < 0) return `L${Math.abs(clamped).toFixed(2)}`;
+    return `R${clamped.toFixed(2)}`;
+  }
+
+  function handleVoiceGainInput(voiceId: string, event: Event) {
+    const layer = getLayerByVoiceId(voiceId);
+    if (!layer) return;
     const target = event.target as HTMLInputElement;
-    overdubState.setLayerMuted(layerId, target.checked);
+    const gain = clampNumber(Number.parseFloat(target.value), 0, 2);
+    if (!Number.isFinite(gain)) return;
+    overdubState.setLayerGain(layer.id, gain);
   }
 
-  function handleLayerSolo(layerId: string, event: Event) {
+  function handleVoicePanInput(voiceId: string, event: Event) {
+    const layer = getLayerByVoiceId(voiceId);
+    if (!layer) return;
     const target = event.target as HTMLInputElement;
-    overdubState.setLayerSolo(layerId, target.checked);
+    const pan = clampNumber(Number.parseFloat(target.value), -1, 1);
+    if (!Number.isFinite(pan)) return;
+    overdubState.setLayerPan(layer.id, pan);
   }
 
-  function handleLayerGain(layerId: string, event: Event) {
+  function handleVoiceSynthGainInput(voiceId: string, event: Event) {
     const target = event.target as HTMLInputElement;
-    overdubState.setLayerGain(layerId, clampNumber(Number.parseFloat(target.value) || 1, 0, 2));
+    const gain = clampNumber(Number.parseFloat(target.value), 0, 2);
+    if (!Number.isFinite(gain)) return;
+    overdubExerciseState.setSynthGain(voiceId, gain);
   }
 
-  function handleLayerPan(layerId: string, event: Event) {
+  function handleVoiceSynthPanInput(voiceId: string, event: Event) {
     const target = event.target as HTMLInputElement;
-    overdubState.setLayerPan(layerId, clampNumber(Number.parseFloat(target.value) || 0, -1, 1));
+    const pan = clampNumber(Number.parseFloat(target.value), -1, 1);
+    if (!Number.isFinite(pan)) return;
+    overdubExerciseState.setSynthPan(voiceId, pan);
   }
 
-  function handleTakeSelect(layerId: string, event: Event) {
-    const target = event.target as HTMLSelectElement;
-    if (!target.value) return;
-    overdubState.setActiveTake(layerId, target.value);
+  function shouldVoiceSettingsOpenUp(voiceIndex: number): boolean {
+    const voiceCount = overdubVoices.length;
+    return voiceCount > 2 && voiceIndex >= voiceCount - 2;
+  }
+
+  const VISIBLE_TAKE_SLOTS = 3;
+
+  function getTakeForSlot(voiceId: string, slotIndex: number) {
+    const layer = getLayerByVoiceId(voiceId);
+    if (!layer) return null;
+    return layer.takes[slotIndex] ?? null;
+  }
+
+  function isTakeSlotActive(voiceId: string, slotIndex: number): boolean {
+    const layer = getLayerByVoiceId(voiceId);
+    const take = getTakeForSlot(voiceId, slotIndex);
+    if (!layer || !take) return false;
+    if (!overdubState.hasTakeAudio(take.id)) return false;
+    return layer.activeTakeId === take.id && !layer.muted;
+  }
+
+  function isTakeSlotPlayable(voiceId: string, slotIndex: number): boolean {
+    const take = getTakeForSlot(voiceId, slotIndex);
+    if (!take) return false;
+    return overdubState.hasTakeAudio(take.id);
+  }
+
+  function isTakeSlotMissingAudio(voiceId: string, slotIndex: number): boolean {
+    const take = getTakeForSlot(voiceId, slotIndex);
+    return !!take && !overdubState.hasTakeAudio(take.id);
+  }
+
+  function handleTakeSlotToggle(voiceId: string, slotIndex: number) {
+    const layer = getLayerByVoiceId(voiceId);
+    const take = getTakeForSlot(voiceId, slotIndex);
+    if (!layer || !take) return;
+    if (!overdubState.hasTakeAudio(take.id)) return;
+
+    const active = layer.activeTakeId === take.id && !layer.muted;
+    if (active) {
+      overdubState.setLayerMuted(layer.id, true);
+      overdubState.setLayerSolo(layer.id, false);
+      return;
+    }
+
+    overdubState.setActiveTake(layer.id, take.id);
+    overdubState.setLayerMuted(layer.id, false);
+    overdubState.setLayerSolo(layer.id, false);
+  }
+
+  function getNextRecordTakeSlot(voiceId: string): number {
+    const layer = getLayerByVoiceId(voiceId);
+    if (!layer) return 1;
+    return clampNumber(layer.takes.length + 1, 1, VISIBLE_TAKE_SLOTS);
+  }
+
+  function getTotalTakesCount(): number {
+    return layers.reduce((count, layer) => count + layer.takes.length, 0);
+  }
+
+  function getTotalTrailPointsCount(): number {
+    return renderableTrails.reduce((count, trail) => count + trail.points.length, 0);
+  }
+
+  function isProjectScaffoldedForTemplate(template: { name: string; config: { voices: { name: string }[] } }): boolean {
+    const expectedTitle = `${template.name} Takes`;
+    if (project.title !== expectedTitle) return false;
+
+    const expectedVoiceNames = template.config.voices.map((voice) => voice.name);
+    if (layers.length !== expectedVoiceNames.length) return false;
+
+    for (let i = 0; i < expectedVoiceNames.length; i++) {
+      if (layers[i]?.name !== expectedVoiceNames[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   $effect(() => {
     if (overdubState.state.initialized) return;
     void handleInitialize();
   });
+
+  $effect(() => {
+    if (mountDiagnosticLogged) return;
+    mountDiagnosticLogged = true;
+    const mountStartMs = performance.now();
+    console.debug('[OverdubBuilder] mount', {
+      layerCount: layers.length,
+      totalTakes: getTotalTakesCount(),
+      renderableTrails: renderableTrails.length,
+      totalTrailPoints: getTotalTrailPointsCount(),
+      initialized: overdubState.state.initialized,
+      busy: isBusy,
+    });
+    setTimeout(() => {
+      console.debug('[OverdubBuilder] mount+frame', {
+        elapsedMs: Math.round(performance.now() - mountStartMs),
+        layerCount: layers.length,
+        totalTakes: getTotalTakesCount(),
+        renderableTrails: renderableTrails.length,
+        totalTrailPoints: getTotalTrailPointsCount(),
+      });
+    }, 0);
+  });
+
+  $effect(() => {
+    const session = overdubExerciseState.state;
+    if (!session.isActive || !session.template || !session.exerciseId) {
+      return;
+    }
+    if (isProjectScaffoldedForTemplate(session.template)) {
+      return;
+    }
+    if (scaffoldInFlight) {
+      return;
+    }
+
+    scaffoldInFlight = true;
+    const scaffoldStartMs = performance.now();
+    console.debug('[OverdubBuilder] scaffold:start', {
+      exerciseId: session.exerciseId,
+      exerciseName: session.template.name,
+      layerCountBefore: layers.length,
+      totalTakesBefore: getTotalTakesCount(),
+    });
+
+    void overdubState.loadExerciseScaffold(session.template)
+      .then(() => {
+        console.debug('[OverdubBuilder] scaffold:done', {
+          exerciseId: session.exerciseId,
+          elapsedMs: Math.round(performance.now() - scaffoldStartMs),
+          layerCountAfter: layers.length,
+          totalTakesAfter: getTotalTakesCount(),
+        });
+      })
+      .catch((error) => {
+        console.error('[OverdubBuilder] scaffold:error', error);
+      })
+      .finally(() => {
+        scaffoldInFlight = false;
+      });
+  });
+
+  $effect(() => {
+    if (overdubExerciseId !== lastSeenExerciseId) {
+      lastSeenExerciseId = overdubExerciseId;
+      hasRecordedInCurrentExerciseSession = false;
+    }
+
+    if (!overdubIsActive) {
+      hasRecordedInCurrentExerciseSession = false;
+    }
+  });
+
+  $effect(() => {
+    if (!overdubIsActive) {
+      voiceSettingsVoiceId = null;
+      return;
+    }
+
+    if (
+      voiceSettingsVoiceId
+      && !overdubVoices.some((voice) => voice.voiceId === voiceSettingsVoiceId)
+    ) {
+      voiceSettingsVoiceId = null;
+    }
+  });
+
+  $effect(() => {
+    if (!voiceSettingsVoiceId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('.voice-row-wrap')) return;
+      voiceSettingsVoiceId = null;
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, true);
+    };
+  });
 </script>
 
-<div class="overdub-panel">
-  <div class="overdub-header">
-    <span class="title">Overdub Choir Builder</span>
-    <button class="mini-btn" onclick={handleNewProject} disabled={isBusy}>
-      New Project
-    </button>
-  </div>
-
+<div class="overdub-panel" class:overdub-panel--compact={compact}>
   {#if warning}
     <div class="warning">{warning}</div>
   {/if}
 
-  <div class="grid settings">
-    <label class="field">
-      <span>Tempo</span>
-      <input
-        type="number"
-        min="20"
-        max="320"
-        value={project.phrase.tempoBpm}
-        oninput={handlePhraseTempoInput}
-      />
-    </label>
-    <label class="field">
-      <span>Time Sig Num</span>
-      <input
-        type="number"
-        min="1"
-        max="12"
-        value={project.phrase.timeSignatureNumerator}
-        oninput={handleTimeSigNumeratorInput}
-      />
-    </label>
-    <label class="field">
-      <span>Time Sig Den</span>
-      <select value={project.phrase.timeSignatureDenominator} onchange={handleTimeSigDenominatorChange}>
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="4">4</option>
-        <option value="8">8</option>
-        <option value="16">16</option>
-      </select>
-    </label>
-    <label class="field">
-      <span>Measures</span>
-      <input type="number" value={project.phrase.measures} disabled />
-    </label>
-    <label class="field">
-      <span>Count-In Beats</span>
-      <input
-        type="number"
-        min="0"
-        max="32"
-        value={project.phrase.countInBeats}
-        oninput={handleCountInInput}
-      />
-    </label>
-    <label class="field">
-      <span>Monitoring</span>
-      <select value={project.monitoringMode} onchange={handleMonitoringMode}>
-        <option value="layers-and-click">Layers + Click (Recommended)</option>
-        <option value="layers-only">Layers Only</option>
-        <option value="none">Record Without Monitoring</option>
-      </select>
-    </label>
-  </div>
+  <div class="builder-layout" class:builder-layout--no-voices={!overdubIsActive}>
+    {#if overdubIsActive}
+      <section class="exercise-section" aria-label="Exercise voices">
+        <div class="voice-rows">
+          {#each overdubVoices as voice, voiceIndex}
+            <div
+              class="voice-row-wrap"
+              class:voice-row-wrap--settings-open={isVoiceSettingsOpen(voice.voiceId)}
+            >
+              <div class="voice-row" class:voice-row--active={overdubActiveVoiceId === voice.voiceId}>
+                <div class="voice-left">
+                  <button class="voice-select-btn" onclick={() => handleVoiceSelect(voice.voiceId)}>
+                    <span class="voice-swatch" style="background-color: {voice.color}"></span>
+                    <span class="voice-label">{voice.name}</span>
+                  </button>
+                  {#if overdubActiveVoiceId === voice.voiceId}
+                    <span class="voice-rec-indicator">REC T{getNextRecordTakeSlot(voice.voiceId)}</span>
+                  {/if}
+                </div>
+                <div class="take-slots" role="group" aria-label={`${voice.name} take slots`}>
+                  {#each Array.from({ length: VISIBLE_TAKE_SLOTS }) as _, slotIndex}
+                    <button
+                      class="take-slot-btn"
+                      class:take-slot-btn--active={isTakeSlotActive(voice.voiceId, slotIndex)}
+                      class:take-slot-btn--missing={isTakeSlotMissingAudio(voice.voiceId, slotIndex)}
+                      disabled={!isTakeSlotPlayable(voice.voiceId, slotIndex)}
+                      onclick={() => handleTakeSlotToggle(voice.voiceId, slotIndex)}
+                      title={isTakeSlotMissingAudio(voice.voiceId, slotIndex) ? 'Take audio missing for this slot' : undefined}
+                    >
+                      T{slotIndex + 1}
+                    </button>
+                  {/each}
+                </div>
+                <div class="voice-visibility">
+                  <button
+                    type="button"
+                    class="show-btn"
+                    class:show-btn--off={isVoiceHiddenAndMuted(voice.voiceId)}
+                    aria-pressed={!isVoiceHiddenAndMuted(voice.voiceId)}
+                    onclick={() => handleVoiceHideMuteToggle(voice.voiceId)}
+                    title={isVoiceHiddenAndMuted(voice.voiceId)
+                      ? 'Show voice on pitch grid and unmute guide voice'
+                      : 'Hide voice from pitch grid and mute guide voice'}
+                  >
+                    {isVoiceHiddenAndMuted(voice.voiceId) ? 'Show' : 'Hide'}
+                  </button>
+                </div>
+                <div class="voice-settings">
+                  <button
+                    type="button"
+                    class="voice-settings-btn"
+                    class:voice-settings-btn--active={isVoiceSettingsOpen(voice.voiceId)}
+                    onclick={() => toggleVoiceSettings(voice.voiceId)}
+                    aria-expanded={isVoiceSettingsOpen(voice.voiceId)}
+                    aria-label={`Voice mix settings for ${voice.name}`}
+                    title="Voice mix settings"
+                  >
+                    &#9881;
+                  </button>
+                </div>
+              </div>
 
-  <label class="checkbox">
-    <input type="checkbox" checked={project.clickEnabled} onchange={handleClickEnabled} />
-    <span>Click Track Enabled</span>
-  </label>
+              {#if isVoiceSettingsOpen(voice.voiceId)}
+                <div
+                  class="voice-settings-panel"
+                  class:voice-settings-panel--up={shouldVoiceSettingsOpenUp(voiceIndex)}
+                  role="group"
+                  aria-label={`${voice.name} mix settings`}
+                >
+                  <div class="voice-settings-section-label">Synth</div>
+                  <label class="voice-slider-row">
+                    <span class="voice-slider-label">Gain</span>
+                    <input
+                      class="voice-slider"
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      value={getVoiceSynthGain(voice.voiceId)}
+                      oninput={(event) => handleVoiceSynthGainInput(voice.voiceId, event)}
+                    />
+                    <span class="voice-slider-value">{getVoiceSynthGain(voice.voiceId).toFixed(2)}x</span>
+                  </label>
 
-  <div class="main-controls">
-    <button class="record-btn" onclick={handleRecord} disabled={!canRecord}>
-      {#if canStopCapture}
-        Stop &amp; Redo
-      {:else}
-        Record Take
-      {/if}
-    </button>
-    <button class="play-btn" onclick={handlePlay} disabled={isBusy || isRecording || isCountIn}>
-      {mode === 'playing' ? 'Stop Playback' : 'Play Mix'}
-    </button>
-    <button class="undo-btn" onclick={handleUndoLayer} disabled={isBusy || layers.length === 0}>
-      Undo Last Layer
-    </button>
-  </div>
+                  <label class="voice-slider-row">
+                    <span class="voice-slider-label">Pan</span>
+                    <input
+                      class="voice-slider"
+                      type="range"
+                      min="-1"
+                      max="1"
+                      step="0.05"
+                      value={getVoiceSynthPan(voice.voiceId)}
+                      oninput={(event) => handleVoiceSynthPanInput(voice.voiceId, event)}
+                    />
+                    <span class="voice-slider-value">{formatPanLabel(getVoiceSynthPan(voice.voiceId))}</span>
+                  </label>
 
-  {#if isCountIn || isRecording}
-    <div class="progress-wrap">
-      <div class="progress-label">
-        {isCountIn ? 'Count-In' : 'Recording'} ({Math.round(captureDurationMs / 1000)}s phrase)
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" style={`width: ${Math.round(captureRatio * 100)}%`}></div>
-      </div>
-    </div>
-  {/if}
+                  <div class="voice-settings-section-label voice-settings-section-label--spaced">Take</div>
+                  <label class="voice-slider-row">
+                    <span class="voice-slider-label">Gain</span>
+                    <input
+                      class="voice-slider"
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      value={getVoiceLayerGain(voice.voiceId)}
+                      oninput={(event) => handleVoiceGainInput(voice.voiceId, event)}
+                    />
+                    <span class="voice-slider-value">{getVoiceLayerGain(voice.voiceId).toFixed(2)}x</span>
+                  </label>
 
-  {#if canKeep}
-    <div class="review-controls">
-      <button class="keep-btn" onclick={handleKeepTake} disabled={isBusy}>Keep Take</button>
-      <button class="redo-btn" onclick={handleRedoTake} disabled={isBusy}>Redo Take</button>
-    </div>
-  {/if}
-
-  <div class="layer-header">
-    <span>Layers ({layers.length}/{project.maxLayers})</span>
-    <button class="mini-btn" onclick={handleAddLayer} disabled={layers.length >= project.maxLayers || isBusy}>
-      Add Layer
-    </button>
-  </div>
-
-  <div class="layer-list">
-    {#each layers as layer}
-      <div class="layer-card">
-        <div class="layer-row">
-          <span class="layer-name">{layer.name}</span>
-          <button class="mini-btn" onclick={() => handleArmLayer(layer.id)} disabled={isBusy || isRecording || isCountIn}>
-            Arm
-          </button>
-          <button
-            class="mini-btn"
-            onclick={() => handleRemoveLayer(layer.id)}
-            disabled={layers.length <= 1 || isBusy}
-          >
-            Remove
-          </button>
+                  <label class="voice-slider-row">
+                    <span class="voice-slider-label">Pan</span>
+                    <input
+                      class="voice-slider"
+                      type="range"
+                      min="-1"
+                      max="1"
+                      step="0.05"
+                      value={getVoiceLayerPan(voice.voiceId)}
+                      oninput={(event) => handleVoicePanInput(voice.voiceId, event)}
+                    />
+                    <span class="voice-slider-value">{formatPanLabel(getVoiceLayerPan(voice.voiceId))}</span>
+                  </label>
+                </div>
+              {/if}
+            </div>
+          {/each}
         </div>
-        <div class="layer-controls">
+      </section>
+    {/if}
+
+    <section class="controls-section" aria-label="Recording controls">
+      <div class="overdub-header">
+        <span class="title">
+          Overdub Builder
+          {#if overdubIsActive && overdubExerciseName}
+            {' - '}
+            {overdubExerciseName}
+          {/if}
+        </span>
+        {#if overdubIsActive}
+          <button class="mini-btn" onclick={handleOverdubReset} aria-label="Close exercise">&#10005;</button>
+        {/if}
+      </div>
+
+      <div class="controls-layout">
+        <div class="controls-primary">
+          <div class="grid settings">
+            <div class="field">
+              <span>Count-In Beats</span>
+              <div class="count-in-buttons" role="group" aria-label="Count-in beats">
+                {#each COUNT_IN_OPTIONS as countInBeats}
+                  <button
+                    type="button"
+                    class="count-in-btn"
+                    class:count-in-btn--active={project.phrase.countInBeats === countInBeats}
+                    onclick={() => handleCountInSelect(countInBeats)}
+                  >
+                    {countInBeats}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            <div class="field">
+              <span>Beatlines</span>
+              <div class="mode-buttons" role="group" aria-label="Beatline visibility mode">
+                {#each BEAT_LINE_OPTIONS as option}
+                  <button
+                    type="button"
+                    class="mode-btn"
+                    class:mode-btn--active={beatLineMode === option.value}
+                    onclick={() => handleBeatLineModeSelect(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          </div>
+
           <label class="checkbox">
-            <input type="checkbox" checked={layer.muted} onchange={(e) => handleLayerMuted(layer.id, e)} />
-            <span>Mute</span>
+            <input type="checkbox" checked={project.clickEnabled} onchange={handleClickEnabled} />
+            <span>Click Track Enabled</span>
           </label>
-          <label class="checkbox">
-            <input type="checkbox" checked={layer.solo} onchange={(e) => handleLayerSolo(layer.id, e)} />
-            <span>Solo</span>
-          </label>
-          <label class="inline">
-            <span>Gain</span>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.01"
-              value={layer.gain}
-              oninput={(e) => handleLayerGain(layer.id, e)}
-            />
-          </label>
-          <label class="inline">
-            <span>Pan</span>
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step="0.01"
-              value={layer.pan}
-              oninput={(e) => handleLayerPan(layer.id, e)}
-            />
-          </label>
+
+          {#if isCountIn || isRecording}
+            <div class="progress-wrap">
+              <div class="progress-label">
+                {isCountIn ? 'Count-In' : 'Recording'} ({Math.round(captureDurationMs / 1000)}s phrase)
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" style={`width: ${Math.round(captureRatio * 100)}%`}></div>
+              </div>
+            </div>
+          {/if}
+
+          {#if canRedoPendingTake}
+            <div class="review-controls">
+              <button class="listen-btn" onclick={handlePreviewTake} disabled={isBusy}>
+                {isPendingTakePreviewActive ? 'Stop Listen' : 'Listen Back'}
+              </button>
+              <button class="keep-btn" onclick={handleKeepTake} disabled={isBusy}>Keep Take</button>
+            </div>
+          {/if}
         </div>
-        <label class="field">
-          <span>Active Take</span>
-          <select value={layer.activeTakeId ?? ''} onchange={(e) => handleTakeSelect(layer.id, e)}>
-            <option value="" disabled={layer.takes.length > 0}>No take selected</option>
-            {#each layer.takes as take}
-              <option value={take.id}>{new Date(take.createdAt).toLocaleTimeString()} ({Math.round(take.durationMs / 1000)}s)</option>
-            {/each}
-          </select>
-        </label>
-        <div class="layer-meta">
-          Takes: {layer.takes.length}/{project.maxTakesPerLayer}
+
+        <div class="controls-actions">
+          <div class="main-controls">
+            <button
+              class="record-btn"
+              class:record-btn--redo={canRedoPendingTake && !canStopCapture}
+              onclick={handleRecord}
+              disabled={!canRecord}
+              title={!canRedoPendingTake && !canStopCapture && overdubIsActive && !overdubActiveVoiceId
+                ? 'Select a voice to record'
+                : undefined}
+            >
+              {#if canStopCapture}
+                Stop &amp; Redo
+              {:else if canRedoPendingTake}
+                Redo Take
+              {:else}
+                Record Take
+              {/if}
+            </button>
+            <button class="play-btn" onclick={handlePlayback} disabled={isBusy || isRecording || isCountIn}>
+              {isPlaybackRunning ? 'Stop' : 'Play'}
+            </button>
+          </div>
         </div>
       </div>
-    {/each}
-  </div>
-
-  <div class="trail-meta">
-    Visible kept trails: {renderableTrails.length}
+    </section>
   </div>
 </div>
 
@@ -327,6 +808,13 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+  }
+
+  .overdub-panel--compact {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--spacing-xs);
+    align-items: start;
   }
 
   .overdub-header {
@@ -352,9 +840,291 @@
     line-height: 1.3;
   }
 
+  .builder-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+    gap: var(--spacing-xs);
+    align-items: start;
+  }
+
+  .builder-layout--no-voices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .exercise-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 0;
+    background: rgba(9, 14, 22, 0.55);
+  }
+
+  .voice-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .voice-row-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .voice-row-wrap--settings-open {
+    z-index: 30;
+  }
+
+  .voice-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 3px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .voice-row--active {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .voice-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .voice-select-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 6px;
+    border: none;
+    background: none;
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .voice-select-btn:hover {
+    opacity: 0.9;
+  }
+
+  .voice-swatch {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+
+  .voice-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .voice-rec-indicator {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #ffb48a;
+    border: 1px solid rgba(255, 180, 138, 0.35);
+    background: rgba(255, 120, 80, 0.12);
+    border-radius: 999px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  .take-slots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .take-slot-btn {
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 6px;
+    cursor: pointer;
+    min-width: 30px;
+  }
+
+  .take-slot-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .take-slot-btn--active {
+    color: #fff;
+    border-color: rgba(84, 214, 144, 0.65);
+    background: rgba(32, 147, 93, 0.5);
+  }
+
+  .take-slot-btn--missing {
+    border-color: rgba(255, 176, 102, 0.62);
+    background: rgba(128, 70, 20, 0.34);
+    color: rgba(255, 223, 192, 0.95);
+  }
+
+  .voice-visibility {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .voice-settings {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .voice-settings-btn {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    font-size: 13px;
+    font-weight: 700;
+    width: 28px;
+    height: 24px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+
+  .voice-settings-btn--active {
+    color: #fff;
+    border-color: rgba(115, 166, 255, 0.75);
+    background: rgba(40, 93, 179, 0.58);
+  }
+
+  .voice-settings-panel {
+    position: absolute;
+    right: 3px;
+    top: calc(100% + 2px);
+    z-index: 35;
+    width: min(280px, calc(100% - 6px));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px 8px 8px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(12, 18, 30, 0.96);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  .voice-settings-panel--up {
+    top: auto;
+    bottom: calc(100% + 2px);
+  }
+
+  .voice-settings-section-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #93b7ff;
+  }
+
+  .voice-settings-section-label--spaced {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .voice-slider-row {
+    display: grid;
+    grid-template-columns: 36px minmax(120px, 1fr) 52px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+
+  .voice-slider-label {
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .voice-slider {
+    width: 100%;
+    accent-color: #5f95ff;
+  }
+
+  .voice-slider-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #dfe8ff;
+    font-weight: 700;
+  }
+
+  .show-btn {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(90, 129, 210, 0.3);
+    color: #dfe8ff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    min-width: 44px;
+    cursor: pointer;
+  }
+
+  .show-btn--off {
+    color: rgba(223, 232, 255, 0.55);
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    opacity: 0.55;
+  }
+
+  .controls-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 8px;
+    background: rgba(9, 14, 22, 0.55);
+  }
+
+  .controls-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 210px);
+    gap: var(--spacing-xs);
+    align-items: start;
+  }
+
+  .controls-primary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    min-width: 0;
+  }
+
+  .controls-actions {
+    display: flex;
+    min-width: 0;
+  }
+
   .grid.settings {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--spacing-xs);
   }
 
@@ -366,14 +1136,54 @@
     color: var(--color-text-muted);
   }
 
-  .field input,
-  .field select {
-    padding: 6px 8px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--color-text);
-    font-size: var(--font-size-xs);
+  .count-in-buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .count-in-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 10px;
+    min-width: 34px;
+    cursor: pointer;
+  }
+
+  .count-in-btn--active {
+    color: #fff;
+    border-color: rgba(84, 214, 144, 0.65);
+    background: rgba(32, 147, 93, 0.5);
+  }
+
+  .mode-buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mode-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 10px;
+    min-width: 44px;
+    cursor: pointer;
+  }
+
+  .mode-btn--active {
+    color: #fff;
+    border-color: rgba(98, 181, 255, 0.65);
+    background: rgba(34, 110, 186, 0.52);
   }
 
   .checkbox {
@@ -385,16 +1195,20 @@
   }
 
   .main-controls {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
+    width: 100%;
     gap: var(--spacing-xs);
+  }
+
+  .main-controls > button {
+    width: 100%;
   }
 
   .record-btn,
   .play-btn,
-  .undo-btn,
+  .listen-btn,
   .keep-btn,
-  .redo-btn,
   .mini-btn {
     border: none;
     border-radius: var(--radius-sm);
@@ -405,9 +1219,8 @@
 
   .record-btn,
   .play-btn,
-  .undo-btn,
-  .keep-btn,
-  .redo-btn {
+  .listen-btn,
+  .keep-btn {
     padding: 8px 10px;
     font-size: var(--font-size-xs);
     color: #fff;
@@ -417,20 +1230,20 @@
     background: #d54e3a;
   }
 
+  .record-btn--redo {
+    background: #aa6a2a;
+  }
+
   .play-btn {
     background: #2a8f60;
   }
 
-  .undo-btn {
-    background: #6f6f85;
+  .listen-btn {
+    background: #2a6fbc;
   }
 
   .keep-btn {
     background: #1d9d5d;
-  }
-
-  .redo-btn {
-    background: #aa6a2a;
   }
 
   .mini-btn {
@@ -474,82 +1287,63 @@
     gap: var(--spacing-xs);
   }
 
-  .layer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    margin-top: 4px;
-  }
-
-  .layer-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-    max-height: 260px;
-    overflow: auto;
-    padding-right: 2px;
-  }
-
-  .layer-card {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .layer-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .layer-name {
-    flex: 1;
-    color: var(--color-text);
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-  }
-
-  .layer-controls {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px 8px;
-    align-items: center;
-    width: 100%;
-  }
-
-  .inline {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--color-text-muted);
+  .overdub-panel--compact .warning,
+  .overdub-panel--compact .builder-layout {
     grid-column: 1 / -1;
-    min-width: 0;
   }
 
-  .inline span {
-    flex: 0 0 34px;
+  .overdub-panel--compact .builder-layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr);
   }
 
-  .inline input[type='range'] {
-    flex: 1;
-    width: 100%;
-    min-width: 0;
+  .overdub-panel--compact .controls-section {
+    gap: 6px;
   }
 
-  .layer-meta,
-  .trail-meta {
+  .overdub-panel--compact .controls-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px);
+  }
+
+  .overdub-panel--compact .field {
     font-size: 11px;
-    color: var(--color-text-muted);
   }
 
-  .trail-meta {
-    margin-top: 2px;
+  .overdub-panel--compact .count-in-btn {
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+
+  @media (max-width: 1200px) {
+    .builder-layout,
+    .overdub-panel--compact .builder-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .grid.settings,
+    .overdub-panel--compact .grid.settings {
+      grid-template-columns: 1fr;
+    }
+
+    .controls-layout,
+    .overdub-panel--compact .controls-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .voice-row {
+      grid-template-columns: 1fr;
+      justify-items: start;
+    }
+
+    .voice-slider-row {
+      grid-template-columns: 36px minmax(120px, 1fr) 52px;
+      justify-items: stretch;
+    }
+
+    .voice-slider-value {
+      text-align: right;
+    }
   }
 </style>
+

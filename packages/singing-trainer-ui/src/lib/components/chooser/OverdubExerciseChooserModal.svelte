@@ -105,6 +105,7 @@
                 onselect={() => handleExerciseSelect(entry)}
                 onsettingchange={handleSettingChange}
                 onstart={handleStartExercise}
+                showSettings={false}
               />
             {/each}
           </div>

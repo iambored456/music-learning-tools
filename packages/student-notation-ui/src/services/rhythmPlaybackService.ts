@@ -18,6 +18,57 @@ interface ScheduledEvent {
   noteId?: string;
 }
 
+type TimedStampEvent = {
+  offset: string | Record<string, number>;
+  duration: string;
+  slot: number;
+  type: 'oval' | 'diamond' | 'triplet-eighth' | 'triplet-quarter';
+};
+
+function getQuarterDurationSeconds(tempoBpm: number): number {
+  const safeTempo = Number.isFinite(tempoBpm) && tempoBpm > 0 ? tempoBpm : 120;
+  return 60 / safeTempo;
+}
+
+function resolveEventTiming(
+  event: TimedStampEvent,
+  tempoBpm: number
+): { offsetSeconds: number; durationSeconds: number } {
+  const quarter = getQuarterDurationSeconds(tempoBpm);
+
+  switch (event.type) {
+    case 'oval':
+      return {
+        offsetSeconds: event.slot * (quarter / 4),
+        durationSeconds: quarter / 2
+      };
+    case 'diamond':
+      return {
+        offsetSeconds: event.slot * (quarter / 4),
+        durationSeconds: quarter / 4
+      };
+    case 'triplet-eighth': {
+      const step = quarter / 3;
+      return {
+        offsetSeconds: event.slot * step,
+        durationSeconds: step
+      };
+    }
+    case 'triplet-quarter': {
+      const step = (2 * quarter) / 3;
+      return {
+        offsetSeconds: event.slot * step,
+        durationSeconds: step
+      };
+    }
+    default:
+      return {
+        offsetSeconds: Tone.Time(event.offset as Tone.Unit.Time).toSeconds(),
+        durationSeconds: Tone.Time(event.duration as Tone.Unit.Time).toSeconds()
+      };
+  }
+}
+
 /**
  * Service for playing rhythm patterns when clicking on stamped grid cells
  * Converts rhythm stamps into timed note events at the current project tempo
@@ -96,6 +147,7 @@ class RhythmPlaybackService {
     // Use direct SynthEngine calls with absolute timing
     const now = Tone.now();
     const scheduleToken = this.scheduleToken;
+    const tempoBpm = store.state.tempo;
 
     // Get the base row for calculating per-shape pitches
     // Use globalRow for pitch lookups (fullRowData is never sliced)
@@ -103,14 +155,12 @@ class RhythmPlaybackService {
 
     events.forEach((event, index) => {
       try {
-        // Convert Tone.js time notation to absolute time
-        const offsetSeconds = Tone.Time(event.offset as Tone.Unit.Time).toSeconds();
+        const { offsetSeconds, durationSeconds } = resolveEventTiming(event as TimedStampEvent, tempoBpm);
         const attackTime = now + offsetSeconds;
 
         // Adjust duration based on note shape
         // Circle notes (quarter notes) are twice as long as oval notes (eighth notes)
-        const baseDuration = Tone.Time(event.duration as Tone.Unit.Time).toSeconds();
-        const duration = noteShape === 'circle' ? baseDuration * 2 : baseDuration;
+        const duration = noteShape === 'circle' ? durationSeconds * 2 : durationSeconds;
 
         const releaseTime = attackTime + duration;
 
@@ -240,17 +290,16 @@ class RhythmPlaybackService {
     // Use direct SynthEngine calls with absolute timing
     const now = Tone.now();
     const scheduleToken = this.scheduleToken;
+    const tempoBpm = store.state.tempo;
     // Get the base row for calculating per-shape pitches
     // Use globalRow for pitch lookups (fullRowData is never sliced)
     const baseRow = placement?.globalRow ?? placement?.row;
 
     events.forEach((event, index) => {
       try {
-        // Convert Tone.js time notation to absolute time
-        const offsetSeconds = Tone.Time(event.offset).toSeconds();
+        const { offsetSeconds, durationSeconds } = resolveEventTiming(event as TimedStampEvent, tempoBpm);
         const attackTime = now + offsetSeconds;
-        const duration = Tone.Time(event.duration).toSeconds();
-        const releaseTime = attackTime + duration;
+        const releaseTime = attackTime + durationSeconds;
 
         // Calculate pitch for this individual shape
         let shapePitch = pitch;

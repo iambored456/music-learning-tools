@@ -272,6 +272,8 @@ export interface ExerciseNote {
     midiPitch: number;
     /** Display name (e.g., "C4", "Bb3") */
     pitchName: string;
+    /** Optional lyric syllable for this note */
+    lyric?: string;
 }
 /** A voice within an overdub exercise */
 export interface ExerciseVoice {
@@ -279,9 +281,7 @@ export interface ExerciseVoice {
     voiceId: string;
     /** Display color (hex code) */
     color: string;
-    /** Role: 'guide' voices play as reference audio; 'student' is the part to sing */
-    role: 'guide' | 'student';
-    /** Display name (e.g., "Melody", "Your Part") */
+    /** Display name (e.g., "Melody", "Countermelody") */
     name: string;
     /** Array of notes in this voice (monophonic within voice) */
     notes: ExerciseNote[];

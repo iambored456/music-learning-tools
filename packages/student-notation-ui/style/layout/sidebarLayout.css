@@ -40,6 +40,81 @@ body.sidebar-open #sidebar {
   color: var(--c-text-muted);
 }
 
+.sidebar-section-header {
+  margin: 0 0 var(--space-025);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+
+.sidebar-theme-toggle-container {
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-theme-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  height: 2rem;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--c-border);
+  background-color: var(--c-surface-muted);
+  cursor: pointer;
+}
+
+.sidebar-theme-toggle input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.sidebar-theme-toggle label {
+  position: relative;
+  z-index: 2;
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.sidebar-theme-toggle input[type="radio"]:checked + label {
+  color: #ffffff;
+}
+
+.sidebar-theme-toggle input[type="radio"]:focus-visible + label {
+  outline: 2px solid rgba(var(--c-accent-rgb), 0.35);
+  outline-offset: -1px;
+  border-radius: 999px;
+}
+
+.sidebar-theme-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  z-index: 1;
+  width: calc(50% - 2px);
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background-color: var(--c-accent);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+
+.sidebar-theme-toggle input#theme-dark:checked ~ .sidebar-theme-slider {
+  transform: translateX(100%);
+}
+
 .sidebar-button {
   display: flex;
   align-items: center;
@@ -308,25 +383,23 @@ input[type="range"][orient="vertical"] {
     margin-left: 0.5rem;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    .keyboard-shortcuts-container {
-        border-top-color: var(--c-border-dark, #495057);
-    }
-    
-    .keyboard-shortcuts-container h4 {
-        color: var(--c-text-dark, #e2e8f0);
-    }
-    
-    .shortcut-key {
-        background-color: var(--c-surface-dark, #2d3748);
-        color: var(--c-text-dark, #e2e8f0);
-        border-color: var(--c-border-dark, #4a5568);
-    }
-    
-    .shortcut-desc {
-        color: var(--c-text-muted-dark, #a0aec0);
-    }
+/* Dark mode support (explicitly controlled by theme toggle) */
+body.dark-mode .keyboard-shortcuts-container {
+    border-top-color: var(--c-border);
+}
+
+body.dark-mode .keyboard-shortcuts-container h4 {
+    color: var(--c-text);
+}
+
+body.dark-mode .shortcut-key {
+    background-color: var(--c-surface-muted);
+    color: var(--c-text);
+    border-color: var(--c-border);
+}
+
+body.dark-mode .shortcut-desc {
+    color: var(--c-text-muted);
 }
 
 /* Responsive adjustments */

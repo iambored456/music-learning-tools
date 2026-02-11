@@ -19,7 +19,7 @@ export { ANCHORED_PITCH_MATCHING } from './anchoredPitchMatching.js';
 export { FOUNDATIONS_1_MERGED } from './foundations_1_merged.js';
 
 // Export overdub exercises
-export { SIMPLE_UNISON, ALL_OVERDUB_EXERCISES } from './overdubExercises/index.js';
+export { SIMPLE_UNISON, FEELING_THIS, ALL_OVERDUB_EXERCISES } from './overdubExercises/index.js';
 
 // All lessons for registration
 import { PITCH_MATCHING_PRESETS } from '../presets/pitchMatching.js';

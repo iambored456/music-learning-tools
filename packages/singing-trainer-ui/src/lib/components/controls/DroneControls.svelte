@@ -57,6 +57,14 @@
     appState.setDroneSelectedMode(target.value);
   }
 
+  function handleFocusToggle() {
+    appState.setDroneFocusLegend(!appState.state.drone.focusLegend);
+  }
+
+  function handleDegreesToggle() {
+    appState.setDroneShowDegrees(!appState.state.drone.showDegrees);
+  }
+
   function midiToTonicAndOctave(midi: number): { tonic: TonicNote; octave: number } {
     const tonicIndex = ((Math.round(midi) % 12) + 12) % 12;
     const tonic = TONIC_OPTIONS[tonicIndex] ?? 'C';
@@ -167,6 +175,29 @@
         <option value={key}>{MODE_NAMES[key]}</option>
       {/each}
     </select>
+  </div>
+
+  <div class="mode-options-row">
+    <button
+      class="mode-option-toggle"
+      class:active={appState.state.drone.focusLegend}
+      onclick={handleFocusToggle}
+      disabled={!appState.state.drone.modeEnabled}
+      aria-pressed={appState.state.drone.focusLegend}
+      title="Dim legend pitches outside the selected mode"
+    >
+      Focus
+    </button>
+    <button
+      class="mode-option-toggle"
+      class:active={appState.state.drone.showDegrees}
+      onclick={handleDegreesToggle}
+      disabled={!appState.state.drone.modeEnabled}
+      aria-pressed={appState.state.drone.showDegrees}
+      title="Show scale degree numbers instead of pitch names"
+    >
+      Degrees
+    </button>
   </div>
 </div>
 
@@ -326,5 +357,38 @@
   .mode-select {
     flex: 1;
     min-width: 0;
+  }
+
+  .mode-options-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  .mode-option-toggle {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text);
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .mode-option-toggle:hover:not(:disabled) {
+    border-color: var(--color-secondary);
+  }
+
+  .mode-option-toggle.active {
+    background-color: var(--color-secondary);
+    color: var(--color-bg);
+    border-color: var(--color-secondary);
+  }
+
+  .mode-option-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

@@ -11,5 +11,7 @@ export { createLessonEngine, getLessonEngine, resetGlobalEngine, createStepper, 
 export { resolveConfig, applyAsTonic, applyAsFloorNote, applyCustomOffset, applyVariation, } from './utils/pitchMapping.js';
 export { validateTemplate, calculateLoopDurationMicrobeats, calculateLoopDurationMs, type ValidationResult, } from './utils/validator.js';
 export { STANDARD_4_PHASE_PATTERN, QUICK_RESPONSE_PATTERN, EXTENDED_HOLD_PATTERN, BASIC_PITCH_MATCHING, QUICK_PITCH_MATCHING, SUSTAINED_PITCH_MATCHING, CENTERED_RANGE_MATCHING, PITCH_MATCHING_PRESETS, registerAllPresets, getAllPresets, } from './presets/index.js';
-export { ANCHORED_PITCH_MATCHING, FOUNDATIONS_1_MERGED, ALL_LESSONS, SIMPLE_UNISON, ALL_OVERDUB_EXERCISES, } from './lessons/index.js';
+export { convertSpecToExercise, type ExerciseSpec, type SpecGlobals, type SpecEvent, type SpecPart, type ExerciseSpecMetadata, } from './utils/importExerciseSpec.js';
+export { convertRelativeExerciseToSpec, importMusicXmlToExerciseSpec, importMusicXmlToOverdubExercise, type MusicXmlSpecWarningCode, type MusicXmlSpecWarning, type MusicXmlPipelineWarning, type RelativeToSpecOptions, type ImportMusicXmlToSpecOptions, type ImportMusicXmlToSpecResult, type ImportMusicXmlToOverdubResult, } from './utils/musicxmlImport.js';
+export { ANCHORED_PITCH_MATCHING, FOUNDATIONS_1_MERGED, ALL_LESSONS, SIMPLE_UNISON, FEELING_THIS, ALL_OVERDUB_EXERCISES, } from './lessons/index.js';
 //# sourceMappingURL=index.d.ts.map

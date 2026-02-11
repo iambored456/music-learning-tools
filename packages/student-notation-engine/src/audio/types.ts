@@ -211,6 +211,7 @@ export interface StampScheduleEvent {
   offset: Tone.Unit.Time;
   duration: Tone.Unit.Time;
   rowOffset: number;
+  type?: 'oval' | 'diamond' | 'triplet-eighth' | 'triplet-quarter';
   slot?: number;
   shapeKey?: string;
   noteId?: string;

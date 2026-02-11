@@ -93,3 +93,22 @@
   --font-size-base: 1rem;       /* 16px */
   --font-size-lg: 1.125rem;    /* 18px */
 }
+
+/* Explicit dark-mode palette controlled by sidebar toggle */
+body.dark-mode {
+  --c-bg: #101418;
+  --c-surface: #20262d;
+  --c-surface-muted: #2a323b;
+  --c-surface-overlay: rgba(24, 30, 38, 0.9);
+  --c-text: #e9eef4;
+  --c-text-muted: #aab6c2;
+  --c-border: #3a4551;
+  --c-border-strong: #556170;
+  --c-gridline: #323c46;
+  --c-anacrusis-border: #5f6f80;
+  --c-anacrusis-bg: rgba(95, 111, 128, 0.24);
+  --c-anacrusis-accent: #9fb0c0;
+  --box-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --box-shadow-md: 0 6px 14px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}

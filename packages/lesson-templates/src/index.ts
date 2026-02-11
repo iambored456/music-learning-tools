@@ -122,6 +122,30 @@ export {
   getAllPresets,
 } from './presets/index.js';
 
+// Exercise spec converter
+export {
+  convertSpecToExercise,
+  type ExerciseSpec,
+  type SpecGlobals,
+  type SpecEvent,
+  type SpecPart,
+  type ExerciseSpecMetadata,
+} from './utils/importExerciseSpec.js';
+
+// MusicXML bridge utilities
+export {
+  convertRelativeExerciseToSpec,
+  importMusicXmlToExerciseSpec,
+  importMusicXmlToOverdubExercise,
+  type MusicXmlSpecWarningCode,
+  type MusicXmlSpecWarning,
+  type MusicXmlPipelineWarning,
+  type RelativeToSpecOptions,
+  type ImportMusicXmlToSpecOptions,
+  type ImportMusicXmlToSpecResult,
+  type ImportMusicXmlToOverdubResult,
+} from './utils/musicxmlImport.js';
+
 // Lessons
 export {
   ANCHORED_PITCH_MATCHING,
@@ -129,5 +153,6 @@ export {
   ALL_LESSONS,
   // Overdub exercises
   SIMPLE_UNISON,
+  FEELING_THIS,
   ALL_OVERDUB_EXERCISES,
 } from './lessons/index.js';

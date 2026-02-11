@@ -57,8 +57,8 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
   // [PERF:SHARED-LFO] Shared per-color LFOs for vibrato and tremolo.
   // One LFO per color modulates ALL voices of that color, saving ~40 native nodes per voice.
-  // Vibrato: LFO → voice.oscillator.detune (cents-based, frequency-proportional)
-  // Tremolo: LFO → voice.tremoloGain.gain (amplitude modulation)
+  // Vibrato: LFO → voice.detuneInput (GainNode → oscillator.detune, cents-based)
+  // Tremolo: LFO → voice.tremoloInput (AudioParam on tremolo GainNode)
   const sharedVibratoLFOs: Record<string, Tone.LFO | null> = {};
   const sharedTremoloLFOs: Record<string, Tone.LFO | null> = {};
 
@@ -119,7 +119,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         const synth = synths[color];
         if (synth) {
           getAllVoicesFromSynth(synth).forEach(voice => {
-            try { lfo.connect(voice.oscillator.detune); } catch { /* voice may be disposed */ }
+            try { lfo.connect(voice.detuneInput); } catch { /* voice may be disposed */ }
           });
         }
         log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared vibrato LFO for ${color}`, { freqHz, depthCents }, 'audio');
@@ -160,7 +160,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         const synth = synths[color];
         if (synth) {
           getAllVoicesFromSynth(synth).forEach(voice => {
-            try { lfo.connect(voice.tremoloGain.gain.input); } catch { /* voice may be disposed */ }
+            try { lfo.connect(voice.tremoloInput); } catch { /* voice may be disposed */ }
           });
         }
         log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared tremolo LFO for ${color}`, { freqHz, depth }, 'audio');
@@ -195,12 +195,12 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     try {
       const vibratoLFO = sharedVibratoLFOs[color];
       if (vibratoLFO) {
-        vibratoLFO.connect(voice.oscillator.detune);
+        vibratoLFO.connect(voice.detuneInput);
       }
 
       const tremoloLFO = sharedTremoloLFOs[color];
       if (tremoloLFO) {
-        tremoloLFO.connect(voice.tremoloGain.gain.input);
+        tremoloLFO.connect(voice.tremoloInput);
       }
     } catch (e) {
       log.warn('SynthEngine', `[PERF:SHARED-LFO] Failed to connect shared LFOs to voice for ${color}`, e, 'audio');
@@ -308,7 +308,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
         const synth = new Tone.PolySynth({
           maxPolyphony: Infinity,
-          voice: FilteredVoice,
+          voice: FilteredVoice as any,
           options: {
             oscillator: { type: 'custom', partials: normalizedCoeffs },
             envelope: timbre.adsr,

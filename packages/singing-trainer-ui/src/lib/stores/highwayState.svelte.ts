@@ -20,6 +20,7 @@ export interface TargetNote {
   midi?: number;
   minMidi?: number;
   maxMidi?: number;
+  voiceId?: string;
   startTimeMs: number;
   durationMs: number;
   hit?: boolean;
@@ -41,6 +42,8 @@ export interface HighwayState {
   nowLineX: number;
   pixelsPerSecond: number;
   timeWindowMs: number;
+  tempoBpm: number;
+  leadInBeats: number;
   feedbackConfig: FeedbackCollectorConfig;
   waitForInput: boolean;
   isWaitingForInput: boolean;
@@ -55,6 +58,8 @@ const DEFAULT_STATE: HighwayState = {
   nowLineX: 100, // Position of the "now" line from left edge
   pixelsPerSecond: 200,
   timeWindowMs: 4000,
+  tempoBpm: 120,
+  leadInBeats: 0,
   feedbackConfig: {
     onsetToleranceMs: 100,
     releaseToleranceMs: 150,
@@ -77,6 +82,31 @@ function createHighwayState() {
   let animationFrameId: number | null = null;
   let performanceCompleteCallback: ((results: Map<string, NotePerformance>) => void) | null = null;
   let viewportWidth = 800;
+  let pendingTimelineFitDurationMs: number | null = null;
+  let noteHitCount = 0;
+  let noteMissCount = 0;
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function applyTimelineFit(durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+    if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return;
+
+    const width = Math.max(1, viewportWidth);
+    const leftPaddingPx = clamp(width * 0.08, 40, 120);
+    const rightPaddingPx = clamp(width * 0.04, 20, 96);
+    const nowLineMax = Math.max(40, width - rightPaddingPx - 80);
+    const nowLineX = clamp(leftPaddingPx, 40, nowLineMax);
+    const usableWidthPx = Math.max(100, width - nowLineX - rightPaddingPx);
+    const fittedPixelsPerSecond = clamp((usableWidthPx / durationMs) * 1000, 20, 520);
+    const lookAheadMs = Math.round(((width - nowLineX) / fittedPixelsPerSecond) * 1000);
+
+    state.nowLineX = nowLineX;
+    state.pixelsPerSecond = fittedPixelsPerSecond;
+    state.timeWindowMs = Math.max(1000, Math.max(Math.round(durationMs), lookAheadMs));
+  }
 
   // Convert local TargetNote to engine HighwayTargetNote
   function convertToEngineFormat(notes: TargetNote[]): HighwayTargetNote[] {
@@ -142,7 +172,7 @@ function createHighwayState() {
       pixelsPerSecond: state.pixelsPerSecond,
       lookAheadMs: state.timeWindowMs,
       scrollMode: 'constant-speed',
-      leadInBeats: 0, // No onramp for singing trainer
+      leadInBeats: state.leadInBeats,
       playMetronomeDuringOnramp: false,
       playTargetNotes: false,
       playMetronome: false,
@@ -150,30 +180,30 @@ function createHighwayState() {
       waitForInput: state.waitForInput,
       feedbackConfig: state.feedbackConfig,
       stateCallbacks: {
-        getTempo: () => 120,
+        getTempo: () => state.tempoBpm,
         getCellWidth: () => 20,
         getViewportWidth: () => viewportWidth,
       },
       eventCallbacks: {
         emit: (event, data) => {
-          // Log highway events for debugging
-          console.debug('[Highway]', event, data);
+          if (event === 'playbackStarted') {
+            noteHitCount = 0;
+            noteMissCount = 0;
+            return;
+          }
 
-          // Handle specific events with visual feedback (placeholder for Phase 6)
           if (event === 'noteHit') {
-            const hitData = data as { noteId: string; note: any; performance: any };
-            console.log(
-              `[Highway] Note HIT: ${hitData.noteId}, accuracy: ${hitData.performance.accuracyTier || 'unknown'}`
-            );
-            // TODO Phase 6: Trigger visual effects (glow, particles, emboldening)
+            noteHitCount += 1;
           } else if (event === 'noteMissed') {
-            const missData = data as { noteId: string; note: any; performance: any };
-            console.log(`[Highway] Note MISSED: ${missData.noteId}`);
-            // TODO Phase 6: Trigger visual effects (fade, shake, miss indicator)
+            noteMissCount += 1;
           } else if (event === 'onrampComplete') {
-            console.log('[Highway] Onramp complete, playback starting!');
+            console.debug('[Highway] Onramp complete');
           } else if (event === 'performanceComplete') {
-            console.log('[Highway] Performance complete!');
+            console.debug('[Highway] Performance complete', {
+              noteHitCount,
+              noteMissCount,
+              totalEvaluated: noteHitCount + noteMissCount,
+            });
             // Trigger callback with results
             if (performanceCompleteCallback && engineService) {
               performanceCompleteCallback(engineService.getPerformanceResults());
@@ -266,18 +296,54 @@ function createHighwayState() {
 
     setNowLineX(x: number) {
       state.nowLineX = x;
+      pendingTimelineFitDurationMs = null;
     },
 
     setViewportWidth(width: number) {
       viewportWidth = width;
+      if (pendingTimelineFitDurationMs !== null && Number.isFinite(width) && width > 0) {
+        applyTimelineFit(pendingTimelineFitDurationMs);
+        pendingTimelineFitDurationMs = null;
+      }
     },
 
     setPixelsPerSecond(pps: number) {
       state.pixelsPerSecond = pps;
+      pendingTimelineFitDurationMs = null;
     },
 
     setTimeWindowMs(ms: number) {
       state.timeWindowMs = ms;
+      pendingTimelineFitDurationMs = null;
+    },
+
+    fitTimelineToDuration(durationMs: number) {
+      if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+      const normalizedDurationMs = Math.max(250, Math.round(durationMs));
+      pendingTimelineFitDurationMs = normalizedDurationMs;
+      applyTimelineFit(normalizedDurationMs);
+    },
+
+    setTempoBpm(tempoBpm: number) {
+      state.tempoBpm = clamp(Math.round(tempoBpm), 20, 320);
+      if (engineService && !state.isPlaying) {
+        const engineNotes = convertToEngineFormat(state.targetNotes);
+        initializeEngine();
+        if (engineService) {
+          engineService.init(engineNotes);
+        }
+      }
+    },
+
+    setLeadInBeats(leadInBeats: number) {
+      state.leadInBeats = clamp(Math.round(leadInBeats), 0, 64);
+      if (engineService && !state.isPlaying) {
+        const engineNotes = convertToEngineFormat(state.targetNotes);
+        initializeEngine();
+        if (engineService) {
+          engineService.init(engineNotes);
+        }
+      }
     },
 
     setFeedbackConfig(config: Partial<FeedbackCollectorConfig>) {
@@ -390,6 +456,7 @@ function createHighwayState() {
         engineService.dispose();
         engineService = null;
       }
+      pendingTimelineFitDurationMs = null;
       state = { ...DEFAULT_STATE };
     },
   };

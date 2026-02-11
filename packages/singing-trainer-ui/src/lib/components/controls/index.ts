@@ -1,4 +1,5 @@
 export { default as StartButton } from './StartButton.svelte';
+export { default as MicInputSelector } from './MicInputSelector.svelte';
 export { default as TonicSelector } from './TonicSelector.svelte';
 export { default as DroneControls } from './DroneControls.svelte';
 export { default as ModeToggle } from './ModeToggle.svelte';
@@ -12,3 +13,4 @@ export { default as SpeakingPitchPanel } from './SpeakingPitchPanel.svelte';
 export { default as ThemeSettings } from './ThemeSettings.svelte';
 export { default as DifficultySettings } from './DifficultySettings.svelte';
 export { default as OverdubControls } from './OverdubControls.svelte';
+export { default as OverdubBuilderToolbar } from './OverdubBuilderToolbar.svelte';

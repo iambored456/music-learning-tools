@@ -8,15 +8,14 @@
 import type { ExerciseVoice, ExerciseTimeGrid } from '@mlt/lesson-templates';
 import type { TargetNote } from '../stores/highwayState.svelte.js';
 
-export type VoiceRoleFilter = 'all' | 'guide' | 'student';
-
 /**
  * Converts microbeat column positions to milliseconds.
- * Each macrobeat = one beat at the given tempo.
- * microbeatsPerMacrobeat subdivisions per beat.
+ * In overdub exercises, one macrobeat corresponds to an eighth note.
+ * A quarter-note beat therefore contains 2 macrobeats.
  */
 function microbeatColToMs(col: number, microbeatsPerMacrobeat: number, tempo: number): number {
-  const msPerMacrobeat = 60000 / tempo;
+  const msPerQuarterBeat = 60000 / tempo;
+  const msPerMacrobeat = msPerQuarterBeat / 2;
   const msPerMicrobeat = msPerMacrobeat / microbeatsPerMacrobeat;
   return col * msPerMicrobeat;
 }
@@ -27,19 +26,20 @@ function microbeatColToMs(col: number, microbeatsPerMacrobeat: number, tempo: nu
  * @param voices - Exercise voices with microbeat-column-based notes
  * @param timeGrid - Time grid structure (microbeats, groupings)
  * @param tempo - Tempo in BPM
- * @param roleFilter - Which voice roles to include ('all', 'guide', 'student')
+ * @param activeVoiceId - Which voice the user is practicing (its notes get role='input').
+ *   All other voices get role='reference'. If null/undefined, all voices are 'reference' (listen-only).
  * @returns Array of TargetNotes with per-voice colors, sorted by startTimeMs
  */
 export function convertExerciseVoicesToTargetNotes(
   voices: ExerciseVoice[],
   timeGrid: ExerciseTimeGrid,
   tempo: number,
-  roleFilter: VoiceRoleFilter = 'all',
+  activeVoiceId?: string | null,
 ): TargetNote[] {
   const notes: TargetNote[] = [];
 
   for (const voice of voices) {
-    if (roleFilter !== 'all' && voice.role !== roleFilter) continue;
+    const isActiveVoice = activeVoiceId != null && voice.voiceId === activeVoiceId;
 
     for (const note of voice.notes) {
       const startTimeMs = microbeatColToMs(note.startMicrobeatCol, timeGrid.microbeatsPerMacrobeat, tempo);
@@ -48,11 +48,13 @@ export function convertExerciseVoicesToTargetNotes(
 
       notes.push({
         midi: note.midiPitch,
+        voiceId: voice.voiceId,
         startTimeMs,
         durationMs: endTimeMs - startTimeMs,
-        label: note.pitchName,
+        lyric: note.lyric,
+        label: note.lyric ?? note.pitchName,
         color: voice.color,
-        role: voice.role === 'student' ? 'input' : 'reference',
+        role: isActiveVoice ? 'input' : 'reference',
       });
     }
   }

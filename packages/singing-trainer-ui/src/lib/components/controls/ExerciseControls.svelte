@@ -17,6 +17,7 @@
   import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
   import { chooserState } from '../../stores/chooserState.svelte.js';
   import { overdubExerciseChooserState } from '../../stores/overdubExerciseChooserState.svelte.js';
+  import { overdubExerciseState } from '../../stores/overdubExerciseState.svelte.js';
   import { referenceAudio } from '../../services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
   import { onDestroy } from 'svelte';
@@ -75,6 +76,9 @@
   let lessonGuideVisible = $state(false);
   let lessonGuideDismissed = $state(false);
   let isRetryingPortion = $state(false);
+
+  // Overdub exercise state
+  const overdubIsActive = $derived(overdubExerciseState.state.isActive);
 
   // Reactive state from stores
   const isActive = $derived(exerciseState.state.isActive);
@@ -755,69 +759,75 @@
       console.error('[Exercise] Template not found:', lessonId);
       return;
     }
+
+    if (template.type === 'overdub') {
+      overdubExerciseState.loadExercise(lessonId, settings);
+      return;
+    }
+
     initializeLessonGuide(template);
 
     // Apply settings from chooser
-    numLoops = getSettingNumber(settings, 'loopCount', template.config?.numLoops ?? numLoops);
-    tempo = getSettingNumber(settings, 'tempoBpm', template.config?.tempo ?? tempo);
-    referenceVolume = template.config?.referenceVolume ?? referenceVolume;
+    numLoops = getSettingNumber(settings, 'loopCount', template.config.numLoops ?? numLoops);
+    tempo = getSettingNumber(settings, 'tempoBpm', template.config.tempo ?? tempo);
+    referenceVolume = template.config.referenceVolume ?? referenceVolume;
     speakingPitchUsage = template.speakingPitchUsage;
 
     minAmplitudeDb = getSettingNumber(
       settings,
       'minAmplitudeDb',
-      template.config?.minAmplitudeDb ?? minAmplitudeDb
+      template.config.minAmplitudeDb ?? minAmplitudeDb
     );
-    minVoicedMs = getSettingNumber(settings, 'minVoicedMs', template.config?.minVoicedMs ?? minVoicedMs);
+    minVoicedMs = getSettingNumber(settings, 'minVoicedMs', template.config.minVoicedMs ?? minVoicedMs);
     minCoveragePct = getSettingNumber(
       settings,
       'minCoveragePct',
-      template.config?.minCoveragePct ?? minCoveragePct
+      template.config.minCoveragePct ?? minCoveragePct
     );
     bandLowMinOffsetSemis = getSettingNumber(
       settings,
       'bandLowMinOffsetSemis',
-      template.config?.bandLowMinOffsetSemis ?? bandLowMinOffsetSemis
+      template.config.bandLowMinOffsetSemis ?? bandLowMinOffsetSemis
     );
     bandLowMaxOffsetSemis = getSettingNumber(
       settings,
       'bandLowMaxOffsetSemis',
-      template.config?.bandLowMaxOffsetSemis ?? bandLowMaxOffsetSemis
+      template.config.bandLowMaxOffsetSemis ?? bandLowMaxOffsetSemis
     );
     bandHighMinOffsetSemis = getSettingNumber(
       settings,
       'bandHighMinOffsetSemis',
-      template.config?.bandHighMinOffsetSemis ?? bandHighMinOffsetSemis
+      template.config.bandHighMinOffsetSemis ?? bandHighMinOffsetSemis
     );
     bandHighMaxOffsetSemis = getSettingNumber(
       settings,
       'bandHighMaxOffsetSemis',
-      template.config?.bandHighMaxOffsetSemis ?? bandHighMaxOffsetSemis
+      template.config.bandHighMaxOffsetSemis ?? bandHighMaxOffsetSemis
     );
     holdBandSemitones = getSettingNumber(
       settings,
       'holdBandSemitones',
-      template.config?.holdBandSemitones ?? holdBandSemitones
+      template.config.holdBandSemitones ?? holdBandSemitones
     );
     minSlideSemitones = getSettingNumber(
       settings,
       'minSlideSemitones',
-      template.config?.minSlideSemitones ?? minSlideSemitones
+      template.config.minSlideSemitones ?? minSlideSemitones
     );
     waitForInput = getSettingBoolean(
       settings,
       'waitForInput',
-      template.config?.waitForInput ?? waitForInput
+      template.config.waitForInput ?? waitForInput
     );
     showImmediateFeedback = getSettingBoolean(
       settings,
       'showImmediateFeedback',
-      template.config?.showImmediateFeedback ?? showImmediateFeedback
+      template.config.showImmediateFeedback ?? showImmediateFeedback
     );
     showScore = getSettingBoolean(
       settings,
       'showScore',
-      template.config?.showScore ?? showScore
+      template.config.showScore ?? showScore
     );
 
     // Start the exercise
@@ -834,7 +844,7 @@
 
 <div class="exercise-panel">
   <!-- Choose Lesson / Exercise Buttons -->
-  {#if !isActive}
+  {#if !isActive && !overdubIsActive}
     <div class="chooser-buttons">
       <button class="choose-exercise-btn" onclick={handleOpenChooser}>
         Choose Lesson

@@ -36,7 +36,8 @@
   import { exerciseState } from '../stores/exerciseState.svelte.js';
   import { ultrastarState } from '../stores/ultrastarState.svelte.js';
   import { overdubState } from '../stores/overdubState.svelte.js';
-  import { MODE_SCALE_DEGREES } from '../constants/modes.js';
+  import { overdubExerciseState } from '../stores/overdubExerciseState.svelte.js';
+  import { MODE_SCALE_DEGREES, MODE_DEGREE_LABELS } from '../constants/modes.js';
   import { LyricsDisplay } from './karaoke/index.js';
   import YAxisDragZones from './YAxisDragZones.svelte';
   import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';
@@ -89,15 +90,33 @@
   // Check if ultrastar mode is active (for lyrics display)
   const isUltrastarActive = $derived(ultrastarState.state.isActive && ultrastarState.state.isPlaying);
   const isExerciseActive = $derived(exerciseState.state.isActive || exerciseState.state.isPlaying);
-
-  // Calculate beat interval based on exercise tempo
-  // 1 beat = 2 microbeats, beatIntervalMs = 60000 / tempo
-  const beatIntervalMs = $derived<number>(
-    (60 / exerciseState.state.config.tempo) * 1000 // ms per beat (quarter note)
+  const isOverdubExerciseActive = $derived(
+    overdubExerciseState.state.isActive || overdubExerciseState.state.isPlaying
   );
 
-  // Lead-in time offset for beat line alignment (matches exerciseState)
-  const beatTimeOffsetMs = $derived(exerciseState.state.config.leadInMs ?? 0);
+  const overdubPhrase = $derived(overdubState.state.engine.project.phrase);
+  const overdubBeatIntervalMs = $derived<number>(
+    (60 / Math.max(20, overdubPhrase.tempoBpm)) * 1000 * (4 / Math.max(1, overdubPhrase.timeSignatureDenominator))
+  );
+  const overdubMeasureIntervalMs = $derived<number>(
+    overdubBeatIntervalMs * Math.max(1, overdubPhrase.timeSignatureNumerator)
+  );
+
+  // Base exercise timing (non-overdub lessons)
+  const exerciseBeatIntervalMs = $derived<number>(
+    (60 / Math.max(20, exerciseState.state.config.tempo)) * 1000
+  );
+  const exerciseMeasureIntervalMs = $derived<number>(exerciseBeatIntervalMs * 4);
+
+  const beatIntervalMs = $derived<number>(
+    isOverdubExerciseActive ? overdubBeatIntervalMs : exerciseBeatIntervalMs
+  );
+  const measureIntervalMs = $derived<number>(
+    isOverdubExerciseActive ? overdubMeasureIntervalMs : exerciseMeasureIntervalMs
+  );
+  const beatTimeOffsetMs = $derived<number>(
+    isOverdubExerciseActive ? 0 : (exerciseState.state.config.leadInMs ?? 0)
+  );
 
   const legendHighlight = $derived<LegendHighlightConfig | undefined>((() => {
     if (!appState.state.pitchHighlightEnabled) {
@@ -170,6 +189,35 @@
     if (droneHighlightEntry) entries.push(droneHighlightEntry);
     return entries.length > 0 ? entries : undefined;
   })());
+
+  const modeFocusedPitchClasses = $derived<Set<number> | null>((() => {
+    const drone = appState.state.drone;
+    if (!drone.modeEnabled || !drone.focusLegend) return null;
+    const tonicPc = getTonicPitchClass(appState.state.tonic);
+    const offsets = MODE_SCALE_DEGREES[drone.selectedMode];
+    if (!offsets) return null;
+    return new Set(offsets.map(o => (tonicPc + o) % 12));
+  })());
+
+  const modeFocusColorsEnabled = $derived(
+    appState.state.drone.modeEnabled && appState.state.drone.focusLegend
+  );
+
+  const modeLabelOverrides = $derived<Map<number, string> | undefined>((() => {
+    const drone = appState.state.drone;
+    if (!drone.modeEnabled || !drone.showDegrees) return undefined;
+    const tonicPc = getTonicPitchClass(appState.state.tonic);
+    const offsets = MODE_SCALE_DEGREES[drone.selectedMode];
+    const labels = MODE_DEGREE_LABELS[drone.selectedMode];
+    if (!offsets || !labels) return undefined;
+    const map = new Map<number, string>();
+    for (let i = 0; i < offsets.length; i++) {
+      map.set((tonicPc + offsets[i]) % 12, labels[i]);
+    }
+    return map;
+  })());
+
+  const showHorizontalGridLines = $derived(!appState.state.drone.isPlaying);
 
   // Build MIDI → hex color lookup from fullRowData
   const midiToHex = $derived.by<Map<number, string>>(() => {
@@ -251,20 +299,31 @@
     overdubState.state.isCountInActive || overdubState.state.isRecordingActive
   );
   const forwardCursorModeEnabled = $derived(overdubState.state.forwardCursorModeEnabled);
+  const hasHighwayTargets = $derived((highwayState.state.targetNotes?.length ?? 0) > 0);
   const useLoopTimeline = $derived(
     mode === 'highway'
       && forwardCursorModeEnabled
       && overdubRecordingActive
       && !isUltrastarActive
       && !isExerciseActive
+      && !isOverdubExerciseActive
   );
   const showTimingGridLines = $derived<boolean>(
     mode === 'highway'
       && !useLoopTimeline
       && !ultrastarState.state.isActive
-      && highwayState.state.isPlaying
+      && (highwayState.state.isPlaying || hasHighwayTargets || isOverdubExerciseActive)
   );
-  const gridBeatIntervalMs = $derived<number>(showTimingGridLines ? beatIntervalMs : 0);
+  const gridBeatIntervalMs = $derived.by<number>(() => {
+    if (!showTimingGridLines) return 0;
+    if (appState.state.beatLineMode === 'none') return 0;
+    if (appState.state.beatLineMode === 'bar') return measureIntervalMs;
+    return beatIntervalMs;
+  });
+  const gridMeasureIntervalMs = $derived.by<number | undefined>(() => {
+    if (!showTimingGridLines || appState.state.beatLineMode === 'none') return undefined;
+    return measureIntervalMs;
+  });
   const effectiveGridMode = $derived<PitchGridMode>(useLoopTimeline ? 'singing' : mode);
 
   // Build singing mode config (no userPitch — passed as separate prop)
@@ -630,6 +689,17 @@
   });
 
   $effect(() => {
+    console.debug('[SingingCanvas] Highway render state', {
+      mode,
+      visualizationMode: appState.state.visualizationMode,
+      rawTargetNotes: highwayState.state.targetNotes.length,
+      cachedTargetNotes: cachedTargetNotes.length,
+      isPlaying: highwayState.state.isPlaying,
+      yAxisRange: appState.state.yAxisRange,
+    });
+  });
+
+  $effect(() => {
     void mode;
     void trailCtx;
     // Run trail loop for both stationary and highway modes
@@ -673,7 +743,12 @@
     userPitch={useLoopTimeline ? null : userPitch}
     legendHighlight={legendHighlight}
     rowHighlight={combinedRowHighlight}
+    focusedPitchClasses={modeFocusedPitchClasses}
+    focusColorsEnabled={modeFocusColorsEnabled}
+    legendLabelOverrides={modeLabelOverrides}
+    {showHorizontalGridLines}
     beatIntervalMs={gridBeatIntervalMs}
+    measureIntervalMs={gridMeasureIntervalMs}
     {beatTimeOffsetMs}
   />
   <canvas

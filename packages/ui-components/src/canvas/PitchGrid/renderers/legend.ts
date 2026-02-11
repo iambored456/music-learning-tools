@@ -35,6 +35,8 @@ export interface LegendRenderConfig {
   focusColorsEnabled: boolean;
   /** Optional highlight overlay for a specific pitch */
   highlight?: LegendHighlightConfig;
+  /** Optional label overrides by pitch class (0-11). When set, replaces pitch name with the override string. */
+  labelOverrides?: Map<number, string>;
 }
 
 export interface LegendRenderOptions {
@@ -147,7 +149,19 @@ function processLabel(
   row: PitchRowData,
   config: LegendRenderConfig
 ): string | null {
-  const { showFrequencyLabels, showOctaveLabels, accidentalMode, focusColorsEnabled, focusedPitchClasses } = config;
+  const { showFrequencyLabels, showOctaveLabels, accidentalMode, focusColorsEnabled, focusedPitchClasses, labelOverrides } = config;
+
+  // Label overrides take priority (e.g., scale degree labels)
+  if (labelOverrides && labelOverrides.size > 0) {
+    const pc = getPitchClassFromRow(row);
+    const override = labelOverrides.get(pc);
+    if (override !== undefined) {
+      return override;
+    }
+    // Explicit override map is active but this pitch class is not mapped.
+    // Render as transparent/empty instead of falling back to pitch labels.
+    return null;
+  }
 
   const finalizeLabel = (value: string): string =>
     showOctaveLabels ? value : stripOctaveSuffix(value);

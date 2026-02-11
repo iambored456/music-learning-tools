@@ -9,6 +9,7 @@
     SingingCanvas,
     DroneControls,
     StartButton,
+    MicInputSelector,
     PitchHighlightToggle,
     ThemeSettings,
     LyricLabelControls,
@@ -18,7 +19,7 @@
     UltrastarControls,
     SpeakingPitchPanel,
     DifficultySettings,
-    OverdubControls,
+    OverdubBuilderToolbar,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
   import { ExerciseChooserModal, OverdubExerciseChooserModal } from './lib/components/chooser/index.js';
@@ -67,6 +68,9 @@
 
   // Reactive state for Ultrastar
   const isUltrastarActive = $derived(ultrastarState.state.isActive);
+  const showOverdubBuilderToolbar = $derived(
+    openSection === 5 || overdubExerciseState.state.isActive
+  );
 
   // Register performance complete callbacks
   $effect(() => {
@@ -115,7 +119,7 @@
     }
   }
 
-  // Check for handoff and auto-start pitch detection on mount
+  // Check for handoff on mount
   onMount(async () => {
     // Register lesson templates
     try {
@@ -134,12 +138,13 @@
       }
     }
 
-    // Auto-start pitch detection
+    // Auto-start microphone pitch detection by default on app startup.
     try {
       await startDetection();
       appState.setDetecting(true);
-    } catch (err) {
-      console.error('[App] Failed to auto-start pitch detection:', err);
+    } catch (error) {
+      appState.setDetecting(false);
+      console.warn('[App] Auto-start mic detection failed; user can start manually.', error);
     }
   });
 
@@ -178,31 +183,10 @@
    */
   function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
     overdubExerciseState.loadExercise(exerciseId, settings);
-    overdubExerciseState.start();
   }
 </script>
 
 <div class="app">
-  <header class="header">
-    <h1 class="title">Singing Trainer</h1>
-    <div class="header-controls">
-      {#if hasImportedSnapshot}
-        <div class="handoff-controls">
-          <div class="transposition-control">
-            <button class="transpose-btn" onclick={handleTransposeDown} title="Transpose down">-</button>
-            <span class="transposition-label">
-              {transposition >= 0 ? '+' : ''}{transposition}
-            </span>
-            <button class="transpose-btn" onclick={handleTransposeUp} title="Transpose up">+</button>
-          </div>
-          <button class="bring-back-btn" onclick={handleBringBack}>
-            Bring Back to Student Notation
-          </button>
-        </div>
-      {/if}
-    </div>
-  </header>
-
   {#if handoffError}
     <div class="error-banner">
       {handoffError}
@@ -211,12 +195,30 @@
 
   <main class="main">
     <aside class="sidebar sidebar--left">
+      <div class="sidebar-header">
+        <h1 class="sidebar-title">Singing Trainer</h1>
+        {#if hasImportedSnapshot}
+          <div class="handoff-controls">
+            <div class="transposition-control">
+              <button class="transpose-btn" onclick={handleTransposeDown} title="Transpose down">-</button>
+              <span class="transposition-label">
+                {transposition >= 0 ? '+' : ''}{transposition}
+              </span>
+              <button class="transpose-btn" onclick={handleTransposeUp} title="Transpose up">+</button>
+            </div>
+            <button class="bring-back-btn" onclick={handleBringBack}>
+              Bring Back to Student Notation
+            </button>
+          </div>
+        {/if}
+      </div>
+
       <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
         <summary class="settings-summary">Mic Settings</summary>
         <div class="settings-content">
           <StartButton />
+          <MicInputSelector />
           <PitchReadout />
-          <PitchHighlightToggle />
         </div>
       </details>
 
@@ -224,6 +226,7 @@
         <summary class="settings-summary">Theme Settings</summary>
         <div class="settings-content">
           <ThemeSettings />
+          <PitchHighlightToggle />
         </div>
       </details>
 
@@ -252,7 +255,12 @@
       <details class="settings-details" open={openSection === 5} ontoggle={handleToggle(5)}>
         <summary class="settings-summary">Overdub Builder</summary>
         <div class="settings-content">
-          <OverdubControls />
+          <p class="builder-toolbar-hint">
+            Builder controls are in the bottom toolbar.
+          </p>
+          <p class="builder-toolbar-hint builder-toolbar-hint--subtle">
+            Keep this section open to pin the toolbar while not in an exercise.
+          </p>
         </div>
       </details>
 
@@ -293,7 +301,10 @@
     </aside>
 
     <section class="canvas-area">
-      <SingingCanvas />
+      <div class="canvas-main">
+        <SingingCanvas />
+      </div>
+      <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
     </section>
   </main>
 
@@ -326,27 +337,6 @@
     width: 100%;
   }
 
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--spacing-md) var(--spacing-lg);
-    background-color: var(--color-bg-light);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .title {
-    font-size: var(--font-size-xl);
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .header-controls {
-    display: flex;
-    gap: var(--spacing-md);
-  }
-
   .main {
     display: flex;
     flex: 1;
@@ -363,6 +353,20 @@
     min-width: 260px;
     max-width: 300px;
     overflow-y: auto; /* Allow vertical scrolling */
+  }
+
+  .sidebar-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .sidebar-title {
+    margin: 0;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.1;
   }
 
   .control-group {
@@ -383,15 +387,27 @@
   .canvas-area {
     flex: 1;
     display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
     padding: var(--spacing-lg);
     overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .canvas-main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
   }
 
   /* Handoff controls */
   .handoff-controls {
     display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
   }
 
   .transposition-control {
@@ -442,6 +458,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.15s ease;
+    width: 100%;
   }
 
   .bring-back-btn:hover {
@@ -523,27 +540,19 @@
     width: 100%;
   }
 
+  .builder-toolbar-hint {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    line-height: 1.35;
+  }
+
+  .builder-toolbar-hint--subtle {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+  }
+
   @media (max-width: 900px) {
-    .header {
-      flex-wrap: wrap;
-      gap: var(--spacing-sm);
-      padding: var(--spacing-sm) var(--spacing-md);
-    }
-
-    .title {
-      font-size: var(--font-size-lg);
-    }
-
-    .header-controls {
-      width: 100%;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-    }
-
-    .handoff-controls {
-      flex-wrap: wrap;
-    }
-
     .main {
       flex-direction: column;
     }

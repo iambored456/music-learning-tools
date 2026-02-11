@@ -24,6 +24,9 @@
   let volumeIconBtn: HTMLElement | null = null;
   let volumePopup: HTMLElement | null = null;
   let verticalVolumeSlider: HTMLInputElement | null = null;
+  let themeToggle: HTMLElement | null = null;
+  let themeLightInput: HTMLInputElement | null = null;
+  let themeDarkInput: HTMLInputElement | null = null;
 
   // Anacrusis toggle
   let anacrusisOnBtn: HTMLElement | null = null;
@@ -58,6 +61,8 @@
   let isRightLegendVisible = true;
 
   const VOLUME_STORAGE_KEY = 'app.volumeSliderValue';
+  const THEME_STORAGE_KEY = 'app.themeMode';
+  type ThemeMode = 'light' | 'dark';
 
   // Volume helper functions
   function clampVolume(value: number): number {
@@ -87,6 +92,33 @@
     }
   }
 
+  function getStoredThemeMode(): ThemeMode {
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'dark') {return 'dark';}
+      if (saved === 'light') {return 'light';}
+    } catch {
+      // Ignore localStorage access issues
+    }
+    return 'light';
+  }
+
+  function storeThemeMode(mode: ThemeMode): void {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch {
+      // Ignore localStorage write issues
+    }
+  }
+
+  function applyThemeMode(mode: ThemeMode): void {
+    const isDark = mode === 'dark';
+    document.body.classList.toggle('dark-mode', isDark);
+    if (themeLightInput) {themeLightInput.checked = !isDark;}
+    if (themeDarkInput) {themeDarkInput.checked = isDark;}
+    storeThemeMode(mode);
+  }
+
   // Event handlers
   function toggleSidebar() {
     document.body.classList.toggle('sidebar-open');
@@ -104,6 +136,28 @@
     const dB = (value === 0) ? -Infinity : (value / 100) * 37.5 - 50;
     store.emit('volumeChanged', dB);
     storeVolume(value);
+  }
+
+  function handleThemeLightChange() {
+    if (themeLightInput?.checked) {
+      applyThemeMode('light');
+    }
+  }
+
+  function handleThemeDarkChange() {
+    if (themeDarkInput?.checked) {
+      applyThemeMode('dark');
+    }
+  }
+
+  function handleThemeToggleClick(event: Event) {
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === 'LABEL' || target.tagName === 'INPUT')) {
+      return;
+    }
+
+    const nextMode: ThemeMode = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+    applyThemeMode(nextMode);
   }
 
   function handleDocumentClickForVolume(e: Event) {
@@ -307,6 +361,9 @@
     volumeIconBtn = document.getElementById('volume-icon-button');
     volumePopup = document.getElementById('volume-popup');
     verticalVolumeSlider = document.getElementById('vertical-volume-slider') as HTMLInputElement | null;
+    themeToggle = document.getElementById('theme-toggle');
+    themeLightInput = document.getElementById('theme-light') as HTMLInputElement | null;
+    themeDarkInput = document.getElementById('theme-dark') as HTMLInputElement | null;
 
     // Anacrusis toggle
     anacrusisOnBtn = document.getElementById('anacrusis-on-btn');
@@ -349,6 +406,11 @@
       document.addEventListener('click', handleDocumentClickForVolume);
       verticalVolumeSlider.dispatchEvent(new Event('input'));
     }
+
+    applyThemeMode(getStoredThemeMode());
+    themeLightInput?.addEventListener('change', handleThemeLightChange);
+    themeDarkInput?.addEventListener('change', handleThemeDarkChange);
+    themeToggle?.addEventListener('click', handleThemeToggleClick);
 
     // Anacrusis event listeners
     if (anacrusisOnBtn && anacrusisOffBtn) {
@@ -415,6 +477,9 @@
     volumeIconBtn?.removeEventListener('click', handleVolumeIconClick);
     verticalVolumeSlider?.removeEventListener('input', handleVolumeChange);
     document.removeEventListener('click', handleDocumentClickForVolume);
+    themeLightInput?.removeEventListener('change', handleThemeLightChange);
+    themeDarkInput?.removeEventListener('change', handleThemeDarkChange);
+    themeToggle?.removeEventListener('click', handleThemeToggleClick);
 
     anacrusisOnBtn?.removeEventListener('click', handleAnacrusisOn);
     anacrusisOffBtn?.removeEventListener('click', handleAnacrusisOff);

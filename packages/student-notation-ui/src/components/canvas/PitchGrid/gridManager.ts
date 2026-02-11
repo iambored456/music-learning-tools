@@ -3,6 +3,7 @@ import store from '@state/initStore.ts';
 import PitchGridController from './pitchGrid.ts';
 import DrumGridController from '../drumGrid/drumGrid.js';
 import { initPitchGridInteraction } from './interactors/pitchGridInteractor.js';
+import { initLegendPitchRangeDragInteraction } from './interactors/legendPitchRangeDragInteractor.js';
 import { initDrumGridInteraction } from '../drumGrid/drumGridInteractor.js';
 import logger from '@utils/logger.ts';
 import { logStampLayout } from '@utils/stampLayoutDebug.ts';
@@ -16,6 +17,7 @@ const GridManager = {
   init() {
     // Initialize the event handlers for both grids.
     initPitchGridInteraction();
+    initLegendPitchRangeDragInteraction();
     initDrumGridInteraction();
 
     // Listen for canvas resize events from layoutService

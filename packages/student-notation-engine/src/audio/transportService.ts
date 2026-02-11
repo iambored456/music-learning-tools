@@ -59,6 +59,57 @@ function binarySearchTimeMap(timeMap: number[], time: number): number {
   return -1;
 }
 
+type TimedStampEvent = StampScheduleEvent & {
+  type?: 'oval' | 'diamond' | 'triplet-eighth' | 'triplet-quarter';
+  slot?: number;
+};
+
+function getQuarterDurationSeconds(tempoBpm: number): number {
+  const safeTempo = Number.isFinite(tempoBpm) && tempoBpm > 0 ? tempoBpm : 120;
+  return 60 / safeTempo;
+}
+
+function resolveEventTiming(
+  event: TimedStampEvent,
+  tempoBpm: number
+): { offsetSeconds: number; durationSeconds: number } {
+  const quarter = getQuarterDurationSeconds(tempoBpm);
+
+  if (typeof event.slot === 'number') {
+    if (event.type === 'oval') {
+      return {
+        offsetSeconds: event.slot * (quarter / 4),
+        durationSeconds: quarter / 2
+      };
+    }
+    if (event.type === 'diamond') {
+      return {
+        offsetSeconds: event.slot * (quarter / 4),
+        durationSeconds: quarter / 4
+      };
+    }
+    if (event.type === 'triplet-eighth') {
+      const step = quarter / 3;
+      return {
+        offsetSeconds: event.slot * step,
+        durationSeconds: step
+      };
+    }
+    if (event.type === 'triplet-quarter') {
+      const step = (2 * quarter) / 3;
+      return {
+        offsetSeconds: event.slot * step,
+        durationSeconds: step
+      };
+    }
+  }
+
+  return {
+    offsetSeconds: Tone.Time(event.offset).toSeconds(),
+    durationSeconds: Tone.Time(event.duration).toSeconds()
+  };
+}
+
 /**
  * Create a new transport service instance
  */
@@ -312,10 +363,12 @@ export function createTransportService(config: TransportConfig): TransportServic
     color: string,
     state: TransportState
   ): void {
-    const offsetTime = Tone.Time(event.offset).toSeconds();
-    const eventDuration = Tone.Time(event.duration).toSeconds();
-    const triggerTime = cellStartTime + offsetTime;
-    const releaseTime = triggerTime + eventDuration;
+    const { offsetSeconds, durationSeconds } = resolveEventTiming(
+      event as TimedStampEvent,
+      state.tempo
+    );
+    const triggerTime = cellStartTime + offsetSeconds;
+    const releaseTime = triggerTime + durationSeconds;
 
     const shapeRow = baseRow + event.rowOffset;
     const shapePitch = getPitchFromRow(shapeRow, state);

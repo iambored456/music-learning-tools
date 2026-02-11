@@ -7,6 +7,7 @@
 export type VisualizationMode = 'stationary' | 'highway';
 export type LyricLabelMode = 'auto' | 'fixed';
 export type NoteColorMode = 'green' | 'pitchColor';
+export type BeatLineMode = 'none' | 'beat' | 'bar';
 export type TonicNote =
   | 'C'
   | 'C#'
@@ -32,6 +33,8 @@ export interface DroneState {
   volume: number;
   modeEnabled: boolean;
   selectedMode: string;
+  focusLegend: boolean;
+  showDegrees: boolean;
 }
 
 export interface YAxisRange {
@@ -61,6 +64,7 @@ export interface AppState {
   lyricLabelScale: number;
   lyricLabelFixedPx: number;
   noteColorMode: NoteColorMode;
+  beatLineMode: BeatLineMode;
 }
 
 const DEFAULT_STATE: AppState = {
@@ -73,11 +77,12 @@ const DEFAULT_STATE: AppState = {
   showAccidentals: true,
   pitchHighlightEnabled: true,
   yAxisRange: { minMidi: 40, maxMidi: 72 }, // E2 to C5
-  drone: { isPlaying: false, octave: 3, volume: -12, modeEnabled: false, selectedMode: '1' },
+  drone: { isPlaying: false, octave: 3, volume: -12, modeEnabled: false, selectedMode: '1', focusLegend: false, showDegrees: false },
   lyricLabelMode: 'auto',
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
   noteColorMode: 'green',
+  beatLineMode: 'beat',
 };
 
 function createAppState() {
@@ -158,6 +163,10 @@ function createAppState() {
       state.noteColorMode = mode;
     },
 
+    setBeatLineMode(mode: BeatLineMode) {
+      state.beatLineMode = mode;
+    },
+
     setYAxisRange(range: YAxisRange) {
       state.yAxisRange = range;
     },
@@ -204,6 +213,14 @@ function createAppState() {
 
     setDroneSelectedMode(modeKey: string) {
       state.drone = { ...state.drone, selectedMode: modeKey };
+    },
+
+    setDroneFocusLegend(enabled: boolean) {
+      state.drone = { ...state.drone, focusLegend: enabled };
+    },
+
+    setDroneShowDegrees(enabled: boolean) {
+      state.drone = { ...state.drone, showDegrees: enabled };
     },
 
     reset() {

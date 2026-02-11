@@ -362,6 +362,8 @@ export interface PitchGridBaseProps {
   showOctaveLabels?: boolean;
   /** Optional highlight overlay for legend labels */
   legendHighlight?: LegendHighlightConfig;
+  /** Whether to render horizontal pitch grid lines */
+  showHorizontalGridLines?: boolean;
 }
 
 /**
@@ -433,6 +435,8 @@ export interface PitchGridHighwayProps extends PitchGridBaseProps {
 
   /** Beat interval for vertical grid lines (ms) */
   beatIntervalMs?: number;
+  /** Measure interval for vertical grid lines (ms) */
+  measureIntervalMs?: number;
 }
 
 /**

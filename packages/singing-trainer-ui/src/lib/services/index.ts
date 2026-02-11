@@ -54,7 +54,6 @@ export {
 export {
   convertExerciseVoicesToTargetNotes,
   calculateExerciseDurationMs,
-  type VoiceRoleFilter,
 } from './exerciseVoiceConverter.js';
 
 export { guideVoicePlayer } from './guideVoicePlayer.js';

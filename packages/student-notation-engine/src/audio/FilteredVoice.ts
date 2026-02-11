@@ -1,31 +1,66 @@
 /**
- * Filtered Voice
+ * Filtered Voice — Native Web Audio Implementation
  *
- * A custom Tone.js synth voice with:
- * - Multi-mode filter (HP/BP/LP with blend)
- * - Preset gain control
- * - tremoloGain in signal path (modulated externally by shared LFOs)
+ * Extends Tone.Monophonic directly (skipping Tone.Synth) to eliminate
+ * 12 unnecessary nodes from the Tone.js OmniOscillator and AmplitudeEnvelope
+ * abstraction layers. Result: 13 native nodes per voice instead of 25.
  *
  * Performance optimizations:
+ * - [PERF:NATIVE-OSC] Native OscillatorNode + PeriodicWave replaces OmniOscillator
+ *   stack (saves 11 nodes: 4 wasted Signals, 3 pass-throughs, 2 freq Signals,
+ *   1 fade GainNode, 1 detune Signal pair).
+ * - [PERF:NATIVE-ADSR] Native GainNode with AudioParam automation replaces
+ *   AmplitudeEnvelope (saves 2 Signal nodes).
  * - [PERF:SHARED-LFO] Vibrato/tremolo LFOs are shared per color in synthEngine,
- *   not created per voice. Saves ~42 native Web Audio nodes per voice.
+ *   not created per voice.
  * - [PERF:LAZY-FILTER] Filter wet chain is disconnected when filter is disabled,
  *   orphaning filter nodes from the audio graph.
- * - [PERF:NATIVE-NODES] Filters use native BiquadFilterNode (1 node each) instead of
- *   Tone.Filter (11 nodes each). Blend uses native GainNode (4 total) instead of
- *   3 × Tone.CrossFade (8 nodes each). Saves ~50 native nodes per voice.
- * - [PERF:DOUBLE-PATH-FIX] Oscillator → envelope default path from Tone.Synth is
- *   disconnected; signal flows exclusively through the custom chain.
+ * - [PERF:NATIVE-NODES] Filters use native BiquadFilterNode + GainNode blending.
+ *
+ * Node inventory (13 total):
+ *   #1  OscillatorNode     - Sound source (fire-and-forget per note)
+ *   #2  GainNode           - Detune bus (persistent vibrato LFO target)
+ *   #3  GainNode           - ADSR envelope gate (native automation)
+ *   #4  GainNode           - Instrument._volume (from Monophonic base)
+ *   #5  GainNode           - Preset gain (timbre volume)
+ *   #6  GainNode           - Tremolo target
+ *   #7  GainNode           - Dry/bypass
+ *   #8  BiquadFilterNode   - Highpass
+ *   #9  GainNode           - HP blend weight
+ *   #10 BiquadFilterNode   - Bandpass LP stage
+ *   #11 GainNode           - BP blend weight
+ *   #12 BiquadFilterNode   - Lowpass
+ *   #13 GainNode           - LP blend weight
+ *
+ * Signal chain:
+ *   oscillator → _presetGain → _dryGain ─────────────────────→ _tremoloGain → _envelopeGain → output
+ *                             → _hpFilter → _hpGain ──────────→ _tremoloGain
+ *                             → _hpFilter → _bpFilter → _bpGain → _tremoloGain
+ *                             → _lpFilter → _lpGain ──────────→ _tremoloGain
+ *
+ * External modulation targets (connected by synthEngine shared LFOs):
+ *   - detuneInput (GainNode)      ← shared vibrato LFO
+ *   - tremoloInput (AudioParam)   ← shared tremolo LFO
  *
  * Framework-agnostic - no DOM dependencies.
  */
 import * as Tone from 'tone';
+// Monophonic is not in Tone.js public API — import from internal module
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore internal Tone.js import
+import { Monophonic } from 'tone/build/esm/instrument/Monophonic';
 
-export interface FilteredVoiceOptions extends Tone.SynthOptions {
+export interface FilteredVoiceOptions {
+  oscillator?: { type?: string; partials?: number[] };
+  envelope?: { attack?: number; decay?: number; sustain?: number; release?: number };
   filter?: FilterParams;
   vibrato?: VibratoParams;
   tremelo?: TremoloParams;  // Note: 'tremelo' spelling for consistency with existing code
   gain?: number;
+  context?: any;
+  onsilence?: (voice: any) => void;
+  volume?: number;
+  [key: string]: any;
 }
 
 export interface FilterParams {
@@ -64,53 +99,114 @@ export function setVoiceLogger(logger: VoiceLogger | null): void {
   voiceLogger = logger;
 }
 
-/**
- * Signal chain:
- *   oscillator → presetGain → _dryGain ─────────────────────→ tremoloGain → envelope → output
- *                            → _hpFilter → _hpGain ──────────→ tremoloGain
- *                            → _hpFilter → _bpFilter → _bpGain → tremoloGain
- *                            → _lpFilter → _lpGain ──────────→ tremoloGain
- *
- * When filter is disabled, _dryGain=1 and filter entrance is disconnected.
- * When filter is enabled, _dryGain=0 and blend gains control HP/BP/LP mix.
- *
- * External modulation targets (connected by synthEngine shared LFOs):
- *   - oscillator.detune  ← shared vibrato LFO (cents-based, frequency-proportional)
- *   - tremoloGain.gain   ← shared tremolo LFO (amplitude modulation)
- */
-export class FilteredVoice extends Tone.Synth {
-  // Core signal path (Tone.js wrappers — needed for shared LFO connection API)
-  presetGain!: Tone.Gain;
-  tremoloGain!: Tone.Gain;
+// PolySynth requires `voice instanceof Monophonic` and a static getDefaults()
+const MonophonicBase = Monophonic as any;
 
-  // [PERF:NATIVE-NODES] Native filter nodes (1 node each vs 11 for Tone.Filter)
+export class FilteredVoice extends MonophonicBase {
+  static getDefaults() {
+    return Object.assign(MonophonicBase.getDefaults(), {
+      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 },
+      oscillator: { type: 'custom', partials: [1] },
+      filter: undefined,
+      gain: 1,
+    });
+  }
+
+  // --- Native oscillator (fire-and-forget per note) ---
+  private _oscillator: OscillatorNode | null = null;
+  private _periodicWave!: PeriodicWave;
+  private _currentPartials!: number[];
+
+  // --- ADSR state ---
+  private _adsrParams!: { attack: number; decay: number; sustain: number; release: number };
+  private _attackStartTime = -1;
+  private _releaseStartTime = -1;
+  private _lastVelocity = 1;
+
+  // --- Native audio nodes (persistent across notes) ---
+  private _detuneBus!: GainNode;       // #2: vibrato LFO target
+  private _envelopeGain!: GainNode;    // #3: ADSR gate
+  // #4: Instrument._volume (created by base class)
+  private _presetGain!: GainNode;      // #5: timbre volume
+  private _tremoloGain!: GainNode;     // #6: tremolo target
+
+  // --- Filter nodes ---
   private _hpFilter!: BiquadFilterNode;
   private _bpFilter!: BiquadFilterNode;  // LP filter for HP→LP bandpass combo
   private _lpFilter!: BiquadFilterNode;
-
-  // [PERF:NATIVE-NODES] Native blend/dry gains (4 nodes vs 24 for 3 × Tone.CrossFade)
   private _dryGain!: GainNode;
   private _hpGain!: GainNode;
   private _bpGain!: GainNode;
   private _lpGain!: GainNode;
 
-  // [PERF:LAZY-FILTER] Track whether the filter wet chain is connected to the audio graph
+  // [PERF:LAZY-FILTER] Track whether the filter wet chain is connected
   private _filterChainConnected = false;
+
+  // --- Public LFO connection targets ---
+  detuneInput!: GainNode;          // vibrato LFO connects here
+  tremoloInput!: AudioParam;       // tremolo LFO connects here
+
+  // Frequency proxy — satisfies Monophonic.setNote() with 0 native nodes
+  frequency: any;
 
   constructor(options: FilteredVoiceOptions) {
     super(options);
 
-    // [PERF:DOUBLE-PATH-FIX] Tone.Synth wires oscillator → envelope → output.
-    // We route through our own chain, so disconnect the default path.
-    this.oscillator.disconnect(this.envelope);
-
     const ctx = this.context.rawContext as AudioContext;
+    const self = this;
 
-    // --- Core signal path ---
-    this.presetGain = new Tone.Gain(options.gain || 1.0);
-    this.tremoloGain = new Tone.Gain(1);
+    // --- Cache ADSR params ---
+    this._adsrParams = {
+      attack: options.envelope?.attack ?? 0.005,
+      decay: options.envelope?.decay ?? 0.1,
+      sustain: options.envelope?.sustain ?? 0.3,
+      release: options.envelope?.release ?? 1,
+    };
 
-    // --- Native filter nodes ---
+    // --- Create PeriodicWave from partials ---
+    this._currentPartials = options.oscillator?.partials ?? [1];
+    this._periodicWave = this._createPeriodicWave(ctx, this._currentPartials);
+
+    // --- Frequency proxy (0 native nodes) ---
+    // Monophonic.setNote() calls this.frequency.setValueAtTime() or .exponentialRampTo().
+    // We cache the value and forward to the native oscillator when it exists.
+    this.frequency = {
+      value: 440,
+      setValueAtTime(freq: any, time: number) {
+        const hz = self.toFrequency(freq); // FrequencyClass/note name → Hz
+        self.frequency.value = hz;
+        if (self._oscillator) {
+          self._oscillator.frequency.setValueAtTime(hz, time);
+        }
+      },
+      exponentialRampTo(freq: any, rampTime: number, startTime: number) {
+        const hz = self.toFrequency(freq); // FrequencyClass/note name → Hz
+        self.frequency.value = hz;
+        if (self._oscillator) {
+          self._oscillator.frequency.exponentialRampToValueAtTime(hz, startTime + rampTime);
+        }
+      },
+    };
+
+    // === Native Nodes ===
+
+    // #2: Detune bus — persistent vibrato LFO target
+    this._detuneBus = ctx.createGain();
+    this._detuneBus.gain.value = 1;
+
+    // #3: ADSR envelope gate
+    this._envelopeGain = ctx.createGain();
+    this._envelopeGain.gain.value = 0;
+
+    // #5: Preset gain (timbre volume)
+    this._presetGain = ctx.createGain();
+    this._presetGain.gain.value = options.gain ?? 1.0;
+
+    // #6: Tremolo target
+    this._tremoloGain = ctx.createGain();
+    this._tremoloGain.gain.value = 1;
+
+    // --- Filter nodes (#7-#13) ---
     this._hpFilter = ctx.createBiquadFilter();
     this._hpFilter.type = 'highpass';
     this._bpFilter = ctx.createBiquadFilter();
@@ -118,7 +214,6 @@ export class FilteredVoice extends Tone.Synth {
     this._lpFilter = ctx.createBiquadFilter();
     this._lpFilter.type = 'lowpass';
 
-    // --- Native blend/dry gains (dry=1 = filter off, filter gains start at 0) ---
     this._dryGain = ctx.createGain();
     this._dryGain.gain.value = 1;
     this._hpGain = ctx.createGain();
@@ -130,57 +225,234 @@ export class FilteredVoice extends Tone.Synth {
 
     // === Audio Routing ===
 
-    // 1. Oscillator → Preset Gain
-    this.oscillator.connect(this.presetGain);
+    // Dry path: _presetGain → _dryGain → _tremoloGain
+    this._presetGain.connect(this._dryGain);
+    this._dryGain.connect(this._tremoloGain);
 
-    // 2. Dry path (always connected): presetGain → _dryGain → tremoloGain
-    this.presetGain.output.connect(this._dryGain);
-    this._dryGain.connect(this.tremoloGain.input);
-
-    // 3. Filter internal wiring (always interconnected; entrance is toggled)
-    //    HP path: _hpFilter → _hpGain → tremoloGain
+    // Filter internal wiring (always connected; entrance toggled by lazy-filter)
     this._hpFilter.connect(this._hpGain);
-    this._hpGain.connect(this.tremoloGain.input);
-    //    BP path: _hpFilter → _bpFilter → _bpGain → tremoloGain
+    this._hpGain.connect(this._tremoloGain);
     this._hpFilter.connect(this._bpFilter);
     this._bpFilter.connect(this._bpGain);
-    this._bpGain.connect(this.tremoloGain.input);
-    //    LP path: _lpFilter → _lpGain → tremoloGain
+    this._bpGain.connect(this._tremoloGain);
     this._lpFilter.connect(this._lpGain);
-    this._lpGain.connect(this.tremoloGain.input);
+    this._lpGain.connect(this._tremoloGain);
 
-    // 4. [PERF:LAZY-FILTER] Conditionally connect filter entrance
+    // Output chain: _tremoloGain → _envelopeGain → Instrument._volume
+    this._tremoloGain.connect(this._envelopeGain);
+
+    // Connect to Instrument's output (Volume.input is Tone.Gain, Tone.Gain._gainNode is native)
+    const instrumentVolume = (this as any)._volume;
+    const volumeNativeGain = instrumentVolume.input._gainNode as GainNode;
+    this._envelopeGain.connect(volumeNativeGain);
+
+    // [PERF:LAZY-FILTER] Conditionally connect filter entrance
     if (options.filter?.enabled) {
       this._connectFilterWetChain();
     }
 
-    // 5. Output: tremoloGain → envelope (envelope → output is from Synth base class)
-    this.tremoloGain.connect(this.envelope);
-
-    // 6. Apply initial filter settings
+    // Apply initial filter settings
     if (options.filter) {
       this._setFilter(options.filter);
     }
 
-    // [PERF:SHARED-LFO] Vibrato and tremolo are handled by shared per-color LFOs
-    // in synthEngine.ts, not per-voice. _setVibrato/_setTremolo are kept as no-ops
-    // for backwards compatibility with callers that haven't been updated yet.
+    // Expose LFO connection targets
+    this.detuneInput = this._detuneBus;
+    this.tremoloInput = this._tremoloGain.gain;
   }
 
-  _setPresetGain(value: number): void {
-    if (this.presetGain) {
-      this.presetGain.gain.value = value;
+  // --- PeriodicWave creation ---
+
+  private _createPeriodicWave(ctx: AudioContext, partials: number[]): PeriodicWave {
+    const real = new Float32Array(partials.length + 1); // all zeros (cosine = 0 at phase 0)
+    const imag = new Float32Array(partials.length + 1);
+    for (let i = 0; i < partials.length; i++) {
+      imag[i + 1] = partials[i]; // sine components
+    }
+    return ctx.createPeriodicWave(real, imag);
+  }
+
+  private _updatePeriodicWave(partials: number[]): void {
+    this._currentPartials = partials;
+    const ctx = this.context.rawContext as AudioContext;
+    this._periodicWave = this._createPeriodicWave(ctx, partials);
+    if (this._oscillator) {
+      this._oscillator.setPeriodicWave(this._periodicWave);
     }
   }
 
-  // [PERF:SHARED-LFO] No-op — vibrato is now handled by shared per-color LFOs.
-  _setVibrato(_params: VibratoParams, _time = Tone.now()): void {
-    // No-op: vibrato modulation is applied externally via shared LFO → oscillator.detune
+  // --- Monophonic required methods ---
+
+  /**
+   * Start the attack portion of the envelope.
+   * Called by Monophonic.triggerAttack() BEFORE setNote().
+   */
+  _triggerEnvelopeAttack(time: number, velocity: number): void {
+    const ctx = this.context.rawContext as AudioContext;
+
+    // Clean up previous oscillator (voice may be recycled by PolySynth)
+    if (this._oscillator) {
+      try {
+        this._oscillator.onended = null;
+        this._oscillator.stop(time);
+        this._oscillator.disconnect();
+      } catch {
+        // Oscillator may already be stopped
+      }
+      this._oscillator = null;
+    }
+
+    // Create new OscillatorNode with cached PeriodicWave
+    this._oscillator = ctx.createOscillator();
+    this._oscillator.setPeriodicWave(this._periodicWave);
+
+    // Set frequency to cached value (setNote() will override at the same time)
+    this._oscillator.frequency.setValueAtTime(this.frequency.value, time);
+
+    // Wire: oscillator → _presetGain
+    this._oscillator.connect(this._presetGain);
+
+    // Re-link detune bus to new oscillator's detune param
+    try { this._detuneBus.disconnect(); } catch { /* not yet connected */ }
+    this._detuneBus.connect(this._oscillator.detune);
+
+    // Start oscillator
+    this._oscillator.start(time);
+
+    // Track timing for getLevelAtTime()
+    this._attackStartTime = time;
+    this._releaseStartTime = -1;
+    this._lastVelocity = velocity;
+
+    // Schedule ADSR attack + decay on _envelopeGain.gain
+    const { attack, decay, sustain } = this._adsrParams;
+    const gainParam = this._envelopeGain.gain;
+
+    gainParam.cancelScheduledValues(time);
+    gainParam.setValueAtTime(0, time);
+
+    // Attack: linear ramp to peak (velocity)
+    gainParam.linearRampToValueAtTime(velocity, time + attack);
+
+    // Decay: exponential ramp to sustain level (value must be > 0)
+    const sustainLevel = Math.max(sustain * velocity, 0.0001);
+    if (decay > 0) {
+      gainParam.exponentialRampToValueAtTime(sustainLevel, time + attack + decay);
+    } else {
+      gainParam.setValueAtTime(sustainLevel, time + attack);
+    }
+
+    // Zero-sustain: stop oscillator after attack+decay
+    if (sustain === 0) {
+      const stopTime = time + attack + decay + 0.01;
+      this._oscillator.stop(stopTime);
+      this._oscillator.onended = () => {
+        this._attackStartTime = -1;
+        this.onsilence(this);
+      };
+    }
   }
 
-  // [PERF:SHARED-LFO] No-op — tremolo is now handled by shared per-color LFOs.
+  /**
+   * Start the release portion of the envelope.
+   * Called by Monophonic.triggerRelease().
+   */
+  _triggerEnvelopeRelease(time: number): void {
+    if (!this._oscillator) return;
+
+    const { release } = this._adsrParams;
+    const gainParam = this._envelopeGain.gain;
+
+    this._releaseStartTime = time;
+
+    // Freeze current gain value and cancel future automation
+    gainParam.cancelAndHoldAtTime(time);
+
+    // Release: linear ramp to 0 (avoids exponential never-reaches-zero issue)
+    gainParam.linearRampToValueAtTime(0, time + release);
+
+    // Stop oscillator shortly after release completes
+    try {
+      this._oscillator.stop(time + release + 0.02);
+    } catch {
+      // Already scheduled to stop (zero-sustain case)
+    }
+
+    // When oscillator stops, tell PolySynth this voice is available
+    this._oscillator.onended = () => {
+      this._attackStartTime = -1;
+      this.onsilence(this);
+    };
+  }
+
+  /**
+   * Approximate envelope level at the given time.
+   * Used by Monophonic for portamento decisions (> 0.05 means "voice is active").
+   */
+  getLevelAtTime(time: number): number {
+    time = this.toSeconds(time);
+    if (this._attackStartTime < 0) return 0;
+
+    const { attack, decay, sustain, release } = this._adsrParams;
+    const velocity = this._lastVelocity;
+
+    // Release phase
+    if (this._releaseStartTime >= 0) {
+      const releaseElapsed = time - this._releaseStartTime;
+      if (releaseElapsed >= release) return 0;
+      if (releaseElapsed >= 0) {
+        const sustainLevel = sustain * velocity;
+        return sustainLevel * (1 - releaseElapsed / release);
+      }
+    }
+
+    // Attack/decay/sustain phases
+    const elapsed = time - this._attackStartTime;
+    if (elapsed < 0) return 0;
+    if (elapsed < attack) {
+      return (elapsed / attack) * velocity;
+    }
+    if (elapsed < attack + decay) {
+      const decayProgress = (elapsed - attack) / decay;
+      return velocity - (velocity - sustain * velocity) * decayProgress;
+    }
+    return sustain * velocity;
+  }
+
+  // --- Option handling for PolySynth.set() ---
+
+  set(options: Record<string, any>): this {
+    if (options.oscillator?.partials) {
+      this._updatePeriodicWave(options.oscillator.partials);
+    }
+    if (options.envelope) {
+      Object.assign(this._adsrParams, options.envelope);
+    }
+    if (options.gain !== undefined) {
+      this._setPresetGain(options.gain);
+    }
+    if (options.filter) {
+      this._setFilter(options.filter);
+    }
+    return this;
+  }
+
+  // --- Public methods (same interface as previous FilteredVoice) ---
+
+  _setPresetGain(value: number): void {
+    if (this._presetGain) {
+      this._presetGain.gain.value = value;
+    }
+  }
+
+  // [PERF:SHARED-LFO] No-op — vibrato handled by shared per-color LFOs.
+  _setVibrato(_params: VibratoParams, _time = Tone.now()): void {
+    // No-op: vibrato modulation applied externally via shared LFO → detuneInput
+  }
+
+  // [PERF:SHARED-LFO] No-op — tremolo handled by shared per-color LFOs.
   _setTremolo(_params: TremoloParams, _time = Tone.now()): void {
-    // No-op: tremolo modulation is applied externally via shared LFO → tremoloGain.gain
+    // No-op: tremolo modulation applied externally via shared LFO → tremoloInput
   }
 
   /**
@@ -188,9 +460,9 @@ export class FilteredVoice extends Tone.Synth {
    * Called by synthEngine when shared tremolo LFO is disconnected.
    */
   _resetTremoloGain(time = Tone.now()): void {
-    if (this.tremoloGain) {
-      this.tremoloGain.gain.cancelScheduledValues(time);
-      this.tremoloGain.gain.value = 1.0;
+    if (this._tremoloGain) {
+      this._tremoloGain.gain.cancelScheduledValues(time);
+      this._tremoloGain.gain.value = 1.0;
     }
   }
 
@@ -232,24 +504,50 @@ export class FilteredVoice extends Tone.Synth {
     }
   }
 
-  // [PERF:LAZY-FILTER] Connect filter entrance from presetGain.
-  // Internal filter wiring stays permanently connected; only the entrance
-  // (presetGain → filters) is toggled, which orphans/re-adopts the subgraph.
+  // [PERF:LAZY-FILTER] Connect filter entrance from _presetGain.
   private _connectFilterWetChain(): void {
     if (this._filterChainConnected) return;
-    this.presetGain.output.connect(this._hpFilter);
-    this.presetGain.output.connect(this._lpFilter);
+    this._presetGain.connect(this._hpFilter);
+    this._presetGain.connect(this._lpFilter);
     this._filterChainConnected = true;
     voiceLogger?.debug('FilteredVoice', 'Filter wet chain connected', null, 'audio');
   }
 
-  // [PERF:LAZY-FILTER] Disconnect filter entrance. The orphaned filter nodes
-  // and downstream blend gains have no input and won't be processed.
+  // [PERF:LAZY-FILTER] Disconnect filter entrance.
   private _disconnectFilterWetChain(): void {
     if (!this._filterChainConnected) return;
-    this.presetGain.output.disconnect(this._hpFilter);
-    this.presetGain.output.disconnect(this._lpFilter);
+    this._presetGain.disconnect(this._hpFilter);
+    this._presetGain.disconnect(this._lpFilter);
     this._filterChainConnected = false;
     voiceLogger?.debug('FilteredVoice', 'Filter wet chain disconnected', null, 'audio');
+  }
+
+  /**
+   * Clean up all native nodes.
+   */
+  dispose(): this {
+    if (this._oscillator) {
+      try {
+        this._oscillator.onended = null;
+        this._oscillator.stop();
+        this._oscillator.disconnect();
+      } catch { /* already stopped */ }
+      this._oscillator = null;
+    }
+
+    try { this._detuneBus.disconnect(); } catch { /* ok */ }
+    try { this._envelopeGain.disconnect(); } catch { /* ok */ }
+    try { this._presetGain.disconnect(); } catch { /* ok */ }
+    try { this._tremoloGain.disconnect(); } catch { /* ok */ }
+    try { this._dryGain.disconnect(); } catch { /* ok */ }
+    try { this._hpFilter.disconnect(); } catch { /* ok */ }
+    try { this._hpGain.disconnect(); } catch { /* ok */ }
+    try { this._bpFilter.disconnect(); } catch { /* ok */ }
+    try { this._bpGain.disconnect(); } catch { /* ok */ }
+    try { this._lpFilter.disconnect(); } catch { /* ok */ }
+    try { this._lpGain.disconnect(); } catch { /* ok */ }
+
+    super.dispose();
+    return this;
   }
 }

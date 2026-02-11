@@ -15,7 +15,11 @@ export { resolveConfig, applyAsTonic, applyAsFloorNote, applyCustomOffset, apply
 export { validateTemplate, calculateLoopDurationMicrobeats, calculateLoopDurationMs, } from './utils/validator.js';
 // Presets
 export { STANDARD_4_PHASE_PATTERN, QUICK_RESPONSE_PATTERN, EXTENDED_HOLD_PATTERN, BASIC_PITCH_MATCHING, QUICK_PITCH_MATCHING, SUSTAINED_PITCH_MATCHING, CENTERED_RANGE_MATCHING, PITCH_MATCHING_PRESETS, registerAllPresets, getAllPresets, } from './presets/index.js';
+// Exercise spec converter
+export { convertSpecToExercise, } from './utils/importExerciseSpec.js';
+// MusicXML bridge utilities
+export { convertRelativeExerciseToSpec, importMusicXmlToExerciseSpec, importMusicXmlToOverdubExercise, } from './utils/musicxmlImport.js';
 // Lessons
 export { ANCHORED_PITCH_MATCHING, FOUNDATIONS_1_MERGED, ALL_LESSONS, 
 // Overdub exercises
-SIMPLE_UNISON, ALL_OVERDUB_EXERCISES, } from './lessons/index.js';
+SIMPLE_UNISON, FEELING_THIS, ALL_OVERDUB_EXERCISES, } from './lessons/index.js';

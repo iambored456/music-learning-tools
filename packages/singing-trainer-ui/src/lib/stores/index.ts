@@ -1,7 +1,7 @@
 /**
  * Store exports
  */
-export { appState, type AppState, type VisualizationMode, type TonicNote } from './appState.svelte.js';
+export { appState, type AppState, type VisualizationMode, type TonicNote, type BeatLineMode } from './appState.svelte.js';
 export {
   pitchState,
   type PitchState,
@@ -38,6 +38,7 @@ export {
 export {
   overdubExerciseState,
   type OverdubExerciseSessionState,
+  type VoiceInfo,
 } from './overdubExerciseState.svelte.js';
 export {
   overdubExerciseChooserState,

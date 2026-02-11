@@ -5,7 +5,8 @@
  */
 import type { OverdubExerciseTemplate } from '../../types.js';
 import { SIMPLE_UNISON } from './simpleUnison.js';
-export { SIMPLE_UNISON };
+import { FEELING_THIS } from './feelingThis.js';
+export { SIMPLE_UNISON, FEELING_THIS };
 /** All available overdub exercises */
 export declare const ALL_OVERDUB_EXERCISES: OverdubExerciseTemplate[];
 //# sourceMappingURL=index.d.ts.map

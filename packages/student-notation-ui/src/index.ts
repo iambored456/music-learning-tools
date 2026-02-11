@@ -8,6 +8,7 @@ export type StudentNotationInstance = {
 
 const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const publicPrefix = '../public/';
+const THEME_STORAGE_KEY = 'app.themeMode';
 
 const shouldInitDebug = (): boolean => {
   if (typeof window === 'undefined') {return false;}
@@ -60,6 +61,17 @@ function ensureMountContainerLayout(container: HTMLElement): void {
   container.style.minHeight = '0';
 }
 
+function applyStoredThemeModeClass(): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {return;}
+  let isDarkMode = false;
+  try {
+    isDarkMode = window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
+  } catch {
+    // Ignore localStorage access issues
+  }
+  document.body.classList.toggle('dark-mode', isDarkMode);
+}
+
 export function mountStudentNotation(container: HTMLElement): StudentNotationInstance {
   initDebug('[StudentNotation] mount:start', {
     hasTemplate: Boolean(template),
@@ -67,6 +79,7 @@ export function mountStudentNotation(container: HTMLElement): StudentNotationIns
     containerId: container.id || null,
   });
 
+  applyStoredThemeModeClass();
   ensureMountContainerLayout(container);
   container.innerHTML = template;
   initDebug('[StudentNotation] template injected');
