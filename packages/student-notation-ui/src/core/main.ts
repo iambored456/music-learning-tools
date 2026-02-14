@@ -76,8 +76,18 @@ declare global {
     initAudio?: () => Promise<void>;
     initStartTime?: number;
     ModulationTest?: typeof ModulationTest;
+    TONE_DEBUG_CLASS?: string;
   }
 }
+
+const disableToneClassDebugLogging = (): void => {
+  if (typeof window === 'undefined') {return;}
+  // Tone logs class-level debug traces when TONE_DEBUG_CLASS matches a Tone class name.
+  // Clearing this prevents noisy triggerAttack/triggerRelease console output.
+  window.TONE_DEBUG_CLASS = undefined;
+};
+
+disableToneClassDebugLogging();
 
 const shouldInitDebug = (): boolean => {
   if (typeof window === 'undefined') {return false;}

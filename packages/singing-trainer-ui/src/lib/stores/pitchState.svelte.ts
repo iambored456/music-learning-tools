@@ -55,11 +55,6 @@ function createPitchState() {
 
     addHistoryPoint(point: PitchHistoryPoint) {
       state.history.push(point);
-      // Prune points older than 30s to bound memory growth
-      const cutoff = point.time - 30_000;
-      while (state.history.length > 0 && state.history[0].time < cutoff) {
-        state.history.shift();
-      }
     },
 
     setStablePitch(stable: StablePitch) {

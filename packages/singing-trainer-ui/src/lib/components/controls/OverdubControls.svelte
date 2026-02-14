@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appState } from '../../stores/appState.svelte.js';
+  import { appState, type MicTrailColorMode } from '../../stores/appState.svelte.js';
   import { overdubState } from '../../stores/overdubState.svelte.js';
   import { overdubExerciseState } from '../../stores/overdubExerciseState.svelte.js';
   import { highwayState } from '../../stores/highwayState.svelte.js';
@@ -21,7 +21,6 @@
   const captureRatio = $derived(overdubState.captureProgressRatio);
   const captureDurationMs = $derived(overdubState.captureDurationMs);
   const pendingTake = $derived(machine.pendingTake);
-  const renderableTrails = $derived(overdubState.getRenderableTrails());
   const overdubIsActive = $derived(overdubExerciseState.state.isActive);
   const overdubExerciseName = $derived(overdubExerciseState.state.template?.name ?? '');
   const overdubExerciseId = $derived(overdubExerciseState.state.exerciseId);
@@ -29,8 +28,11 @@
   const overdubActiveVoiceId = $derived(overdubExerciseState.state.activeVoiceId);
   const overdubExercisePlaying = $derived(overdubExerciseState.state.isPlaying);
   const beatLineMode = $derived(appState.state.beatLineMode);
+  const overdubMicTrailColorMode = $derived(appState.state.overdubMicTrailColorMode);
   const DEFAULT_VOICE_GAIN = 1.1;
   const DEFAULT_SYNTH_GAIN = 1;
+  const TIMELINE_MIN_ZOOM = 1;
+  const TIMELINE_MAX_ZOOM = 15;
   let voiceSettingsVoiceId = $state<string | null>(null);
   let hasRecordedInCurrentExerciseSession = $state(false);
   let lastSeenExerciseId = $state<string | null>(null);
@@ -71,28 +73,105 @@
     )
   );
   let scaffoldInFlight = $state(false);
-  let mountDiagnosticLogged = $state(false);
 
   function clampNumber(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
   }
 
   function fitTimelineToExerciseDuration() {
-    if (!overdubIsActive) return;
-    const durationMs = overdubExerciseState.state.durationMs || overdubState.captureDurationMs;
+    const durationMs = overdubIsActive
+      ? (overdubExerciseState.state.durationMs || overdubState.captureDurationMs)
+      : overdubState.captureDurationMs;
     if (durationMs > 0) {
-      highwayState.fitTimelineToDuration(durationMs);
+      const phraseTempoBpm = Math.max(20, Math.round(project.phrase.tempoBpm));
+      const denominator = Math.max(1, Math.round(project.phrase.timeSignatureDenominator));
+      const beatDurationMs = (60_000 / phraseTempoBpm) * (4 / denominator);
+      const boundaryPaddingMs = overdubIsActive
+        ? Math.max(0, Math.round(beatDurationMs * 4))
+        : 0;
+      highwayState.fitTimelineToDuration(durationMs, {
+        paddingBeforeMs: boundaryPaddingMs,
+        paddingAfterMs: boundaryPaddingMs,
+      });
     }
   }
 
+  const timelineDurationMs = $derived(
+    Math.max(1, Math.round(highwayState.state.timelineDurationMs))
+  );
+  const timelineViewDurationMs = $derived(
+    clampNumber(
+      Math.round(highwayState.state.timelineViewDurationMs),
+      1,
+      timelineDurationMs,
+    )
+  );
+  const timelineMaxStartMs = $derived(
+    Math.max(0, timelineDurationMs - timelineViewDurationMs)
+  );
+  const timelineViewStartMs = $derived(
+    clampNumber(
+      Math.round(highwayState.state.timelineViewStartMs),
+      0,
+      timelineMaxStartMs,
+    )
+  );
+  const timelineZoomRatio = $derived(
+    timelineViewDurationMs > 0
+      ? timelineDurationMs / timelineViewDurationMs
+      : 1
+  );
+  const timelineScrollPercent = $derived(
+    timelineMaxStartMs > 0
+      ? (timelineViewStartMs / timelineMaxStartMs) * 100
+      : 0
+  );
+  const timelineViewportControlsEnabled = $derived(
+    !isCountIn
+    && !isRecording
+    && (highwayState.state.targetNotes.length > 0 || overdubIsActive)
+  );
+
+  function setTimelineZoomRatio(zoomRatio: number, anchorRatio: number = 0.5) {
+    const clampedZoom = clampNumber(
+      Number.isFinite(zoomRatio) ? zoomRatio : 1,
+      TIMELINE_MIN_ZOOM,
+      TIMELINE_MAX_ZOOM,
+    );
+    const nextViewDurationMs = timelineDurationMs / clampedZoom;
+    highwayState.setTimelineViewDurationMs(nextViewDurationMs, anchorRatio);
+  }
+
+  function handleTimelineZoomIn() {
+    setTimelineZoomRatio(timelineZoomRatio * 1.2);
+  }
+
+  function handleTimelineZoomOut() {
+    setTimelineZoomRatio(timelineZoomRatio / 1.2);
+  }
+
+  function handleTimelineFit() {
+    highwayState.resetTimelineViewport();
+  }
+
+  function handleTimelineZoomInput(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const zoomRatio = Number.parseFloat(target.value);
+    if (!Number.isFinite(zoomRatio)) return;
+    setTimelineZoomRatio(zoomRatio);
+  }
+
+  function handleTimelineScrollInput(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const ratio = clampNumber(Number.parseFloat(target.value), 0, 100) / 100;
+    const nextStartMs = ratio * timelineMaxStartMs;
+    highwayState.setTimelineViewStartMs(nextStartMs);
+  }
+
   type PlaybackTempoContext = {
-    denominator: number;
     phraseTempoBpm: number;
-    exerciseTempoBpm: number;
     effectiveTempoBpm: number;
     highwayTempoBpm: number;
-    clickBeatDurationMs: number;
-    highwayBeatDurationMs: number;
   };
 
   function getPlaybackTempoContext(): PlaybackTempoContext {
@@ -101,16 +180,10 @@
     const exerciseTempoBpm = Math.max(20, Math.round(overdubExerciseState.state.tempo || phraseTempoBpm));
     const effectiveTempoBpm = overdubIsActive ? exerciseTempoBpm : phraseTempoBpm;
     const highwayTempoBpm = effectiveTempoBpm * (denominator / 4);
-    const clickBeatDurationMs = (60_000 / effectiveTempoBpm) * (4 / denominator);
-    const highwayBeatDurationMs = 60_000 / Math.max(20, highwayTempoBpm);
     return {
-      denominator,
       phraseTempoBpm,
-      exerciseTempoBpm,
       effectiveTempoBpm,
       highwayTempoBpm,
-      clickBeatDurationMs,
-      highwayBeatDurationMs,
     };
   }
 
@@ -120,21 +193,6 @@
       overdubState.setPhraseSettings({ tempoBpm: context.effectiveTempoBpm });
     }
     return context;
-  }
-
-  function logTempoFlow(scope: 'play' | 'record', context: PlaybackTempoContext) {
-    console.log('[Timing] TempoFlow', {
-      scope,
-      overdubIsActive,
-      phraseTempoBpm: context.phraseTempoBpm,
-      exerciseTempoBpm: context.exerciseTempoBpm,
-      effectiveTempoBpm: context.effectiveTempoBpm,
-      denominator: context.denominator,
-      highwayTempoBpm: Number(context.highwayTempoBpm.toFixed(3)),
-      clickBeatDurationMs: Math.round(context.clickBeatDurationMs),
-      highwayBeatDurationMs: Math.round(context.highwayBeatDurationMs),
-      beatDurationDeltaMs: Math.round(context.highwayBeatDurationMs - context.clickBeatDurationMs),
-    });
   }
 
   async function handleInitialize() {
@@ -165,19 +223,10 @@
 
     if (overdubIsActive) {
       const tempoContext = syncProjectTempoWithExercise();
-      logTempoFlow('record', tempoContext);
       try {
         await overdubState.startRecordingCycle({
           onScheduled: (schedule) => {
             hasRecordedInCurrentExerciseSession = true;
-            console.log('[Timing] OverdubControls.recordScheduled', {
-              startDelayMs: schedule.startDelayMs,
-              startAtPerfMs: Math.round(schedule.startAtPerfMs),
-              phraseDurationMs: schedule.phraseDurationMs,
-              countInMs: schedule.countInMs,
-              tempoBpm: project.phrase.tempoBpm,
-              countInBeats: project.phrase.countInBeats,
-            });
             void overdubExerciseState.start({
               startDelayMs: schedule.startDelayMs,
               startAtPerfMs: schedule.startAtPerfMs,
@@ -194,6 +243,7 @@
     }
 
     await overdubState.startRecordingCycle();
+    fitTimelineToExerciseDuration();
   }
 
   async function handleKeepTake() {
@@ -220,20 +270,13 @@
     }
 
     if (canRedoPendingTake) {
-      await overdubState.previewPendingTake();
+      await handlePreviewTake();
       return;
     }
 
     if (overdubIsActive) {
       const tempoContext = syncProjectTempoWithExercise();
-      logTempoFlow('play', tempoContext);
       const playback = await overdubState.playComposite();
-      console.log('[Timing] OverdubControls.playRequested', {
-        startDelayMs: playback.startDelayMs,
-        startAtPerfMs: Math.round(playback.startAtPerfMs),
-        tempoBpm: tempoContext.effectiveTempoBpm,
-        countInBeats: project.phrase.countInBeats,
-      });
       await overdubExerciseState.start({
         startDelayMs: playback.startDelayMs,
         startAtPerfMs: playback.startAtPerfMs,
@@ -252,6 +295,14 @@
     { value: 'beat', label: 'Beat' },
     { value: 'bar', label: 'Bar' },
   ] as const;
+  const MIC_TRAIL_COLOR_OPTIONS: Array<{ value: MicTrailColorMode; label: string }> = [
+    { value: 'voice', label: 'Voice' },
+    { value: 'rainbow', label: 'Rainbow' },
+  ];
+  const CLICK_TRACK_OPTIONS: Array<{ enabled: boolean; label: string }> = [
+    { enabled: true, label: 'On' },
+    { enabled: false, label: 'Off' },
+  ];
 
   function handleCountInSelect(countInBeats: number) {
     overdubState.setPhraseSettings({ countInBeats });
@@ -261,9 +312,12 @@
     appState.setBeatLineMode(mode);
   }
 
-  function handleClickEnabled(event: Event) {
-    const target = event.target as HTMLInputElement;
-    overdubState.setClickEnabled(target.checked);
+  function handleMicTrailColorModeSelect(mode: MicTrailColorMode) {
+    appState.setOverdubMicTrailColorMode(mode);
+  }
+
+  function handleClickTrackEnabled(enabled: boolean) {
+    overdubState.setClickEnabled(enabled);
   }
 
   function handleOverdubReset() {
@@ -429,14 +483,6 @@
     return clampNumber(layer.takes.length + 1, 1, VISIBLE_TAKE_SLOTS);
   }
 
-  function getTotalTakesCount(): number {
-    return layers.reduce((count, layer) => count + layer.takes.length, 0);
-  }
-
-  function getTotalTrailPointsCount(): number {
-    return renderableTrails.reduce((count, trail) => count + trail.points.length, 0);
-  }
-
   function isProjectScaffoldedForTemplate(template: { name: string; config: { voices: { name: string }[] } }): boolean {
     const expectedTitle = `${template.name} Takes`;
     if (project.title !== expectedTitle) return false;
@@ -458,29 +504,6 @@
   });
 
   $effect(() => {
-    if (mountDiagnosticLogged) return;
-    mountDiagnosticLogged = true;
-    const mountStartMs = performance.now();
-    console.debug('[OverdubBuilder] mount', {
-      layerCount: layers.length,
-      totalTakes: getTotalTakesCount(),
-      renderableTrails: renderableTrails.length,
-      totalTrailPoints: getTotalTrailPointsCount(),
-      initialized: overdubState.state.initialized,
-      busy: isBusy,
-    });
-    setTimeout(() => {
-      console.debug('[OverdubBuilder] mount+frame', {
-        elapsedMs: Math.round(performance.now() - mountStartMs),
-        layerCount: layers.length,
-        totalTakes: getTotalTakesCount(),
-        renderableTrails: renderableTrails.length,
-        totalTrailPoints: getTotalTrailPointsCount(),
-      });
-    }, 0);
-  });
-
-  $effect(() => {
     const session = overdubExerciseState.state;
     if (!session.isActive || !session.template || !session.exerciseId) {
       return;
@@ -493,23 +516,7 @@
     }
 
     scaffoldInFlight = true;
-    const scaffoldStartMs = performance.now();
-    console.debug('[OverdubBuilder] scaffold:start', {
-      exerciseId: session.exerciseId,
-      exerciseName: session.template.name,
-      layerCountBefore: layers.length,
-      totalTakesBefore: getTotalTakesCount(),
-    });
-
     void overdubState.loadExerciseScaffold(session.template)
-      .then(() => {
-        console.debug('[OverdubBuilder] scaffold:done', {
-          exerciseId: session.exerciseId,
-          elapsedMs: Math.round(performance.now() - scaffoldStartMs),
-          layerCountAfter: layers.length,
-          totalTakesAfter: getTotalTakesCount(),
-        });
-      })
       .catch((error) => {
         console.error('[OverdubBuilder] scaffold:error', error);
       })
@@ -714,67 +721,132 @@
       </div>
 
       <div class="controls-layout">
-        <div class="controls-primary">
-          <div class="grid settings">
-            <div class="field">
-              <span>Count-In Beats</span>
-              <div class="count-in-buttons" role="group" aria-label="Count-in beats">
-                {#each COUNT_IN_OPTIONS as countInBeats}
-                  <button
-                    type="button"
-                    class="count-in-btn"
-                    class:count-in-btn--active={project.phrase.countInBeats === countInBeats}
-                    onclick={() => handleCountInSelect(countInBeats)}
-                  >
-                    {countInBeats}
-                  </button>
-                {/each}
-              </div>
-            </div>
-            <div class="field">
-              <span>Beatlines</span>
-              <div class="mode-buttons" role="group" aria-label="Beatline visibility mode">
-                {#each BEAT_LINE_OPTIONS as option}
-                  <button
-                    type="button"
-                    class="mode-btn"
-                    class:mode-btn--active={beatLineMode === option.value}
-                    onclick={() => handleBeatLineModeSelect(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                {/each}
-              </div>
+        <div class="controls-column controls-column--timing">
+          <div class="field">
+            <span>Count-In Beats</span>
+            <div class="count-in-buttons" role="group" aria-label="Count-in beats">
+              {#each COUNT_IN_OPTIONS as countInBeats}
+                <button
+                  type="button"
+                  class="count-in-btn"
+                  class:count-in-btn--active={project.phrase.countInBeats === countInBeats}
+                  onclick={() => handleCountInSelect(countInBeats)}
+                >
+                  {countInBeats}
+                </button>
+              {/each}
             </div>
           </div>
-
-          <label class="checkbox">
-            <input type="checkbox" checked={project.clickEnabled} onchange={handleClickEnabled} />
-            <span>Click Track Enabled</span>
-          </label>
-
-          {#if isCountIn || isRecording}
-            <div class="progress-wrap">
-              <div class="progress-label">
-                {isCountIn ? 'Count-In' : 'Recording'} ({Math.round(captureDurationMs / 1000)}s phrase)
-              </div>
-              <div class="progress-track">
-                <div class="progress-fill" style={`width: ${Math.round(captureRatio * 100)}%`}></div>
-              </div>
+          <div class="field">
+            <span>Beatlines</span>
+            <div class="mode-buttons" role="group" aria-label="Beatline visibility mode">
+              {#each BEAT_LINE_OPTIONS as option}
+                <button
+                  type="button"
+                  class="mode-btn"
+                  class:mode-btn--active={beatLineMode === option.value}
+                  onclick={() => handleBeatLineModeSelect(option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
             </div>
-          {/if}
-
-          {#if canRedoPendingTake}
-            <div class="review-controls">
-              <button class="listen-btn" onclick={handlePreviewTake} disabled={isBusy}>
-                {isPendingTakePreviewActive ? 'Stop Listen' : 'Listen Back'}
-              </button>
-              <button class="keep-btn" onclick={handleKeepTake} disabled={isBusy}>Keep Take</button>
-            </div>
-          {/if}
+          </div>
         </div>
 
-        <div class="controls-actions">
+        <div class="controls-column controls-column--trail">
+          <div class="field">
+            <span>Mic Trail Color</span>
+            <div class="mode-buttons" role="group" aria-label="Mic trail color mode">
+              {#each MIC_TRAIL_COLOR_OPTIONS as option}
+                <button
+                  type="button"
+                  class="mode-btn"
+                  class:mode-btn--active={overdubMicTrailColorMode === option.value}
+                  onclick={() => handleMicTrailColorModeSelect(option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+          <div class="field">
+            <span>Click Track</span>
+            <div class="mode-buttons" role="group" aria-label="Click track mode">
+              {#each CLICK_TRACK_OPTIONS as option}
+                <button
+                  type="button"
+                  class="mode-btn"
+                  class:mode-btn--active={project.clickEnabled === option.enabled}
+                  onclick={() => handleClickTrackEnabled(option.enabled)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+        </div>
+
+        <div class="controls-column controls-column--timeline">
+          <div class="field timeline-field">
+            <span>Timeline View</span>
+            <div class="timeline-zoom-row" role="group" aria-label="Timeline zoom controls">
+              <button
+                type="button"
+                class="timeline-btn"
+                onclick={handleTimelineZoomOut}
+                disabled={!timelineViewportControlsEnabled}
+              >
+                -
+              </button>
+              <input
+                class="timeline-zoom-slider"
+                type="range"
+                min={TIMELINE_MIN_ZOOM}
+                max={TIMELINE_MAX_ZOOM}
+                step="0.05"
+                value={timelineZoomRatio}
+                oninput={handleTimelineZoomInput}
+                disabled={!timelineViewportControlsEnabled}
+                aria-label="Timeline zoom"
+              />
+              <button
+                type="button"
+                class="timeline-btn"
+                onclick={handleTimelineZoomIn}
+                disabled={!timelineViewportControlsEnabled}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                class="timeline-btn timeline-btn--fit"
+                onclick={handleTimelineFit}
+                disabled={!timelineViewportControlsEnabled}
+              >
+                Full
+              </button>
+            </div>
+            <div class="timeline-scroll-row">
+              <input
+                class="timeline-scroll-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={timelineScrollPercent}
+                oninput={handleTimelineScrollInput}
+                disabled={!timelineViewportControlsEnabled || timelineMaxStartMs <= 0}
+                aria-label="Timeline scroll"
+              />
+              <span class="timeline-zoom-readout">
+                {Math.round(timelineZoomRatio * 100)}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls-column controls-column--actions">
           <div class="main-controls">
             <button
               class="record-btn"
@@ -794,9 +866,25 @@
               {/if}
             </button>
             <button class="play-btn" onclick={handlePlayback} disabled={isBusy || isRecording || isCountIn}>
-              {isPlaybackRunning ? 'Stop' : 'Play'}
+              {#if canRedoPendingTake}
+                {isPendingTakePreviewActive ? 'Stop Listen' : 'Listen Back'}
+              {:else}
+                {isPlaybackRunning ? 'Stop' : 'Play'}
+              {/if}
             </button>
+            <button class="keep-btn" onclick={handleKeepTake} disabled={isBusy || !canKeep}>Keep Take</button>
           </div>
+
+          {#if isCountIn || isRecording}
+            <div class="progress-wrap">
+              <div class="progress-label">
+                {isCountIn ? 'Count-In' : 'Recording'} ({Math.round(captureDurationMs / 1000)}s phrase)
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" style={`width: ${Math.round(captureRatio * 100)}%`}></div>
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </section>
@@ -859,12 +947,14 @@
     border-radius: 10px;
     padding: 0;
     background: rgba(9, 14, 22, 0.55);
+    overflow-x: auto;
   }
 
   .voice-rows {
     display: flex;
     flex-direction: column;
     gap: 0;
+    min-width: max-content;
   }
 
   .voice-row-wrap {
@@ -872,6 +962,7 @@
     display: flex;
     flex-direction: column;
     gap: 0;
+    min-width: max-content;
   }
 
   .voice-row-wrap--settings-open {
@@ -887,6 +978,7 @@
     border-radius: var(--radius-sm);
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.03);
+    min-width: max-content;
   }
 
   .voice-row--active {
@@ -899,7 +991,6 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
-    width: 100%;
   }
 
   .voice-select-btn {
@@ -914,7 +1005,6 @@
     text-align: left;
     min-width: 0;
     flex: 1 1 auto;
-    width: 100%;
   }
 
   .voice-select-btn:hover {
@@ -1105,27 +1195,20 @@
 
   .controls-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(160px, 210px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(170px, 220px);
     gap: var(--spacing-xs);
     align-items: start;
   }
 
-  .controls-primary {
+  .controls-column {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
     min-width: 0;
   }
 
-  .controls-actions {
-    display: flex;
+  .controls-column--timeline {
     min-width: 0;
-  }
-
-  .grid.settings {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--spacing-xs);
   }
 
   .field {
@@ -1186,12 +1269,60 @@
     background: rgba(34, 110, 186, 0.52);
   }
 
-  .checkbox {
-    display: inline-flex;
-    align-items: center;
+  .timeline-field {
     gap: 6px;
-    font-size: var(--font-size-xs);
+  }
+
+  .timeline-zoom-row {
+    display: grid;
+    grid-template-columns: auto minmax(120px, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .timeline-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
     color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    min-height: 28px;
+    min-width: 30px;
+    padding: 5px 8px;
+    cursor: pointer;
+  }
+
+  .timeline-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .timeline-btn--fit {
+    min-width: 46px;
+  }
+
+  .timeline-zoom-slider,
+  .timeline-scroll-slider {
+    width: 100%;
+    accent-color: #5f95ff;
+  }
+
+  .timeline-scroll-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .timeline-zoom-readout {
+    min-width: 44px;
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    color: #dfe8ff;
+    font-variant-numeric: tabular-nums;
   }
 
   .main-controls {
@@ -1207,7 +1338,6 @@
 
   .record-btn,
   .play-btn,
-  .listen-btn,
   .keep-btn,
   .mini-btn {
     border: none;
@@ -1219,7 +1349,6 @@
 
   .record-btn,
   .play-btn,
-  .listen-btn,
   .keep-btn {
     padding: 8px 10px;
     font-size: var(--font-size-xs);
@@ -1238,12 +1367,8 @@
     background: #2a8f60;
   }
 
-  .listen-btn {
-    background: #2a6fbc;
-  }
-
   .keep-btn {
-    background: #1d9d5d;
+    background: #2a6fbc;
   }
 
   .mini-btn {
@@ -1282,11 +1407,6 @@
     background: linear-gradient(90deg, #3ccf8c, #64a6ff);
   }
 
-  .review-controls {
-    display: flex;
-    gap: var(--spacing-xs);
-  }
-
   .overdub-panel--compact .warning,
   .overdub-panel--compact .builder-layout {
     grid-column: 1 / -1;
@@ -1301,7 +1421,7 @@
   }
 
   .overdub-panel--compact .controls-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr) minmax(150px, 190px);
   }
 
   .overdub-panel--compact .field {
@@ -1321,19 +1441,9 @@
   }
 
   @media (max-width: 900px) {
-    .grid.settings,
-    .overdub-panel--compact .grid.settings {
-      grid-template-columns: 1fr;
-    }
-
     .controls-layout,
     .overdub-panel--compact .controls-layout {
       grid-template-columns: 1fr;
-    }
-
-    .voice-row {
-      grid-template-columns: 1fr;
-      justify-items: start;
     }
 
     .voice-slider-row {

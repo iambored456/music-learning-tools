@@ -218,7 +218,7 @@ function drawTonicSign(
   if (fontSize < 6) return;
 
   ctx.fillStyle = '#212529';
-  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(numberText, centerX, y);

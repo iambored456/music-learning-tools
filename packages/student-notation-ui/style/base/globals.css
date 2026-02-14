@@ -2,9 +2,16 @@
    FONT DEFINITION & GLOBAL STYLES
    ========================================================================= */
 @font-face {
-  font-family: 'Atkinson Hyperlegible';
+  font-family: 'Atkinson Hyperlegible Next';
   src: url('../../public/fonts/atkinsonHyperlegibleNextRegular.otf') format('opentype');
   font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('../../public/fonts/atkinsonHyperlegibleNextBold.otf') format('opentype');
+  font-weight: bold;
   font-style: normal;
 }
 

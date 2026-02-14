@@ -102,10 +102,47 @@
 
 /* Tempo number boxes (DraggableNumber components) */
 #eighth-note-tempo,
-#quarter-note-tempo, 
+#quarter-note-tempo,
 #dotted-quarter-tempo {
     transform-origin: center;
     transition: transform 0.08s ease-out;
+}
+
+/* Tempo stepper: vertical stack of up-button, input, down-button */
+.tempo-stepper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+}
+
+.tempo-step-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 12px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--c-surface);
+    color: var(--c-text-muted);
+    font-size: 7px;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.tempo-step-btn:hover {
+    background-color: var(--c-accent-light);
+    color: var(--c-accent);
+}
+
+.tempo-step-btn:active {
+    background-color: var(--c-accent);
+    color: var(--c-surface);
 }
 
 .tempo-input {

@@ -12,6 +12,7 @@ import type {
   TonicSign,
   SixteenthStampPlaybackData
 } from '@mlt/types';
+import type { ColumnMap } from '../../services/columnMapService.js';
 
 /**
  * Callbacks for sixteenth stamp actions
@@ -21,6 +22,10 @@ export interface SixteenthStampActionCallbacks {
   getPlacedTonicSigns?: (state: Store['state']) => TonicSign[];
   /** Check if column is within a tonic span */
   isWithinTonicSpan?: (column: number, tonicSigns: TonicSign[]) => boolean;
+  /** Convert canvas column to time index (needed for three-stamp cross-collision) */
+  canvasToTime?: (canvasIndex: number, map: ColumnMap) => number | null;
+  /** Get column map from state (needed for three-stamp cross-collision) */
+  getColumnMap?: (state: Store['state']) => ColumnMap;
   /** Logger function */
   log?: (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => void;
 }
@@ -39,6 +44,8 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
   const {
     getPlacedTonicSigns,
     isWithinTonicSpan,
+    canvasToTime,
+    getColumnMap,
     log = () => {}
   } = callbacks;
 
@@ -80,6 +87,23 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
       if (existingStamp) {
         // Remove existing colliding stamp
         this.removeSixteenthStampPlacement(existingStamp.id);
+      }
+
+      // Check for collision with three-sixteenth stamps (time-space)
+      if (this.state.sixteenthThreeStampPlacements && canvasToTime && getColumnMap) {
+        const map = getColumnMap(this.state);
+        const fourStampStartTime = canvasToTime(startColumn, map);
+        if (fourStampStartTime !== null) {
+          const fourStampEndTime = fourStampStartTime + 2;
+          const collidingThreeStamps = this.state.sixteenthThreeStampPlacements.filter(placement => {
+            if (placement.row !== row) return false;
+            const threeStampEndTime = placement.startTimeIndex + 1.5;
+            return !(threeStampEndTime <= fourStampStartTime || fourStampEndTime <= placement.startTimeIndex);
+          });
+          collidingThreeStamps.forEach(stamp => {
+            this.removeSixteenthThreeStampPlacement(stamp.id);
+          });
+        }
       }
 
       // Row indices are stored as global (full gamut) indices.

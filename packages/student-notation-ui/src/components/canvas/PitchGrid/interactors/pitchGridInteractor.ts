@@ -19,16 +19,19 @@ import GridCoordsService from '@services/gridCoordsService.ts';
 import pitchGridViewportService from '../../../../services/pitchGridViewportService.ts';
 import annotationService from '../../../../services/annotationService.ts';
 import { drawSingleColumnOvalNote, drawTwoColumnOvalNote } from '../renderers/notes.js';
-import { getRowY, getColumnX } from '../renderers/rendererUtils.js';
+import { getRowY, getColumnFromX, getColumnX } from '../renderers/rendererUtils.js';
 import GlobalService from '@services/globalService.ts';
 import { isNotePlayableAtColumn, isWithinTonicSpan } from '../../../../utils/tonicColumnUtils.ts';
 import { setGhostNotePosition, clearGhostNotePosition } from '@services/spacebarHandler.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import { GROUP_WIDTH_CELLS } from '../../../../rhythm/tripletStamps.js';
+import { getNearestSixteenthThreeStampSnapTarget } from '../../../../rhythm/sixteenthThreeStampSnap.js';
 import { canvasToTime, timeToCanvas } from '../../../../services/columnMapService.ts';
 import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
+import SixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.js';
 import TripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.js';
 import { renderSixteenthStampPreview } from '../renderers/sixteenthStampRenderer.js';
+import { renderSixteenthThreeStampPreview } from '../renderers/sixteenthThreeStampRenderer.js';
 import { renderTripletStampPreview } from '../renderers/tripletStampRenderer.js';
 import { getModulationDisplayText, getModulationColor } from '../../../../rhythm/modulationMapping.js';
 import { PitchGridModulationToolInteractor } from './tools/PitchGridModulationToolInteractor.ts';
@@ -37,6 +40,7 @@ import { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolIntera
 import { PitchGridChordToolInteractor } from './tools/PitchGridChordToolInteractor.ts';
 import { PitchGridSixteenthStampToolInteractor } from './tools/PitchGridSixteenthStampToolInteractor.ts';
 import { PitchGridTripletStampToolInteractor } from './tools/PitchGridTripletStampToolInteractor.ts';
+import { PitchGridSixteenthThreeStampToolInteractor } from './tools/PitchGridSixteenthThreeStampToolInteractor.ts';
 import { PitchGridTonicizationToolInteractor } from './tools/PitchGridTonicizationToolInteractor.ts';
 import { PitchGridInteractionCoordinator } from './PitchGridInteractionCoordinator.ts';
 import { PitchGridRightClickEraserInteractor } from './PitchGridRightClickEraserInteractor.ts';
@@ -64,6 +68,7 @@ const eraserToolInteractor = new PitchGridEraserToolInteractor();
 const chordToolInteractor = new PitchGridChordToolInteractor();
 const stampToolInteractor = new PitchGridSixteenthStampToolInteractor();
 const tripletToolInteractor = new PitchGridTripletStampToolInteractor();
+const sixteenthThreeStampToolInteractor = new PitchGridSixteenthThreeStampToolInteractor();
 const tonicizationToolInteractor = new PitchGridTonicizationToolInteractor();
 const rightClickEraserInteractor = new PitchGridRightClickEraserInteractor();
 const interactionCoordinator = new PitchGridInteractionCoordinator({
@@ -72,6 +77,7 @@ const interactionCoordinator = new PitchGridInteractionCoordinator({
   eraserToolInteractor,
   stampToolInteractor,
   tripletToolInteractor,
+  sixteenthThreeStampToolInteractor,
   modulationToolInteractor,
   tonicizationToolInteractor,
   placementFillNoteIds,
@@ -155,6 +161,20 @@ function getTimeAlignedCanvasColumn(canvasCol: number): number | null {
   return Math.max(0, visualAligned - 2); // back to canvas-space
 }
 
+function getSixteenthThreeSnapTargetForX(actualX: number): { startTimeIndex: number; startCanvasCol: number } | null {
+  const pointerCanvasCol = getColumnFromX(actualX, {
+    ...store.state,
+    columnWidths: store.state.columnWidths,
+    musicalColumnWidths: store.state.columnWidths,
+    cellWidth: store.state.cellWidth,
+    cellHeight: store.state.cellHeight,
+    tempoModulationMarkers: store.state.tempoModulationMarkers,
+    baseMicrobeatPx: store.state.baseMicrobeatPx || store.state.cellWidth
+  });
+
+  return getNearestSixteenthThreeStampSnapTarget(pointerCanvasCol, store.state);
+}
+
 function isPositionWithinPitchGrid(colIndex: number, rowIndex: number): boolean {
   const isCircleNote =
         (store.state.selectedTool === 'note' || store.state.selectedTool === 'chord') &&
@@ -197,30 +217,32 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
 
   // MODULATION FIX: Use modulated column positioning to match placed notes
   const fullOptions = { ...store.state, zoomLevel: pitchGridViewportService.getViewportInfo().zoomLevel };
-  const x = getColumnX(colIndex, fullOptions);
+  const toolType = store.state.selectedTool;
+  const highlightStartCol = toolType === 'sixteenthStamp'
+    ? (getTimeAlignedCanvasColumn(colIndex) ?? colIndex)
+    : colIndex;
+
+  const x = getColumnX(highlightStartCol, fullOptions);
   const centerY = getRowY(rowIndex, store.state);
   const y = centerY - (store.state.cellHeight / 2); // Center the full-height highlight on the rank
-
-
-  const toolType = store.state.selectedTool;
 
   // MODULATION FIX: Calculate highlight width based on modulated grid scaling
   let highlightWidth;
   if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
     // For modulated grids, calculate the actual width by finding the difference
     // between this column position and the next column position
-    const nextX = getColumnX(colIndex + 1, fullOptions);
+    const nextX = getColumnX(highlightStartCol + 1, fullOptions);
     highlightWidth = nextX - x;
   } else {
     // No modulation - use standard calculation
-    highlightWidth = (store.state.columnWidths[colIndex] ?? 1) * store.state.cellWidth;
+    highlightWidth = (store.state.columnWidths[highlightStartCol] ?? 1) * store.state.cellWidth;
   }
 
   // Apply tool-specific width overrides, but account for modulation scaling
   if (toolType === 'eraser' || rightClickEraserInteractor.getIsActive()) {
     if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
-      const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
+      const twoColumnsEndX = getColumnX(highlightStartCol + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
     } else {
       highlightWidth = store.state.cellWidth * 2;
@@ -228,7 +250,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
   } else if (toolType === 'note' && store.state.selectedNote?.shape === 'circle') {
     if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
-      const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
+      const twoColumnsEndX = getColumnX(highlightStartCol + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
     } else {
       highlightWidth = store.state.cellWidth * 2;
@@ -236,10 +258,18 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
   } else if (toolType === 'sixteenthStamp') {
     if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
-      const twoColumnsEndX = getColumnX(colIndex + 2, fullOptions);
+      const twoColumnsEndX = getColumnX(highlightStartCol + 2, fullOptions);
       highlightWidth = twoColumnsEndX - x;
     } else {
       highlightWidth = store.state.cellWidth * 2;
+    }
+  } else if (toolType === 'sixteenthThreeStamp') {
+    // Three-sixteenth stamps span 1.5 microbeats
+    if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
+      const endX = getColumnX(highlightStartCol + 1.5, fullOptions);
+      highlightWidth = endX - x;
+    } else {
+      highlightWidth = store.state.cellWidth * 1.5;
     }
   } else if (toolType === 'tripletStamp') {
     // Triplet width depends on the selected triplet stamp (1 or 2 cells)
@@ -248,7 +278,7 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
       const span = selectedTriplet.span === 'eighth' ? 1 : 2; // eighth=1 cell, quarter=2 cells
       const cellSpan = 2 * span; // Each cell is 2 microbeats
       if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
-        const spanEndX = getColumnX(colIndex + cellSpan, fullOptions);
+        const spanEndX = getColumnX(highlightStartCol + cellSpan, fullOptions);
         highlightWidth = spanEndX - x;
       } else {
         highlightWidth = store.state.cellWidth * cellSpan;
@@ -420,14 +450,19 @@ function handleMouseDown(e: MouseEvent) {
       // not place a new note on top of it.
       const dragSixteenth = stampToolInteractor.tryStartShapeDrag({ actualX: x + scrollLeft, canvasY: y });
       const dragTriplet = !dragSixteenth && tripletToolInteractor.tryStartShapeDrag({ actualX: x + scrollLeft, canvasY: y });
-      if (dragSixteenth || dragTriplet) {
+      const dragThreeSixteenth = !dragSixteenth && !dragTriplet && sixteenthThreeStampToolInteractor.tryStartShapeDrag({ actualX: x + scrollLeft, canvasY: y });
+      if (dragSixteenth || dragTriplet || dragThreeSixteenth) {
         return;
       }
 
-      const hitSixteenth = rhythmPlaybackService.getSixteenthStampAtPosition(colIndex, rowIndex);
       const timeCol = canvasToTime(colIndex, store.state);
+      const threeStampSnapTarget = getSixteenthThreeSnapTargetForX(x + scrollLeft);
+      const hitSixteenth = rhythmPlaybackService.getSixteenthStampAtPosition(colIndex, rowIndex);
+      const hitThreeSixteenth = threeStampSnapTarget
+        ? rhythmPlaybackService.getSixteenthThreeStampAtPosition?.(threeStampSnapTarget.startTimeIndex, rowIndex)
+        : (timeCol === null ? null : rhythmPlaybackService.getSixteenthThreeStampAtPosition?.(timeCol, rowIndex));
       const hitTriplet = timeCol === null ? null : rhythmPlaybackService.getTripletStampAtPosition(timeCol, rowIndex);
-      if (hitSixteenth || hitTriplet) {
+      if (hitSixteenth || hitThreeSixteenth || hitTriplet) {
         return;
       }
     }
@@ -489,6 +524,7 @@ function handleMouseMove(e: MouseEvent) {
   const toolType = store.state.selectedTool;
   const actualX = x + scrollLeft;
   const timeCol = canvasToTime(colIndex, store.state);
+  const threeStampSnapTarget = getSixteenthThreeSnapTargetForX(actualX);
   const preBoundsMoveResult = interactionCoordinator.handleToolMouseMoveBeforeBoundsCheck({
     actualX,
     rowIndex,
@@ -537,21 +573,25 @@ function handleMouseMove(e: MouseEvent) {
   setGhostNotePosition(colIndex, rowIndex);
 
   const hitSixteenth = rhythmPlaybackService.getSixteenthStampAtPosition(colIndex, rowIndex);
+  const hitThreeSixteenth = threeStampSnapTarget
+    ? rhythmPlaybackService.getSixteenthThreeStampAtPosition?.(threeStampSnapTarget.startTimeIndex, rowIndex)
+    : (timeCol === null ? null : rhythmPlaybackService.getSixteenthThreeStampAtPosition?.(timeCol, rowIndex));
   const hitTriplet = timeCol === null ? null : rhythmPlaybackService.getTripletStampAtPosition(timeCol, rowIndex);
-  const isStampHover = Boolean(hitSixteenth || hitTriplet);
+  const isStampHover = Boolean(hitSixteenth || hitThreeSixteenth || hitTriplet);
   const suppressNoteHover = isStampHover && (toolType === 'note' || toolType === 'chord');
 
   const shouldShowGrabCursor = isStampHover &&
     toolType !== 'eraser' &&
     !stampToolInteractor.isDraggingShape() &&
-    !tripletToolInteractor.isDraggingShape();
+    !tripletToolInteractor.isDraggingShape() &&
+    !sixteenthThreeStampToolInteractor.isDraggingShape();
   if (shouldShowGrabCursor) {
     setStampHoverCursor(canvasEl);
   } else {
     clearStampHoverCursor();
   }
 
-  const isStampTool = toolType === 'sixteenthStamp' || toolType === 'tripletStamp';
+  const isStampTool = toolType === 'sixteenthStamp' || toolType === 'tripletStamp' || toolType === 'sixteenthThreeStamp';
 
   if (isStampTool && isStampHover) {
     return;
@@ -619,6 +659,9 @@ function handleMouseMove(e: MouseEvent) {
   const placedTonicSigns = getPlacedTonicSigns(store.state);
   const isCircle = store.state.selectedNote?.shape === 'circle';
   let tripletStartTimeIndex: number | null = null;
+  const threeStampPlacementSnapTarget = store.state.selectedTool === 'sixteenthThreeStamp'
+    ? threeStampSnapTarget
+    : null;
 
     // Determine if placement is allowed based on tool type
     let canPlace = true;
@@ -627,11 +670,24 @@ function handleMouseMove(e: MouseEvent) {
       canPlace = isNotePlayableAtColumn(colIndex, store.state) &&
         (!isCircle || isNotePlayableAtColumn(colIndex + 1, store.state));
     } else if (store.state.selectedTool === 'sixteenthStamp') {
-      // Stamps span 2 microbeats - check both columns
+      // Sixteenth stamps span 2 microbeats - check both columns.
       const alignedCol = getTimeAlignedCanvasColumn(colIndex);
       canPlace = alignedCol !== null &&
         !isWithinTonicSpan(alignedCol, placedTonicSigns) &&
         !isWithinTonicSpan(alignedCol + 1, placedTonicSigns);
+    } else if (store.state.selectedTool === 'sixteenthThreeStamp') {
+      // Three-sixteenth stamps are snapped to 1.5-microbeat starts.
+      if (!threeStampPlacementSnapTarget) {
+        canPlace = false;
+      } else {
+        const stampStart = threeStampPlacementSnapTarget.startCanvasCol;
+        const stampEnd = stampStart + 1.5;
+        canPlace = !placedTonicSigns.some((tonicSign) => {
+          const tonicStart = tonicSign.columnIndex;
+          const tonicEnd = tonicStart + 2;
+          return stampStart < tonicEnd && stampEnd > tonicStart;
+        });
+      }
     } else if (store.state.selectedTool === 'tripletStamp') {
       // Triplets span multiple microbeats - check all microbeat columns
       const selectedTriplet = TripletStampsToolbar.getSelectedTripletStamp();
@@ -680,8 +736,10 @@ function handleMouseMove(e: MouseEvent) {
         ? getNoteHoverColor(0.2)
         : 'rgba(220, 53, 69, 0.15)';
 
-    const highlightStartCol = colIndex;
-    drawHoverHighlight(highlightStartCol, rowIndex, highlightColor);
+  const highlightStartCol = store.state.selectedTool === 'sixteenthThreeStamp'
+    ? (threeStampPlacementSnapTarget?.startCanvasCol ?? colIndex)
+    : colIndex;
+  drawHoverHighlight(highlightStartCol, rowIndex, highlightColor);
 
     if (store.state.selectedTool === 'sixteenthStamp') {
       // Show stamp preview (only if placement is allowed)
@@ -703,6 +761,24 @@ function handleMouseMove(e: MouseEvent) {
         };
 
         renderSixteenthStampPreview(pitchHoverCtx, alignedCol, rowIndex, selectedStamp, options);
+      }
+    } else if (store.state.selectedTool === 'sixteenthThreeStamp') {
+      // Show three-sixteenth stamp preview (only if placement is allowed)
+      const selectedStamp = SixteenthThreeStampsToolbar.getSelectedSixteenthThreeStamp();
+      if (selectedStamp && canPlace && threeStampPlacementSnapTarget) {
+
+        const options = {
+          cellWidth: store.state.cellWidth,
+          cellHeight: store.state.cellHeight,
+          columnWidths: store.state.columnWidths,
+          musicalColumnWidths: store.state.columnWidths,
+          tempoModulationMarkers: store.state.tempoModulationMarkers,
+          baseMicrobeatPx: store.state.cellWidth,
+          macrobeatGroupings: store.state.macrobeatGroupings,
+          previewColor: getNoteColor()
+        };
+
+        renderSixteenthThreeStampPreview(pitchHoverCtx, threeStampPlacementSnapTarget.startCanvasCol, rowIndex, selectedStamp, options);
       }
     } else if (store.state.selectedTool === 'tripletStamp') {
       // Show triplet preview (only if placement is allowed)
@@ -962,7 +1038,7 @@ function drawModulationPreview(ctx: CanvasRenderingContext2D, xPosition: number,
 
   // Draw preview label
   ctx.globalAlpha = 0.8;
-  ctx.font = '12px Arial, sans-serif';
+  ctx.font = '12px "Atkinson Hyperlegible Next", system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillStyle = color;

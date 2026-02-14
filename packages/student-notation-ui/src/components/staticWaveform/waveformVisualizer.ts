@@ -467,7 +467,7 @@ class StaticWaveformVisualizer {
     const degrees = isExtended ? [0, 90, 180, 270, 360, 450] : [0, 90, 180, 270, 360];
 
     ctx.fillStyle = '#666666';
-    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = '12px "Atkinson Hyperlegible Next", system-ui, sans-serif';
     ctx.textAlign = 'center';
 
     labels.forEach((label, index) => {

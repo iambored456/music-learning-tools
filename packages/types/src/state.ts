@@ -13,8 +13,10 @@ import type {
   TonicSignGroups,
   SixteenthStampPlacement,
   TripletStampPlacement,
+  SixteenthThreeStampPlacement,
   SixteenthStampPlaybackData,
   TripletStampPlaybackData,
+  SixteenthThreeStampPlaybackData,
   MacrobeatGrouping,
   MacrobeatBoundaryStyle,
   ModulationMarker,
@@ -46,6 +48,7 @@ export interface HistoryEntry {
   placedChords: PlacedChord[];
   sixteenthStampPlacements: SixteenthStampPlacement[];
   tripletStampPlacements: TripletStampPlacement[];
+  sixteenthThreeStampPlacements: SixteenthThreeStampPlacement[];
   annotations: Annotation[];
   lassoSelection: LassoSelection;
 }
@@ -60,6 +63,7 @@ export interface AppState {
   tonicSignGroups: TonicSignGroups;
   sixteenthStampPlacements: SixteenthStampPlacement[];
   tripletStampPlacements: TripletStampPlacement[];
+  sixteenthThreeStampPlacements: SixteenthThreeStampPlacement[];
   annotations: Annotation[];
   lassoSelection: LassoSelection;
   history: HistoryEntry[];
@@ -208,6 +212,17 @@ export interface Store {
   getSixteenthStampPlaybackData(): SixteenthStampPlaybackData[];
   updateSixteenthStampShapeOffset(placementId: string, shapeKey: string, rowOffset: number): void;
   getSixteenthStampShapeRow(placement: SixteenthStampPlacement, shapeKey: string): number;
+
+  // Three-sixteenth stamp actions
+  addSixteenthThreeStampPlacement(sixteenthThreeStampId: number, startTimeIndex: number, row: number, color?: string): SixteenthThreeStampPlacement;
+  removeSixteenthThreeStampPlacement(placementId: string): boolean;
+  eraseSixteenthThreeStampsInArea(eraseStartCol: number, eraseEndCol: number, eraseStartRow: number, eraseEndRow: number): boolean;
+  getAllSixteenthThreeStampPlacements(): SixteenthThreeStampPlacement[];
+  getSixteenthThreeStampAt(timeIndex: number, row: number): SixteenthThreeStampPlacement | null;
+  clearAllSixteenthThreeStamps(): void;
+  getSixteenthThreeStampPlaybackData(): SixteenthThreeStampPlaybackData[];
+  updateSixteenthThreeStampShapeOffset(placementId: string, shapeKey: string, rowOffset: number): void;
+  getSixteenthThreeStampShapeRow(placement: SixteenthThreeStampPlacement, shapeKey: string): number;
 
   // Triplet actions
   addTripletStampPlacement(placement: Omit<TripletStampPlacement, 'id'>): TripletStampPlacement;

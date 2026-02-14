@@ -287,7 +287,7 @@ export function drawLegend(
       // Draw text
       const fontSize = getLegendFontSize(cellWidth, cellHeight, label.length, pixelRatio);
 
-      ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+      ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 

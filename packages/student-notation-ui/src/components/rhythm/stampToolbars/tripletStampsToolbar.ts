@@ -128,6 +128,10 @@ const TripletStampsToolbar = {
     store.on('sixteenthStampToolSelected', () => {
       this.clearSelection();
     });
+
+    store.on('sixteenthThreeStampToolSelected', () => {
+      this.clearSelection();
+    });
   },
 
   setInitialSelection(tripletStampId: number) {

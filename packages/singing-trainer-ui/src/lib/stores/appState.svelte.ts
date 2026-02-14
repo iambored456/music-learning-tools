@@ -8,6 +8,7 @@ export type VisualizationMode = 'stationary' | 'highway';
 export type LyricLabelMode = 'auto' | 'fixed';
 export type NoteColorMode = 'green' | 'pitchColor';
 export type BeatLineMode = 'none' | 'beat' | 'bar';
+export type MicTrailColorMode = 'voice' | 'rainbow';
 export type TonicNote =
   | 'C'
   | 'C#'
@@ -65,6 +66,9 @@ export interface AppState {
   lyricLabelFixedPx: number;
   noteColorMode: NoteColorMode;
   beatLineMode: BeatLineMode;
+  overdubMicTrailColorMode: MicTrailColorMode;
+  judgementLineCircleRadiusPx: number;
+  micTrailCircleRadiusPx: number;
 }
 
 const DEFAULT_STATE: AppState = {
@@ -82,7 +86,10 @@ const DEFAULT_STATE: AppState = {
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
   noteColorMode: 'green',
-  beatLineMode: 'beat',
+  beatLineMode: 'bar',
+  overdubMicTrailColorMode: 'rainbow',
+  judgementLineCircleRadiusPx: 16,
+  micTrailCircleRadiusPx: 9.5,
 };
 
 function createAppState() {
@@ -165,6 +172,20 @@ function createAppState() {
 
     setBeatLineMode(mode: BeatLineMode) {
       state.beatLineMode = mode;
+    },
+
+    setOverdubMicTrailColorMode(mode: MicTrailColorMode) {
+      state.overdubMicTrailColorMode = mode;
+    },
+
+    setJudgementLineCircleRadiusPx(radius: number) {
+      if (!Number.isFinite(radius)) return;
+      state.judgementLineCircleRadiusPx = Math.max(4, Math.min(36, Math.round(radius * 10) / 10));
+    },
+
+    setMicTrailCircleRadiusPx(radius: number) {
+      if (!Number.isFinite(radius)) return;
+      state.micTrailCircleRadiusPx = Math.max(2, Math.min(24, Math.round(radius * 10) / 10));
     },
 
     setYAxisRange(range: YAxisRange) {

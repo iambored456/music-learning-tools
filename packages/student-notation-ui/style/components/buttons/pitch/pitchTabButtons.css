@@ -29,18 +29,21 @@
     display: flex;
     gap: 0;
     margin-bottom: calc(-1 * var(--space-005));
+    min-height: var(--preset-tab-rail-height);
+    align-items: stretch;
     position: relative;
     z-index: 1;
+    --pitch-tab-border-width: 1px;
 }
 
 .pitch-tab-button {
     padding: var(--space-015) var(--space-035);
     background-color: var(--c-surface-muted);
-    border: 1px solid var(--c-border);
+    border: var(--pitch-tab-border-width) solid var(--c-border);
     border-bottom: none;
     color: var(--c-text-muted);
     font-family: var(--main-font); 
-    font-size: 0.875rem; 
+    font-size: var(--font-size-sm);
     font-weight: 500;
     cursor: pointer; 
     text-align: center;
@@ -50,10 +53,16 @@
     border-top-right-radius: var(--border-radius-md);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+    height: var(--preset-tab-rail-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .pitch-tab-button + .pitch-tab-button {
-    margin-left: -1px;
+    margin-left: calc(-1 * var(--pitch-tab-border-width));
 }
 
 .pitch-tab-button:hover {
@@ -110,26 +119,31 @@
     overflow: hidden;
 }
 
-.pitch-tab-panel.active .intervals-content-box::before {
-    content: '';
-    position: absolute;
-    top: -1px;
-    left: calc(50% - 50px);
-    width: 60px;
-    height: 1px;
-    background-color: transparent;
-    z-index: 3;
+.range-content-box,
+.chords-content-box,
+.draw-content-box {
+    --pitch-tab-bridge-left: 0px;
+    --pitch-tab-bridge-width: 0px;
 }
 
-.pitch-tab-panel.active .chords-content-box::before {
+.pitch-tab-panel.active .range-content-box::before,
+.pitch-tab-panel.active .chords-content-box::before,
+.pitch-tab-panel.active .draw-content-box::before {
     content: '';
     position: absolute;
     top: -1px;
-    left: calc(50% + 10px);
-    width: 50px;
+    left: var(--pitch-tab-bridge-left, 0px);
+    width: var(--pitch-tab-bridge-width, 0px);
     height: 1px;
-    background-color: transparent;
+    background-color: var(--c-surface);
     z-index: 3;
+    pointer-events: none;
+}
+
+/* Range/Chords default to overflow hidden, which clips the seam strip at top:-1px. */
+.pitch-tab-panel.active .range-content-box,
+.pitch-tab-panel.active .chords-content-box {
+    overflow: visible;
 }
 
 /* --- Harmony Preset Button Styles --- */

@@ -1,11 +1,12 @@
 // js/services/rhythmPlaybackService.ts
 import * as Tone from 'tone';
 import { getSixteenthStampScheduleEvents } from '@/rhythm/scheduleSixteenthStamps.js';
+import { getSixteenthThreeStampScheduleEvents } from '@/rhythm/scheduleSixteenthThreeStamps.js';
 import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js';
 import store from '@state/initStore.ts';
 import SynthEngine from './initAudio.js';
 import logger from '@utils/logger.ts';
-import type { SixteenthStampPlacement, TripletStampPlacement } from '@app-types/state.js';
+import type { SixteenthStampPlacement, SixteenthThreeStampPlacement, TripletStampPlacement } from '@app-types/state.js';
 import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 
 logger.moduleLoaded('RhythmPlaybackService');
@@ -360,6 +361,111 @@ class RhythmPlaybackService {
   }
 
   /**
+     * Check if a three-sixteenth stamp exists at a given time-space position
+     */
+  getSixteenthThreeStampAtPosition(timeIndex: number, rowIndex: number): SixteenthThreeStampPlacement | null {
+    if (!store.state.sixteenthThreeStampPlacements) {return null;}
+
+    const stamp = store.state.sixteenthThreeStampPlacements.find(placement => {
+      const rowMatches = placement.row === rowIndex;
+      const timeMatches = timeIndex >= placement.startTimeIndex &&
+                                  timeIndex < placement.startTimeIndex + 1.5;
+      return rowMatches && timeMatches;
+    });
+
+    return stamp || null;
+  }
+
+  /**
+     * Play a three-sixteenth rhythm pattern for a clicked cell
+     */
+  playThreeRhythmPattern(
+    sixteenthThreeStampId: number,
+    pitch: string,
+    color: string,
+    noteShape: 'circle' | 'oval' | 'diamond' = 'oval',
+    placement: SixteenthThreeStampPlacement | null = null
+  ): void {
+    if (!this.isInitialized) {
+      logger.warn('RhythmPlaybackService', 'Not initialized, call initialize() first');
+      return;
+    }
+
+    this.stopCurrentPattern();
+
+    const events = getSixteenthThreeStampScheduleEvents(sixteenthThreeStampId, placement);
+
+    if (!events || events.length === 0) {
+      logger.warn('RhythmPlaybackService', `No events found for three-sixteenth stamp ${sixteenthThreeStampId}`);
+      return;
+    }
+
+    logger.debug('RhythmPlaybackService', `Playing three-sixteenth pattern ${sixteenthThreeStampId}: ${events.length} notes`, {
+      sixteenthThreeStampId,
+      basePitch: pitch,
+      color,
+      events,
+      hasShapeOffsets: !!placement?.shapeOffsets
+    });
+
+    const now = Tone.now();
+    const scheduleToken = this.scheduleToken;
+    const tempoBpm = store.state.tempo;
+    const baseRow = placement?.globalRow ?? placement?.row;
+
+    events.forEach((event, index) => {
+      try {
+        const { offsetSeconds, durationSeconds } = resolveEventTiming(event as TimedStampEvent, tempoBpm);
+        const attackTime = now + offsetSeconds;
+        const duration = noteShape === 'circle' ? durationSeconds * 2 : durationSeconds;
+        const releaseTime = attackTime + duration;
+
+        let shapePitch = pitch;
+        if (baseRow !== undefined && event.rowOffset !== 0) {
+          const shapeRow = baseRow + event.rowOffset;
+          const rowData = store.state.fullRowData[shapeRow];
+          if (rowData) {
+            shapePitch = rowData.toneNote.replace('♭', 'b').replace('♯', '#');
+          }
+        }
+        shapePitch = shapePitch.replace('\u266D', 'b').replace('\u266F', '#');
+        const noteId = placement?.id && event.shapeKey
+          ? buildSixteenthStampShapeNoteId(placement.id, event.shapeKey)
+          : undefined;
+
+        SynthEngine.triggerAttack(shapePitch, color, attackTime);
+        if (noteId) {
+          Tone.Draw.schedule(() => {
+            if (this.scheduleToken !== scheduleToken) {return;}
+            store.emit('noteAttack', { noteId, color });
+          }, attackTime);
+        }
+
+        SynthEngine.triggerRelease(shapePitch, color, releaseTime);
+        if (noteId) {
+          Tone.Draw.schedule(() => {
+            if (this.scheduleToken !== scheduleToken) {return;}
+            store.emit('noteRelease', { noteId, color });
+          }, releaseTime);
+        }
+
+        this.scheduledEvents.push({
+          pitch: shapePitch,
+          color,
+          attackTime,
+          releaseTime,
+          noteId
+        });
+
+      } catch (error) {
+        logger.warn('RhythmPlaybackService', `Error scheduling three-sixteenth note ${index + 1}`, error);
+      }
+    });
+
+    logger.info('RhythmPlaybackService', `Scheduled ${events.length} notes for three-sixteenth pattern ${sixteenthThreeStampId}`);
+  }
+
+  /**
      * Dispose of the service and clean up resources
      */
   dispose(): void {
@@ -373,4 +479,3 @@ class RhythmPlaybackService {
 const rhythmPlaybackService = new RhythmPlaybackService();
 
 export default rhythmPlaybackService;
-

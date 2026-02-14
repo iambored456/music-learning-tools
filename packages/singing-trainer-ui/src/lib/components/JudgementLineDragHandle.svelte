@@ -4,9 +4,10 @@
   interface Props {
     canvasWidth: number;
     gridHeight: number;
+    nowLineX: number;
   }
 
-  let { canvasWidth, gridHeight }: Props = $props();
+  let { canvasWidth, gridHeight, nowLineX }: Props = $props();
 
   let dragging = $state(false);
   let hovered = $state(false);
@@ -21,22 +22,30 @@
   }
 
   function handlePointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
     dragging = true;
     startX = e.clientX;
-    startNowLineX = highwayState.state.nowLineX;
+    startNowLineX = nowLineX;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.stopPropagation();
     e.preventDefault();
   }
 
   function handlePointerMove(e: PointerEvent) {
     if (!dragging) return;
+    e.stopPropagation();
     e.preventDefault();
     const deltaX = e.clientX - startX;
     highwayState.setNowLineX(clampX(startNowLineX + deltaX));
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(e: PointerEvent) {
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
     dragging = false;
+    e.stopPropagation();
   }
 </script>
 
@@ -45,7 +54,8 @@
   class="judgement-drag-handle"
   class:judgement-drag-handle--hovered={hovered}
   class:judgement-drag-handle--dragging={dragging}
-  style:left="{highwayState.state.nowLineX - HIT_ZONE_HALF}px"
+  data-judgement-drag-handle="true"
+  style:left="{nowLineX - HIT_ZONE_HALF}px"
   style:width="{HIT_ZONE_HALF * 2}px"
   style:height="{gridHeight}px"
   onpointerenter={() => hovered = true}

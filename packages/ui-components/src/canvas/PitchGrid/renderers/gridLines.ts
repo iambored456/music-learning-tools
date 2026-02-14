@@ -36,7 +36,6 @@ export interface TimeBasedVerticalLinesConfig {
   beatIntervalMs: number;
   measureIntervalMs?: number;
   visibleTimeRange: { startMs: number; endMs: number };
-  nowLineX?: number;
   /** Time offset for beat alignment (e.g., lead-in time) */
   beatTimeOffsetMs?: number;
 }
@@ -216,7 +215,27 @@ export function drawTimeBasedVerticalLines(
   config: TimeBasedVerticalLinesConfig,
   coords: CoordinateUtils
 ): void {
-  const { viewportHeight, beatIntervalMs, measureIntervalMs, visibleTimeRange, nowLineX, beatTimeOffsetMs = 0 } = config;
+  const { viewportHeight, beatIntervalMs, measureIntervalMs, visibleTimeRange, beatTimeOffsetMs = 0 } = config;
+
+  const normalizedMeasureIntervalMs = (
+    Number.isFinite(measureIntervalMs) && (measureIntervalMs as number) > 0
+  )
+    ? (measureIntervalMs as number)
+    : null;
+  const measureStepBeatsRaw = normalizedMeasureIntervalMs
+    ? normalizedMeasureIntervalMs / beatIntervalMs
+    : null;
+  const measureStepBeatsRounded = measureStepBeatsRaw
+    ? Math.max(1, Math.round(measureStepBeatsRaw))
+    : null;
+  const hasIntegralMeasureStep = (
+    measureStepBeatsRaw !== null
+    && measureStepBeatsRounded !== null
+    && Math.abs(measureStepBeatsRaw - measureStepBeatsRounded) <= 1e-6
+  );
+  const measureRemainderEpsilonMs = normalizedMeasureIntervalMs
+    ? Math.max(0.5, normalizedMeasureIntervalMs * 1e-6)
+    : 0;
 
   // Calculate beat positions within visible time range, accounting for time offset
   // Beats should align with: offset, offset + beatIntervalMs, offset + 2*beatIntervalMs, etc.
@@ -231,9 +250,17 @@ export function drawTimeBasedVerticalLines(
     if (x === undefined) continue;
 
     // Determine if this is a measure boundary (every 4 beats from the offset)
-    const isMeasure = measureIntervalMs
-      ? ((timeMs - beatTimeOffsetMs) % measureIntervalMs === 0)
-      : false;
+    let isMeasure = false;
+    if (normalizedMeasureIntervalMs !== null) {
+      if (hasIntegralMeasureStep && measureStepBeatsRounded !== null) {
+        isMeasure = beatIndex % measureStepBeatsRounded === 0;
+      } else {
+        const elapsedSinceOffsetMs = timeMs - beatTimeOffsetMs;
+        const remainderMs = elapsedSinceOffsetMs % normalizedMeasureIntervalMs;
+        isMeasure = Math.abs(remainderMs) <= measureRemainderEpsilonMs
+          || Math.abs(Math.abs(remainderMs) - normalizedMeasureIntervalMs) <= measureRemainderEpsilonMs;
+      }
+    }
 
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -245,17 +272,6 @@ export function drawTimeBasedVerticalLines(
   }
 
   ctx.setLineDash([]);
-
-  // Draw "now line" if specified (highway mode)
-  if (nowLineX !== undefined) {
-    ctx.beginPath();
-    ctx.moveTo(nowLineX, 0);
-    ctx.lineTo(nowLineX, viewportHeight);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#00ff00';
-    ctx.setLineDash([]);
-    ctx.stroke();
-  }
 }
 
 // ============================================================================

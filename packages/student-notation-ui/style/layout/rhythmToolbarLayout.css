@@ -211,6 +211,9 @@
     display: flex;
     gap: 0;
     margin-bottom: calc(-1 * var(--space-005));
+    min-height: var(--preset-tab-rail-height);
+    align-items: stretch;
+    --rhythm-tab-border-width: 1px;
     position: relative;
     z-index: 1;
 }
@@ -258,7 +261,8 @@
     box-shadow: var(--box-shadow-sm);
 }
 
-.sixteenth-stamps-grid {
+.sixteenth-four-stamp-grid,
+.sixteenth-three-stamps-grid {
     display: grid;
     grid-template-rows: repeat(3, minmax(0, 1fr));
     flex: 1;
@@ -267,39 +271,58 @@
     align-items: stretch;
 }
 
-.sixteenth-stamps-row {
+.sixteenth-stamps-row,
+.sixteenth-three-stamps-row {
     display: grid;
     gap: var(--space-1);
     justify-items: center;
-    align-content: center;
-    align-items: center;
-    padding: var(--space-05) var(--space-2);
+    align-content: stretch;
+    align-items: stretch;
+    padding: 0 var(--space-2);
     box-sizing: border-box;
 }
 
 .sixteenth-stamps-row-1 {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .sixteenth-stamps-row-2 {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .sixteenth-stamps-row-3 {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.sixteenth-stamps-row .sixteenth-stamp-button {
+.sixteenth-stamps-row .sixteenth-stamp-button,
+.sixteenth-three-stamps-row .sixteenth-stamp-button {
     height: 100%;
     width: auto;
     max-width: 100%;
     max-height: 100%;
-    aspect-ratio: 1 / 1;
     justify-self: center;
     align-self: center;
 }
 
-.sixteenth-stamps-row .sixteenth-stamp-button svg {
+.sixteenth-stamps-row .sixteenth-stamp-button {
+    aspect-ratio: 1 / 1;
+}
+
+.sixteenth-three-stamps-row-1,
+.sixteenth-three-stamps-row-2 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sixteenth-three-stamps-row-3 {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.sixteenth-three-stamps-row .sixteenth-stamp-button {
+    aspect-ratio: 3 / 4;
+}
+
+.sixteenth-stamps-row .sixteenth-stamp-button svg,
+.sixteenth-three-stamps-row .sixteenth-stamp-button svg {
     width: 100%;
     height: 100%;
     display: block;
@@ -321,6 +344,26 @@
     border: 1px solid var(--c-border);
     border-radius: var(--border-radius-md);
     box-shadow: var(--box-shadow-sm);
+}
+
+.sixteenth-stamps-toolbar-container,
+.triplet-stamps-toolbar-container {
+    position: relative;
+    --rhythm-tab-bridge-left: 0px;
+    --rhythm-tab-bridge-width: 0px;
+}
+
+.rhythm-stamp-tab-panel.active .sixteenth-stamps-toolbar-container::before,
+.rhythm-stamp-tab-panel.active .triplet-stamps-toolbar-container::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: var(--rhythm-tab-bridge-left, 0px);
+    width: var(--rhythm-tab-bridge-width, 0px);
+    height: 1px;
+    background-color: var(--c-surface);
+    z-index: 3;
+    pointer-events: none;
 }
 
 .triplet-stamps-grid {

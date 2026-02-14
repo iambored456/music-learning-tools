@@ -5,6 +5,7 @@ import { drawLegendsToSeparateCanvases } from './legend.js';
 import { drawSingleColumnOvalNote, drawTwoColumnOvalNote, drawTonicShape } from './notes.js';
 import { getRowY, getVisibleRowRange } from './rendererUtils.js';
 import { renderSixteenthStamps } from './sixteenthStampRenderer.js';
+import { renderSixteenthThreeStamps } from './sixteenthThreeStampRenderer.js';
 import { renderTripletStamps } from './tripletStampRenderer.js';
 import { renderModulationMarkers } from './modulationRenderer.js';
 import { renderAnnotations } from './annotationRenderer.js';
@@ -252,6 +253,9 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
 
   // Draw stamps (render on top of everything else)
   renderSixteenthStamps(ctx, fullOptions);
+
+  // Draw three-sixteenth stamps
+  renderSixteenthThreeStamps(ctx, fullOptions);
 
   // Draw triplet groups (render on top of stamps)
   renderTripletStamps(ctx, fullOptions);

@@ -261,6 +261,24 @@
       if (!isNaN(val) && val > 0) updateTempoDisplays(val * 1.5);
     });
 
+    // Wire up tempo stepper buttons (+1 / -1)
+    const tempoStepInputMap: Record<string, DraggableNumber | null> = {
+      eighth: eighthNoteInput,
+      quarter: quarterNoteInput,
+      dotted: dottedQuarterInput
+    };
+
+    document.querySelectorAll<HTMLButtonElement>('.tempo-step-btn').forEach(btn => {
+      const tempoKey = btn.dataset.tempo;
+      if (!tempoKey || !tempoStepInputMap[tempoKey]) return;
+      const input = tempoStepInputMap[tempoKey]!;
+      const delta = btn.classList.contains('tempo-step-up') ? 1 : -1;
+      btn.addEventListener('click', () => {
+        input.value = input.value + delta;
+        btn.blur();
+      });
+    });
+
     // Initialize tempo displays
     updateTempoDisplays(store.state.tempo);
 

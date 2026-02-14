@@ -753,7 +753,7 @@ class AnnotationService {
 
     // Get the actual font family from CSS variable (same as canvas)
     const computedStyle = window.getComputedStyle(document.documentElement);
-    const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible", Arial, sans-serif';
+    const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible Next", Arial, sans-serif';
 
     // Use existing settings if editing, otherwise use current tool settings
     const settings = existingSettings || this.toolSettings.text;
@@ -1030,7 +1030,7 @@ class AnnotationService {
 
     // Get the actual font family from CSS variable
     const computedStyle = window.getComputedStyle(document.documentElement);
-    const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible", Arial, sans-serif';
+    const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible Next", Arial, sans-serif';
 
     const fontSizeValue = this.getSizeValue(settings.size);
     ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${fontSizeValue} ${mainFont}`;

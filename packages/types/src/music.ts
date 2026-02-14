@@ -151,6 +151,29 @@ export interface TripletStampPlaybackData {
   placement: TripletStampPlacement;
 }
 
+export interface SixteenthThreeStampPlacement {
+  id: string;
+  sixteenthThreeStampId: number;
+  /** Time-space index (like triplets). Placement span is 1.5 microbeats. */
+  startTimeIndex: number;
+  row: number;
+  /** Absolute row index in masterRowData; used to restore position after range changes. */
+  globalRow?: number;
+  color: string;
+  timestamp: number;
+  shapeOffsets?: Record<string, number>;
+}
+
+export interface SixteenthThreeStampPlaybackData {
+  sixteenthThreeStampId: number;
+  /** Time-space index (like triplets). Placement span is 1.5 microbeats. */
+  startTimeIndex: number;
+  row: number;
+  pitch: string;
+  color: string;
+  placement: SixteenthThreeStampPlacement;
+}
+
 // ============================================================================
 // Rhythm & Time Types
 // ============================================================================
@@ -234,7 +257,8 @@ export interface GeometryPoint {
 export type LassoSelectedItem =
   | { type: 'note'; id: string; data: PlacedNote; index?: number }
   | { type: 'sixteenthStamp'; id: string; data: SixteenthStampPlacement; index?: number }
-  | { type: 'tripletStamp'; id: string; data: TripletStampPlacement; index?: number };
+  | { type: 'tripletStamp'; id: string; data: TripletStampPlacement; index?: number }
+  | { type: 'sixteenthThreeStamp'; id: string; data: SixteenthThreeStampPlacement; index?: number };
 
 export interface LassoSelection {
   selectedItems: LassoSelectedItem[];

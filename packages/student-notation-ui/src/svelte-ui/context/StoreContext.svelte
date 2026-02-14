@@ -99,6 +99,7 @@
     store.on('rhythmPatternChanged', handleRhythmPatternChanged);
     store.on('notesChanged', renderAll);
     store.on('sixteenthStampPlacementsChanged', renderAll);
+    store.on('sixteenthThreeStampPlacementsChanged', renderAll);
     store.on('tripletStampPlacementsChanged', renderAll);
     store.on('accidentalModeChanged', renderAll);
     store.on('frequencyLabelsChanged', renderAll);

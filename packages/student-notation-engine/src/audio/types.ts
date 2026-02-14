@@ -192,6 +192,19 @@ export interface SchedulableStamp {
 }
 
 /**
+ * Three-sixteenth stamp playback data for scheduling
+ */
+export interface SchedulableThreeStamp {
+  sixteenthThreeStampId: string | number;
+  startTimeIndex: number;
+  row: number;
+  color: string;
+  placement?: {
+    shapeOffsets?: Record<string, number>;
+  };
+}
+
+/**
  * Triplet playback data for scheduling
  */
 export interface SchedulableTriplet {
@@ -282,6 +295,10 @@ export interface TransportStateCallbacks {
   getStampPlaybackData?: () => SchedulableStamp[];
   /** Get stamp schedule events */
   getStampScheduleEvents?: (stampId: string | number, placement?: any) => StampScheduleEvent[];
+  /** Get three-sixteenth stamp playback data */
+  getThreeStampPlaybackData?: () => SchedulableThreeStamp[];
+  /** Get three-sixteenth stamp schedule events */
+  getThreeStampScheduleEvents?: (stampId: string | number, placement?: any) => StampScheduleEvent[];
   /** Get triplet playback data */
   getTripletPlaybackData?: () => SchedulableTriplet[];
   /** Get triplet schedule events */

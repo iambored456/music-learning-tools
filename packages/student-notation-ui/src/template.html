@@ -718,13 +718,22 @@
                 <div class="control-section rhythm-stamp-tabs-container">
                     <div class="rhythm-stamp-tabs-controls">
                         <div class="rhythm-tab-stamps">
-                            <button class="rhythm-tab-button rhythm-stamp-tab-button active" data-rhythm-stamp-tab="sixteenth">Sixteenths</button>
+                            <button class="rhythm-tab-button rhythm-stamp-tab-button active" data-rhythm-stamp-tab="sixteenth">
+                                <span class="rhythm-stamp-tab-label">Sixteenths</span>
+                                <span class="sixteenth-sub-toggle sixteenth-sub-toggle-inline" aria-label="Sixteenth stamp mode">
+                                    <span class="sixteenth-sub-btn active" data-sixteenth-sub="four">4</span>
+                                    <span class="sixteenth-sub-btn" data-sixteenth-sub="three">3</span>
+                                </span>
+                            </button>
                             <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="triplet">Triplets</button>
                         </div>
                         <div class="rhythm-stamp-tab-content">
                             <div class="rhythm-stamp-tab-panel active" id="sixteenth-stamps-panel">
-                                <div id="sixteenth-stamps-toolbar-container" class="sixteenth-stamps-toolbar-container">
-                                    <!-- Stamps toolbar will be rendered here by JavaScript -->
+                                <div id="sixteenth-stamps-four-toolbar-container" class="sixteenth-stamps-toolbar-container sixteenth-sub-panel active">
+                                    <!-- Four-sixteenth stamps toolbar will be rendered here by JavaScript -->
+                                </div>
+                                <div id="sixteenth-stamps-three-toolbar-container" class="sixteenth-stamps-toolbar-container sixteenth-sub-panel" style="display:none;">
+                                    <!-- Three-sixteenth stamps toolbar will be rendered here by JavaScript -->
                                 </div>
                             </div>
                             <div class="rhythm-stamp-tab-panel" id="triplet-stamps-panel">
@@ -745,15 +754,27 @@
                                     <div class="tempo-boxes-container">
                                         <div class="tempo-input-group tempo-row">
                                             <img src="assets/tabicons/eigthNote.svg" alt="Eighth Note Tempo" class="tempo-label-icon">
-                                            <div id="eighth-note-tempo"></div>
+                                            <div class="tempo-stepper">
+                                                <button class="tempo-step-btn tempo-step-up" data-tempo="eighth" aria-label="Increase eighth note tempo">&#9650;</button>
+                                                <div id="eighth-note-tempo"></div>
+                                                <button class="tempo-step-btn tempo-step-down" data-tempo="eighth" aria-label="Decrease eighth note tempo">&#9660;</button>
+                                            </div>
                                         </div>
                                         <div class="tempo-input-group tempo-row">
                                             <img src="assets/tabicons/quarterNote.svg" alt="Quarter Note Tempo" class="tempo-label-icon">
-                                            <div id="quarter-note-tempo"></div>
+                                            <div class="tempo-stepper">
+                                                <button class="tempo-step-btn tempo-step-up" data-tempo="quarter" aria-label="Increase quarter note tempo">&#9650;</button>
+                                                <div id="quarter-note-tempo"></div>
+                                                <button class="tempo-step-btn tempo-step-down" data-tempo="quarter" aria-label="Decrease quarter note tempo">&#9660;</button>
+                                            </div>
                                         </div>
                                         <div class="tempo-input-group tempo-row">
                                             <img src="assets/tabicons/dottedQuarterNote.svg" alt="Dotted Quarter Note Tempo" class="tempo-label-icon">
-                                            <div id="dotted-quarter-tempo"></div>
+                                            <div class="tempo-stepper">
+                                                <button class="tempo-step-btn tempo-step-up" data-tempo="dotted" aria-label="Increase dotted quarter note tempo">&#9650;</button>
+                                                <div id="dotted-quarter-tempo"></div>
+                                                <button class="tempo-step-btn tempo-step-down" data-tempo="dotted" aria-label="Decrease dotted quarter note tempo">&#9660;</button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="tempo-slider-container tempo-column-2">

@@ -622,6 +622,32 @@
       document.getElementById(`${normalizedRhythmTab}-stamps-panel`)?.classList.add('active');
     }
 
+    // Sixteenth sub-toggle (4 vs 3)
+    const sixteenthSubBtns = document.querySelectorAll<HTMLElement>('.sixteenth-sub-btn');
+    const fourContainer = document.getElementById('sixteenth-stamps-four-toolbar-container');
+    const threeContainer = document.getElementById('sixteenth-stamps-three-toolbar-container');
+
+    const applySixteenthSubSelection = (targetSub: string): void => {
+      sixteenthSubBtns.forEach(b => b.classList.toggle('active', b.dataset['sixteenthSub'] === targetSub));
+      if (fourContainer) fourContainer.style.display = targetSub === 'four' ? '' : 'none';
+      if (threeContainer) threeContainer.style.display = targetSub === 'three' ? '' : 'none';
+    };
+
+    sixteenthSubBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetSub = btn.dataset['sixteenthSub'];
+        if (!targetSub) return;
+
+        applySixteenthSubSelection(targetSub);
+
+        localStorage.setItem('selectedSixteenthSub', targetSub);
+      });
+    });
+
+    // Restore saved sixteenth sub-toggle
+    const savedSixteenthSub = localStorage.getItem('selectedSixteenthSub') || 'four';
+    applySixteenthSubSelection(savedSixteenthSub === 'three' ? 'three' : 'four');
+
     // Unified position toggle
     if (unifiedPositionToggle) {
       const toggleTrack = unifiedPositionToggle.querySelector<HTMLElement>('.toggle-track');

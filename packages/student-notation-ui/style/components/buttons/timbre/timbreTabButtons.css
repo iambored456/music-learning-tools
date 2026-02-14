@@ -91,12 +91,13 @@
     align-items: stretch;
     position: relative;
     z-index: 1;
+    --preset-tab-border-width: 1px;
 }
 
 .preset-tab-button {
     padding: var(--space-015) var(--space-035);
     background-color: var(--c-surface-muted);
-    border: 1px solid var(--c-border);
+    border: var(--preset-tab-border-width) solid var(--c-border);
     border-bottom: none;
     color: var(--c-text-muted);
     font-family: var(--main-font);
@@ -120,6 +121,11 @@
 
 .preset-tab-button + .preset-tab-button {
     margin-left: -1px;
+}
+
+/* Nudge the second (Effects) tab left by two border widths for visual alignment */
+.preset-effects-tabs .preset-tab-button[data-preset-tab="effects"] {
+    transform: translateX(calc(-2 * var(--preset-tab-border-width)));
 }
 
 .preset-tab-button:hover {
@@ -202,6 +208,8 @@
 .preset-content-box {
     width: 100%;
     max-width: 100%;
+    --preset-tab-bridge-left: 0px;
+    --preset-tab-bridge-width: 0px;
 }
 
 #presets-panel .preset-content-box {
@@ -233,14 +241,7 @@
     container-type: size;
 }
 
-/* Adjust border radius when connected to active tab */
-.preset-tab-panel.active[id="presets-panel"] .preset-content-box {
-    border-top-left-radius: 0px;
-}
-
-.preset-tab-panel.active[id="effects-panel"] .effects-content-box {
-    border-top-right-radius: 0px;
-}
+/* Active corner shaping is centralized in style/base/uiStates.css */
 
 .effects-content-box {
     width: fit-content;
@@ -253,31 +254,34 @@
     flex: 1 1 auto;
     align-items: stretch;
     justify-content: stretch;
+    --effects-tab-bridge-left: 0px;
+    --effects-tab-bridge-width: 0px;
 }
 
 /* Tab-specific border gap styling to create seamless connection */
-/* Presets tab - leftmost tab */
+/* Bridge strip matches active preset/effects tab button geometry */
 .preset-tab-panel.active[id="presets-panel"] .preset-content-box::before {
     content: '';
     position: absolute;
     top: -1px;
-    left: calc(50% - 35px);
-    width: 70px;
+    left: var(--preset-tab-bridge-left, 0px);
+    width: var(--preset-tab-bridge-width, 0px);
     height: 1px;
     background-color: var(--c-surface);
     z-index: 3;
+    pointer-events: none;
 }
 
-/* Effects tab - rightmost tab */
 .preset-tab-panel.active[id="effects-panel"] .effects-content-box::before {
     content: '';
     position: absolute;
     top: -1px;
-    left: calc(50% - 35px);
-    width: 70px;
+    left: var(--effects-tab-bridge-left, 0px);
+    width: var(--effects-tab-bridge-width, 0px);
     height: 1px;
     background-color: var(--c-surface);
     z-index: 3;
+    pointer-events: none;
 }
 
 /* --- Preset Voice Buttons --- */
@@ -323,7 +327,9 @@
   flex: 1 1 0;
   height: auto;
   min-height: 0;
-  font-size: clamp(0.7rem, 1.5dvh, 1rem);
+  padding: clamp(0.06rem, 0.18dvh, 0.16rem) clamp(0.14rem, 0.28dvw, 0.28rem);
+  line-height: 1.05;
+  font-size: clamp(0.8rem, 1.8dvh, 1.1rem);
 }
 .preset-button {
   width: 100%;
@@ -331,10 +337,10 @@
   justify-content: center;
   display: flex;
   align-items: center;
-  padding: clamp(0.2rem, 0.5dvh, 0.5rem) clamp(0.25rem, 0.5dvw, 0.5rem);
+  padding: clamp(0.08rem, 0.2dvh, 0.2rem) clamp(0.14rem, 0.3dvw, 0.28rem);
   height: clamp(1.5rem, 3.5dvh, 3rem);
   min-height: 0;
-  font-size: clamp(0.65rem, 1.2dvh, 0.85rem);
+  font-size: clamp(0.75rem, 1.45dvh, 0.95rem);
   background-color: var(--c-surface);
   color: var(--c-text);
   border: 1px solid var(--c-border);

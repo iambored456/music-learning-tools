@@ -57,6 +57,7 @@ export type {
   PlaybackMode,
   SchedulableNote,
   SchedulableStamp,
+  SchedulableThreeStamp,
   SchedulableTriplet,
   StampScheduleEvent,
   EffectsManager,

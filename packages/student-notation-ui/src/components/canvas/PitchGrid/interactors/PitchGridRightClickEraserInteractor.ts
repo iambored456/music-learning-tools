@@ -130,6 +130,7 @@ export class PitchGridRightClickEraserInteractor {
     const noteErased = Boolean(store.eraseInPitchArea(colIndex as CanvasSpaceColumn, rowIndex, 2, false));
     const tonicErased = Boolean(store.eraseTonicSignAt(colIndex, false));
     const sixteenthErased = Boolean(store.eraseSixteenthStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow));
+    const threeStampErased = Boolean(store.eraseSixteenthThreeStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow));
     const tripletErased = Boolean(store.eraseTripletStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow));
 
     let annotationErased = false;
@@ -141,7 +142,7 @@ export class PitchGridRightClickEraserInteractor {
       annotationErased = Boolean(annotationService.eraseAtPoint(canvasX, canvasY));
     }
 
-    const passErased = noteErased || tonicErased || sixteenthErased || tripletErased || annotationErased;
+    const passErased = noteErased || tonicErased || sixteenthErased || threeStampErased || tripletErased || annotationErased;
     this.actionTaken = this.actionTaken || passErased;
 
     logRightClickEraser(phase, {

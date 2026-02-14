@@ -48,6 +48,13 @@ export interface HighwayState {
   waitForInput: boolean;
   isWaitingForInput: boolean;
   waitingNoteId: string | null;
+  timelineDurationMs: number;
+  timelineViewStartMs: number;
+  timelineViewDurationMs: number;
+  timelineContentDurationMs: number;
+  timelineContentStartMs: number;
+  timelinePaddingBeforeMs: number;
+  timelinePaddingAfterMs: number;
 }
 
 const DEFAULT_STATE: HighwayState = {
@@ -74,9 +81,21 @@ const DEFAULT_STATE: HighwayState = {
   waitForInput: false,
   isWaitingForInput: false,
   waitingNoteId: null,
+  timelineDurationMs: 4000,
+  timelineViewStartMs: 0,
+  timelineViewDurationMs: 4000,
+  timelineContentDurationMs: 4000,
+  timelineContentStartMs: 0,
+  timelinePaddingBeforeMs: 0,
+  timelinePaddingAfterMs: 0,
 };
 
 function createHighwayState() {
+  const MIN_TIMELINE_DURATION_MS = 250;
+  const MIN_TIMELINE_VIEW_MS = 250;
+  const MAX_TIMELINE_ZOOM_RATIO = 15;
+  const MAX_TIMELINE_DURATION_MS = 60 * 60 * 1000;
+
   let state = $state<HighwayState>({ ...DEFAULT_STATE });
   let engineService: NoteHighwayServiceInstance | null = null;
   let animationFrameId: number | null = null;
@@ -88,6 +107,92 @@ function createHighwayState() {
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function normalizeTimelineDurationMs(durationMs: number): number {
+    if (!Number.isFinite(durationMs)) {
+      return DEFAULT_STATE.timelineDurationMs;
+    }
+    return clamp(
+      Math.round(durationMs),
+      MIN_TIMELINE_DURATION_MS,
+      MAX_TIMELINE_DURATION_MS,
+    );
+  }
+
+  function normalizePaddingMs(paddingMs: number | null | undefined): number {
+    if (!Number.isFinite(paddingMs)) return 0;
+    return Math.max(0, Math.round(paddingMs as number));
+  }
+
+  function getMinimumTimelineViewDurationMs(durationMs: number): number {
+    const zoomCapFloorMs = Math.ceil(Math.max(1, durationMs) / MAX_TIMELINE_ZOOM_RATIO);
+    return Math.max(MIN_TIMELINE_VIEW_MS, zoomCapFloorMs);
+  }
+
+  function getTimelineContentDurationFromNotes(notes: TargetNote[]): number {
+    let maxEndMs = 0;
+    for (const note of notes) {
+      const startMs = Number.isFinite(note.startTimeMs) ? note.startTimeMs : 0;
+      const durationMs = Number.isFinite(note.durationMs) ? note.durationMs : 0;
+      const noteEndMs = Math.max(0, Math.round(startMs + durationMs));
+      if (noteEndMs > maxEndMs) {
+        maxEndMs = noteEndMs;
+      }
+    }
+    return normalizeTimelineDurationMs(Math.max(DEFAULT_STATE.timelineContentDurationMs, maxEndMs));
+  }
+
+  function isTimelineAtFullView(epsilonMs = 1): boolean {
+    return state.timelineViewStartMs <= epsilonMs
+      && Math.abs(state.timelineViewDurationMs - state.timelineDurationMs) <= epsilonMs;
+  }
+
+  function setTimelineViewport(startMs: number, viewDurationMs: number): void {
+    const durationMs = Math.max(MIN_TIMELINE_DURATION_MS, state.timelineDurationMs);
+    const minViewDurationMs = getMinimumTimelineViewDurationMs(durationMs);
+    const clampedViewDurationMs = clamp(
+      Math.round(viewDurationMs),
+      minViewDurationMs,
+      durationMs,
+    );
+    const maxStartMs = Math.max(0, durationMs - clampedViewDurationMs);
+    const clampedStartMs = clamp(Math.round(startMs), 0, maxStartMs);
+    state.timelineViewDurationMs = clampedViewDurationMs;
+    state.timelineViewStartMs = clampedStartMs;
+  }
+
+  function setTimelineDuration(
+    contentDurationMs: number,
+    options?: { resetView?: boolean; paddingBeforeMs?: number; paddingAfterMs?: number },
+  ): void {
+    const wasFullView = isTimelineAtFullView();
+    const normalizedContentDurationMs = normalizeTimelineDurationMs(contentDurationMs);
+    const paddingBeforeMs = options?.paddingBeforeMs !== undefined
+      ? normalizePaddingMs(options.paddingBeforeMs)
+      : state.timelinePaddingBeforeMs;
+    const paddingAfterMs = options?.paddingAfterMs !== undefined
+      ? normalizePaddingMs(options.paddingAfterMs)
+      : state.timelinePaddingAfterMs;
+
+    const requestedTotalDurationMs = normalizedContentDurationMs + paddingBeforeMs + paddingAfterMs;
+    const normalizedTotalDurationMs = normalizeTimelineDurationMs(requestedTotalDurationMs);
+    const availablePaddingBudgetMs = Math.max(0, normalizedTotalDurationMs - normalizedContentDurationMs);
+    const clampedPaddingBeforeMs = Math.min(paddingBeforeMs, availablePaddingBudgetMs);
+    const clampedPaddingAfterMs = Math.max(0, availablePaddingBudgetMs - clampedPaddingBeforeMs);
+
+    state.timelineContentDurationMs = normalizedContentDurationMs;
+    state.timelineContentStartMs = clampedPaddingBeforeMs;
+    state.timelinePaddingBeforeMs = clampedPaddingBeforeMs;
+    state.timelinePaddingAfterMs = clampedPaddingAfterMs;
+    state.timelineDurationMs = normalizedTotalDurationMs;
+
+    if (options?.resetView || wasFullView) {
+      setTimelineViewport(0, normalizedTotalDurationMs);
+      return;
+    }
+
+    setTimelineViewport(state.timelineViewStartMs, state.timelineViewDurationMs);
   }
 
   function applyTimelineFit(durationMs: number): void {
@@ -276,8 +381,24 @@ function createHighwayState() {
       }
     },
 
-    setTargetNotes(notes: TargetNote[]) {
+    setTargetNotes(
+      notes: TargetNote[],
+      options?: { preserveTimelinePadding?: boolean; contentDurationMs?: number },
+    ) {
       state.targetNotes = notes;
+      const inferredTimelineContentDurationMs = (
+        Number.isFinite(options?.contentDurationMs) && (options?.contentDurationMs as number) > 0
+      )
+        ? normalizeTimelineDurationMs(options?.contentDurationMs as number)
+        : getTimelineContentDurationFromNotes(notes);
+      if (options?.preserveTimelinePadding) {
+        setTimelineDuration(inferredTimelineContentDurationMs);
+      } else {
+        setTimelineDuration(inferredTimelineContentDurationMs, {
+          paddingBeforeMs: 0,
+          paddingAfterMs: 0,
+        });
+      }
 
       // Reinitialize engine if it exists
       if (engineService) {
@@ -317,11 +438,65 @@ function createHighwayState() {
       pendingTimelineFitDurationMs = null;
     },
 
-    fitTimelineToDuration(durationMs: number) {
+    fitTimelineToDuration(
+      durationMs: number,
+      options?: { paddingBeforeMs?: number; paddingAfterMs?: number },
+    ) {
       if (!Number.isFinite(durationMs) || durationMs <= 0) return;
-      const normalizedDurationMs = Math.max(250, Math.round(durationMs));
-      pendingTimelineFitDurationMs = normalizedDurationMs;
-      applyTimelineFit(normalizedDurationMs);
+      const normalizedContentDurationMs = normalizeTimelineDurationMs(durationMs);
+      const paddingBeforeMs = normalizePaddingMs(options?.paddingBeforeMs);
+      const paddingAfterMs = normalizePaddingMs(options?.paddingAfterMs);
+      setTimelineDuration(normalizedContentDurationMs, {
+        resetView: true,
+        paddingBeforeMs,
+        paddingAfterMs,
+      });
+      pendingTimelineFitDurationMs = state.timelineDurationMs;
+      applyTimelineFit(state.timelineDurationMs);
+    },
+
+    resetTimelineViewport() {
+      setTimelineViewport(0, state.timelineDurationMs);
+    },
+
+    setTimelineViewStartMs(startMs: number) {
+      setTimelineViewport(startMs, state.timelineViewDurationMs);
+    },
+
+    setTimelineViewDurationMs(viewDurationMs: number, anchorRatio: number = 0.5) {
+      const anchor = clamp(anchorRatio, 0, 1);
+      const minViewDurationMs = getMinimumTimelineViewDurationMs(state.timelineDurationMs);
+      const currentViewDurationMs = Math.max(minViewDurationMs, state.timelineViewDurationMs);
+      const anchorTimeMs = state.timelineViewStartMs + (currentViewDurationMs * anchor);
+      const clampedViewDurationMs = clamp(
+        Math.round(viewDurationMs),
+        minViewDurationMs,
+        state.timelineDurationMs,
+      );
+      const nextStartMs = anchorTimeMs - (clampedViewDurationMs * anchor);
+      setTimelineViewport(nextStartMs, clampedViewDurationMs);
+    },
+
+    zoomTimelineViewport(zoomFactor: number, anchorRatio: number = 0.5) {
+      if (!Number.isFinite(zoomFactor) || zoomFactor <= 0) return;
+      const minViewDurationMs = getMinimumTimelineViewDurationMs(state.timelineDurationMs);
+      const currentViewDurationMs = Math.max(minViewDurationMs, state.timelineViewDurationMs);
+      const nextViewDurationMs = currentViewDurationMs / zoomFactor;
+      const anchor = clamp(anchorRatio, 0, 1);
+      const anchorTimeMs = state.timelineViewStartMs + (currentViewDurationMs * anchor);
+      const clampedViewDurationMs = clamp(
+        Math.round(nextViewDurationMs),
+        minViewDurationMs,
+        state.timelineDurationMs,
+      );
+      const nextStartMs = anchorTimeMs - (clampedViewDurationMs * anchor);
+      setTimelineViewport(nextStartMs, clampedViewDurationMs);
+    },
+
+    panTimelineViewportMs(deltaMs: number) {
+      if (!Number.isFinite(deltaMs) || deltaMs === 0) return;
+      const nextStartMs = state.timelineViewStartMs + deltaMs;
+      setTimelineViewport(nextStartMs, state.timelineViewDurationMs);
     },
 
     setTempoBpm(tempoBpm: number) {

@@ -85,6 +85,19 @@ export interface SixteenthStampPlacement {
   shapeOffsets?: Record<string, number>;
 }
 
+export interface SixteenthThreeStampPlacement {
+  id: string;
+  sixteenthThreeStampId: number;
+  /** Time-space index (like triplets). Placement span is 1.5 microbeats. */
+  startTimeIndex: number;
+  row: number;
+  /** Absolute row index in masterRowData; used to restore position after range changes. */
+  globalRow?: number;
+  color: string;
+  timestamp: number;
+  shapeOffsets?: Record<string, number>;
+}
+
 export interface TripletStampPlacement {
   id: string;
   tripletStampId: number;
@@ -124,11 +137,22 @@ export type TripletStampPlaybackData = {
   placement: TripletStampPlacement;
 };
 
+export type SixteenthThreeStampPlaybackData = {
+  sixteenthThreeStampId: number;
+  /** Time-space index (like triplets). Placement span is 1.5 microbeats. */
+  startTimeIndex: number;
+  row: number;
+  pitch: string;
+  color: string;
+  placement: SixteenthThreeStampPlacement;
+};
+
 export type Annotation = any;
 
 export type LassoSelectedItem =
   | { type: 'note'; id: string; data: PlacedNote; index?: number }
   | { type: 'sixteenthStamp'; id: string; data: SixteenthStampPlacement; index?: number }
+  | { type: 'sixteenthThreeStamp'; id: string; data: SixteenthThreeStampPlacement; index?: number }
   | { type: 'tripletStamp'; id: string; data: TripletStampPlacement; index?: number };
 
 export interface LassoSelection {
@@ -247,6 +271,7 @@ export interface HistoryEntry {
   timbres: TimbresState['timbres'];
   placedChords: PlacedChord[];
   sixteenthStampPlacements: SixteenthStampPlacement[];
+  sixteenthThreeStampPlacements: SixteenthThreeStampPlacement[];
   tripletStampPlacements: TripletStampPlacement[];
   annotations: Annotation[];
   lassoSelection: LassoSelection;
@@ -258,6 +283,7 @@ export interface AppState {
   placedChords: PlacedChord[];
   tonicSignGroups: TonicSignGroups;
   sixteenthStampPlacements: SixteenthStampPlacement[];
+  sixteenthThreeStampPlacements: SixteenthThreeStampPlacement[];
   tripletStampPlacements: TripletStampPlacement[];
   annotations: Annotation[];
   lassoSelection: LassoSelection;
@@ -403,6 +429,15 @@ export interface Store {
   getSixteenthStampPlaybackData(): SixteenthStampPlaybackData[];
   updateSixteenthStampShapeOffset(placementId: string, shapeKey: string, rowOffset: number): void;
   getSixteenthStampShapeRow(placement: SixteenthStampPlacement, shapeKey: string): number;
+  addSixteenthThreeStampPlacement(sixteenthThreeStampId: number, startTimeIndex: number, row: number, color?: string): SixteenthThreeStampPlacement;
+  removeSixteenthThreeStampPlacement(placementId: string): boolean;
+  eraseSixteenthThreeStampsInArea(eraseStartCol: number, eraseEndCol: number, eraseStartRow: number, eraseEndRow: number): boolean;
+  getAllSixteenthThreeStampPlacements(): SixteenthThreeStampPlacement[];
+  getSixteenthThreeStampAt(timeIndex: number, row: number): SixteenthThreeStampPlacement | null;
+  clearAllSixteenthThreeStamps(): void;
+  getSixteenthThreeStampPlaybackData(): SixteenthThreeStampPlaybackData[];
+  updateSixteenthThreeStampShapeOffset(placementId: string, shapeKey: string, rowOffset: number): void;
+  getSixteenthThreeStampShapeRow(placement: SixteenthThreeStampPlacement, shapeKey: string): number;
   addTripletStampPlacement(placement: Omit<TripletStampPlacement, 'id'>): TripletStampPlacement;
   removeTripletStampPlacement(placementId: string): boolean;
   eraseTripletStampsInArea(eraseStartCol: number, eraseEndCol: number, eraseStartRow: number, eraseEndRow: number): boolean;

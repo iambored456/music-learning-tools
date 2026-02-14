@@ -20,6 +20,7 @@ import { getInitialState } from './initialState.js';
 import { createNoteActions, type NoteActionCallbacks } from './actions/noteActions.js';
 import { createSixteenthStampActions, type SixteenthStampActionCallbacks } from './actions/sixteenthStampActions.js';
 import { createTripletStampActions, type TripletStampActionCallbacks } from './actions/tripletStampActions.js';
+import { createSixteenthThreeStampActions, type SixteenthThreeStampActionCallbacks } from './actions/sixteenthThreeStampActions.js';
 import { createRhythmActions, type RhythmActionCallbacks } from './actions/rhythmActions.js';
 
 // Event callback type
@@ -56,6 +57,8 @@ export interface StoreConfig {
   sixteenthStampActionCallbacks?: SixteenthStampActionCallbacks;
   /** Callbacks for triplet stamp actions */
   tripletStampActionCallbacks?: TripletStampActionCallbacks;
+  /** Callbacks for three-sixteenth stamp actions */
+  sixteenthThreeStampActionCallbacks?: SixteenthThreeStampActionCallbacks;
   /** Callbacks for rhythm actions */
   rhythmActionCallbacks?: RhythmActionCallbacks;
 }
@@ -69,7 +72,7 @@ export interface StoreInstance extends Store {
   /** Dispose of the store and clean up */
   dispose(): void;
   /** Unsubscribe from an event */
-  off(eventName: string, callback: EventCallback): void;
+  off<T = unknown>(eventName: string, callback: EventCallback<T>): void;
   /** Save state to storage (if configured) */
   saveState(): void;
 }
@@ -179,6 +182,7 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
       tonicSignGroups: state.tonicSignGroups,
       sixteenthStampPlacements: state.sixteenthStampPlacements,
       tripletStampPlacements: state.tripletStampPlacements,
+      sixteenthThreeStampPlacements: state.sixteenthThreeStampPlacements,
       // timbres: state.timbres, // Removed - always use default Sine preset
       macrobeatGroupings: state.macrobeatGroupings,
       macrobeatBoundaryStyles: state.macrobeatBoundaryStyles,
@@ -215,6 +219,7 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     noteActionCallbacks = {},
     sixteenthStampActionCallbacks = {},
     tripletStampActionCallbacks = {},
+    sixteenthThreeStampActionCallbacks = {},
     rhythmActionCallbacks = {}
   } = config;
 
@@ -245,9 +250,9 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       subscribers[eventName].push(callback as EventCallback);
     },
 
-    off(eventName: string, callback: EventCallback): void {
+    off<T = unknown>(eventName: string, callback: EventCallback<T>): void {
       if (subscribers[eventName]) {
-        const index = subscribers[eventName].indexOf(callback);
+        const index = subscribers[eventName].indexOf(callback as EventCallback);
         if (index > -1) {
           subscribers[eventName].splice(index, 1);
         }
@@ -289,6 +294,7 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
         placedChords: JSON.parse(JSON.stringify(store.state.placedChords)),
         sixteenthStampPlacements: JSON.parse(JSON.stringify(store.state.sixteenthStampPlacements)),
         tripletStampPlacements: JSON.parse(JSON.stringify(store.state.tripletStampPlacements || [])),
+        sixteenthThreeStampPlacements: JSON.parse(JSON.stringify(store.state.sixteenthThreeStampPlacements || [])),
         timbres: timbresForHistory,
         annotations: store.state.annotations ? JSON.parse(JSON.stringify(store.state.annotations)) : [],
         lassoSelection: JSON.parse(JSON.stringify(store.state.lassoSelection))
@@ -308,11 +314,13 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
         store.state.tonicSignGroups = JSON.parse(JSON.stringify(snapshot.tonicSignGroups));
         store.state.sixteenthStampPlacements = JSON.parse(JSON.stringify(snapshot.sixteenthStampPlacements || []));
         store.state.tripletStampPlacements = JSON.parse(JSON.stringify(snapshot.tripletStampPlacements || []));
+        store.state.sixteenthThreeStampPlacements = JSON.parse(JSON.stringify(snapshot.sixteenthThreeStampPlacements || []));
         store.state.timbres = restoreTimbres(snapshot.timbres);
         store.state.annotations = snapshot.annotations ? JSON.parse(JSON.stringify(snapshot.annotations)) : [];
         store.emit('notesChanged');
         store.emit('sixteenthStampPlacementsChanged');
         store.emit('tripletStampPlacementsChanged');
+        store.emit('sixteenthThreeStampPlacementsChanged');
         store.emit('rhythmStructureChanged');
         if (store.state.selectedNote?.color) {
           store.emit('timbreChanged', store.state.selectedNote.color);
@@ -331,11 +339,13 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
         store.state.tonicSignGroups = JSON.parse(JSON.stringify(snapshot.tonicSignGroups));
         store.state.sixteenthStampPlacements = JSON.parse(JSON.stringify(snapshot.sixteenthStampPlacements || []));
         store.state.tripletStampPlacements = JSON.parse(JSON.stringify(snapshot.tripletStampPlacements || []));
+        store.state.sixteenthThreeStampPlacements = JSON.parse(JSON.stringify(snapshot.sixteenthThreeStampPlacements || []));
         store.state.timbres = restoreTimbres(snapshot.timbres);
         store.state.annotations = snapshot.annotations ? JSON.parse(JSON.stringify(snapshot.annotations)) : [];
         store.emit('notesChanged');
         store.emit('sixteenthStampPlacementsChanged');
         store.emit('tripletStampPlacementsChanged');
+        store.emit('sixteenthThreeStampPlacementsChanged');
         store.emit('rhythmStructureChanged');
         if (store.state.selectedNote?.color) {
           store.emit('timbreChanged', store.state.selectedNote.color);
@@ -556,6 +566,10 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     // ========== TRIPLET STAMP ACTIONS ==========
     // Extracted from triplet stamp actions module
     ...createTripletStampActions(tripletStampActionCallbacks),
+
+    // ========== THREE-SIXTEENTH STAMP ACTIONS ==========
+    // Extracted from three-sixteenth stamp actions module
+    ...createSixteenthThreeStampActions(sixteenthThreeStampActionCallbacks),
 
     // ========== RHYTHM ACTIONS ==========
     // Extracted from rhythm actions module

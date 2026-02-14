@@ -149,6 +149,15 @@ const store: StoreInstance = createStore({
     log: logWrapper
   },
   sixteenthStampActionCallbacks: {
+    canvasToTime: (canvasIndex, map) => {
+      return map.canvasToTime.get(canvasIndex) ?? null;
+    },
+    getColumnMap: (state) => {
+      if (columnMapServiceCallbacks.getColumnMap) {
+        return columnMapServiceCallbacks.getColumnMap(state);
+      }
+      return createEmptyColumnMap();
+    },
     log: (level, message, data) => logWrapper(level, 'sixteenthStampActions', message, data)
   },
   tripletStampActionCallbacks: {
@@ -165,6 +174,21 @@ const store: StoreInstance = createStore({
       return createEmptyColumnMap();
     },
     log: (level, message, data) => logWrapper(level, 'tripletStampActions', message, data)
+  },
+  sixteenthThreeStampActionCallbacks: {
+    canvasToTime: (canvasIndex, map) => {
+      return map.canvasToTime.get(canvasIndex) ?? null;
+    },
+    timeToCanvas: (timeIndex, map) => {
+      return map.timeToCanvas.get(timeIndex) ?? timeIndex;
+    },
+    getColumnMap: (state) => {
+      if (columnMapServiceCallbacks.getColumnMap) {
+        return columnMapServiceCallbacks.getColumnMap(state);
+      }
+      return createEmptyColumnMap();
+    },
+    log: (level, message, data) => logWrapper(level, 'sixteenthThreeStampActions', message, data)
   }
 });
 

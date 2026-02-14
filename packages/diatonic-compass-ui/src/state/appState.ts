@@ -39,6 +39,7 @@ export interface AppState {
     init: boolean;
     orientation: BeltOrientation;
     order: BeltId[];
+    resultAboveCompass: boolean;
     layoutOrder: LayoutOrder;
   };
   dimensions: {
@@ -179,12 +180,13 @@ export function getDefaultState(): AppState {
       init: false,
       orientation: 'horizontal',
       order: ['pitch', 'degree', 'intervals', 'chromatic'],
+      resultAboveCompass: false,
       layoutOrder: {
         horizontal: ['compass', 'pitch', 'degree', 'intervals', 'chromatic', 'result'],
         vertical: ['compass', 'result']
       }
     },
-    dimensions: { 
+    dimensions: {
       size: 0, cx: 0, cy: 0, dpr: 1 
     },
     playback: { 

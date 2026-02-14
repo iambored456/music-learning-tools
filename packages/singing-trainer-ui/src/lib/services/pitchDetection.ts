@@ -18,6 +18,9 @@ const CONFIG = {
   MAX_PITCH_HZ: 1600,
   HIGHLIGHT_CORE_CENTS: 25,
   HIGHLIGHT_CROSSFADE_CENTS: 50,
+  HIGHLIGHT_MIN_DATA_POINTS: 16,
+  // With MIN=16, RAMP=5 yields a ramp across points 16,17,18,19,20.
+  HIGHLIGHT_RAMP_DATA_POINTS: 5,
   MIN_VOLUME_DB: -60,
   DISPLAY_MIN_VOLUME_DB: -80,
   PREFERRED_STREAM_PROBE_DURATION_MS: 220,
@@ -46,6 +49,23 @@ let trackUnmuteListener: (() => void) | null = null;
 let trackEndedListener: (() => void) | null = null;
 
 let preferredInputDeviceId: string | null = null;
+let highlightConsecutiveDataPoints = 0;
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function easeOutCubic(value: number): number {
+  const t = clamp01(value);
+  return 1 - ((1 - t) * (1 - t) * (1 - t));
+}
+
+function getHighlightRampMultiplier(consecutivePoints: number): number {
+  if (consecutivePoints < CONFIG.HIGHLIGHT_MIN_DATA_POINTS) return 0;
+  const rampPoint = consecutivePoints - CONFIG.HIGHLIGHT_MIN_DATA_POINTS + 1;
+  const rampProgress = clamp01(rampPoint / CONFIG.HIGHLIGHT_RAMP_DATA_POINTS);
+  return easeOutCubic(rampProgress);
+}
 
 function loadPreferredInputDeviceId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -354,45 +374,52 @@ function animationLoop(): void {
   }
 
   if (hasDisplayPitch && pitchState.state.currentPitch) {
-    const midi = pitchState.state.currentPitch.midi;
-    const lowerMidi = Math.floor(midi);
-    const upperMidi = lowerMidi + 1;
-    const centsFromLower = (midi - lowerMidi) * CENTS_PER_SEMITONE;
-    const crossfadeStart = CONFIG.HIGHLIGHT_CORE_CENTS;
-    const crossfadeEnd = CENTS_PER_SEMITONE - CONFIG.HIGHLIGHT_CORE_CENTS;
-
-    let lowerOpacity = 0;
-    let upperOpacity = 0;
-
-    if (centsFromLower <= crossfadeStart) {
-      lowerOpacity = 1;
-    } else if (centsFromLower >= crossfadeEnd) {
-      upperOpacity = 1;
+    highlightConsecutiveDataPoints += 1;
+    const highlightRampMultiplier = getHighlightRampMultiplier(highlightConsecutiveDataPoints);
+    if (highlightRampMultiplier <= 0) {
+      pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
     } else {
-      const t = (centsFromLower - crossfadeStart) / CONFIG.HIGHLIGHT_CROSSFADE_CENTS;
-      lowerOpacity = 1 - t;
-      upperOpacity = t;
-    }
+      const midi = pitchState.state.currentPitch.midi;
+      const lowerMidi = Math.floor(midi);
+      const upperMidi = lowerMidi + 1;
+      const centsFromLower = (midi - lowerMidi) * CENTS_PER_SEMITONE;
+      const crossfadeStart = CONFIG.HIGHLIGHT_CORE_CENTS;
+      const crossfadeEnd = CENTS_PER_SEMITONE - CONFIG.HIGHLIGHT_CORE_CENTS;
 
-    const highlights = [];
-    if (lowerOpacity > 0) {
-      highlights.push({
-        pitchClass: midiToPitchClass(lowerMidi),
-        midi: lowerMidi,
-        opacity: lowerOpacity,
-      });
-    }
+      let lowerOpacity = 0;
+      let upperOpacity = 0;
 
-    if (upperOpacity > 0) {
-      highlights.push({
-        pitchClass: midiToPitchClass(upperMidi),
-        midi: upperMidi,
-        opacity: upperOpacity,
-      });
-    }
+      if (centsFromLower <= crossfadeStart) {
+        lowerOpacity = 1;
+      } else if (centsFromLower >= crossfadeEnd) {
+        upperOpacity = 1;
+      } else {
+        const t = (centsFromLower - crossfadeStart) / CONFIG.HIGHLIGHT_CROSSFADE_CENTS;
+        lowerOpacity = 1 - t;
+        upperOpacity = t;
+      }
 
-    pitchState.setStablePitch({ highlights, size: HIGHLIGHT_DEFAULT_SIZE });
+      const highlights = [];
+      if (lowerOpacity > 0) {
+        highlights.push({
+          pitchClass: midiToPitchClass(lowerMidi),
+          midi: lowerMidi,
+          opacity: lowerOpacity * highlightRampMultiplier,
+        });
+      }
+
+      if (upperOpacity > 0) {
+        highlights.push({
+          pitchClass: midiToPitchClass(upperMidi),
+          midi: upperMidi,
+          opacity: upperOpacity * highlightRampMultiplier,
+        });
+      }
+
+      pitchState.setStablePitch({ highlights, size: HIGHLIGHT_DEFAULT_SIZE });
+    }
   } else {
+    highlightConsecutiveDataPoints = 0;
     pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
   }
 
@@ -525,6 +552,7 @@ function cleanup(): void {
 
   pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
   pitchState.setCurrentPitch(null);
+  highlightConsecutiveDataPoints = 0;
 }
 
 export function isDetecting(): boolean {

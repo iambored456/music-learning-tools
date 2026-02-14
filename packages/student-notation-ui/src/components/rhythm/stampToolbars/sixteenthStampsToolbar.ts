@@ -1,6 +1,7 @@
 // js/components/Rhythm/stampToolbars/sixteenthStampsToolbar.js
 import { SIXTEENTH_STAMPS } from '@/rhythm/sixteenthStamps.ts';
 import { defaultSixteenthStampRenderer } from '@utils/sixteenthStampRenderer.ts';
+import { registerSixteenthStampLayoutDebug } from '@utils/sixteenthStampLayoutDebug.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 
@@ -17,13 +18,14 @@ const SixteenthStampsToolbar = {
   updateSixteenthStampColors: (_color: string) => {},
 
   init() {
+    registerSixteenthStampLayoutDebug();
     this.render();
     this.bindEvents();
     logger.info('SixteenthStampsToolbar', 'Sixteenth stamps toolbar initialized', null, 'stamps');
   },
 
   render() {
-    const container = document.getElementById('sixteenth-stamps-toolbar-container');
+    const container = document.getElementById('sixteenth-stamps-four-toolbar-container');
     if (!container) {
       logger.warn('SixteenthStampsToolbar', 'Container not found', null, 'stamps');
       return;
@@ -32,7 +34,7 @@ const SixteenthStampsToolbar = {
     container.innerHTML = '';
 
     const grid = document.createElement('div');
-    grid.className = 'sixteenth-stamps-grid';
+    grid.className = 'sixteenth-four-stamp-grid';
 
     const stampRows = [
       [1, 2, 3, 4],
@@ -57,6 +59,7 @@ const SixteenthStampsToolbar = {
 
     container.appendChild(grid);
     this.setInitialSelection(this.selectedSixteenthStampId);
+    window.logSixteenthStampLayoutComparison?.();
   },
 
   createSixteenthStampButton(stamp: SixteenthStamp) {
@@ -79,7 +82,7 @@ const SixteenthStampsToolbar = {
   },
 
   bindEvents() {
-    const container = document.getElementById('sixteenth-stamps-toolbar-container');
+    const container = document.getElementById('sixteenth-stamps-four-toolbar-container');
     if (!container) {return;}
 
     container.addEventListener('click', (e) => {
@@ -145,11 +148,15 @@ const SixteenthStampsToolbar = {
     store.on('tripletStampToolSelected', () => {
       this.clearSelection();
     });
+
+    store.on('sixteenthThreeStampToolSelected', () => {
+      this.clearSelection();
+    });
   },
 
   setInitialSelection(sixteenthStampId: number) {
     this.selectedSixteenthStampId = sixteenthStampId;
-    const container = document.getElementById('sixteenth-stamps-toolbar-container');
+    const container = document.getElementById('sixteenth-stamps-four-toolbar-container');
     if (container) {
       container.querySelectorAll('.sixteenth-stamp-button').forEach(btn => {
         const button = btn as HTMLElement;
@@ -160,7 +167,7 @@ const SixteenthStampsToolbar = {
 
   selectSixteenthStamp(sixteenthStampId: number) {
     this.selectedSixteenthStampId = sixteenthStampId;
-    const container = document.getElementById('sixteenth-stamps-toolbar-container');
+    const container = document.getElementById('sixteenth-stamps-four-toolbar-container');
     if (container) {
       container.querySelectorAll('.sixteenth-stamp-button').forEach(btn => {
         const button = btn as HTMLElement;
@@ -173,7 +180,7 @@ const SixteenthStampsToolbar = {
   },
 
   clearSelection() {
-    const container = document.getElementById('sixteenth-stamps-toolbar-container');
+    const container = document.getElementById('sixteenth-stamps-four-toolbar-container');
     if (container) {
       container.querySelectorAll('.sixteenth-stamp-button').forEach(btn => {
         btn.classList.remove('active');

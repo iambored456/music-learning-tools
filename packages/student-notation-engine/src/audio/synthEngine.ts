@@ -319,6 +319,9 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
           } as any
         }).connect(masterGain) as any;
 
+        // Suppress Tone.js PolySynth debug logging (triggerAttack/triggerRelease)
+        synth.debug = false;
+
         // Apply synth-level effects if effects manager is available
         if (effectsManager && masterGain) {
           effectsManager.applySynthEffects(synth, color, masterGain);

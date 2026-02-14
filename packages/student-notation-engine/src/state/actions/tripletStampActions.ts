@@ -98,6 +98,21 @@ export function createTripletStampActions(callbacks: TripletStampActionCallbacks
         });
       }
 
+      // Check for collision with three-sixteenth stamps (both in time-space)
+      if (this.state.sixteenthThreeStampPlacements) {
+        const collidingThreeStamps = this.state.sixteenthThreeStampPlacements.filter(threeStamp => {
+          if (threeStamp.row !== placement.row) return false;
+          const threeStampEndTime = threeStamp.startTimeIndex + 1.5;
+          return !(threeStampEndTime <= placement.startTimeIndex || newEndTime <= threeStamp.startTimeIndex);
+        });
+
+        collidingThreeStamps.forEach(threeStamp => {
+          if (this.removeSixteenthThreeStampPlacement) {
+            this.removeSixteenthThreeStampPlacement(threeStamp.id);
+          }
+        });
+      }
+
       const finalPlacement: TripletStampPlacement = {
         id: generateTripletStampPlacementId(),
         ...placement,

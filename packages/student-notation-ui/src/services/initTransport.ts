@@ -18,6 +18,8 @@ import { getTonicSpanColumnIndices } from '@utils/tonicColumnUtils.ts';
 import { drawPulsingColumnHighlight } from '@utils/pulsingPlayhead.ts';
 import { getSixteenthStampPlaybackData } from '@/rhythm/sixteenthStampPlacements.js';
 import { getSixteenthStampScheduleEvents } from '@/rhythm/scheduleSixteenthStamps.js';
+import { getSixteenthThreeStampPlaybackData } from '@/rhythm/sixteenthThreeStampPlacements.js';
+import { getSixteenthThreeStampScheduleEvents } from '@/rhythm/scheduleSixteenthThreeStamps.js';
 import { getTripletStampPlaybackData } from '@/rhythm/tripletStampPlacements.js';
 import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js';
 import { getColumnStartX, getColumnWidth, getCanvasWidth, getMacrobeatHighlightRectForCanvasColumn } from '@services/playheadModel.ts';
@@ -90,6 +92,28 @@ const TransportService = {
             noteId: buildSixteenthStampShapeNoteId(placementId, event.shapeKey)
           }));
         },
+        getThreeStampPlaybackData: () => getSixteenthThreeStampPlaybackData().map((stamp) => ({
+          sixteenthThreeStampId: String(stamp.sixteenthThreeStampId),
+          startTimeIndex: stamp.startTimeIndex,
+          row: stamp.row,
+          color: stamp.color,
+          placement: stamp.placement
+        })),
+        getThreeStampScheduleEvents: (stampId, placement) => {
+          const resolvedStampId = typeof stampId === 'string' ? Number(stampId) : stampId;
+          if (!Number.isFinite(resolvedStampId)) {
+            return [];
+          }
+          const scheduleEvents = getSixteenthThreeStampScheduleEvents(resolvedStampId, placement ?? null);
+          const placementId = typeof placement?.id === 'string' ? placement.id : null;
+          if (!placementId) {
+            return scheduleEvents;
+          }
+          return scheduleEvents.map((event) => ({
+            ...event,
+            noteId: buildSixteenthStampShapeNoteId(placementId, event.shapeKey)
+          }));
+        },
         getTripletPlaybackData: () => getTripletStampPlaybackData().map((triplet) => ({
           tripletStampId: String(triplet.tripletStampId),
           startTimeIndex: triplet.startTimeIndex,
@@ -112,7 +136,9 @@ const TransportService = {
             noteId: buildTripletStampShapeNoteId(placementId, event.shapeKey)
           }));
         },
-        timeToCanvas: (timeIndex, state) => timeToCanvas(timeIndex, state as any),
+        // Use full store state (includes macrobeatGroupings) for column-map conversion.
+        // TransportState is intentionally reduced and does not contain layout metadata.
+        timeToCanvas: (timeIndex) => timeToCanvas(timeIndex, store.state),
         getPlacedTonicSigns: () => getPlacedTonicSigns(store.state),
         getTonicSpanColumnIndices: (tonicSigns) =>
           getTonicSpanColumnIndices(tonicSigns as Parameters<typeof getTonicSpanColumnIndices>[0]),

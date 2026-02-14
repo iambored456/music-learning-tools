@@ -142,3 +142,16 @@
     background-color: #e6ac00 !important; /* Slightly darker yellow on hover */
     color: var(--c-text) !important;
 }
+
+/* --- Shared Sub-Tab Corner Profile --- */
+/* Active content boxes flatten only the top-left corner. */
+.preset-tab-panel.active > .preset-content-box,
+.preset-tab-panel.active > .effects-content-box,
+.pitch-tab-panel.active > .range-content-box,
+.pitch-tab-panel.active > .chords-content-box,
+.pitch-tab-panel.active > .draw-content-box,
+.rhythm-stamp-tab-panel.active > .sixteenth-stamps-toolbar-container,
+.rhythm-stamp-tab-panel.active > .triplet-stamps-toolbar-container {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: var(--border-radius-md) !important;
+}

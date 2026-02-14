@@ -35,8 +35,10 @@ export {
   // Stamps
   type SixteenthStampPlacement,
   type TripletStampPlacement,
+  type SixteenthThreeStampPlacement,
   type SixteenthStampPlaybackData,
   type TripletStampPlaybackData,
+  type SixteenthThreeStampPlaybackData,
 
   // Rhythm & Time
   type MacrobeatGrouping,

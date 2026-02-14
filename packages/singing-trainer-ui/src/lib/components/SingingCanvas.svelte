@@ -35,7 +35,7 @@
   import { highwayState } from '../stores/highwayState.svelte.js';
   import { exerciseState } from '../stores/exerciseState.svelte.js';
   import { ultrastarState } from '../stores/ultrastarState.svelte.js';
-  import { overdubState } from '../stores/overdubState.svelte.js';
+  import { overdubState, type RenderableTakeTrail } from '../stores/overdubState.svelte.js';
   import { overdubExerciseState } from '../stores/overdubExerciseState.svelte.js';
   import { MODE_SCALE_DEGREES, MODE_DEGREE_LABELS } from '../constants/modes.js';
   import { LyricsDisplay } from './karaoke/index.js';
@@ -51,6 +51,22 @@
   let trailCanvas: HTMLCanvasElement | undefined = $state(undefined);
   let trailCtx: CanvasRenderingContext2D | null = $state(null);
   let trailAnimationId: number | null = $state(null);
+  const timelineTrailHistoryCache = new Map<
+    string,
+    {
+      sourceRef: RenderableTakeTrail['points'];
+      sourceLength: number;
+      sourceLastOffsetMs: number;
+      history: PitchHistoryPoint[];
+    }
+  >();
+  let timelinePanDragActive = $state(false);
+  let timelinePanPointerId = $state<number | null>(null);
+  let timelinePanStartClientX = 0;
+  let timelinePanStartViewStartMs = 0;
+  let timelinePanViewDurationMs = 0;
+
+  type RgbTuple = [number, number, number];
 
   const cellWidth = 20;
   const showOctaveLabels = true;
@@ -276,7 +292,8 @@
   const trailConfig = $derived<PitchTrailConfig>({
     timeWindowMs: Infinity,
     pixelsPerSecond: 200,
-    circleRadius: 9.5,
+    circleRadius: appState.state.micTrailCircleRadiusPx,
+    indicatorRadius: appState.state.judgementLineCircleRadiusPx,
     proximityThreshold: 35,
     maxConnections: 0,
     connectorLineWidth: 2.5,
@@ -294,6 +311,52 @@
   });
 
   const persistentOverdubTrails = $derived(overdubState.getRenderableTrails());
+  const overdubVoiceColorByLayerId = $derived.by<Map<string, RgbTuple>>(() => {
+    const map = new Map<string, RgbTuple>();
+    const template = overdubExerciseState.state.template;
+    if (!template) return map;
+
+    const voiceColorByName = new Map<string, RgbTuple>();
+    for (const voice of template.config.voices) {
+      const parsed = parseHexColorToRgb(voice.color);
+      if (parsed) {
+        voiceColorByName.set(voice.name, parsed);
+      }
+    }
+
+    for (const layer of overdubState.state.engine.project.layers) {
+      const voiceColor = voiceColorByName.get(layer.name);
+      if (voiceColor) {
+        map.set(layer.id, voiceColor);
+      }
+    }
+    return map;
+  });
+  const liveMicTrailFixedColor = $derived.by<RgbTuple | null>(() => {
+    if (appState.state.overdubMicTrailColorMode !== 'voice') return null;
+    if (!overdubExerciseState.state.isActive) return null;
+
+    const template = overdubExerciseState.state.template;
+    const activeVoiceId = overdubExerciseState.state.activeVoiceId;
+    if (template && activeVoiceId) {
+      const activeVoice = template.config.voices.find((voice) => voice.voiceId === activeVoiceId);
+      const parsedActiveVoiceColor = parseHexColorToRgb(activeVoice?.color);
+      if (parsedActiveVoiceColor) {
+        return parsedActiveVoiceColor;
+      }
+    }
+
+    const armedLayerId = overdubState.state.engine.armedLayerId;
+    if (armedLayerId) {
+      return overdubVoiceColorByLayerId.get(armedLayerId) ?? null;
+    }
+
+    return null;
+  });
+  const liveTrailConfig = $derived<PitchTrailConfig>({
+    ...trailConfig,
+    fixedColorRgb: liveMicTrailFixedColor,
+  });
   const loopDurationMs = $derived(Math.max(1, overdubState.captureDurationMs));
   const overdubRecordingActive = $derived(
     overdubState.state.isCountInActive || overdubState.state.isRecordingActive
@@ -314,6 +377,59 @@
       && !ultrastarState.state.isActive
       && (highwayState.state.isPlaying || hasHighwayTargets || isOverdubExerciseActive)
   );
+  const timelineViewportEnabled = $derived(
+    mode === 'highway'
+      && !useLoopTimeline
+      && !isUltrastarActive
+      && (hasHighwayTargets || isOverdubExerciseActive)
+      && (!highwayState.state.isPlaying || overdubRecordingActive)
+  );
+  const timelineViewportProjection = $derived.by<{
+    nowLineX: number;
+    pixelsPerSecond: number;
+    currentTimeMs: number;
+    timeWindowMs: number;
+  } | null>(() => {
+    if (!timelineViewportEnabled || gridWidth <= 0) return null;
+
+    const totalDurationMs = Math.max(1, Math.round(highwayState.state.timelineDurationMs));
+    const viewDurationMs = clampNumber(
+      Math.round(highwayState.state.timelineViewDurationMs),
+      1,
+      totalDurationMs,
+    );
+    const maxStartMs = Math.max(0, totalDurationMs - viewDurationMs);
+    const viewStartMs = clampNumber(
+      Math.round(highwayState.state.timelineViewStartMs),
+      0,
+      maxStartMs,
+    );
+
+    const width = Math.max(1, gridWidth);
+    const nowLineX = clampNumber(
+      Math.round(highwayState.state.nowLineX),
+      16,
+      Math.max(16, width - 16),
+    );
+    const pixelsPerSecond = Math.max(1, (width / viewDurationMs) * 1000);
+    const timelineContentStartMs = clampNumber(
+      Math.round(highwayState.state.timelineContentStartMs),
+      0,
+      totalDurationMs,
+    );
+    const currentTimeMs = (
+      viewStartMs
+      + ((nowLineX / pixelsPerSecond) * 1000)
+      - timelineContentStartMs
+    );
+
+    return {
+      nowLineX,
+      pixelsPerSecond,
+      currentTimeMs,
+      timeWindowMs: viewDurationMs,
+    };
+  });
   const gridBeatIntervalMs = $derived.by<number>(() => {
     if (!showTimingGridLines) return 0;
     if (appState.state.beatLineMode === 'none') return 0;
@@ -334,7 +450,7 @@
           targetNotes: [],
           pixelsPerSecond: 200,
           timeWindowMs: Infinity,
-          trailConfig,
+          trailConfig: liveTrailConfig,
           labelConfig,
         }
       : undefined
@@ -346,11 +462,17 @@
       ? {
           pitchHistory: [],
           targetNotes: cachedTargetNotes,
-          nowLineX: highwayState.state.nowLineX,
-          pixelsPerSecond: highwayState.state.pixelsPerSecond,
-          currentTimeMs: highwayState.state.currentTimeMs,
-          timeWindowMs: highwayState.state.timeWindowMs,
-          trailConfig,
+          nowLineX: timelineViewportProjection?.nowLineX ?? highwayState.state.nowLineX,
+          pixelsPerSecond: timelineViewportProjection?.pixelsPerSecond ?? highwayState.state.pixelsPerSecond,
+          currentTimeMs: timelineViewportProjection
+            ? (
+                highwayState.state.isPlaying && overdubRecordingActive
+                  ? highwayState.state.currentTimeMs
+                  : timelineViewportProjection.currentTimeMs
+              )
+            : highwayState.state.currentTimeMs,
+          timeWindowMs: timelineViewportProjection?.timeWindowMs ?? highwayState.state.timeWindowMs,
+          trailConfig: liveTrailConfig,
           labelConfig,
         }
       : undefined
@@ -366,6 +488,149 @@
     containerWidth,
     containerHeight,
   });
+
+  function clampNumber(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function parseHexColorToRgb(color: string | null | undefined): RgbTuple | null {
+    if (typeof color !== 'string') return null;
+    const normalized = color.trim();
+    const shortHexMatch = normalized.match(/^#([0-9a-fA-F]{3})$/);
+    if (shortHexMatch) {
+      const hex = shortHexMatch[1];
+      const r = Number.parseInt(hex[0] + hex[0], 16);
+      const g = Number.parseInt(hex[1] + hex[1], 16);
+      const b = Number.parseInt(hex[2] + hex[2], 16);
+      return [r, g, b];
+    }
+
+    const longHexMatch = normalized.match(/^#([0-9a-fA-F]{6})$/);
+    if (!longHexMatch) return null;
+    const hex = longHexMatch[1];
+    const r = Number.parseInt(hex.slice(0, 2), 16);
+    const g = Number.parseInt(hex.slice(2, 4), 16);
+    const b = Number.parseInt(hex.slice(4, 6), 16);
+    return [r, g, b];
+  }
+
+  function getRenderableTrailFixedColor(trail: RenderableTakeTrail): RgbTuple | null {
+    if (appState.state.overdubMicTrailColorMode !== 'voice') return null;
+    if (!overdubExerciseState.state.isActive) return null;
+    return overdubVoiceColorByLayerId.get(trail.layerId)
+      ?? parseHexColorToRgb(trail.color);
+  }
+
+  function normalizeWheelDelta(delta: number, deltaMode: number): number {
+    if (deltaMode === WheelEvent.DOM_DELTA_LINE) return delta * 16;
+    if (deltaMode === WheelEvent.DOM_DELTA_PAGE) return delta * Math.max(1, containerHeight);
+    return delta;
+  }
+
+  function getPointerXInGrid(clientX: number): number | null {
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    return clientX - rect.left - gridOffsetX;
+  }
+
+  function isPointerInsideGrid(clientX: number): boolean {
+    if (gridWidth <= 0) return false;
+    const pointerXInGrid = getPointerXInGrid(clientX);
+    if (pointerXInGrid === null) return false;
+    return pointerXInGrid >= 0 && pointerXInGrid <= gridWidth;
+  }
+
+  function shiftYAxisRangeBySemitones(deltaSemitones: number): void {
+    if (!Number.isFinite(deltaSemitones) || deltaSemitones === 0) return;
+    const range = appState.state.yAxisRange;
+    const span = Math.max(6, Math.round(range.maxMidi - range.minMidi));
+    const minBound = 21;
+    const maxBound = 108;
+    const maxStart = Math.max(minBound, maxBound - span);
+    const nextMin = clampNumber(Math.round(range.minMidi + deltaSemitones), minBound, maxStart);
+    const nextMax = nextMin + span;
+    if (nextMin === range.minMidi && nextMax === range.maxMidi) return;
+    appState.setYAxisRange({ minMidi: nextMin, maxMidi: nextMax });
+  }
+
+  function handleGridWheel(event: WheelEvent): void {
+    if (!isPointerInsideGrid(event.clientX)) return;
+
+    const pointerXInGrid = getPointerXInGrid(event.clientX);
+    const normalizedDeltaY = normalizeWheelDelta(event.deltaY, event.deltaMode);
+    const normalizedDeltaX = normalizeWheelDelta(event.deltaX, event.deltaMode);
+
+    if (
+      timelineViewportEnabled
+      && pointerXInGrid !== null
+      && (event.ctrlKey || event.metaKey || event.altKey)
+    ) {
+      event.preventDefault();
+      const anchorRatio = clampNumber(pointerXInGrid / Math.max(1, gridWidth), 0, 1);
+      const zoomFactor = Math.exp(-normalizedDeltaY * 0.003);
+      highwayState.zoomTimelineViewport(zoomFactor, anchorRatio);
+      return;
+    }
+
+    const primaryScrollDelta = Math.abs(normalizedDeltaY) > 0 ? normalizedDeltaY : normalizedDeltaX;
+    if (!Number.isFinite(primaryScrollDelta) || primaryScrollDelta === 0) return;
+
+    event.preventDefault();
+    const semitoneSteps = Math.max(1, Math.round(Math.abs(primaryScrollDelta) / 48));
+    const deltaSemitones = primaryScrollDelta > 0 ? -semitoneSteps : semitoneSteps;
+    shiftYAxisRangeBySemitones(deltaSemitones);
+  }
+
+  function handleTimelinePanPointerDown(event: PointerEvent): void {
+    if (!timelineViewportEnabled || event.button !== 2) return;
+    if (!isPointerInsideGrid(event.clientX)) return;
+    const targetElement = event.target instanceof HTMLElement ? event.target : null;
+    if (targetElement?.closest('[data-judgement-drag-handle="true"]')) return;
+
+    const target = event.currentTarget as HTMLElement | null;
+    timelinePanDragActive = true;
+    timelinePanPointerId = event.pointerId;
+    timelinePanStartClientX = event.clientX;
+    timelinePanStartViewStartMs = highwayState.state.timelineViewStartMs;
+    timelinePanViewDurationMs = highwayState.state.timelineViewDurationMs;
+    target?.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function handleTimelinePanPointerMove(event: PointerEvent): void {
+    if (!timelinePanDragActive) return;
+    if (timelinePanPointerId !== null && event.pointerId !== timelinePanPointerId) return;
+    if (gridWidth <= 0) return;
+
+    const deltaPx = event.clientX - timelinePanStartClientX;
+    const deltaMs = -(deltaPx / Math.max(1, gridWidth)) * timelinePanViewDurationMs;
+    highwayState.setTimelineViewStartMs(timelinePanStartViewStartMs + deltaMs);
+    event.preventDefault();
+  }
+
+  function stopTimelinePan(target: EventTarget | null, pointerId?: number): void {
+    if (!timelinePanDragActive) return;
+    timelinePanDragActive = false;
+    timelinePanPointerId = null;
+    if (
+      target instanceof HTMLElement
+      && pointerId !== undefined
+      && target.hasPointerCapture(pointerId)
+    ) {
+      target.releasePointerCapture(pointerId);
+    }
+  }
+
+  function handleTimelinePanPointerUp(event: PointerEvent): void {
+    if (timelinePanPointerId !== null && event.pointerId !== timelinePanPointerId) return;
+    stopTimelinePan(event.currentTarget, event.pointerId);
+  }
+
+  function handleTimelineContextMenu(event: MouseEvent): void {
+    if (!timelineViewportEnabled) return;
+    if (!isPointerInsideGrid(event.clientX)) return;
+    event.preventDefault();
+  }
 
   function setupTrailCanvas(): void {
     if (!trailCanvas) return;
@@ -387,6 +652,42 @@
     trailCtx = ctx;
   }
 
+  function getCachedTimelineTrailHistory(trail: RenderableTakeTrail): PitchHistoryPoint[] {
+    const sourcePoints = trail.points;
+    if (!sourcePoints || sourcePoints.length === 0) return [];
+
+    const sourceLength = sourcePoints.length;
+    const sourceLastOffsetMs = Math.round(sourcePoints[sourceLength - 1]?.offsetMs ?? -1);
+    const cached = timelineTrailHistoryCache.get(trail.takeId);
+    if (
+      cached
+      && cached.sourceRef === sourcePoints
+      && cached.sourceLength === sourceLength
+      && cached.sourceLastOffsetMs === sourceLastOffsetMs
+    ) {
+      return cached.history;
+    }
+
+    const history: PitchHistoryPoint[] = [];
+    for (const point of sourcePoints) {
+      if (point.offsetMs < 0) continue;
+      history.push({
+        frequency: point.frequency,
+        midi: point.midi,
+        clarity: point.clarity,
+        time: point.offsetMs,
+      });
+    }
+
+    timelineTrailHistoryCache.set(trail.takeId, {
+      sourceRef: sourcePoints,
+      sourceLength,
+      sourceLastOffsetMs,
+      history,
+    });
+    return history;
+  }
+
   function renderTrail(): void {
     if (!trailCtx || gridWidth <= 0) return;
 
@@ -399,23 +700,24 @@
       return;
     }
 
-    const trailHistory = pitchState.state.history;
-    if (trailHistory.length === 0) return;
-
     // Support both stationary and highway modes
     const activeConfig = mode === 'singing' ? singingConfig : highwayConfig;
     if (!activeConfig) return;
+
+    const trailHistory = pitchState.state.history;
 
     // Use appropriate nowLineX based on mode
     const nowLineX = mode === 'highway' && highwayConfig
       ? highwayConfig.nowLineX
       : 100;
+    const pixelsPerSecond = Math.max(1, activeConfig.pixelsPerSecond ?? 200);
+    const timeWindowMs = Math.max(1, activeConfig.timeWindowMs ?? trailConfig.timeWindowMs ?? 4000);
 
     const coords = createTimeCoordinates({
       cellWidth,
       cellHeight: viewportWindow.cellHeight,
       viewport,
-      pixelsPerSecond: activeConfig.pixelsPerSecond ?? 200,
+      pixelsPerSecond,
       nowLineX,
       currentTimeMs: mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0,
     });
@@ -426,17 +728,28 @@
           mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0
         ))
       : trailConfig.tonicPitchClass;
+    const syncedTrailConfig: PitchTrailConfig = {
+      ...trailConfig,
+      tonicPitchClass: currentTonicPc,
+      pixelsPerSecond,
+      timeWindowMs,
+      fixedColorRgb: liveMicTrailFixedColor,
+    };
+
+    if (mode === 'highway' && highwayConfig) {
+      drawPersistentOverdubTrailsInTimeline(trailCtx, highwayConfig, syncedTrailConfig);
+    }
+
+    if (trailHistory.length === 0) return;
 
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight: viewportWindow.cellHeight,
       viewportWidth: gridWidth,
       nowLineX,
-      pixelsPerSecond: activeConfig.pixelsPerSecond ?? 200,
-      timeWindowMs: activeConfig.timeWindowMs ?? 4000,
+      pixelsPerSecond,
+      timeWindowMs,
       colorMode: 'color',
-      trailConfig: currentTonicPc !== trailConfig.tonicPitchClass
-        ? { ...trailConfig, tonicPitchClass: currentTonicPc }
-        : trailConfig,
+      trailConfig: syncedTrailConfig,
     };
 
     drawUserPitchTrace(
@@ -447,6 +760,69 @@
       userPitchConfig,
       fullRowData
     );
+  }
+
+  function drawPersistentOverdubTrailsInTimeline(
+    ctx: CanvasRenderingContext2D,
+    config: HighwayModeConfig,
+    syncedTrailConfig: PitchTrailConfig
+  ): void {
+    const trails = persistentOverdubTrails;
+    if (trails.length === 0) return;
+
+    const timelinePixelsPerSecond = Math.max(1, config.pixelsPerSecond ?? 200);
+    const timelineNowLineX = config.nowLineX;
+    const timelineCurrentTimeMs = config.currentTimeMs;
+    const timelineWindowMs = Math.max(1, config.timeWindowMs ?? syncedTrailConfig.timeWindowMs ?? 4000);
+    const coords = createTimeCoordinates({
+      cellWidth,
+      cellHeight: viewportWindow.cellHeight,
+      viewport,
+      pixelsPerSecond: timelinePixelsPerSecond,
+      nowLineX: timelineNowLineX,
+      currentTimeMs: timelineCurrentTimeMs,
+    });
+
+    const persistentTrailConfig: UserPitchRenderConfig = {
+      cellHeight: viewportWindow.cellHeight,
+      viewportWidth: gridWidth,
+      nowLineX: timelineNowLineX,
+      pixelsPerSecond: timelinePixelsPerSecond,
+      timeWindowMs: timelineWindowMs,
+      colorMode: 'color',
+      trailConfig: {
+        ...syncedTrailConfig,
+        pixelsPerSecond: timelinePixelsPerSecond,
+        timeWindowMs: timelineWindowMs,
+        includeFuturePoints: true,
+        fixedColorRgb: null,
+      },
+    };
+
+    for (const trail of trails) {
+      if (!trail.points || trail.points.length === 0) continue;
+      const timelineHistory = getCachedTimelineTrailHistory(trail);
+      if (timelineHistory.length === 0) continue;
+      const trailFixedColor = getRenderableTrailFixedColor(trail);
+      const trailConfigWithColor: UserPitchRenderConfig = trailFixedColor
+        ? {
+            ...persistentTrailConfig,
+            trailConfig: {
+              ...persistentTrailConfig.trailConfig,
+              fixedColorRgb: trailFixedColor,
+            },
+          }
+        : persistentTrailConfig;
+
+      drawUserPitchTrace(
+        ctx,
+        coords,
+        timelineHistory,
+        timelineCurrentTimeMs,
+        trailConfigWithColor,
+        fullRowData
+      );
+    }
   }
 
   function isLoopTransportActive(): boolean {
@@ -520,6 +896,7 @@
         ...trailConfig,
         timeWindowMs: phraseDurationMs,
         pixelsPerSecond: loopPixelsPerSecond,
+        fixedColorRgb: liveMicTrailFixedColor,
       },
     };
 
@@ -578,7 +955,7 @@
     ctx.restore();
   }
 
-  function drawPersistentOverdubTrails(ctx: CanvasRenderingContext2D, currentTime: number): void {
+  function drawPersistentOverdubTrails(ctx: CanvasRenderingContext2D, _currentTime: number): void {
     const trails = persistentOverdubTrails;
     if (trails.length === 0) return;
 
@@ -604,33 +981,31 @@
         ...trailConfig,
         timeWindowMs: phraseDurationMs,
         pixelsPerSecond: loopPixelsPerSecond,
-        circleRadius: 4.5,
-        connectorLineWidth: 1.5,
-        maxConnections: 2,
-        maxOpacity: 0.78,
+        fixedColorRgb: null,
       },
     };
 
     for (const trail of trails) {
       if (!trail.points || trail.points.length === 0) continue;
-      const remappedHistory: PitchHistoryPoint[] = [];
-      for (const point of trail.points) {
-        if (point.offsetMs < 0 || point.offsetMs > phraseDurationMs) continue;
-        remappedHistory.push({
-          frequency: point.frequency,
-          midi: point.midi,
-          clarity: point.clarity,
-          time: currentTime - (phraseDurationMs - point.offsetMs),
-        });
-      }
-      if (remappedHistory.length === 0) continue;
+      const timelineHistory = getCachedTimelineTrailHistory(trail);
+      if (timelineHistory.length === 0) continue;
+      const trailFixedColor = getRenderableTrailFixedColor(trail);
+      const trailConfigWithColor: UserPitchRenderConfig = trailFixedColor
+        ? {
+            ...persistentTrailConfig,
+            trailConfig: {
+              ...persistentTrailConfig.trailConfig,
+              fixedColorRgb: trailFixedColor,
+            },
+          }
+        : persistentTrailConfig;
 
       drawUserPitchTrace(
         ctx,
         coords,
-        remappedHistory,
-        currentTime,
-        persistentTrailConfig,
+        timelineHistory,
+        phraseDurationMs,
+        trailConfigWithColor,
         fullRowData
       );
     }
@@ -689,6 +1064,19 @@
   });
 
   $effect(() => {
+    const trails = persistentOverdubTrails;
+    const activeTakeIds = new Set<string>();
+    for (const trail of trails) {
+      activeTakeIds.add(trail.takeId);
+    }
+    for (const takeId of timelineTrailHistoryCache.keys()) {
+      if (!activeTakeIds.has(takeId)) {
+        timelineTrailHistoryCache.delete(takeId);
+      }
+    }
+  });
+
+  $effect(() => {
     console.debug('[SingingCanvas] Highway render state', {
       mode,
       visualizationMode: appState.state.visualizationMode,
@@ -712,10 +1100,23 @@
 
   onDestroy(() => {
     stopTrailLoop();
+    stopTimelinePan(null);
+    timelineTrailHistoryCache.clear();
   });
 </script>
 
-<div class="singing-canvas-container" bind:this={container}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="singing-canvas-container"
+  class:singing-canvas-container--x-pan-active={timelinePanDragActive}
+  bind:this={container}
+  onwheel={handleGridWheel}
+  onpointerdown={handleTimelinePanPointerDown}
+  onpointermove={handleTimelinePanPointerMove}
+  onpointerup={handleTimelinePanPointerUp}
+  onpointercancel={handleTimelinePanPointerUp}
+  oncontextmenu={handleTimelineContextMenu}
+>
   {#if showLegends}
     <div class="legend-overlay legend-overlay--left" style:width="{legendCanvasWidth}px" style:height="{containerHeight}px">
       <YAxisDragZones gridHeight={containerHeight} cellHeight={viewportWindow.cellHeight} />
@@ -758,7 +1159,11 @@
 
   {#if mode === 'highway' && !useLoopTimeline}
     <div class="judgement-line-overlay" style:left="{gridOffsetX}px" style:width="{gridWidth}px">
-      <JudgementLineDragHandle canvasWidth={gridWidth} gridHeight={containerHeight} />
+      <JudgementLineDragHandle
+        canvasWidth={gridWidth}
+        gridHeight={containerHeight}
+        nowLineX={highwayConfig?.nowLineX ?? highwayState.state.nowLineX}
+      />
     </div>
   {/if}
 
@@ -779,6 +1184,10 @@
     background-image: linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02));
     border-radius: var(--radius-md);
     overflow: hidden;
+  }
+
+  .singing-canvas-container--x-pan-active {
+    cursor: grabbing;
   }
 
   .legend-overlay {

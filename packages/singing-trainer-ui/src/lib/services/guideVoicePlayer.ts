@@ -204,11 +204,8 @@ class GuideVoicePlayer {
       0,
       200,
     );
-    const toneLookAheadMs = Math.round(Tone.getContext().lookAhead * 1000);
     const scheduleId = ++this.scheduleGeneration;
-    const peakPolyphony = estimatePeakPolyphony(notes);
     const peakPolyphonyWithRelease = estimatePeakPolyphony(notes, RELEASE_OVERLAP_TAIL_MS);
-    const perVoicePolyphony = new Map<string, { peakWithRelease: number; maxPolyphony: number }>();
     for (const [voiceId, voiceNotes] of notesByVoice) {
       const chain = this.getOrCreateVoiceChain(voiceId);
       if (!chain) continue;
@@ -220,38 +217,11 @@ class GuideVoicePlayer {
       );
       chain.synth.maxPolyphony = maxPolyphony;
       this.applyVoiceMix(voiceId, options?.voiceMixById);
-      perVoicePolyphony.set(voiceId, { peakWithRelease, maxPolyphony });
     }
     this.applyNormalization(peakPolyphonyWithRelease);
     const velocity = this.getNoteVelocity(peakPolyphonyWithRelease);
     this._isPlaying = true;
-    let droppedLateNotes = 0;
-    let skippedForCapacity = 0;
     const estimatedActiveVoicesByVoiceId = new Map<string, number>();
-    let maxEstimatedActiveVoices = 0;
-    const maxEstimatedActiveVoicesByVoiceId = new Map<string, number>();
-
-    console.log('[Timing] GuideVoicePlayer.scheduleStart', {
-      scheduledNotes: notes.length,
-      scheduledVoices: notesByVoice.size,
-      peakPolyphony,
-      peakPolyphonyWithRelease,
-      perVoicePolyphony: Object.fromEntries(
-        Array.from(perVoicePolyphony.entries()).map(([voiceId, polyphony]) => ([
-          voiceId,
-          {
-            peakPolyphonyWithRelease: polyphony.peakWithRelease,
-            maxPolyphony: polyphony.maxPolyphony,
-            ...this.getVoiceMix(voiceId, options?.voiceMixById),
-          },
-        ])),
-      ),
-      releaseTailMs: RELEASE_OVERLAP_TAIL_MS,
-      referenceStartPerfMs: Math.round(referenceStartPerfMs),
-      scheduleIssuedPerfMs: Math.round(scheduleIssuedPerfMs),
-      preScheduleMs,
-      toneLookAheadMs,
-    });
 
     for (const note of notes) {
       if (typeof note.midi !== 'number') continue;
@@ -273,25 +243,16 @@ class GuideVoicePlayer {
         const nowPerfMs = performance.now();
         const latenessMs = nowPerfMs - intendedAttackPerfMs;
         if (latenessMs > MAX_NOTE_LATENESS_MS) {
-          droppedLateNotes += 1;
           return;
         }
 
         const effectiveDurationMs = Math.max(30, note.durationMs - Math.max(0, latenessMs));
         const activeVoicesForVoice = estimatedActiveVoicesByVoiceId.get(voiceId) ?? 0;
         if (activeVoicesForVoice >= chain.synth.maxPolyphony) {
-          skippedForCapacity += 1;
           return;
         }
         const nextActiveVoicesForVoice = activeVoicesForVoice + 1;
         estimatedActiveVoicesByVoiceId.set(voiceId, nextActiveVoicesForVoice);
-        if (nextActiveVoicesForVoice > maxEstimatedActiveVoices) {
-          maxEstimatedActiveVoices = nextActiveVoicesForVoice;
-        }
-        const maxForVoice = maxEstimatedActiveVoicesByVoiceId.get(voiceId) ?? 0;
-        if (nextActiveVoicesForVoice > maxForVoice) {
-          maxEstimatedActiveVoicesByVoiceId.set(voiceId, nextActiveVoicesForVoice);
-        }
         const lifetimeMs = effectiveDurationMs + RELEASE_OVERLAP_TAIL_MS;
         const releaseEstimateTimeout = window.setTimeout(() => {
           if (scheduleId !== this.scheduleGeneration) return;
@@ -318,24 +279,6 @@ class GuideVoicePlayer {
       const endDelayMs = Math.max(0, Math.round(endAtPerfMs - performance.now()));
       const endTimeoutId = window.setTimeout(() => {
         this._isPlaying = false;
-        console.log('[Timing] GuideVoicePlayer.scheduleComplete', {
-          droppedLateNotes,
-          skippedForCapacity,
-          scheduledNotes: notes.length,
-          peakPolyphony,
-          peakPolyphonyWithRelease,
-          perVoicePolyphony: Object.fromEntries(
-            Array.from(perVoicePolyphony.entries()).map(([voiceId, polyphony]) => ([
-              voiceId,
-              {
-                peakPolyphonyWithRelease: polyphony.peakWithRelease,
-                maxPolyphony: polyphony.maxPolyphony,
-              },
-            ])),
-          ),
-          maxEstimatedActiveVoices,
-          maxEstimatedActiveVoicesByVoiceId: Object.fromEntries(maxEstimatedActiveVoicesByVoiceId),
-        });
       }, endDelayMs);
       this.scheduledTimeouts.push(endTimeoutId);
     }

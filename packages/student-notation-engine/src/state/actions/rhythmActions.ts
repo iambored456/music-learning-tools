@@ -296,6 +296,29 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
           });
         }
 
+        // Shift three-sixteenth stamps (time-space: just shift startTimeIndex directly)
+        if (this.state.sixteenthThreeStampPlacements) {
+          const threeStampsToRemove: typeof this.state.sixteenthThreeStampPlacements = [];
+
+          this.state.sixteenthThreeStampPlacements.forEach(stamp => {
+            const newStartTime = stamp.startTimeIndex + timeShift;
+
+            if (newStartTime < 0) {
+              threeStampsToRemove.push(stamp);
+              return;
+            }
+
+            stamp.startTimeIndex = newStartTime;
+          });
+
+          threeStampsToRemove.forEach(stampToRemove => {
+            const idx = this.state.sixteenthThreeStampPlacements.indexOf(stampToRemove);
+            if (idx > -1) {
+              this.state.sixteenthThreeStampPlacements.splice(idx, 1);
+            }
+          });
+        }
+
         // Update modulation markers to reflect the new grid layout
         const markersToRemove: ModulationMarker[] = [];
         const anacrusisShift = enabled
@@ -328,6 +351,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
       this.emit('notesChanged');
       this.emit('sixteenthStampPlacementsChanged');
       this.emit('tripletStampPlacementsChanged');
+      this.emit('sixteenthThreeStampPlacementsChanged');
       this.emit('tempoModulationMarkersChanged');
       this.emit('rhythmStructureChanged');
       this.recordState();
@@ -488,6 +512,22 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
           });
         }
 
+        // Remove three-sixteenth stamps beyond the boundary (already in time-space)
+        let threeStampsRemoved = false;
+        if (this.state.sixteenthThreeStampPlacements) {
+          const threeStampsToRemove = this.state.sixteenthThreeStampPlacements.filter(stamp =>
+            stamp.startTimeIndex >= boundaryTime
+          );
+
+          threeStampsToRemove.forEach(stamp => {
+            const idx = this.state.sixteenthThreeStampPlacements.indexOf(stamp);
+            if (idx > -1) {
+              this.state.sixteenthThreeStampPlacements.splice(idx, 1);
+              threeStampsRemoved = true;
+            }
+          });
+        }
+
         this.state.macrobeatGroupings.pop();
         this.state.macrobeatBoundaryStyles.pop();
 
@@ -499,6 +539,9 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
         }
         if (tripletsToRemove.length > 0) {
           this.emit('tripletStampPlacementsChanged');
+        }
+        if (threeStampsRemoved) {
+          this.emit('sixteenthThreeStampPlacementsChanged');
         }
         this.emit('rhythmStructureChanged');
         this.recordState();

@@ -208,10 +208,16 @@ export interface TargetNoteLabelConfig {
 export interface PitchTrailConfig {
   /** Time window for pitch history display in ms (default: 4000) */
   timeWindowMs?: number;
+  /** Whether trail can render points ahead of the current time cursor (default: false) */
+  includeFuturePoints?: boolean;
+  /** Optional fixed RGB color override for trail and indicator points */
+  fixedColorRgb?: [number, number, number] | null;
   /** Scroll speed in pixels per second (default: 200) */
   pixelsPerSecond?: number;
   /** Circle radius for trail points in pixels (default: 9.5) */
   circleRadius?: number;
+  /** Circle radius for the live indicator at the judgment line (default: row-height based when <= 0) */
+  indicatorRadius?: number;
   /** Maximum distance in pixels to draw connector lines (default: 35) */
   proximityThreshold?: number;
   /** Maximum connections per point (default: 3) */

@@ -510,9 +510,13 @@
       const shouldDrawBeatLines = Number.isFinite(beatIntervalMs) && beatIntervalMs > 0;
       if (shouldDrawBeatLines) {
         // Draw time-based vertical lines
+        const leftVisibleTimeMs = coords.getTimeFromX?.(0)
+          ?? (highwayConfig.currentTimeMs - 1000);
+        const rightVisibleTimeMs = coords.getTimeFromX?.(gridWidth)
+          ?? (highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000);
         const visibleTimeRange = {
-          startMs: highwayConfig.currentTimeMs - 1000,
-          endMs: highwayConfig.currentTimeMs + (gridWidth / (highwayConfig.pixelsPerSecond ?? 200)) * 1000,
+          startMs: Math.min(leftVisibleTimeMs, rightVisibleTimeMs),
+          endMs: Math.max(leftVisibleTimeMs, rightVisibleTimeMs),
         };
 
         const verticalConfig: TimeBasedVerticalLinesConfig = {
@@ -521,7 +525,6 @@
           beatIntervalMs,
           measureIntervalMs,
           visibleTimeRange,
-          nowLineX: highwayConfig.nowLineX,
           beatTimeOffsetMs,
         };
         drawTimeBasedVerticalLines(renderCtx, verticalConfig, coords);

@@ -191,7 +191,7 @@
   input {
     background-color: var(--fill);
     color: var(--text);
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
     font-weight: 500;
     font-size: var(--font-size);
     border: none;

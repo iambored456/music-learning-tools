@@ -32,6 +32,7 @@
   border-bottom: 2px solid var(--c-border-strong);
   border-top: none;
   border-left: none;
+  border-top-left-radius: var(--border-radius-md);
   gap: 0;
   min-height: 0;
   /* Width and height will be set by JavaScript */
@@ -65,6 +66,7 @@
   border-bottom: 2px solid var(--c-border-strong);
   border-top: none;
   border-left: none;
+  border-top-right-radius: var(--border-radius-md);
   box-sizing: border-box;
   /* Width will be set by JavaScript to match pitch grid content area (excludes legends) */
   /* Height will be set by JavaScript to match drum grid height */
@@ -76,7 +78,7 @@
   justify-content: center;
   flex: 0 0 auto;
   background-color: transparent;
-  border-bottom: 2px solid var(--c-border-strong);
+  border-bottom: none;
   border-top: none;
   border-right: none;
   border-left: none;
@@ -125,8 +127,9 @@
   overflow-y: hidden;
   position: relative;
   background-color: transparent;
-  border-radius: 0 0 var(--border-radius-md) var(--border-radius-md);
-  border-top: 2px solid var(--c-border-strong);
+  border-bottom-right-radius: var(--border-radius-md);
+  border-bottom-left-radius: var(--border-radius-md);
+  border-top: none;
 }
 
 #drum-grid-wrapper > * {
@@ -149,7 +152,9 @@
 .drum-grid-left-cell {
   background-color: var(--c-bg);
   border-right: 2px solid var(--c-border-strong);
+  border-top: 2px solid var(--c-border-strong);
   border-bottom: 2px solid var(--c-border-strong);
+  border-bottom-left-radius: var(--border-radius-md);
   position: relative;
   align-items: stretch;
 }
@@ -159,19 +164,36 @@
   position: relative;
   flex: 0 0 auto;
   min-width: 0;
-  border-right: 2px solid var(--c-border-strong);
+  border-right: none;
+  border-top: 2px solid var(--c-border-strong);
   border-bottom: 2px solid var(--c-border-strong);
+  border-bottom-right-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+
+.drum-grid-middle-cell::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--border-radius-md);
+  width: 2px;
+  background-color: var(--c-border-strong);
+  pointer-events: none;
 }
 
 .drum-grid-right-cell {
   background-color: transparent;
-  border-bottom: 2px solid var(--c-border-strong);
+  border-bottom: none;
+  border-bottom-right-radius: var(--border-radius-md);
 }
 
 #drum-canvas-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  border-bottom-right-radius: inherit;
 }
 
 .drum-volume-control {
@@ -245,7 +267,7 @@
 }
 
 .drum-track-label {
-  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-family: 'Atkinson Hyperlegible Next', sans-serif;
   font-size: clamp(0.45rem, calc(var(--drum-row-height, 30px) * 0.32), 0.9rem);
   line-height: 1;
   color: var(--c-text-muted);
@@ -353,6 +375,8 @@
   overflow-y: hidden;
   min-height: 0;
   background-color: var(--c-surface);
+  border-top-right-radius: var(--border-radius-md);
+  border-bottom-right-radius: var(--border-radius-md);
 }
 
 #pitch-canvas-wrapper {

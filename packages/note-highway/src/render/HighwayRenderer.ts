@@ -232,7 +232,7 @@ export function createHighwayRenderer(config: Partial<HighwayConfig> = {}): IHig
 
     // Paused indicator
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px sans-serif';
+    ctx.font = 'bold 24px "Atkinson Hyperlegible Next", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Match the pitch to continue', viewport.width / 2, viewport.height / 2);

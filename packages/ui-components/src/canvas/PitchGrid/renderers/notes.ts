@@ -213,7 +213,7 @@ function drawScaleDegreeText(
   if (baseFontSize < MIN_FONT_SIZE) return;
 
   ctx.fillStyle = '#212529';
-  ctx.font = `bold ${baseFontSize}px 'Atkinson Hyperlegible', sans-serif`;
+  ctx.font = `bold ${baseFontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -437,7 +437,7 @@ export function drawTonicShape(
   if (fontSize < 6) return;
 
   ctx.fillStyle = '#212529';
-  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(numberText, centerX, y);
@@ -466,8 +466,11 @@ export interface UserPitchRenderConfig {
 
 const DEFAULT_TRAIL_CONFIG: Required<PitchTrailConfig> = {
   timeWindowMs: 4000,
+  includeFuturePoints: false,
+  fixedColorRgb: null,
   pixelsPerSecond: 200,
   circleRadius: 9.5,
+  indicatorRadius: 0,
   proximityThreshold: 35,
   maxConnections: 3,
   connectorLineWidth: 2.5,
@@ -507,13 +510,20 @@ export function drawUserPitchIndicator(
 
   // Use continuous Y positioning for sub-semitone accuracy
   const y = getMidiY(coords, midi, cellHeight, fullRowData);
-  const radius = (cellHeight / 2) * 0.8;
+  const configuredRadius = trail.indicatorRadius ?? 0;
+  const radius = Number.isFinite(configuredRadius) && configuredRadius > 0
+    ? configuredRadius
+    : (cellHeight / 2) * 0.8;
 
   // Get interpolated color based on fractional MIDI value
   const color: RGB =
-    colorMode === 'bw'
-      ? [128, 128, 128]
-      : getInterpolatedPitchColor(midi, trail.useTonicRelativeColors ? trail.tonicPitchClass : 0);
+    trail.fixedColorRgb
+      ? trail.fixedColorRgb
+      : (
+        colorMode === 'bw'
+          ? [128, 128, 128]
+          : getInterpolatedPitchColor(midi, trail.useTonicRelativeColors ? trail.tonicPitchClass : 0)
+      );
 
   ctx.save();
 
@@ -540,6 +550,23 @@ interface TrailPoint {
   y: number;
   clarity: number;
   color: RGB;
+}
+
+function findHistoryStartIndex(history: PitchHistoryPoint[], cutoffTime: number): number {
+  let low = 0;
+  let high = history.length;
+
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    const midTime = history[mid]?.time ?? 0;
+    if (midTime < cutoffTime) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  return low;
 }
 
 /**
@@ -598,67 +625,91 @@ export function drawUserPitchTrace(
   // Use trail config values, with fallbacks to top-level config
   const timeWindowMs = trail.timeWindowMs;
   const pixelsPerSecond = trail.pixelsPerSecond;
+  const includeFuturePoints = trail.includeFuturePoints;
 
   // Use nowLineX as origin if provided (highway mode), otherwise use right edge (stationary mode)
   const trailOriginX = config.nowLineX ?? viewportWidth;
+  const isFiniteWindow = Number.isFinite(timeWindowMs);
+  const cutoffTime = isFiniteWindow ? currentTime - timeWindowMs : Number.NEGATIVE_INFINITY;
+  const startIndex = isFiniteWindow ? findHistoryStartIndex(history, cutoffTime) : 0;
 
-  // Filter to visible time window and transform to screen coordinates
-  const notePoints: TrailPoint[] = history
-    .filter(p => p.midi > 0 && p.clarity >= trail.clarityThreshold)
-    .map(point => {
-      const age = currentTime - point.time;
-      // Skip points outside time window
-      if (age >= timeWindowMs || age < 0) return null;
+  // Transform visible points to screen coordinates.
+  const notePoints: TrailPoint[] = [];
+  for (let i = startIndex; i < history.length; i++) {
+    const point = history[i];
+    if (!point) continue;
+    if (point.midi <= 0 || point.clarity < trail.clarityThreshold) continue;
 
-      // Trail extends leftward from origin point (nowLineX for highway, right edge for stationary)
-      const x = trailOriginX - (age / 1000) * pixelsPerSecond;
+    const age = currentTime - point.time;
+    if (!includeFuturePoints && age < 0) continue;
+    if (isFiniteWindow && age >= timeWindowMs) continue;
 
-      // Use continuous Y positioning for sub-semitone accuracy
-      const y = getMidiY(coords, point.midi, cellHeight, fullRowData);
+    // Trail extends leftward from origin point (nowLineX for highway, right edge for stationary)
+    const x = trailOriginX - (age / 1000) * pixelsPerSecond;
+    if (x < 0) continue;
+    if (x > viewportWidth) {
+      // History is time-sorted, so once future points overflow the right edge,
+      // subsequent points will be even farther right.
+      if (includeFuturePoints && age < 0) break;
+      continue;
+    }
 
-      // Get interpolated color based on fractional MIDI value
-      const color: RGB =
-        colorMode === 'bw'
-          ? [128, 128, 128]
-          : getInterpolatedPitchColor(point.midi, trail.useTonicRelativeColors ? trail.tonicPitchClass : 0);
+    // Use continuous Y positioning for sub-semitone accuracy
+    const y = getMidiY(coords, point.midi, cellHeight, fullRowData);
 
-      return {
-        x,
-        y,
-        clarity: point.clarity,
-        color,
-      };
-    })
-    .filter((p): p is TrailPoint => p !== null && p.x >= 0);
+    // Get interpolated color based on fractional MIDI value
+    const color: RGB =
+      trail.fixedColorRgb
+        ? trail.fixedColorRgb
+        : (
+          colorMode === 'bw'
+            ? [128, 128, 128]
+            : getInterpolatedPitchColor(point.midi, trail.useTonicRelativeColors ? trail.tonicPitchClass : 0)
+        );
+
+    notePoints.push({
+      x,
+      y,
+      clarity: point.clarity,
+      color,
+    });
+  }
 
   if (notePoints.length === 0) return;
 
   ctx.save();
 
   // Phase 1: Draw connector lines between proximate points
-  ctx.strokeStyle = trail.connectorColor;
-  ctx.lineWidth = trail.connectorLineWidth;
-  ctx.beginPath();
+  if (
+    trail.maxConnections > 0
+    && trail.connectorLineWidth > 0
+    && trail.proximityThreshold > 0
+    && notePoints.length > 1
+  ) {
+    ctx.strokeStyle = trail.connectorColor;
+    ctx.lineWidth = trail.connectorLineWidth;
+    ctx.beginPath();
 
-  const thresholdSq = trail.proximityThreshold * trail.proximityThreshold;
-  for (let i = 0; i < notePoints.length; i++) {
-    let connections = 0;
-    for (let j = i + 1; j < notePoints.length && connections < trail.maxConnections; j++) {
-      const dx = notePoints[j].x - notePoints[i].x;
-      // Points are sorted by x (oldest=leftmost first), so once x-gap
-      // exceeds threshold no further points can be proximate
-      if (dx > trail.proximityThreshold) break;
-      const dy = notePoints[i].y - notePoints[j].y;
-      const distSq = dx * dx + dy * dy;
+    const thresholdSq = trail.proximityThreshold * trail.proximityThreshold;
+    for (let i = 0; i < notePoints.length; i++) {
+      let connections = 0;
+      for (let j = i + 1; j < notePoints.length && connections < trail.maxConnections; j++) {
+        const dx = notePoints[j].x - notePoints[i].x;
+        // Points are sorted by x (oldest=leftmost first), so once x-gap
+        // exceeds threshold no further points can be proximate
+        if (dx > trail.proximityThreshold) break;
+        const dy = notePoints[i].y - notePoints[j].y;
+        const distSq = dx * dx + dy * dy;
 
-      if (distSq <= thresholdSq) {
-        ctx.moveTo(notePoints[i].x, notePoints[i].y);
-        ctx.lineTo(notePoints[j].x, notePoints[j].y);
-        connections++;
+        if (distSq <= thresholdSq) {
+          ctx.moveTo(notePoints[i].x, notePoints[i].y);
+          ctx.lineTo(notePoints[j].x, notePoints[j].y);
+          connections++;
+        }
       }
     }
+    ctx.stroke();
   }
-  ctx.stroke();
 
   // Phase 2: Draw colored circles at each point
   for (const pt of notePoints) {
@@ -726,7 +777,7 @@ export function drawTargetNotes(
         if (labelText) {
           const fontSize = getTargetLabelFontSize(endX - startX, cellHeight, config.labelConfig);
           ctx.save();
-          ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+          ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'top';
           const textWidth = ctx.measureText(labelText).width;
@@ -765,7 +816,7 @@ export function drawTargetNotes(
         if (labelText) {
           const fontSize = getTargetLabelFontSize(endX - startX, cellHeight, config.labelConfig);
           ctx.save();
-          ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+          ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'top';
           const textWidth = ctx.measureText(labelText).width;
@@ -887,7 +938,7 @@ export function drawTargetNotes(
         const fontSize = getTargetLabelFontSize(noteWidth, ry, config.labelConfig);
 
         ctx.save();
-        ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible', sans-serif`;
+        ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
 

@@ -112,6 +112,9 @@ export class FilteredVoice extends MonophonicBase {
     });
   }
 
+  // Suppress Tone.js Monophonic.triggerAttack/triggerRelease console logging
+  protected log(): void { /* noop */ }
+
   // --- Native oscillator (fire-and-forget per note) ---
   private _oscillator: OscillatorNode | null = null;
   private _periodicWave!: PeriodicWave;

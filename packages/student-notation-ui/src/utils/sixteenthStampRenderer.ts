@@ -1,4 +1,5 @@
 import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.js';
+import { createHexDiamondBase, renderSixteenthStampRowSVG } from '@utils/sharedDiamondStampSvg.ts';
 
 export interface SixteenthStampShape {
   ovals: number[];
@@ -177,18 +178,21 @@ export class SixteenthStampRenderer {
     svg.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
     svg.style.color = '#000000'; // Ensure visibility with explicit color
 
-    const scale = Math.min(viewBoxWidth / 100, viewBoxHeight / 100) * 0.8;
-    const diamondW = this.options.diamondW * scale;
-    const diamondH = this.options.diamondH * scale;
+    const strokeWidth = this.options.strokeWidth * 2;
+    const inset = Math.max(strokeWidth / 2, 0.5);
+    const usableWidth = Math.max(1, viewBoxWidth - (2 * inset));
+    const usableHeight = Math.max(1, viewBoxHeight - (2 * inset));
+    const scale = Math.min(usableWidth / 100, usableHeight / 100) * 0.8;
     const ovalRx = this.options.ovalRx * scale;
     const ovalRy = this.options.ovalRy * scale;
-
-    const slotCenters = [12.5, 37.5, 62.5, 87.5];
-    const centerY = viewBoxHeight / 2;
+    const slotWidth = usableWidth / 4;
+    const slotStartX = inset;
+    const diamondH = usableHeight;
+    const centerY = inset + (usableHeight / 2);
 
     // Draw ovals (8th notes)
     stamp.ovals.forEach(ovalStart => {
-      const cx = ovalStart === 0 ? 25 : 75;
+      const cx = inset + ((ovalStart === 0 ? 0.25 : 0.75) * usableWidth);
       const oval = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
       oval.setAttribute('cx', String(cx));
       oval.setAttribute('cy', String(centerY));
@@ -196,27 +200,22 @@ export class SixteenthStampRenderer {
       oval.setAttribute('ry', String(ovalRy));
       oval.setAttribute('fill', 'none');
       oval.setAttribute('stroke', 'currentColor');
-      oval.setAttribute('stroke-width', String(this.options.strokeWidth * 2));
+      oval.setAttribute('stroke-width', String(strokeWidth));
       oval.setAttribute('stroke-linecap', 'round');
       svg.appendChild(oval);
     });
 
-    // Draw diamonds (16th notes)
-    stamp.diamonds.forEach(slot => {
-      const cx = slotCenters[slot];
-      if (cx === undefined) {
-        return;
-      }
-      const path = diamondPath(cx, centerY, diamondW, diamondH);
-      const diamond = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      diamond.setAttribute('d', path);
-      diamond.setAttribute('fill', 'none');
-      diamond.setAttribute('stroke', 'currentColor');
-      diamond.setAttribute('stroke-width', String(this.options.strokeWidth * 2));
-      diamond.setAttribute('stroke-linejoin', 'round');
-      diamond.setAttribute('stroke-linecap', 'round');
-      svg.appendChild(diamond);
+    // Draw diamonds (16th notes) with shared boundaries rendered once.
+    const selected = Array.from({ length: 4 }, (_, index) => stamp.diamonds.includes(index));
+    const base = createHexDiamondBase(slotWidth, diamondH, centerY);
+    const rowMarkup = renderSixteenthStampRowSVG({
+      slots: 4,
+      selected,
+      base,
+      offset: slot => ({ x: slotStartX + (slot * slotWidth), y: 0 }),
+      strokeWidth
     });
+    svg.insertAdjacentHTML('beforeend', rowMarkup);
 
     return svg;
   }

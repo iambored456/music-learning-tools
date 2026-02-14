@@ -374,8 +374,38 @@ export function canvasToTime(canvasIndex: number, state: AppState): number | nul
 
 export function timeToCanvas(timeIndex: number, state: AppState): number {
   const map = columnMapService.getColumnMap(state);
-  const result = map.timeToCanvas.get(timeIndex);
-  return result !== undefined ? result : timeIndex;
+  const exact = map.timeToCanvas.get(timeIndex);
+  if (exact !== undefined) {
+    return exact;
+  }
+
+  if (!Number.isFinite(timeIndex)) {
+    return timeIndex;
+  }
+
+  // Support fractional time-space positions (e.g. 1.5 microbeats) by interpolating
+  // between neighboring integer time columns.
+  const lowerTime = Math.floor(timeIndex);
+  const upperTime = Math.ceil(timeIndex);
+  if (lowerTime === upperTime) {
+    return map.timeToCanvas.get(lowerTime) ?? timeIndex;
+  }
+
+  const lowerCanvas = map.timeToCanvas.get(lowerTime);
+  const upperCanvas = map.timeToCanvas.get(upperTime);
+  if (lowerCanvas !== undefined && upperCanvas !== undefined) {
+    const ratio = (timeIndex - lowerTime) / (upperTime - lowerTime);
+    return lowerCanvas + (upperCanvas - lowerCanvas) * ratio;
+  }
+
+  if (lowerCanvas !== undefined) {
+    return lowerCanvas + (timeIndex - lowerTime);
+  }
+  if (upperCanvas !== undefined) {
+    return upperCanvas - (upperTime - timeIndex);
+  }
+
+  return timeIndex;
 }
 
 export function timeToVisual(timeIndex: number, state: AppState): number {

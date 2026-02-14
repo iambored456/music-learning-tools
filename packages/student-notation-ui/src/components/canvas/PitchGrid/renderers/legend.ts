@@ -328,7 +328,7 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
 
           const finalFontSize = getLegendFontSize(cellWidth, cellHeight, pitchToDraw.length, pixelRatio);
 
-          ctx.font = `bold ${finalFontSize}px 'Atkinson Hyperlegible', sans-serif`;
+          ctx.font = `bold ${finalFontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
@@ -608,7 +608,7 @@ export function drawLegendsToSeparateCanvases(
 
           const finalFontSize = getLegendFontSize(cellWidth, cellHeight, pitchToDraw.length, pixelRatio);
 
-          ctx.font = `bold ${finalFontSize}px 'Atkinson Hyperlegible', sans-serif`;
+          ctx.font = `bold ${finalFontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 

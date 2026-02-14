@@ -276,7 +276,7 @@ export function createNoteRenderer(callbacks: NoteRenderCallbacks) {
     if (baseFontSize < MIN_FONT_SIZE) return;
 
     ctx.fillStyle = '#212529';
-    ctx.font = `bold ${baseFontSize}px 'Atkinson Hyperlegible', sans-serif`;
+    ctx.font = `bold ${baseFontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

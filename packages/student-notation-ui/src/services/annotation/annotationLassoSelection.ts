@@ -6,6 +6,7 @@ import { calculateConvexHull, polygonIntersectsEllipse, polygonIntersectsRect } 
 type SelectedItem =
   | { type: 'note'; id: string; data: any; index?: number }
   | { type: 'sixteenthStamp'; id: string; data: any; index?: number }
+  | { type: 'sixteenthThreeStamp'; id: string; data: any; index?: number }
   | { type: 'tripletStamp'; id: string; data: any; index?: number };
 
 export function computeLassoSelection(params: {

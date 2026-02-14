@@ -47,14 +47,15 @@ export const initialState: AppState = {
   placedChords: [],
   tonicSignGroups: {},
   sixteenthStampPlacements: [],
+  sixteenthThreeStampPlacements: [],
   tripletStampPlacements: [],
   annotations: [],
   lassoSelection: {
-    selectedItems: [], // Array of {type: 'note'|'sixteenthStamp'|'tripletStamp', id: uniqueId, data: originalObject}
-    convexHull: null,  // Convex hull points for bounding border
-    isActive: false    // Whether a lasso selection is currently active
+    selectedItems: [],
+    convexHull: null,
+    isActive: false
   },
-  history: [ { notes: [], tonicSignGroups: {}, timbres: getInitialTimbresState().timbres, placedChords: [], sixteenthStampPlacements: [], tripletStampPlacements: [], annotations: [], lassoSelection: { selectedItems: [], convexHull: null, isActive: false } } ],
+  history: [ { notes: [], tonicSignGroups: {}, timbres: getInitialTimbresState().timbres, placedChords: [], sixteenthStampPlacements: [], sixteenthThreeStampPlacements: [], tripletStampPlacements: [], annotations: [], lassoSelection: { selectedItems: [], convexHull: null, isActive: false } } ],
   historyIndex: 0,
   // Full pitch gamut - NEVER sliced. Includes the visual-only top boundary row (used to show C8's top half-cell).
   fullRowData: [...masterRowData],

@@ -215,7 +215,7 @@
       if (payload.color !== currentColor) {return;}
       if (isDragging) {return;}
 
-      if (payload.effectParams) {
+      if (payload.effectParams && config) {
         const nextX = payload.effectParams[config.xParam];
         const nextY = payload.effectParams[config.yParam];
         if (typeof nextX === 'number') {xValue = nextX;}

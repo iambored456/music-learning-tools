@@ -22,6 +22,11 @@ export {
 } from './tripletStampActions.js';
 
 export {
+  createSixteenthThreeStampActions,
+  type SixteenthThreeStampActionCallbacks
+} from './sixteenthThreeStampActions.js';
+
+export {
   createRhythmActions,
   type RhythmActionCallbacks,
   ANACRUSIS_ON_GROUPINGS,

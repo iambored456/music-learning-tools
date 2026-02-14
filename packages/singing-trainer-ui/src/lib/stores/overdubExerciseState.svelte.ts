@@ -114,7 +114,6 @@ function createOverdubExerciseState() {
       void overdubState.stopCompositePlayback();
     }
     state.isPlaying = false;
-    console.debug('[OverdubExercise] Playback stopped', { exerciseId: state.exerciseId });
   }
 
   /**
@@ -237,19 +236,19 @@ function createOverdubExerciseState() {
         maxMidi: config.maxMidiPitch,
       });
       appState.setVisualizationMode('highway');
-      highwayState.setTargetNotes(state.allTargetNotes);
-      highwayState.fitTimelineToDuration(durationMs);
-
-      console.debug('[OverdubExercise] Loaded exercise', {
-        exerciseId,
-        tempo,
-        durationMs,
-        voiceCount: config.voices.length,
-        allNotes: state.allTargetNotes.length,
-        guideNotes: state.guideTargetNotes.length,
-        synthVoices: Object.keys(state.synthMixByVoiceId).length,
-        yAxisRange: { minMidi: config.minMidiPitch, maxMidi: config.maxMidiPitch },
+      appState.setOverdubMicTrailColorMode('voice');
+      overdubState.setRenderableTrailsVisible(true);
+      highwayState.setTargetNotes(state.allTargetNotes, {
+        preserveTimelinePadding: true,
+        contentDurationMs: state.durationMs,
       });
+      const beatDurationMs = 60_000 / Math.max(20, tempo);
+      const boundaryPaddingMs = Math.max(0, Math.round(beatDurationMs * 4));
+      highwayState.fitTimelineToDuration(durationMs, {
+        paddingBeforeMs: boundaryPaddingMs,
+        paddingAfterMs: boundaryPaddingMs,
+      });
+
     },
 
     /**
@@ -258,13 +257,9 @@ function createOverdubExerciseState() {
     setActiveVoice(voiceId: string | null) {
       state.activeVoiceId = voiceId;
       rebuildNotes();
-      highwayState.setTargetNotes(state.allTargetNotes);
-
-      console.debug('[OverdubExercise] Active voice changed', {
-        exerciseId: state.exerciseId,
-        activeVoiceId: state.activeVoiceId,
-        allNotes: state.allTargetNotes.length,
-        guideNotes: state.guideTargetNotes.length,
+      highwayState.setTargetNotes(state.allTargetNotes, {
+        preserveTimelinePadding: true,
+        contentDurationMs: state.durationMs,
       });
 
       // If currently playing, restart guide audio for the new voice selection.
@@ -296,12 +291,6 @@ function createOverdubExerciseState() {
         [voiceId]: { ...current, gain: nextGain },
       };
 
-      console.debug('[OverdubExercise] Voice synth gain changed', {
-        exerciseId: state.exerciseId,
-        voiceId,
-        gain: Number(nextGain.toFixed(3)),
-      });
-
       rescheduleGuidePlaybackIfPlaying();
     },
 
@@ -313,12 +302,6 @@ function createOverdubExerciseState() {
         ...state.synthMixByVoiceId,
         [voiceId]: { ...current, pan: nextPan },
       };
-
-      console.debug('[OverdubExercise] Voice synth pan changed', {
-        exerciseId: state.exerciseId,
-        voiceId,
-        pan: Number(nextPan.toFixed(3)),
-      });
 
       rescheduleGuidePlaybackIfPlaying();
     },
@@ -335,14 +318,6 @@ function createOverdubExerciseState() {
       state.guideEnabledVoiceIds = Array.from(current);
       rebuildNotes();
 
-      console.debug('[OverdubExercise] Guide voice toggle changed', {
-        exerciseId: state.exerciseId,
-        voiceId,
-        enabled,
-        enabledGuideVoiceCount: state.guideEnabledVoiceIds.length,
-        guideNotes: state.guideTargetNotes.length,
-      });
-
       rescheduleGuidePlaybackIfPlaying();
     },
 
@@ -357,15 +332,11 @@ function createOverdubExerciseState() {
       }
       state.visibleVoiceIds = Array.from(current);
       rebuildNotes();
-      highwayState.setTargetNotes(state.allTargetNotes);
-
-      console.debug('[OverdubExercise] Voice visibility changed', {
-        exerciseId: state.exerciseId,
-        voiceId,
-        visible,
-        visibleVoiceCount: state.visibleVoiceIds.length,
-        allNotes: state.allTargetNotes.length,
+      highwayState.setTargetNotes(state.allTargetNotes, {
+        preserveTimelinePadding: true,
+        contentDurationMs: state.durationMs,
       });
+
     },
 
     /**
@@ -378,10 +349,6 @@ function createOverdubExerciseState() {
       tempoBpm?: number;
     }) {
       if (state.isPlaying || startInFlight) {
-        console.debug('[OverdubExercise] start() ignored (already playing or in flight)', {
-          isPlaying: state.isPlaying,
-          startInFlight,
-        });
         return;
       }
 
@@ -394,7 +361,6 @@ function createOverdubExerciseState() {
       const startDelayMs = Math.max(0, Math.round(options?.startDelayMs ?? 0));
       const leadInBeats = Math.max(0, Math.round(options?.leadInBeats ?? 0));
       const tempoBpm = Math.max(20, Math.round(options?.tempoBpm ?? state.tempo));
-      const noteGridTempoBpm = Math.max(20, Math.round(state.tempo));
       const tailBeatsAfterLastNote = 4;
       const guidePreScheduleMs = 60;
       const targetDownbeatPerfMs = (
@@ -418,7 +384,10 @@ function createOverdubExerciseState() {
         appState.setVisualizationMode('highway');
 
         // Set highway target notes (all voices with per-voice colors)
-        highwayState.setTargetNotes(state.allTargetNotes);
+        highwayState.setTargetNotes(state.allTargetNotes, {
+          preserveTimelinePadding: true,
+          contentDurationMs: state.durationMs,
+        });
         highwayState.setTempoBpm(tempoBpm);
         highwayState.setLeadInBeats(leadInBeats);
 
@@ -458,26 +427,6 @@ function createOverdubExerciseState() {
             if (!state.isPlaying || state.exerciseId !== scheduledExerciseId) return;
             stopPlaybackSession();
           }, autoStopDelayMs);
-
-          console.log('[Timing] OverdubExercise.playbackStarted', {
-            exerciseId: state.exerciseId,
-            allNotes: state.allTargetNotes.length,
-            guideNotes: state.guideTargetNotes.length,
-            activeVoiceId: state.activeVoiceId,
-            startDelayMs,
-            targetDownbeatPerfMs: Math.round(targetDownbeatPerfMs),
-            downbeatSkewMs: Math.round(performance.now() - targetDownbeatPerfMs),
-            exerciseDurationMs: Math.round(state.durationMs),
-            maxVisibleNoteEndMs: Math.round(maxVisibleNoteEndMs),
-            maxGuideNoteEndMs: Math.round(maxGuideNoteEndMs),
-            beatDurationMs: Math.round(beatDurationMs),
-            autoStopTailBeats: tailBeatsAfterLastNote,
-            autoStopDelayMs,
-            guidePreScheduleMs,
-            leadInBeats,
-            noteGridTempoBpm,
-            highwayTempoBpm: tempoBpm,
-          });
         };
 
         const remainingStartDelayMs = Math.max(0, Math.round(targetDownbeatPerfMs - performance.now()));
@@ -485,16 +434,6 @@ function createOverdubExerciseState() {
         if (remainingStartDelayMs > 0) {
           clearPendingPlaybackStart();
           playbackStartTimeoutId = window.setTimeout(beginPlayback, guideScheduleDelayMs);
-          console.log('[Timing] OverdubExercise.playbackArmed', {
-            exerciseId: state.exerciseId,
-            startDelayMs: remainingStartDelayMs,
-            guideScheduleDelayMs,
-            targetDownbeatPerfMs: Math.round(targetDownbeatPerfMs),
-            leadInBeats,
-            activeVoiceId: state.activeVoiceId,
-            noteGridTempoBpm,
-            highwayTempoBpm: tempoBpm,
-          });
         } else {
           beginPlayback();
         }
@@ -524,8 +463,8 @@ function createOverdubExerciseState() {
       stopPlaybackSession();
       guideVoicePlayer.dispose();
       highwayState.setTargetNotes([]);
+      overdubState.setRenderableTrailsVisible(false);
       startInFlight = false;
-      console.debug('[OverdubExercise] Session reset', { exerciseId: state.exerciseId });
       state = { ...DEFAULT_STATE };
     },
   };

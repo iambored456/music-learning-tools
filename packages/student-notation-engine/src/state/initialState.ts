@@ -129,6 +129,7 @@ export function getInitialState(): AppState {
     tonicSignGroups: {},
     sixteenthStampPlacements: [],
     tripletStampPlacements: [],
+    sixteenthThreeStampPlacements: [],
     annotations: [],
     lassoSelection: {
       selectedItems: [],
@@ -142,6 +143,7 @@ export function getInitialState(): AppState {
       placedChords: [],
       sixteenthStampPlacements: [],
       tripletStampPlacements: [],
+      sixteenthThreeStampPlacements: [],
       annotations: [],
       lassoSelection: { selectedItems: [], convexHull: null, isActive: false }
     }],

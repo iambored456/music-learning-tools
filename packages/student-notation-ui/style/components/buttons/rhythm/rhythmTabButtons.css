@@ -6,11 +6,11 @@
 .rhythm-tab-button {
     padding: var(--space-015) var(--space-035);
     background-color: var(--c-surface-muted);
-    border: 1px solid var(--c-border);
+    border: var(--rhythm-tab-border-width, 1px) solid var(--c-border);
     border-bottom: none;
     color: var(--c-text-muted);
     font-family: var(--main-font);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
     font-weight: 500;
     cursor: pointer;
     text-align: center;
@@ -18,11 +18,18 @@
     position: relative;
     border-top-left-radius: var(--border-radius-md);
     border-top-right-radius: var(--border-radius-md);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    height: var(--preset-tab-rail-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
     white-space: nowrap;
 }
 
 .rhythm-tab-button + .rhythm-tab-button {
-    margin-left: -1px;
+    margin-left: calc(-1 * var(--rhythm-tab-border-width, 1px));
 }
 
 .rhythm-tab-button:hover {
@@ -38,6 +45,60 @@
     border-bottom-color: transparent;
     z-index: 2;
     margin-bottom: -1px;
+}
+
+.rhythm-stamp-tab-button[data-rhythm-stamp-tab="sixteenth"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-010);
+}
+
+.rhythm-stamp-tab-label {
+    line-height: 1;
+}
+
+.sixteenth-sub-toggle-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    margin-left: var(--space-010);
+    padding: 1px;
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-sm);
+    background-color: var(--c-surface-muted);
+}
+
+.sixteenth-sub-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0.95rem;
+    height: 0.95rem;
+    padding: 0 3px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    background-color: transparent;
+    color: var(--c-text-muted);
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rhythm-stamp-tab-button.active .sixteenth-sub-btn {
+    color: var(--c-text);
+}
+
+.sixteenth-sub-btn:hover {
+    background-color: var(--c-surface);
+    color: var(--c-text);
+    border-color: var(--c-border);
+}
+
+.sixteenth-sub-btn.active {
+    background-color: var(--c-warning);
+    border-color: transparent;
+    color: var(--c-text);
 }
 
 /* --- Stamp Buttons --- */

@@ -11,11 +11,12 @@ export class PitchGridEraserToolInteractor {
 
     store.eraseInPitchArea(colIndex as CanvasSpaceColumn, rowIndex, 2, false);
 
-    const eraseEndCol = colIndex + 2 - 1;
+    const eraseEndCol = (colIndex + 2 - 1) as CanvasSpaceColumn;
     const eraseStartRow = rowIndex - 1;
     const eraseEndRow = rowIndex + 1;
 
     removeSixteenthStampsInEraserArea(colIndex, eraseEndCol, eraseStartRow, eraseEndRow);
+    store.eraseSixteenthThreeStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow);
     eraseTripletStampGroups(colIndex, eraseEndCol, eraseStartRow, eraseEndRow);
 
     return { handled: true, shouldStartDrag: true };
@@ -32,12 +33,12 @@ export class PitchGridEraserToolInteractor {
     const eraseStartRow = rowIndex - 1;
     const eraseEndRow = rowIndex + 1;
     store.eraseSixteenthStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow);
+    store.eraseSixteenthThreeStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow);
     store.eraseTripletStampsInArea(colIndex as CanvasSpaceColumn, eraseEndCol, eraseStartRow, eraseEndRow);
 
     return true;
   }
 }
-
 
 
 

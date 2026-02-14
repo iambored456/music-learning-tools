@@ -22,6 +22,7 @@ import type {
   SynthLogger,
   SchedulableNote,
   SchedulableStamp,
+  SchedulableThreeStamp,
   SchedulableTriplet,
   StampScheduleEvent
 } from './types.js';
@@ -233,7 +234,13 @@ export function createTransportService(config: TransportConfig): TransportServic
       scheduleTriplet(tripletData, timeMap, state);
     });
 
-    log.debug('TransportService', 'scheduleNotes', `Finished scheduling ${state.placedNotes.length} notes, ${stampPlaybackData.length} stamps, and ${tripletPlaybackData.length} triplets`);
+    // Schedule three-sixteenth stamps
+    const threeStampPlaybackData = stateCallbacks.getThreeStampPlaybackData?.() ?? [];
+    threeStampPlaybackData.forEach(stampData => {
+      scheduleThreeStamp(stampData, timeMap, state);
+    });
+
+    log.debug('TransportService', 'scheduleNotes', `Finished scheduling ${state.placedNotes.length} notes, ${stampPlaybackData.length} stamps, ${tripletPlaybackData.length} triplets, and ${threeStampPlaybackData.length} three-stamps`);
 
     if (typeof window !== 'undefined' && (window as any).__audioDiag) {
       console.log(`[AudioDiag] SCHEDULE | notes=${state.placedNotes.length} stamps=${stampPlaybackData.length} triplets=${tripletPlaybackData.length} | ctx=${Tone.context?.state} | transport=${Tone.Transport.state}`);
@@ -315,6 +322,33 @@ export function createTransportService(config: TransportConfig): TransportServic
     }, releaseTime);
   }
 
+  function getCellStartTime(timeMap: number[], canvasColumnIndex: number): number | null {
+    const exactTime = timeMap[canvasColumnIndex];
+    if (exactTime !== undefined) {
+      return exactTime;
+    }
+
+    if (!Number.isFinite(canvasColumnIndex)) {
+      return null;
+    }
+
+    // Support fractional canvas columns by interpolating between neighboring columns.
+    const lowerIndex = Math.floor(canvasColumnIndex);
+    const upperIndex = Math.ceil(canvasColumnIndex);
+    if (lowerIndex === upperIndex) {
+      return timeMap[lowerIndex] ?? null;
+    }
+
+    const lowerTime = timeMap[lowerIndex];
+    const upperTime = timeMap[upperIndex];
+    if (lowerTime === undefined || upperTime === undefined) {
+      return null;
+    }
+
+    const ratio = (canvasColumnIndex - lowerIndex) / (upperIndex - lowerIndex);
+    return lowerTime + (upperTime - lowerTime) * ratio;
+  }
+
   /**
    * Schedule a stamp.
    */
@@ -324,8 +358,8 @@ export function createTransportService(config: TransportConfig): TransportServic
     state: TransportState
   ): void {
     const canvasColumnIndex = stampData.column;
-    const cellStartTime = timeMap[canvasColumnIndex];
-    if (cellStartTime === undefined) return;
+    const cellStartTime = getCellStartTime(timeMap, canvasColumnIndex);
+    if (cellStartTime === null) return;
 
     const scheduleEvents = stateCallbacks.getStampScheduleEvents?.(stampData.sixteenthStampId, stampData.placement) ?? [];
 
@@ -343,13 +377,33 @@ export function createTransportService(config: TransportConfig): TransportServic
     state: TransportState
   ): void {
     const canvasColumnIndex = stateCallbacks.timeToCanvas?.(tripletData.startTimeIndex, state) ?? tripletData.startTimeIndex;
-    const cellStartTime = timeMap[canvasColumnIndex];
-    if (cellStartTime === undefined) return;
+    const cellStartTime = getCellStartTime(timeMap, canvasColumnIndex);
+    if (cellStartTime === null) return;
 
     const scheduleEvents = stateCallbacks.getTripletScheduleEvents?.(tripletData.tripletStampId, tripletData.placement) ?? [];
 
     scheduleEvents.forEach(event => {
       scheduleStampEvent(event, cellStartTime, tripletData.row, tripletData.color, state);
+    });
+  }
+
+  /**
+   * Schedule a three-sixteenth stamp.
+   */
+  function scheduleThreeStamp(
+    stampData: SchedulableThreeStamp,
+    timeMap: number[],
+    state: TransportState
+  ): void {
+    // Convert time-space → canvas-space (same pattern as scheduleTriplet)
+    const canvasColumnIndex = stateCallbacks.timeToCanvas?.(stampData.startTimeIndex, state) ?? stampData.startTimeIndex;
+    const cellStartTime = getCellStartTime(timeMap, canvasColumnIndex);
+    if (cellStartTime === null) return;
+
+    const scheduleEvents = stateCallbacks.getThreeStampScheduleEvents?.(stampData.sixteenthThreeStampId, stampData.placement) ?? [];
+
+    scheduleEvents.forEach(event => {
+      scheduleStampEvent(event, cellStartTime, stampData.row, stampData.color, state);
     });
   }
 

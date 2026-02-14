@@ -5,6 +5,7 @@ import type { PitchGridChordToolInteractor } from './tools/PitchGridChordToolInt
 import type { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolInteractor.ts';
 import type { PitchGridSixteenthStampToolInteractor } from './tools/PitchGridSixteenthStampToolInteractor.ts';
 import type { PitchGridTripletStampToolInteractor } from './tools/PitchGridTripletStampToolInteractor.ts';
+import type { PitchGridSixteenthThreeStampToolInteractor } from './tools/PitchGridSixteenthThreeStampToolInteractor.ts';
 import type { PitchGridModulationToolInteractor } from './tools/PitchGridModulationToolInteractor.ts';
 import type { PitchGridTonicizationToolInteractor } from './tools/PitchGridTonicizationToolInteractor.ts';
 
@@ -31,6 +32,7 @@ export class PitchGridInteractionCoordinator {
       eraserToolInteractor: PitchGridEraserToolInteractor;
       stampToolInteractor: PitchGridSixteenthStampToolInteractor;
       tripletToolInteractor: PitchGridTripletStampToolInteractor;
+      sixteenthThreeStampToolInteractor: PitchGridSixteenthThreeStampToolInteractor;
       modulationToolInteractor: PitchGridModulationToolInteractor;
       tonicizationToolInteractor: PitchGridTonicizationToolInteractor;
       placementFillNoteIds: Set<string>;
@@ -129,6 +131,24 @@ export class PitchGridInteractionCoordinator {
       };
     }
 
+    if (toolType === 'sixteenthThreeStamp') {
+      const result = this.deps.sixteenthThreeStampToolInteractor.handleMouseDown({
+        colIndex,
+        rowIndex,
+        actualX,
+        canvasY,
+        getPitchForRow: this.deps.getPitchForRow
+      });
+
+      return {
+        handled: result.handled,
+        state: {
+          ...state,
+          activePreviewPitches: result.activePreviewPitches ?? state.activePreviewPitches
+        }
+      };
+    }
+
     if (toolType === 'modulation') {
       this.deps.modulationToolInteractor.handlePlacementClick(actualX, this.deps.findNearestMeasureBoundary);
       return { handled: true, state };
@@ -175,6 +195,10 @@ export class PitchGridInteractionCoordinator {
     }
 
     if (this.deps.tripletToolInteractor.handleMouseMove({ rowIndex, canvasEl, getPitchForRow: this.deps.getPitchForRow })) {
+      return { handled: true, state };
+    }
+
+    if (this.deps.sixteenthThreeStampToolInteractor.handleMouseMove({ rowIndex, canvasEl, getPitchForRow: this.deps.getPitchForRow })) {
       return { handled: true, state };
     }
 
@@ -246,6 +270,8 @@ export class PitchGridInteractionCoordinator {
       this.deps.stampToolInteractor.updateHoverCursor({ actualX, canvasY, canvasEl });
     } else if (toolType === 'tripletStamp') {
       this.deps.tripletToolInteractor.updateHoverCursor({ actualX, canvasY, canvasEl });
+    } else if (toolType === 'sixteenthThreeStamp') {
+      this.deps.sixteenthThreeStampToolInteractor.updateHoverCursor({ actualX, canvasY, canvasEl });
     }
 
     const hoveredMarker = this.deps.modulationToolInteractor.getHoveredMarker(actualX, canvasY);
@@ -269,6 +295,10 @@ export class PitchGridInteractionCoordinator {
     }
 
     if (this.deps.tripletToolInteractor.handleMouseUp()) {
+      return true;
+    }
+
+    if (this.deps.sixteenthThreeStampToolInteractor.handleMouseUp()) {
       return true;
     }
 

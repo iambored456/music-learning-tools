@@ -41,6 +41,7 @@ export const historyActions = {
       tonicSignGroups: JSON.parse(JSON.stringify(this.state.tonicSignGroups)),
       placedChords: JSON.parse(JSON.stringify(this.state.placedChords)),
       sixteenthStampPlacements: JSON.parse(JSON.stringify(this.state.sixteenthStampPlacements)),
+      sixteenthThreeStampPlacements: JSON.parse(JSON.stringify(this.state.sixteenthThreeStampPlacements || [])),
       tripletStampPlacements: JSON.parse(JSON.stringify(this.state.tripletStampPlacements || [])),
       timbres: timbresForHistory, // Already cloned safely
       annotations: this.state.annotations ? JSON.parse(JSON.stringify(this.state.annotations)) : [],

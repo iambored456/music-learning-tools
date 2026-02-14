@@ -1,7 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Space+Grotesk:wght@400;500;600&display=swap');
 
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('../../../packages/diatonic-compass-ui/fonts/AtkinsonHyperlegibleNext-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  src: url('../../../packages/diatonic-compass-ui/fonts/AtkinsonHyperlegibleNext-Bold.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
 :root {
-  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+  font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #1f1b16;
@@ -50,6 +64,7 @@ body {
 }
 
 .eyebrow {
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   font-size: 0.75rem;
   letter-spacing: 0.25em;
   text-transform: uppercase;

@@ -343,7 +343,7 @@ function drawText(ctx: CanvasRenderingContext2D, annotation: TextAnnotation, isS
 
   // Get the actual font family from CSS variable
   const computedStyle = window.getComputedStyle(document.documentElement);
-  const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible", Arial, sans-serif';
+  const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible Next", Arial, sans-serif';
 
   const fontSize = settings.size;
   const lineHeight = fontSize * 1.2;
