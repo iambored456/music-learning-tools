@@ -50,31 +50,54 @@ const DEFAULT_TREMOLO = {
  * Create default timbres for each note color
  */
 function createDefaultTimbres(): TimbresMap {
-  const colors = [
-    '#4a90e2', // Blue
-    '#2d2d2d', // Black
-    '#d66573', // Red
-    '#68a03f'  // Green
-  ];
-
+  const bins = 32;
+  const startupPresetByColor: Record<string, 'sine' | 'triangle' | 'square' | 'sawtooth'> = {
+    '#4a90e2': 'sine',
+    '#2d2d2d': 'triangle',
+    '#d66573': 'square',
+    '#68a03f': 'sawtooth'
+  };
+  const presetGain: Record<'sine' | 'triangle' | 'square' | 'sawtooth', number> = {
+    sine: 1.0,
+    triangle: 0.81,
+    square: 4 / Math.PI,
+    sawtooth: 2 / Math.PI
+  };
   const timbres: TimbresMap = {};
 
-  colors.forEach(color => {
-    // Create sine wave coefficients (only first harmonic)
-    const coeffs = new Float32Array(32);
-    coeffs[0] = 1.0; // Fundamental
+  Object.entries(startupPresetByColor).forEach(([color, presetName]) => {
+    const coeffs = new Float32Array(bins).fill(0);
+    const phases = new Float32Array(bins).fill(0);
 
-    // Create zero phases
-    const phases = new Float32Array(32);
+    if (presetName === 'sine') {
+      coeffs[0] = 1.0;
+    } else if (presetName === 'triangle') {
+      for (let n = 1; n <= bins; n += 2) {
+        const i = n - 1;
+        coeffs[i] = 1 / (n * n);
+        phases[i] = Math.PI / 2;
+      }
+    } else if (presetName === 'square') {
+      for (let n = 1; n <= bins; n += 2) {
+        const i = n - 1;
+        coeffs[i] = 1 / n;
+      }
+    } else {
+      for (let n = 1; n <= bins; n++) {
+        const i = n - 1;
+        coeffs[i] = 1 / n;
+        phases[i] = (n % 2 === 1) ? 0 : Math.PI;
+      }
+    }
 
     timbres[color] = {
-      name: 'Sine',
+      name: presetName,
       adsr: { ...DEFAULT_ADSR },
       coeffs,
       phases,
       filter: { ...DEFAULT_FILTER },
-      activePresetName: 'sine',
-      gain: 1.0,
+      activePresetName: presetName,
+      gain: presetGain[presetName],
       vibrato: { ...DEFAULT_VIBRATO },
       tremelo: { ...DEFAULT_TREMOLO }
     };

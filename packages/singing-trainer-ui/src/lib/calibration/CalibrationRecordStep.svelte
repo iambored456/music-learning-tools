@@ -6,9 +6,9 @@
    */
 
   import PhrasePrompt from './PhrasePrompt.svelte';
-  import { speakingPitchStore } from './speakingPitchStore.svelte.js';
-  import { collectPitchSamples, type CalibrationPitchSample } from '../services/pitchDetection.js';
-  import { DEFAULT_CALIBRATION_CONFIG } from './types.js';
+  import { speakingPitchStore } from '@mlt/singing-trainer-core/calibration/speakingPitchStore.svelte.js';
+  import { collectPitchSamples, type CalibrationPitchSample } from '@mlt/singing-trainer-core/services/pitchDetection.js';
+  import { DEFAULT_CALIBRATION_CONFIG } from '@mlt/singing-trainer-core/calibration/types.js';
 
   interface Props {
     phraseIndex: number;

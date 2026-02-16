@@ -5,10 +5,10 @@
    * Controls for the drone reference tone.
    */
 
-  import { appState, type TonicNote } from '../../stores/appState.svelte.js';
-  import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
-  import { toggleDrone, updateDrone } from '../../services/droneAudio.js';
-  import { MODE_NAMES, MODE_KEYS } from '../../constants/modes.js';
+  import { appState, type TonicNote } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
+  import { toggleDrone, updateDrone } from '@mlt/singing-trainer-core/services/droneAudio.js';
+  import { MODE_NAMES, MODE_KEYS } from '@mlt/singing-trainer-core/constants/modes.js';
 
   const TONIC_OPTIONS: TonicNote[] = [
     'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'

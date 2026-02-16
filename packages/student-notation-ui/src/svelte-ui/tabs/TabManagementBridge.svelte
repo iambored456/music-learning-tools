@@ -111,7 +111,7 @@
     { label: 'rhythmTabStamps', selector: '.rhythm-tab-stamps' },
     { label: 'rhythmStampTabContent', selector: '.rhythm-stamp-tab-content' },
     { label: 'rhythmStampTabPanelActive', selector: '.rhythm-stamp-tab-panel.active' },
-    { label: 'rhythmStampToolbar', selector: '.sixteenth-stamps-toolbar-container, .triplet-stamps-toolbar-container' }
+    { label: 'rhythmStampToolbar', selector: '.sixteenth-stamps-toolbar-container, .triplet-stamps-toolbar-container, .rhythm-controls-content-box' }
   ];
 
   let sizingResizeObserver: ResizeObserver | null = null;
@@ -328,7 +328,7 @@
 
   function getActiveRhythmContentBox(activeRhythmPanel: HTMLElement | null): HTMLElement | null {
     const rhythmContentNodes = activeRhythmPanel?.querySelectorAll(
-      '.sixteenth-stamps-toolbar-container, .triplet-stamps-toolbar-container'
+      '.sixteenth-stamps-toolbar-container, .triplet-stamps-toolbar-container, .rhythm-controls-content-box'
     );
     if (!rhythmContentNodes || rhythmContentNodes.length === 0) {
       return null;

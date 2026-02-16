@@ -35,7 +35,6 @@ export {
 // Drum management
 export {
   resetDrumStartTimes,
-  getSafeDrumStartTime,
   getDrumPlayers,
   initDrumPlayers,
   triggerDrum

@@ -5,7 +5,7 @@
    * Displays the calibration result and allows manual adjustment.
    */
 
-  import { speakingPitchStore } from './speakingPitchStore.svelte.js';
+  import { speakingPitchStore } from '@mlt/singing-trainer-core/calibration/speakingPitchStore.svelte.js';
 
   interface Props {
     onSave: () => void;

@@ -7,8 +7,8 @@
    */
 
   import { onMount, onDestroy } from 'svelte';
-  import { youtubeState } from '../../stores/youtubeState.svelte.js';
-  import { ultrastarState } from '../../stores/ultrastarState.svelte.js';
+  import { youtubeState } from '@mlt/singing-trainer-core/stores/youtubeState.svelte.js';
+  import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
 
   // Unique ID for the player container
   const playerId = `youtube-player-${Math.random().toString(36).slice(2, 9)}`;

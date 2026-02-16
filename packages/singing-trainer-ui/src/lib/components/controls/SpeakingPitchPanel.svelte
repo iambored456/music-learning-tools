@@ -6,7 +6,7 @@
    * Designed to be a prominent standalone panel in the sidebar.
    */
 
-  import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
+  import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
   import { midiToFrequency } from '@mlt/pitch-utils';
 
   interface Props {

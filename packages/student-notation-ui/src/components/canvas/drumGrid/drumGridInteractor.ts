@@ -262,13 +262,14 @@ function createVolumeSlider(): void {
 
   if (!drumWrapper || !leftCell) {return;}
 
-  // Build left-cell content (volume button + row labels) if missing
+  // Build left-cell content (volume button + gear icons + row labels) if missing
   let leftContent = leftCell.querySelector('.drum-left-content') as HTMLElement | null;
   if (!leftContent) {
     leftContent = document.createElement('div');
     leftContent.className = 'drum-left-content';
     const leftContentEl = leftContent;
 
+    // Column 1: Volume button spanning all 3 rows
     const volumeButton = document.createElement('button');
     volumeButton.className = 'drum-volume-button';
     volumeButton.type = 'button';
@@ -284,75 +285,128 @@ function createVolumeSlider(): void {
     `;
     volumeButton.style.gridRow = '1 / span 3';
     volumeButton.style.gridColumn = '1';
+    leftContentEl.appendChild(volumeButton);
 
+    // Column 2: Gear icon buttons (one per row) with popup menus
+    const gearSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg>`;
+
+    (['H', 'M', 'L'] as const).forEach((track, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'drum-gear-wrapper';
+      wrapper.style.gridColumn = '2';
+      wrapper.style.gridRow = `${index + 1}`;
+
+      const gearBtn = document.createElement('button');
+      gearBtn.className = 'drum-gear-button';
+      gearBtn.type = 'button';
+      gearBtn.setAttribute('aria-label', `${track} drum settings`);
+      gearBtn.innerHTML = gearSvg;
+
+      const popup = document.createElement('div');
+      popup.className = 'drum-gear-popup';
+      popup.dataset.drumTrack = track;
+
+      gearBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isVisible = popup.classList.contains('visible');
+        // Close all gear popups first
+        leftContentEl.querySelectorAll('.drum-gear-popup').forEach(p => p.classList.remove('visible'));
+        if (!isVisible) {
+          popup.classList.add('visible');
+        }
+      });
+
+      wrapper.appendChild(gearBtn);
+      wrapper.appendChild(popup);
+      leftContentEl.appendChild(wrapper);
+    });
+
+    // Column 3: H/M/L labels
     ['H', 'M', 'L'].forEach((label, index) => {
       const item = document.createElement('span');
       item.className = 'drum-track-label';
       item.textContent = label;
-      item.style.gridColumn = '2';
+      item.style.gridColumn = '3';
       item.style.gridRow = `${index + 1}`;
       leftContentEl.appendChild(item);
     });
 
-    leftContentEl.appendChild(volumeButton);
     leftCell.appendChild(leftContentEl);
   }
 
-  const volumeControl = document.createElement('div');
-  volumeControl.className = 'drum-volume-control';
+  // Volume button ↔ inline slider swap
+  const volumeButton = leftCell.querySelector('.drum-volume-button') as HTMLElement | null;
 
-  volumeSlider = document.createElement('input');
-  volumeSlider.type = 'range';
-  volumeSlider.min = '0';
-  volumeSlider.max = '100';
-  volumeSlider.value = '100';
-  volumeSlider.className = 'drum-volume-slider';
-  volumeSlider.style.cssText = 'width: 80px; margin: 0;';
+  let sliderWrap: HTMLElement | null = null;
 
-  volumeSlider.addEventListener('input', (event) => {
-    const target = event.currentTarget as HTMLInputElement;
-    drumVolume = Number(target.value) / 100;
+  const showSlider = () => {
+    if (!volumeButton) {return;}
 
-    const drumVolumeNode = (window as any).drumVolumeNode;
-    if (drumVolumeNode?.volume) {
-      const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
-      drumVolumeNode.volume.value = volumeDb;
+    sliderWrap = document.createElement('div');
+    sliderWrap.className = 'drum-volume-slider-wrap';
+    sliderWrap.style.gridRow = '1 / span 3';
+    sliderWrap.style.gridColumn = '1';
 
-      const now = Date.now();
-      if (now - lastDrumPlaybackTime >= DRUM_PLAYBACK_THROTTLE_MS) {
-        triggerDrumHit('M', 0.1);
-        lastDrumPlaybackTime = now;
+    volumeSlider = document.createElement('input');
+    volumeSlider.type = 'range';
+    volumeSlider.min = '0';
+    volumeSlider.max = '100';
+    volumeSlider.value = String(Math.round(drumVolume * 100));
+    volumeSlider.className = 'drum-volume-slider-inline';
+
+    volumeSlider.addEventListener('input', (event) => {
+      const target = event.currentTarget as HTMLInputElement;
+      drumVolume = Number(target.value) / 100;
+
+      const drumVolumeNode = (window as any).drumVolumeNode;
+      if (drumVolumeNode?.volume) {
+        const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
+        drumVolumeNode.volume.value = volumeDb;
+
+        const now = Date.now();
+        if (now - lastDrumPlaybackTime >= DRUM_PLAYBACK_THROTTLE_MS) {
+          triggerDrumHit('M', 0.1);
+          lastDrumPlaybackTime = now;
+        }
       }
-    }
-  });
+    });
 
-  volumeControl.appendChild(volumeSlider);
-  leftCell.appendChild(volumeControl);
+    sliderWrap.appendChild(volumeSlider);
+    volumeButton.replaceWith(sliderWrap);
 
-  const toggleVolume = () => {
-    if (!volumeControl) {return;}
-    const isVisible = volumeControl.classList.contains('visible');
-    if (isVisible) {
-      volumeControl.classList.remove('visible');
-    } else {
-      volumeControl.classList.add('visible');
-    }
+    // Size the slider track to match the wrapper's actual height
+    requestAnimationFrame(() => {
+      if (sliderWrap && volumeSlider) {
+        volumeSlider.style.width = `${sliderWrap.offsetHeight}px`;
+      }
+    });
   };
 
-  const volumeButton = leftCell.querySelector('.drum-volume-button');
+  const hideSlider = () => {
+    if (!sliderWrap || !volumeButton) {return;}
+    sliderWrap.replaceWith(volumeButton);
+    volumeSlider = null;
+    sliderWrap = null;
+  };
+
   if (volumeButton) {
     volumeButton.addEventListener('click', (event) => {
       event.stopPropagation();
-      toggleVolume();
+      showSlider();
     });
   }
 
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
-    const clickedInsideControl = target?.closest('.drum-volume-control');
-    const clickedButton = target?.closest('.drum-volume-button');
-    if (!clickedInsideControl && !clickedButton) {
-      volumeControl.classList.remove('visible');
+    // Collapse slider back to button on outside click
+    if (sliderWrap && !target?.closest('.drum-volume-slider-wrap')) {
+      hideSlider();
+    }
+    // Close gear popups on outside click
+    const clickedGearButton = target?.closest('.drum-gear-button');
+    const clickedGearPopup = target?.closest('.drum-gear-popup');
+    if (!clickedGearButton && !clickedGearPopup) {
+      leftCell?.querySelectorAll('.drum-gear-popup').forEach(p => p.classList.remove('visible'));
     }
   });
 }

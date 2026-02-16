@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { appState } from '../../stores/appState.svelte.js';
-  import type { NoteColorMode } from '../../stores/appState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import type { NoteColorMode } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 
   function handleNoteColorChange(e: Event) {
     const value = (e.target as HTMLSelectElement).value as NoteColorMode;

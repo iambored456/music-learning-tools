@@ -29,7 +29,7 @@ function findPackageJsonFiles(dir, results = []) {
 
     if (stat.isDirectory()) {
       // Skip node_modules and dist directories
-      if (file === 'node_modules' || file === 'dist' || file === '.git') {
+      if (file === 'node_modules' || file === 'dist' || file === '.git' || file === '.repo-backups') {
         continue;
       }
       findPackageJsonFiles(filePath, results);
@@ -62,7 +62,7 @@ const errors = [];
  * Check a single package.json file
  */
 function checkPackageJson(filePath) {
-  const content = readFileSync(filePath, 'utf8');
+  const content = readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
   const pkg = JSON.parse(content);
   const isInApps = filePath.includes('\\apps\\') || filePath.includes('/apps/');
   const isHub = filePath.includes('\\apps\\hub\\') || filePath.includes('/apps/hub/');

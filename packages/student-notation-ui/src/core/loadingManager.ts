@@ -33,9 +33,11 @@ class LoadingManager {
   createLoadingScreen(): void {
     if (this.loadingScreen) {return;}
 
-    const existingScreen = document.getElementById('app-loading-screen');
-    if (existingScreen) {
-      this.loadingScreen = existingScreen;
+    const existingScreens = Array.from(document.querySelectorAll<HTMLElement>('#app-loading-screen'));
+    if (existingScreens.length > 0) {
+      const [primaryScreen, ...duplicateScreens] = existingScreens;
+      duplicateScreens.forEach((screen) => screen.remove());
+      this.loadingScreen = primaryScreen;
     } else {
       this.loadingScreen = document.createElement('div');
       this.loadingScreen.id = 'app-loading-screen';
@@ -142,13 +144,19 @@ class LoadingManager {
    * Finish loading and remove the loading screen.
    */
   completeLoading(): void {
-    if (this.loadingScreen) {
-      this.loadingScreen.classList.add('fade-out');
-      setTimeout(() => {
-        this.loadingScreen?.remove();
-        this.loadingScreen = null;
-      }, 400);
+    const screens = Array.from(document.querySelectorAll<HTMLElement>('#app-loading-screen'));
+    if (screens.length === 0) {
+      return;
     }
+
+    screens.forEach((screen) => screen.classList.add('fade-out'));
+    setTimeout(() => {
+      screens.forEach((screen) => screen.remove());
+      this.loadingScreen = null;
+      this.progressBar = null;
+      this.progressText = null;
+      this.statusText = null;
+    }, 400);
   }
 
   /**

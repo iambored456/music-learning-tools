@@ -6,20 +6,20 @@
    * and controlling playback with YouTube video sync.
    */
 
-  import { ultrastarState } from '../../stores/ultrastarState.svelte.js';
-  import { youtubeState } from '../../stores/youtubeState.svelte.js';
-  import { highwayState } from '../../stores/highwayState.svelte.js';
-  import { appState } from '../../stores/appState.svelte.js';
-  import { createTransportSync, type TransportSyncInstance } from '../../services/transportSync.js';
-  import { parseYouTubeUrl } from '../../services/youtubeUrlParser.js';
+  import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
+  import { youtubeState } from '@mlt/singing-trainer-core/stores/youtubeState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { createTransportSync, type TransportSyncInstance } from '@mlt/singing-trainer-core/services/transportSync.js';
+  import { parseYouTubeUrl } from '@mlt/singing-trainer-core/services/youtubeUrlParser.js';
   import { onDestroy } from 'svelte';
   import YouTubePlayer from '../youtube/YouTubePlayer.svelte';
   import SyncControls from './SyncControls.svelte';
   import DiatonicScaleModal from '../analysis/DiatonicScaleModal.svelte';
-  import { findDiatonicMajor, midiToScaleDegreeLabel, type DiatonicMajorResult } from '../../services/diatonicAnalysis.js';
-  import { scanKeyChangesMajor, type KeySegment } from '../../services/scanKeyChangesMajor.js';
+  import { findDiatonicMajor, midiToScaleDegreeLabel, type DiatonicMajorResult } from '@mlt/singing-trainer-core/services/diatonicAnalysis.js';
+  import { scanKeyChangesMajor, type KeySegment } from '@mlt/singing-trainer-core/services/scanKeyChangesMajor.js';
   import { getTonicPitchClass } from '@mlt/pitch-data';
-  import type { TonicNote, TonicSegment } from '../../stores/appState.svelte.js';
+  import type { TonicNote, TonicSegment } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 
   // Transport sync instance
   let transportSync: TransportSyncInstance | null = null;

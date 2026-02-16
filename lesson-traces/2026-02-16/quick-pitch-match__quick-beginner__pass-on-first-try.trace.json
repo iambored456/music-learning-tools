@@ -1,0 +1,431 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAtIso": "2026-02-16T03:17:31.286Z",
+  "lessonId": "quick-pitch-match",
+  "lessonName": "2.2 Quick Pitch Response",
+  "lessonType": "pitch-matching",
+  "variantId": "quick-beginner",
+  "variantName": "Warm-up",
+  "scenarioId": "pass-on-first-try",
+  "settings": {
+    "loopCount": 5,
+    "tempoBpm": 108,
+    "droneOn": false,
+    "playbackReferenceOn": true
+  },
+  "events": [
+    {
+      "type": "lessonLoaded",
+      "lessonId": "quick-pitch-match",
+      "variantId": "quick-beginner",
+      "scenarioId": "pass-on-first-try",
+      "atMs": 0
+    },
+    {
+      "type": "highwayShow",
+      "atMs": 0
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "leadIn",
+      "loopIndex": 0,
+      "phaseIndex": -1,
+      "phaseLabel": "Lead In",
+      "atMs": 0
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 0,
+      "phaseIndex": 0,
+      "phaseLabel": "Listen",
+      "targetMode": "fixedPitch",
+      "atMs": 1500
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "Ab3",
+      "atMs": 1500
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "Ab3",
+      "atMs": 3722
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 1,
+      "targetMode": "fixedPitch",
+      "atMs": 3722
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 2,
+      "phaseLabel": "Sing",
+      "targetMode": "fixedPitch",
+      "atMs": 4833
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 0,
+      "attempt": 1,
+      "voicedMs": 1778,
+      "coveragePct": 92,
+      "medianPitchMidi": 60,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 4833
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 0,
+      "status": "hit",
+      "noteLabel": "Sing",
+      "atMs": 4833
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 0,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 4833
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 3,
+      "targetMode": "fixedPitch",
+      "atMs": 7055
+    },
+    {
+      "type": "loopAdvance",
+      "newLoopIndex": 1,
+      "atMs": 8166
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 1,
+      "phaseIndex": 0,
+      "phaseLabel": "Listen",
+      "targetMode": "fixedPitch",
+      "atMs": 8166
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "A3",
+      "atMs": 8166
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "A3",
+      "atMs": 10388
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 1,
+      "phaseIndex": 1,
+      "targetMode": "fixedPitch",
+      "atMs": 10388
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 1,
+      "phaseIndex": 2,
+      "phaseLabel": "Sing",
+      "targetMode": "fixedPitch",
+      "atMs": 11499
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 1,
+      "attempt": 1,
+      "voicedMs": 1778,
+      "coveragePct": 92,
+      "medianPitchMidi": 62,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 11499
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 1,
+      "status": "hit",
+      "noteLabel": "Sing",
+      "atMs": 11499
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 1,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 11499
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 1,
+      "phaseIndex": 3,
+      "targetMode": "fixedPitch",
+      "atMs": 13721
+    },
+    {
+      "type": "loopAdvance",
+      "newLoopIndex": 2,
+      "atMs": 14832
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 2,
+      "phaseIndex": 0,
+      "phaseLabel": "Listen",
+      "targetMode": "fixedPitch",
+      "atMs": 14832
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "Bb3",
+      "atMs": 14832
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "Bb3",
+      "atMs": 17054
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 2,
+      "phaseIndex": 1,
+      "targetMode": "fixedPitch",
+      "atMs": 17054
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 2,
+      "phaseIndex": 2,
+      "phaseLabel": "Sing",
+      "targetMode": "fixedPitch",
+      "atMs": 18165
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 2,
+      "attempt": 1,
+      "voicedMs": 1778,
+      "coveragePct": 92,
+      "medianPitchMidi": 64,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 18165
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 2,
+      "status": "hit",
+      "noteLabel": "Sing",
+      "atMs": 18165
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 2,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 18165
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 2,
+      "phaseIndex": 3,
+      "targetMode": "fixedPitch",
+      "atMs": 20387
+    },
+    {
+      "type": "loopAdvance",
+      "newLoopIndex": 3,
+      "atMs": 21498
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 3,
+      "phaseIndex": 0,
+      "phaseLabel": "Listen",
+      "targetMode": "fixedPitch",
+      "atMs": 21498
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "B3",
+      "atMs": 21498
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "B3",
+      "atMs": 23720
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 3,
+      "phaseIndex": 1,
+      "targetMode": "fixedPitch",
+      "atMs": 23720
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 3,
+      "phaseIndex": 2,
+      "phaseLabel": "Sing",
+      "targetMode": "fixedPitch",
+      "atMs": 24831
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 3,
+      "attempt": 1,
+      "voicedMs": 1778,
+      "coveragePct": 92,
+      "medianPitchMidi": 66,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 24831
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 3,
+      "status": "hit",
+      "noteLabel": "Sing",
+      "atMs": 24831
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 3,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 24831
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 3,
+      "phaseIndex": 3,
+      "targetMode": "fixedPitch",
+      "atMs": 27053
+    },
+    {
+      "type": "loopAdvance",
+      "newLoopIndex": 4,
+      "atMs": 28164
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 4,
+      "phaseIndex": 0,
+      "phaseLabel": "Listen",
+      "targetMode": "fixedPitch",
+      "atMs": 28164
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "C4",
+      "atMs": 28164
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "C4",
+      "atMs": 30386
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 4,
+      "phaseIndex": 1,
+      "targetMode": "fixedPitch",
+      "atMs": 30386
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 4,
+      "phaseIndex": 2,
+      "phaseLabel": "Sing",
+      "targetMode": "fixedPitch",
+      "atMs": 31497
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 4,
+      "attempt": 1,
+      "voicedMs": 1778,
+      "coveragePct": 92,
+      "medianPitchMidi": 60,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 31497
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 4,
+      "status": "hit",
+      "noteLabel": "Sing",
+      "atMs": 31497
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 4,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 31497
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 4,
+      "phaseIndex": 3,
+      "targetMode": "fixedPitch",
+      "atMs": 33719
+    },
+    {
+      "type": "highwayHide",
+      "atMs": 34830
+    },
+    {
+      "type": "lessonComplete",
+      "passCount": 5,
+      "failCount": 0,
+      "totalInputs": 5,
+      "atMs": 34830
+    }
+  ],
+  "summary": {
+    "durationMs": 34830,
+    "totalEvents": 54,
+    "evaluations": {
+      "pass": 5,
+      "fail": 0
+    }
+  }
+}

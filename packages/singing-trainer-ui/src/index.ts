@@ -15,40 +15,7 @@ export function mountSingingTrainer(container: HTMLElement): SingingTrainerInsta
   };
 }
 
-// Re-export for convenience
 export { default as App } from './App.svelte';
-
-// Export types
-export type * from './lib/types/ultrastar';
-export type { AppState, VisualizationMode, TonicNote } from './lib/stores/appState.svelte';
-export type { PitchState, DetectedPitch, PitchHistoryPoint, StablePitch } from './lib/stores/pitchState.svelte';
-export type { HighwayState, TargetNote } from './lib/stores/highwayState.svelte';
-export type { UltrastarState } from './lib/stores/ultrastarState.svelte';
-export type { YouTubeState } from './lib/stores/youtubeState.svelte';
-export type { ResultsState, ResultsSummary, PhraseResult } from './lib/stores/resultsState.svelte';
-export type { OverdubUiState, RenderableTakeTrail } from './lib/stores/overdubState.svelte';
-
-// Calibration exports
 export * from './lib/calibration/index.js';
-
-// Preferences store
-export { preferencesStore, type SingingTrainerPreferences } from './lib/stores/preferencesStore.svelte.js';
-
-// Speaking Pitch Panel component
 export { default as SpeakingPitchPanel } from './lib/components/controls/SpeakingPitchPanel.svelte';
-
-// Pitch detection with calibration support
-export { collectPitchSamples, type CalibrationPitchSample } from './lib/services/pitchDetection.js';
-
-// Chooser state and components
-export { chooserState, type ChooserState } from './lib/stores/chooserState.svelte.js';
 export { ExerciseChooserModal } from './lib/components/chooser/index.js';
-export { overdubState } from './lib/stores/overdubState.svelte.js';
-
-// Lesson engine adapters
-export {
-  createGridControllerAdapter,
-  createAudioControllerAdapter,
-  createUiControllerAdapter,
-  createLessonContext,
-} from './lib/engine/index.js';

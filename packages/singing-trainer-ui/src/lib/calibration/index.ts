@@ -16,19 +16,19 @@ export type {
   ClusterAnalysisResult,
   CalibrationWizardState,
   CalibrationConfig,
-} from './types.js';
+} from '@mlt/singing-trainer-core/calibration/types.js';
 
-export { CALIBRATION_PHRASES, DEFAULT_CALIBRATION_CONFIG } from './types.js';
+export { CALIBRATION_PHRASES, DEFAULT_CALIBRATION_CONFIG } from '@mlt/singing-trainer-core/calibration/types.js';
 
 // Algorithm
 export {
   analyzeRecordingsForSpeakingPitch,
   midiToNoteName,
   applyAdjustment,
-} from './speakingPitchCalibration.js';
+} from '@mlt/singing-trainer-core/calibration/speakingPitchCalibration.js';
 
 // Store
-export { speakingPitchStore } from './speakingPitchStore.svelte.js';
+export { speakingPitchStore } from '@mlt/singing-trainer-core/calibration/speakingPitchStore.svelte.js';
 
 // Components
 export { default as CalibrationWizard } from './CalibrationWizard.svelte';

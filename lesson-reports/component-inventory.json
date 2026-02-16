@@ -1,0 +1,746 @@
+{
+  "generatedAtIso": "2026-02-16T03:18:06.054Z",
+  "scope": "focused",
+  "scannedFileCount": 122,
+  "components": [
+    {
+      "id": "packages/diatonic-compass-ui/src/core/ActionController.ts",
+      "name": "ActionController",
+      "file": "packages/diatonic-compass-ui/src/core/ActionController.ts",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/diatonic-compass-ui/src/accessibility/KeyboardManager.ts",
+        "packages/diatonic-compass-ui/src/app.ts",
+        "packages/diatonic-compass-ui/src/tutorial.ts"
+      ],
+      "directImporterCount": 3,
+      "importerScopes": [
+        "packages/diatonic-compass-ui"
+      ],
+      "reusable": true,
+      "reusabilityNotes": "Imported broadly and likely reusable with light decoupling."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseCard.svelte",
+      "name": "ExerciseCard",
+      "file": "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseCard.svelte",
+      "category": "controls",
+      "props": [
+        "entry",
+        "isSelected",
+        "localSettings",
+        "onselect",
+        "onsettingchange",
+        "onstart",
+        "showSettings"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/OverdubExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/index.ts"
+      ],
+      "directImporterCount": 3,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": true,
+      "reusabilityNotes": "Imported broadly and likely reusable with light decoupling."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/calibration/CalibrationRecordStep.svelte",
+      "name": "CalibrationRecordStep",
+      "file": "packages/singing-trainer-ui/src/lib/calibration/CalibrationRecordStep.svelte",
+      "category": "unknown",
+      "props": [
+        "onBack",
+        "onComplete",
+        "phrase",
+        "phraseIndex"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/calibration/CalibrationWizard.svelte",
+        "packages/singing-trainer-ui/src/lib/calibration/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/calibration/CalibrationResultStep.svelte",
+      "name": "CalibrationResultStep",
+      "file": "packages/singing-trainer-ui/src/lib/calibration/CalibrationResultStep.svelte",
+      "category": "feedback",
+      "props": [
+        "onRetry",
+        "onSave"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/calibration/CalibrationWizard.svelte",
+        "packages/singing-trainer-ui/src/lib/calibration/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/chooser/CategoryNav.svelte",
+      "name": "CategoryNav",
+      "file": "packages/singing-trainer-ui/src/lib/components/chooser/CategoryNav.svelte",
+      "category": "controls",
+      "props": [
+        "onselect",
+        "selectedCategory"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/OverdubControls.svelte",
+      "name": "OverdubControls",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/OverdubControls.svelte",
+      "category": "controls",
+      "props": [
+        "compact"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/OverdubBuilderToolbar.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/calibration/PhrasePrompt.svelte",
+      "name": "PhrasePrompt",
+      "file": "packages/singing-trainer-ui/src/lib/calibration/PhrasePrompt.svelte",
+      "category": "unknown",
+      "props": [
+        "isActive",
+        "phrase"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/calibration/CalibrationRecordStep.svelte",
+        "packages/singing-trainer-ui/src/lib/calibration/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/chooser/SettingsRenderer.svelte",
+      "name": "SettingsRenderer",
+      "file": "packages/singing-trainer-ui/src/lib/components/chooser/SettingsRenderer.svelte",
+      "category": "controls",
+      "props": [
+        "disabled",
+        "onchange",
+        "schema",
+        "values"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseCard.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/SpeakingPitchPanel.svelte",
+      "name": "SpeakingPitchPanel",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/SpeakingPitchPanel.svelte",
+      "category": "controls",
+      "props": [
+        "onCalibrate"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/index.ts",
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/SyncControls.svelte",
+      "name": "SyncControls",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/SyncControls.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/UltrastarControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/youtube/YouTubePlayer.svelte",
+      "name": "YouTubePlayer",
+      "file": "packages/singing-trainer-ui/src/lib/components/youtube/YouTubePlayer.svelte",
+      "category": "unknown",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/UltrastarControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/youtube/index.ts"
+      ],
+      "directImporterCount": 2,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/App.svelte",
+      "name": "App",
+      "file": "packages/singing-trainer-ui/src/App.svelte",
+      "category": "unknown",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/calibration/CalibrationWizard.svelte",
+      "name": "CalibrationWizard",
+      "file": "packages/singing-trainer-ui/src/lib/calibration/CalibrationWizard.svelte",
+      "category": "unknown",
+      "props": [
+        "onCancel",
+        "onComplete"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/calibration/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/diatonic-compass-ui/src/utils/canvas.ts",
+      "name": "canvas",
+      "file": "packages/diatonic-compass-ui/src/utils/canvas.ts",
+      "category": "visualization",
+      "props": [],
+      "directImporters": [
+        "packages/diatonic-compass-ui/src/app.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/diatonic-compass-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/analysis/DiatonicScaleModal.svelte",
+      "name": "DiatonicScaleModal",
+      "file": "packages/singing-trainer-ui/src/lib/components/analysis/DiatonicScaleModal.svelte",
+      "category": "analysis",
+      "props": [
+        "onAcceptAll",
+        "onApply",
+        "onClose",
+        "result",
+        "segments"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/UltrastarControls.svelte"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/DifficultySettings.svelte",
+      "name": "DifficultySettings",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/DifficultySettings.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/DroneControls.svelte",
+      "name": "DroneControls",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/DroneControls.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+      "name": "ExerciseChooserModal",
+      "file": "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+      "category": "controls",
+      "props": [
+        "onclose",
+        "onstart"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/chooser/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+      "name": "ExerciseControls",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/InputDecibelMeter.svelte",
+      "name": "InputDecibelMeter",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/InputDecibelMeter.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/JudgementLineDragHandle.svelte",
+      "name": "JudgementLineDragHandle",
+      "file": "packages/singing-trainer-ui/src/lib/components/JudgementLineDragHandle.svelte",
+      "category": "unknown",
+      "props": [
+        "canvasWidth",
+        "gridHeight",
+        "nowLineX"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/LyricLabelControls.svelte",
+      "name": "LyricLabelControls",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/LyricLabelControls.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/karaoke/LyricsDisplay.svelte",
+      "name": "LyricsDisplay",
+      "file": "packages/singing-trainer-ui/src/lib/components/karaoke/LyricsDisplay.svelte",
+      "category": "unknown",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/karaoke/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/MicInputSelector.svelte",
+      "name": "MicInputSelector",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/MicInputSelector.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/ModeToggle.svelte",
+      "name": "ModeToggle",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/ModeToggle.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/OverdubBuilderToolbar.svelte",
+      "name": "OverdubBuilderToolbar",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/OverdubBuilderToolbar.svelte",
+      "category": "controls",
+      "props": [
+        "visible"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/chooser/OverdubExerciseChooserModal.svelte",
+      "name": "OverdubExerciseChooserModal",
+      "file": "packages/singing-trainer-ui/src/lib/components/chooser/OverdubExerciseChooserModal.svelte",
+      "category": "controls",
+      "props": [
+        "onclose",
+        "onstart"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/chooser/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/PitchHighlightToggle.svelte",
+      "name": "PitchHighlightToggle",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/PitchHighlightToggle.svelte",
+      "category": "highlight",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/feedback/PitchReadout.svelte",
+      "name": "PitchReadout",
+      "file": "packages/singing-trainer-ui/src/lib/components/feedback/PitchReadout.svelte",
+      "category": "feedback",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/feedback/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/RangeControl.svelte",
+      "name": "RangeControl",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/RangeControl.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte",
+      "name": "ResultsModal",
+      "file": "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte",
+      "category": "feedback",
+      "props": [
+        "onClose",
+        "onRetry"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/feedback/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+      "name": "SingingCanvas",
+      "file": "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+      "category": "visualization",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/StartButton.svelte",
+      "name": "StartButton",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/StartButton.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/ThemeSettings.svelte",
+      "name": "ThemeSettings",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/ThemeSettings.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/TonicSelector.svelte",
+      "name": "TonicSelector",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/TonicSelector.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/diatonic-compass-ui/src/components/UIControls.ts",
+      "name": "UIControls",
+      "file": "packages/diatonic-compass-ui/src/components/UIControls.ts",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/diatonic-compass-ui/src/app.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/diatonic-compass-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/controls/UltrastarControls.svelte",
+      "name": "UltrastarControls",
+      "file": "packages/singing-trainer-ui/src/lib/components/controls/UltrastarControls.svelte",
+      "category": "controls",
+      "props": [],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/controls/index.ts"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-ui/src/lib/components/YAxisDragZones.svelte",
+      "name": "YAxisDragZones",
+      "file": "packages/singing-trainer-ui/src/lib/components/YAxisDragZones.svelte",
+      "category": "unknown",
+      "props": [
+        "cellHeight",
+        "gridHeight"
+      ],
+      "directImporters": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte"
+      ],
+      "directImporterCount": 1,
+      "importerScopes": [
+        "packages/singing-trainer-ui"
+      ],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-core/src/lib/stores/chooserState.svelte.ts",
+      "name": "chooserState.svelte",
+      "file": "packages/singing-trainer-core/src/lib/stores/chooserState.svelte.ts",
+      "category": "controls",
+      "props": [],
+      "directImporters": [],
+      "directImporterCount": 0,
+      "importerScopes": [],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-core/src/lib/engine/controllerAdapters.ts",
+      "name": "controllerAdapters",
+      "file": "packages/singing-trainer-core/src/lib/engine/controllerAdapters.ts",
+      "category": "controls",
+      "props": [],
+      "directImporters": [],
+      "directImporterCount": 0,
+      "importerScopes": [],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-core/src/lib/stores/highwayState.svelte.ts",
+      "name": "highwayState.svelte",
+      "file": "packages/singing-trainer-core/src/lib/stores/highwayState.svelte.ts",
+      "category": "highway",
+      "props": [],
+      "directImporters": [],
+      "directImporterCount": 0,
+      "importerScopes": [],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-core/src/lib/stores/overdubExerciseChooserState.svelte.ts",
+      "name": "overdubExerciseChooserState.svelte",
+      "file": "packages/singing-trainer-core/src/lib/stores/overdubExerciseChooserState.svelte.ts",
+      "category": "controls",
+      "props": [],
+      "directImporters": [],
+      "directImporterCount": 0,
+      "importerScopes": [],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    },
+    {
+      "id": "packages/singing-trainer-core/src/lib/pitch-range/pitchRangeController.ts",
+      "name": "pitchRangeController",
+      "file": "packages/singing-trainer-core/src/lib/pitch-range/pitchRangeController.ts",
+      "category": "controls",
+      "props": [],
+      "directImporters": [],
+      "directImporterCount": 0,
+      "importerScopes": [],
+      "reusable": false,
+      "reusabilityNotes": "Local usage only."
+    }
+  ]
+}

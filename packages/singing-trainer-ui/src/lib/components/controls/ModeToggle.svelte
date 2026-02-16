@@ -5,7 +5,7 @@
    * Toggle between stationary and highway visualization modes.
    */
 
-  import { appState, type VisualizationMode } from '../../stores/appState.svelte.js';
+  import { appState, type VisualizationMode } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 
   const modes: { value: VisualizationMode; label: string }[] = [
     { value: 'stationary', label: 'Stationary' },

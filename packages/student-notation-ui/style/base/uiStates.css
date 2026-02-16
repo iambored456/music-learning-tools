@@ -151,7 +151,8 @@
 .pitch-tab-panel.active > .chords-content-box,
 .pitch-tab-panel.active > .draw-content-box,
 .rhythm-stamp-tab-panel.active > .sixteenth-stamps-toolbar-container,
-.rhythm-stamp-tab-panel.active > .triplet-stamps-toolbar-container {
+.rhythm-stamp-tab-panel.active > .triplet-stamps-toolbar-container,
+.rhythm-stamp-tab-panel.active > .rhythm-controls-content-box {
     border-top-left-radius: 0 !important;
     border-top-right-radius: var(--border-radius-md) !important;
 }

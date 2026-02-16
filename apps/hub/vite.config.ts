@@ -22,6 +22,7 @@ export default defineConfig({
       '@mlt/ui-components',
       '@mlt/student-notation-engine',
       '@mlt/student-notation-ui',
+      '@mlt/singing-trainer-core',
       '@mlt/singing-trainer-ui',
       '@mlt/diatonic-compass-ui',
       '@mlt/pitch-utils',
@@ -47,8 +48,8 @@ export default defineConfig({
     },
   },
   build: {
-    // Student-notation app is ~590KB after splitting vendors, which is reasonable
-    chunkSizeWarningLimit: 600,
+    // Keep chunking simple to avoid cross-chunk initialization order issues.
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       input: {
         main: resolve(root, 'index.html'),

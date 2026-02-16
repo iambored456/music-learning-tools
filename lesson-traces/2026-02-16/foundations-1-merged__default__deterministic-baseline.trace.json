@@ -1,0 +1,645 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAtIso": "2026-02-16T03:19:45.381Z",
+  "lessonId": "foundations-1-merged",
+  "lessonName": "1.1-1.4 Foundations Lesson",
+  "lessonType": "pitch-matching",
+  "variantId": "default",
+  "scenarioId": "deterministic-baseline",
+  "settings": {
+    "tempoBpm": 90,
+    "minVoicedMs": 400,
+    "minAmplitudeDb": -60,
+    "minCoveragePct": 60,
+    "bandLowMinOffsetSemis": 0,
+    "bandLowMaxOffsetSemis": 5,
+    "bandHighMinOffsetSemis": 9,
+    "bandHighMaxOffsetSemis": 14,
+    "holdBandSemitones": 1,
+    "minSlideSemitones": 3,
+    "waitForInput": true,
+    "showImmediateFeedback": true,
+    "showScore": true
+  },
+  "events": [
+    {
+      "type": "lessonLoaded",
+      "lessonId": "foundations-1-merged",
+      "variantId": "default",
+      "scenarioId": "deterministic-baseline",
+      "atMs": 0
+    },
+    {
+      "type": "highwayShow",
+      "atMs": 0
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "leadIn",
+      "loopIndex": 0,
+      "phaseIndex": -1,
+      "phaseLabel": "Lead In",
+      "atMs": 0
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "foundations-1-1",
+      "segmentName": "1.1 Vocal On/Off",
+      "segmentIndex": 0,
+      "atMs": 2000
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 0,
+      "phaseIndex": 0,
+      "phaseLabel": "LISTEN",
+      "targetMode": "fixedPitch",
+      "atMs": 2000
+    },
+    {
+      "type": "avatarSay",
+      "text": "In this lesson, we are not trying to sing correctly. We are learning control with intention. First, turn your voice on and off. Any pitched sound is okay.",
+      "textId": "foundations-1-1",
+      "atMs": 2000
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "G4",
+      "atMs": 2000
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "G4",
+      "atMs": 3333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 1,
+      "targetMode": "fixedPitch",
+      "atMs": 3333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 2,
+      "phaseLabel": "VOICE ON/OFF",
+      "targetMode": "windowAnyPitch",
+      "atMs": 4666
+    },
+    {
+      "type": "avatarSay",
+      "text": "Make a pitched sound now, then stop the sound completely.",
+      "textId": "foundations-1-1",
+      "atMs": 4666
+    },
+    {
+      "type": "waitForInput",
+      "state": "begin",
+      "thresholds": {
+        "minVoicedMs": 400,
+        "minCoveragePct": 60,
+        "minAmplitudeDb": -60
+      },
+      "atMs": 4666
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 0,
+      "attempt": 1,
+      "voicedMs": 2134,
+      "coveragePct": 92,
+      "medianPitchMidi": 60,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 4666
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 0,
+      "status": "hit",
+      "noteLabel": "VOICE ON/OFF",
+      "atMs": 4666
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 0,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 4666
+    },
+    {
+      "type": "waitForInput",
+      "state": "end",
+      "atMs": 7333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 3,
+      "targetMode": "fixedPitch",
+      "atMs": 7333
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "foundations-1-2",
+      "segmentName": "1.2 High/Low Contrast",
+      "segmentIndex": 1,
+      "atMs": 10000
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 0,
+      "phaseIndex": 4,
+      "phaseLabel": "LISTEN LOW",
+      "targetMode": "windowBand",
+      "atMs": 10000
+    },
+    {
+      "type": "avatarSay",
+      "text": "Great. Now change the sound higher and lower. There is no right note. Just make a clear contrast.",
+      "textId": "foundations-1-2",
+      "atMs": 10000
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "G4",
+      "atMs": 10000
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "G4",
+      "atMs": 11333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 5,
+      "targetMode": "fixedPitch",
+      "atMs": 11333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 6,
+      "phaseLabel": "LOW",
+      "targetMode": "windowBand",
+      "atMs": 12666
+    },
+    {
+      "type": "avatarSay",
+      "text": "Now sing in the lower zone.",
+      "textId": "foundations-1-2",
+      "atMs": 12666
+    },
+    {
+      "type": "waitForInput",
+      "state": "begin",
+      "thresholds": {
+        "minVoicedMs": 400,
+        "minCoveragePct": 60,
+        "minAmplitudeDb": -60
+      },
+      "atMs": 12666
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 1,
+      "attempt": 1,
+      "voicedMs": 2134,
+      "coveragePct": 92,
+      "medianPitchMidi": 61,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 12666
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 1,
+      "status": "hit",
+      "noteLabel": "LOW",
+      "atMs": 12666
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 1,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 12666
+    },
+    {
+      "type": "waitForInput",
+      "state": "end",
+      "atMs": 15333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 7,
+      "targetMode": "fixedPitch",
+      "atMs": 15333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 0,
+      "phaseIndex": 8,
+      "phaseLabel": "LISTEN HIGH",
+      "targetMode": "windowBand",
+      "atMs": 16666
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "G4",
+      "atMs": 16666
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "G4",
+      "atMs": 17999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 9,
+      "targetMode": "fixedPitch",
+      "atMs": 17999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 10,
+      "phaseLabel": "HIGH",
+      "targetMode": "windowBand",
+      "atMs": 19332
+    },
+    {
+      "type": "avatarSay",
+      "text": "Now sing in the higher zone.",
+      "textId": "foundations-1-2",
+      "atMs": 19332
+    },
+    {
+      "type": "waitForInput",
+      "state": "begin",
+      "thresholds": {
+        "minVoicedMs": 400,
+        "minCoveragePct": 60,
+        "minAmplitudeDb": -60
+      },
+      "atMs": 19332
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 2,
+      "attempt": 1,
+      "voicedMs": 2134,
+      "coveragePct": 92,
+      "medianPitchMidi": 62,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 19332
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 2,
+      "status": "hit",
+      "noteLabel": "HIGH",
+      "atMs": 19332
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 2,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 19332
+    },
+    {
+      "type": "waitForInput",
+      "state": "end",
+      "atMs": 21999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 11,
+      "targetMode": "fixedPitch",
+      "atMs": 21999
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "foundations-1-3",
+      "segmentName": "1.3 Pitch Slide",
+      "segmentIndex": 2,
+      "atMs": 24666
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 0,
+      "phaseIndex": 12,
+      "phaseLabel": "LISTEN",
+      "targetMode": "fixedPitch",
+      "atMs": 24666
+    },
+    {
+      "type": "avatarSay",
+      "text": "Nice work. Keep the sound going and slide your pitch up, then down.",
+      "textId": "foundations-1-3",
+      "atMs": 24666
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "G4",
+      "atMs": 24666
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "G4",
+      "atMs": 25999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 13,
+      "targetMode": "fixedPitch",
+      "atMs": 25999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 14,
+      "phaseLabel": "SLIDE UP",
+      "targetMode": "slideWindow",
+      "atMs": 27332
+    },
+    {
+      "type": "avatarSay",
+      "text": "Keep voicing and slide upward slowly.",
+      "textId": "foundations-1-3",
+      "atMs": 27332
+    },
+    {
+      "type": "waitForInput",
+      "state": "begin",
+      "thresholds": {
+        "minVoicedMs": 400,
+        "minCoveragePct": 60,
+        "minAmplitudeDb": -60
+      },
+      "atMs": 27332
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 3,
+      "attempt": 1,
+      "voicedMs": 2134,
+      "coveragePct": 92,
+      "medianPitchMidi": 63,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 27332
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 3,
+      "status": "hit",
+      "noteLabel": "SLIDE UP",
+      "atMs": 27332
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 3,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 27332
+    },
+    {
+      "type": "waitForInput",
+      "state": "end",
+      "atMs": 29999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 15,
+      "targetMode": "fixedPitch",
+      "atMs": 29999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 16,
+      "phaseLabel": "SLIDE DOWN",
+      "targetMode": "slideWindow",
+      "atMs": 31332
+    },
+    {
+      "type": "avatarSay",
+      "text": "Keep voicing and slide downward slowly.",
+      "textId": "foundations-1-3",
+      "atMs": 31332
+    },
+    {
+      "type": "waitForInput",
+      "state": "begin",
+      "thresholds": {
+        "minVoicedMs": 400,
+        "minCoveragePct": 60,
+        "minAmplitudeDb": -60
+      },
+      "atMs": 31332
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 4,
+      "attempt": 1,
+      "voicedMs": 2134,
+      "coveragePct": 92,
+      "medianPitchMidi": 64,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 31332
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 4,
+      "status": "hit",
+      "noteLabel": "SLIDE DOWN",
+      "atMs": 31332
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 4,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 31332
+    },
+    {
+      "type": "waitForInput",
+      "state": "end",
+      "atMs": 33999
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 17,
+      "targetMode": "fixedPitch",
+      "atMs": 33999
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "foundations-1-4",
+      "segmentName": "1.4 Hold Steady",
+      "segmentIndex": 3,
+      "atMs": 36666
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "reference",
+      "loopIndex": 0,
+      "phaseIndex": 18,
+      "phaseLabel": "LISTEN",
+      "targetMode": "fixedPitch",
+      "atMs": 36666
+    },
+    {
+      "type": "avatarSay",
+      "text": "Excellent. Now hold one pitch steady. It does not need to be perfect, just controlled.",
+      "textId": "foundations-1-4",
+      "atMs": 36666
+    },
+    {
+      "type": "referenceTone",
+      "state": "on",
+      "note": "G4",
+      "atMs": 36666
+    },
+    {
+      "type": "referenceTone",
+      "state": "off",
+      "note": "G4",
+      "atMs": 39333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 19,
+      "targetMode": "fixedPitch",
+      "atMs": 39333
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "input",
+      "loopIndex": 0,
+      "phaseIndex": 20,
+      "phaseLabel": "HOLD STEADY",
+      "targetMode": "holdSteady",
+      "atMs": 40666
+    },
+    {
+      "type": "avatarSay",
+      "text": "Pick any pitch and hold it steady.",
+      "textId": "foundations-1-4",
+      "atMs": 40666
+    },
+    {
+      "type": "waitForInput",
+      "state": "begin",
+      "thresholds": {
+        "minVoicedMs": 400,
+        "minCoveragePct": 60,
+        "minAmplitudeDb": -60
+      },
+      "atMs": 40666
+    },
+    {
+      "type": "inputMetrics",
+      "inputIndex": 5,
+      "attempt": 1,
+      "voicedMs": 3200,
+      "coveragePct": 92,
+      "medianPitchMidi": 65,
+      "jitterCents": 10,
+      "withinWindow": true,
+      "atMs": 40666
+    },
+    {
+      "type": "highwayNoteJudged",
+      "inputIndex": 5,
+      "status": "hit",
+      "noteLabel": "HOLD STEADY",
+      "atMs": 40666
+    },
+    {
+      "type": "evaluation",
+      "inputIndex": 5,
+      "attempt": 1,
+      "result": "pass",
+      "atMs": 40666
+    },
+    {
+      "type": "waitForInput",
+      "state": "end",
+      "atMs": 44666
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "rest",
+      "loopIndex": 0,
+      "phaseIndex": 21,
+      "targetMode": "fixedPitch",
+      "atMs": 44666
+    },
+    {
+      "type": "avatarSay",
+      "text": "You learned four core vocal skills: starting sound, changing pitch, moving pitch, and holding pitch.",
+      "textId": "foundations-1-4",
+      "atMs": 44666
+    },
+    {
+      "type": "highwayHide",
+      "atMs": 47333
+    },
+    {
+      "type": "lessonComplete",
+      "passCount": 6,
+      "failCount": 0,
+      "totalInputs": 6,
+      "atMs": 47333
+    }
+  ],
+  "summary": {
+    "durationMs": 47333,
+    "totalEvents": 82,
+    "evaluations": {
+      "pass": 6,
+      "fail": 0
+    }
+  }
+}

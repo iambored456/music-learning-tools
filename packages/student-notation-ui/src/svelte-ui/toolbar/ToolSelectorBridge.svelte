@@ -613,7 +613,13 @@
 
     // Restore saved rhythm tab
     const savedRhythmTab = localStorage.getItem('selectedRhythmStampTab') || localStorage.getItem('selectedRhythmTab');
-    const normalizedRhythmTab = savedRhythmTab === 'stamps' ? 'sixteenth' : savedRhythmTab === 'triplets' ? 'triplet' : (savedRhythmTab || 'sixteenth');
+    const normalizedRhythmTab = savedRhythmTab === 'stamps'
+      ? 'sixteenth'
+      : savedRhythmTab === 'triplets'
+        ? 'triplet'
+        : savedRhythmTab === 'controls'
+          ? 'measures'
+          : (savedRhythmTab || 'sixteenth');
     const savedRhythmTabButton = document.querySelector<HTMLButtonElement>(`[data-rhythm-stamp-tab="${normalizedRhythmTab}"]`);
     if (savedRhythmTabButton) {
       rhythmTabButtons.forEach(btn => btn.classList.remove('active'));

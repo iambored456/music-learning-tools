@@ -136,8 +136,7 @@ function loadStateFromStorage(storage: StorageAdapter | undefined, storageKey: s
       return undefined;
     }
 
-    // Remove timbres from persisted state - always use defaults.
-    // This ensures the Sine preset loads on each session.
+    // Remove timbres from persisted state - always use startup defaults.
     delete parsedState.timbres;
 
     // Validate pitch range
@@ -173,8 +172,8 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
   if (!storage) return;
 
   try {
-    // NOTE: timbres are intentionally NOT persisted
-    // This ensures the default Sine preset loads on each session
+    // NOTE: timbres are intentionally NOT persisted.
+    // This ensures startup voice preset defaults are reapplied each session.
     // Users can change presets during a session, but they reset on reload
     const stateToPersist = JSON.parse(JSON.stringify({
       placedNotes: state.placedNotes,
@@ -183,7 +182,7 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
       sixteenthStampPlacements: state.sixteenthStampPlacements,
       tripletStampPlacements: state.tripletStampPlacements,
       sixteenthThreeStampPlacements: state.sixteenthThreeStampPlacements,
-      // timbres: state.timbres, // Removed - always use default Sine preset
+      // timbres: state.timbres, // Removed - always use startup voice preset defaults
       macrobeatGroupings: state.macrobeatGroupings,
       macrobeatBoundaryStyles: state.macrobeatBoundaryStyles,
       hasAnacrusis: state.hasAnacrusis,
@@ -549,10 +548,35 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     },
 
     applyPreset(color: string, preset: Partial<AppState['timbres'][string]>): void {
-      if (store.state.timbres[color]) {
-        Object.assign(store.state.timbres[color], preset);
-        store.emit('timbreChanged', color);
+      const timbre = store.state.timbres[color];
+      if (!timbre) {
+        return;
       }
+
+      Object.assign(timbre, preset);
+
+      // Clone arrays so each voice owns its own spectrum data.
+      if (preset.adsr) {
+        timbre.adsr = { ...timbre.adsr, ...preset.adsr };
+      }
+      if (preset.filter) {
+        timbre.filter = { ...timbre.filter, ...preset.filter };
+      }
+      if (preset.coeffs) {
+        timbre.coeffs = new Float32Array(preset.coeffs);
+      }
+      if (preset.phases) {
+        timbre.phases = new Float32Array(preset.phases);
+      }
+
+      // Keep UI preset selection in sync with applied preset identity.
+      if (typeof preset.name === 'string' && preset.name.length > 0) {
+        timbre.activePresetName = preset.name;
+      } else if (typeof preset.activePresetName === 'string' && preset.activePresetName.length > 0) {
+        timbre.activePresetName = preset.activePresetName;
+      }
+
+      store.emit('timbreChanged', color);
     },
 
     // ========== NOTE ACTIONS ==========

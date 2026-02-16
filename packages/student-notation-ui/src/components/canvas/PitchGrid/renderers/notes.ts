@@ -168,16 +168,21 @@ function drawDelayGhostNotes(
   }
 
   const { cellWidth } = options;
+  const tempo = options.tempo || 90;
   const delayEffects = animationManager.getDelayEffects?.(note.color);
   if (!delayEffects || delayEffects.length === 0) {
     return;
   }
 
+  // Convert delay ms to pixels using the grid's time mapping:
+  // 1 microbeat (eighth note) = (60 / tempo) / 2 seconds = one cellWidth
+  // So pixelsPerMs = cellWidth / (microbeatDurationSeconds * 1000)
+  const microbeatMs = ((60 / tempo) / 2) * 1000;
+  const pxPerMs = cellWidth / microbeatMs;
+
   // Draw ghost notes to the right of the original note
   delayEffects.forEach((echo, index) => {
-    // Calculate X offset based on delay time (delay is in ms, map to pixels)
-    // 500ms max delay = ~2 cell widths offset
-    const offsetX = (echo.delay / 500) * cellWidth * 2;
+    const offsetX = echo.delay * pxPerMs;
     const echoX = centerX + offsetX;
 
     // Scale down slightly for each echo
@@ -185,7 +190,7 @@ function drawDelayGhostNotes(
     const echoRy = ry * echo.scale;
 
     ctx.save();
-    ctx.globalAlpha = echo.opacity * 0.6; // Additional opacity reduction for ghosts
+    ctx.globalAlpha = echo.opacity;
 
     // Draw ghost note outline
     ctx.beginPath();

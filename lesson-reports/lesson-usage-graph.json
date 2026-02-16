@@ -1,0 +1,159 @@
+{
+  "generatedAtIso": "2026-02-16T03:18:06.056Z",
+  "lessons": [
+    {
+      "lessonId": "anchored-pitch-matching",
+      "lessonName": "2.1 Anchored Pitch Matching",
+      "lessonType": "pitch-matching",
+      "category": "beginning",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=pitch-matching",
+        "difficulty=1",
+        "speakingPitchUsage=asTonic",
+        "loops=5",
+        "tempo=100"
+      ]
+    },
+    {
+      "lessonId": "foundations-1-merged",
+      "lessonName": "1.1-1.4 Foundations Lesson",
+      "lessonType": "pitch-matching",
+      "category": "foundations",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte",
+        "packages/singing-trainer-core/src/lib/engine/controllerAdapters.ts"
+      ],
+      "notes": [
+        "type=pitch-matching",
+        "difficulty=1",
+        "speakingPitchUsage=asFloorNote",
+        "loops=1",
+        "tempo=90",
+        "contains instructionMessage phases"
+      ]
+    },
+    {
+      "lessonId": "basic-pitch-match",
+      "lessonName": "1.5 Basic Pitch Matching",
+      "lessonType": "pitch-matching",
+      "category": "foundations",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=pitch-matching",
+        "difficulty=1",
+        "speakingPitchUsage=asFloorNote",
+        "loops=5",
+        "tempo=108"
+      ]
+    },
+    {
+      "lessonId": "quick-pitch-match",
+      "lessonName": "2.2 Quick Pitch Response",
+      "lessonType": "pitch-matching",
+      "category": "beginning",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=pitch-matching",
+        "difficulty=2",
+        "speakingPitchUsage=asFloorNote",
+        "loops=8",
+        "tempo=120"
+      ]
+    },
+    {
+      "lessonId": "sustained-pitch-match",
+      "lessonName": "2.3 Sustained Pitch",
+      "lessonType": "pitch-matching",
+      "category": "beginning",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=pitch-matching",
+        "difficulty=2",
+        "speakingPitchUsage=asTonic",
+        "loops=4",
+        "tempo=80"
+      ]
+    },
+    {
+      "lessonId": "centered-range-match",
+      "lessonName": "1.6 Centered Range",
+      "lessonType": "pitch-matching",
+      "category": "foundations",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/ExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=pitch-matching",
+        "difficulty=1",
+        "speakingPitchUsage=asTonic",
+        "loops=6",
+        "tempo=100"
+      ]
+    },
+    {
+      "lessonId": "overdub-simple-unison",
+      "lessonName": "Simple Unison",
+      "lessonType": "overdub",
+      "category": "overdub-exercises",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/OverdubControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/OverdubExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=overdub",
+        "difficulty=1",
+        "speakingPitchUsage=none",
+        "voices=2",
+        "tempo=80"
+      ]
+    },
+    {
+      "lessonId": "overdub-feeling-this",
+      "lessonName": "Feeling This (Blink-182)",
+      "lessonType": "overdub",
+      "category": "overdub-exercises",
+      "components": [
+        "packages/singing-trainer-ui/src/lib/components/SingingCanvas.svelte",
+        "packages/singing-trainer-ui/src/lib/components/controls/OverdubControls.svelte",
+        "packages/singing-trainer-ui/src/lib/components/chooser/OverdubExerciseChooserModal.svelte",
+        "packages/singing-trainer-ui/src/lib/components/feedback/ResultsModal.svelte"
+      ],
+      "notes": [
+        "type=overdub",
+        "difficulty=2",
+        "speakingPitchUsage=none",
+        "voices=6",
+        "tempo=87"
+      ]
+    }
+  ]
+}

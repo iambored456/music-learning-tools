@@ -6,7 +6,7 @@
    * Simpler than the lesson chooser (single-column, no category navigation).
    */
 
-  import { overdubExerciseChooserState } from '../../stores/overdubExerciseChooserState.svelte.js';
+  import { overdubExerciseChooserState } from '@mlt/singing-trainer-core/stores/overdubExerciseChooserState.svelte.js';
   import {
     getRegistryEntriesByCategory,
     type RegistryEntry,

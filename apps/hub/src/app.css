@@ -183,6 +183,46 @@ h1 {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.preview {
+  aspect-ratio: 4 / 3;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(60, 52, 46, 0.14);
+  background:
+    linear-gradient(160deg, rgb(var(--palette-peri) / 0.3), transparent 55%),
+    linear-gradient(25deg, rgb(var(--palette-teal) / 0.28), transparent 60%),
+    #e8dfd2;
+}
+
+.preview-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 14px;
+}
+
+.preview-link .preview {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.preview-link:hover .preview {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 24px rgba(29, 20, 13, 0.18);
+}
+
+.preview-link:focus-visible {
+  outline: 2px solid rgba(31, 27, 22, 0.45);
+  outline-offset: 3px;
+}
+
+.preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  image-rendering: auto;
+}
+
 .description {
   margin: 0;
   color: #4f4138;
@@ -221,6 +261,10 @@ h1 {
 .launch:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 28px rgba(29, 20, 13, 0.22);
+}
+
+.launch.is-hidden {
+  display: none;
 }
 
 @keyframes floatIn {

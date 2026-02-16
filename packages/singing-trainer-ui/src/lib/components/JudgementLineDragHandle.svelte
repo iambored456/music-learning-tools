@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { highwayState } from '../stores/highwayState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
 
   interface Props {
     canvasWidth: number;

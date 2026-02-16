@@ -31,6 +31,7 @@
     "dev": "vite build --watch"
   },
   "dependencies": {
+    "@mlt/audio-samples": "workspace:*",
     "@mlt/pitch-data": "workspace:*",
     "@mlt/types": "workspace:*",
     "tone": "^15.0.4",

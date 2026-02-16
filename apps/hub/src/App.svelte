@@ -19,13 +19,25 @@
           <h2>{app.name}</h2>
           <span class="status" aria-hidden="true"></span>
         </div>
+        <a class="preview-link" href={app.href} aria-label={`Open ${app.name}`}>
+          <div class="preview">
+            <img
+              src={app.preview}
+              alt={`${app.name} preview`}
+              loading="lazy"
+              decoding="async"
+              width="1200"
+              height="900"
+            />
+          </div>
+        </a>
         <p class="description">{app.description}</p>
         <div class="tags">
           {#each app.tags as tag}
             <span class="tag">{tag}</span>
           {/each}
         </div>
-        <a class="launch" href={app.href}>
+        <a class="launch is-hidden" href={app.href}>
           Open
         </a>
       </article>

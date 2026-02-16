@@ -155,6 +155,7 @@ export {
   createTimeMapCalculator,
   createDrumManager,
   DEFAULT_DRUM_SAMPLES,
+  preloadDrumSamples,
   type TimeMapCalculatorConfig,
   type TimeMapCalculatorInstance,
   type DrumConfig,

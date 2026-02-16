@@ -20,19 +20,20 @@
     SpeakingPitchPanel,
     DifficultySettings,
     OverdubBuilderToolbar,
+    InputDecibelMeter,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
   import { ExerciseChooserModal, OverdubExerciseChooserModal } from './lib/components/chooser/index.js';
-  import { overdubExerciseState } from './lib/stores/overdubExerciseState.svelte.js';
+  import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { CalibrationWizard } from './lib/calibration/index.js';
-  import { handoffState } from './lib/stores/handoffState.svelte.js';
-  import { appState } from './lib/stores/appState.svelte.js';
-  import { highwayState } from './lib/stores/highwayState.svelte.js';
-  import { ultrastarState } from './lib/stores/ultrastarState.svelte.js';
-  import { resultsState } from './lib/stores/resultsState.svelte.js';
-  import { exerciseState } from './lib/stores/exerciseState.svelte.js';
-  import { overdubState } from './lib/stores/overdubState.svelte.js';
-  import { startDetection, stopDetection } from './lib/services/pitchDetection.js';
+  import { handoffState } from '@mlt/singing-trainer-core/stores/handoffState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
+  import { resultsState } from '@mlt/singing-trainer-core/stores/resultsState.svelte.js';
+  import { exerciseState } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
+  import { overdubState } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
+  import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
   import { registerTemplates, ALL_LESSONS } from '@mlt/lesson-templates';
 
   // Calibration wizard state
@@ -218,6 +219,7 @@
         <div class="settings-content">
           <StartButton />
           <MicInputSelector />
+          <InputDecibelMeter />
           <PitchReadout />
         </div>
       </details>

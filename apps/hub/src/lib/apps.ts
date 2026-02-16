@@ -3,6 +3,7 @@ export type AppCard = {
   name: string;
   description: string;
   href: string;
+  preview: string;
   tags: string[];
   accent: string;
 };
@@ -16,7 +17,8 @@ export const appCards: AppCard[] = [
     name: 'Singing Trainer',
     description: 'Real-time vocal practice with pitch detection and note highway visualization.',
     href: withBase('singing-trainer/'),
-    tags: ['Svelte', 'Audio', 'Pitch'],
+    preview: withBase('previews/singing-trainer.png'),
+    tags: ['Pitch', 'Audiation', 'Karaoke'],
     accent: '#da7e9b',
   },
   {
@@ -24,7 +26,8 @@ export const appCards: AppCard[] = [
     name: 'Student Notation',
     description: 'Grid-first sketchpad for pitch, rhythm, and harmony exploration.',
     href: withBase('student-notation/'),
-    tags: ['Canvas', 'Notation', 'Svelte'],
+    preview: withBase('previews/student-notation.png'),
+    tags: ['Sketchpad', 'Composition', 'Synth'],
     accent: '#bb9b3b',
   },
   {
@@ -32,7 +35,8 @@ export const appCards: AppCard[] = [
     name: 'Diatonic Compass',
     description: 'Interactive compass for keys, modes, and diatonic relationships.',
     href: withBase('diatonic-compass/'),
-    tags: ['Canvas', 'Theory', 'Accessibility'],
+    preview: withBase('previews/diatonic-compass.png'),
+    tags: ['Theory', 'Modes', 'Keys'],
     accent: '#27b6a1',
   },
 ];

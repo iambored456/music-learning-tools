@@ -1,19 +1,13 @@
 import { mountStudentNotation } from '@mlt/student-notation-ui';
 
 const logPrefix = '[Hub:StudentNotation]';
-const shouldInitDebug = (): boolean => {
-  if (typeof window === 'undefined') {return false;}
-  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
-  if (override === true) {return true;}
-  if (override === false) {return false;}
-  return false;
-};
+const t0 = performance.now();
 const log = (message: string, data?: unknown) => {
-  if (!shouldInitDebug()) {return;}
+  const elapsed = `+${(performance.now() - t0).toFixed(0)}ms`;
   if (data === undefined) {
-    console.log(`${logPrefix} ${message}`);
+    console.log(`${logPrefix} ${elapsed} ${message}`);
   } else {
-    console.log(`${logPrefix} ${message}`, data);
+    console.log(`${logPrefix} ${elapsed} ${message}`, data);
   }
 };
 

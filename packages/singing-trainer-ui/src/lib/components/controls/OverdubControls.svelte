@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { appState, type MicTrailColorMode } from '../../stores/appState.svelte.js';
-  import { overdubState } from '../../stores/overdubState.svelte.js';
-  import { overdubExerciseState } from '../../stores/overdubExerciseState.svelte.js';
-  import { highwayState } from '../../stores/highwayState.svelte.js';
+  import { appState, type MicTrailColorMode } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { overdubState } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
+  import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
 
   interface Props {
     compact?: boolean;

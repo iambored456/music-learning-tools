@@ -5,13 +5,13 @@
 	 * Dropdown fallback for pitch range selection.
 	 * Provides two select inputs (Top Pitch, Bottom Pitch) synced with app state.
 	 */
-	import { appState } from '../../stores/appState.svelte';
+	import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 	import {
 		generateMidiOptions,
 		setTop,
 		setBottom,
 		MIN_RANGE_SEMITONES,
-	} from '../../pitch-range/pitchRangeController.js';
+	} from '@mlt/singing-trainer-core/pitch-range/pitchRangeController.js';
 
 	const midiOptions = generateMidiOptions();
 

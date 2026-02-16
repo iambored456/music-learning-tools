@@ -5,7 +5,7 @@
    * Controls for highway lyric label sizing.
    */
 
-  import { appState } from '../../stores/appState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 
   const isUniform = $derived(appState.state.lyricLabelMode === 'fixed');
 

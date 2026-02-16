@@ -46,6 +46,10 @@ const SynthEngine = {
         }
       },
 
+      getPreviewColor: () => {
+        return store.state.selectedNote?.color ?? null;
+      },
+
       // Inject the logger
       logger: {
         debug: (context: string, message: string, data?: unknown) => {
@@ -112,9 +116,9 @@ const SynthEngine = {
     engineInstance.updateSynthForColor(color);
   },
 
-  playNote(pitch: string | number, duration: string | number, time?: number) {
+  playNote(pitch: string | number, duration: string | number, time?: number, color?: string) {
     if (!engineInstance) return;
-    engineInstance.playNote(pitch, duration, time);
+    engineInstance.playNote(pitch, duration, time, color);
   },
 
   triggerAttack(pitch: string | number, color: string, time?: number, isDrum?: boolean) {

@@ -5,8 +5,8 @@
    * Displays the current detected pitch information.
    */
 
-  import { appState } from '../../stores/appState.svelte.js';
-  import { pitchState } from '../../stores/pitchState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
 
   const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 

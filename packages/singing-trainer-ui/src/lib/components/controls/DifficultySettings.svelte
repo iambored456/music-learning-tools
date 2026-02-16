@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { difficultyState, type DifficultyPreset } from '../../stores/difficultyState.svelte.js';
+  import { difficultyState, type DifficultyPreset } from '@mlt/singing-trainer-core/stores/difficultyState.svelte.js';
   import type { FeedbackCollectorConfig } from '@mlt/student-notation-engine';
 
   const presetOptions: { value: DifficultyPreset; label: string }[] = [

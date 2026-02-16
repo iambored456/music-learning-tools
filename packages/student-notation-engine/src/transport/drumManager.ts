@@ -6,6 +6,7 @@
  */
 
 import * as Tone from 'tone';
+import { getDrumSampleSet } from '@mlt/audio-samples';
 import type {
   DrumConfig,
   DrumManagerInstance,
@@ -13,14 +14,45 @@ import type {
 } from './types.js';
 
 /** Default drum sample URLs */
-export const DEFAULT_DRUM_SAMPLES: Record<DrumTrackId, string> = {
-  H: 'https://tonejs.github.io/audio/drum-samples/CR78/hihat.mp3',
-  M: 'https://tonejs.github.io/audio/drum-samples/CR78/snare.mp3',
-  L: 'https://tonejs.github.io/audio/drum-samples/CR78/kick.mp3'
-};
+export const DEFAULT_DRUM_SAMPLES: Record<DrumTrackId, string> =
+  getDrumSampleSet() as Record<DrumTrackId, string>;
+
+let drumPreloadPromise: Promise<void> | null = null;
+let drumsPreloaded = false;
 
 /** Minimum time between drum triggers */
 const DRUM_START_EPSILON = 1e-4;
+
+/**
+ * Preload drum sample buffers so later Tone.Players construction can reuse cached data.
+ * Safe to call repeatedly; concurrent calls share the same promise.
+ */
+export function preloadDrumSamples(
+  samples: Record<DrumTrackId, string> = DEFAULT_DRUM_SAMPLES
+): Promise<void> {
+  if (drumsPreloaded) {
+    return Promise.resolve();
+  }
+
+  if (drumPreloadPromise) {
+    return drumPreloadPromise;
+  }
+
+  const preloadPlayers = new Tone.Players(samples);
+  drumPreloadPromise = (async () => {
+    try {
+      await preloadPlayers.loaded;
+      drumsPreloaded = true;
+    } finally {
+      preloadPlayers.dispose();
+    }
+  })().catch((error) => {
+    drumPreloadPromise = null;
+    throw error;
+  });
+
+  return drumPreloadPromise;
+}
 
 /**
  * Create a drum manager instance.

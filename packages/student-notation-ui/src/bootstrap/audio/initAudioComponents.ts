@@ -10,14 +10,24 @@ import audioEffectsManager from '@services/timbreEffects/effectsAudio/audioEffec
 import effectsCoordinator from '@services/timbreEffects/effectsCoordinator.ts';
 import effectsController from '@components/audio/effects/effectsController.ts';
 
-export function initAudioComponents(): void {
+export interface AudioComponentProgress {
+  onStep(status: string): void;
+}
+
+export function initAudioComponents(progress?: AudioComponentProgress): void {
+  progress?.onStep('Mounting envelope editor...');
   mountComponent('adsr-envelope', '#adsr-envelope');
+
+  progress?.onStep('Initializing harmonic bins...');
   initOvertoneBins();
+
   // Mount after overtone bins create the vertical blend controls.
+  progress?.onStep('Mounting filter controls...');
   mountComponent('filter-controls-bridge', document.body);
   // DEPRECATED: Filter controls now managed by FilterControlsBridge.svelte (Phase 3 modernization)
   // initFilterControls();
 
+  progress?.onStep('Setting up waveform display...');
   logger.initStart('Waveform Visualizer');
   if (initWaveformVisualizer()) {
     logger.initSuccess('Waveform Visualizer');
@@ -26,10 +36,12 @@ export function initAudioComponents(): void {
   }
 
   // Initialize effects architecture
+  progress?.onStep('Initializing effects system...');
   logger.initStart('Effects Managers');
   animationEffectsManager.init();
   audioEffectsManager.init();
 
+  progress?.onStep('Wiring effects controls...');
   effectsCoordinator.init();
 
   effectsController.init();

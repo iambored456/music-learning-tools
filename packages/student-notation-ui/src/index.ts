@@ -10,21 +10,14 @@ const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?
 const publicPrefix = '../public/';
 const THEME_STORAGE_KEY = 'app.themeMode';
 
-const shouldInitDebug = (): boolean => {
-  if (typeof window === 'undefined') {return false;}
-  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
-  if (override === true) {return true;}
-  if (override === false) {return false;}
-  return false;
-};
-
+const t0 = performance.now();
 const initDebug = (message: string, data?: unknown): void => {
-  if (!shouldInitDebug()) {return;}
+  const elapsed = `+${(performance.now() - t0).toFixed(0)}ms`;
   if (data === undefined) {
-    console.log(message);
+    console.log(`[StudentNotation:mount] ${elapsed} ${message}`);
     return;
   }
-  console.log(message, data);
+  console.log(`[StudentNotation:mount] ${elapsed} ${message}`, data);
 };
 
 function resolvePublicAsset(path: string): string {

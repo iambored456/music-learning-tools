@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAtIso": "2026-02-16T03:19:45.500Z",
+  "lessonId": "overdub-feeling-this",
+  "lessonName": "Feeling This (Blink-182)",
+  "lessonType": "overdub",
+  "variantId": "default",
+  "scenarioId": "deterministic-baseline",
+  "settings": {
+    "tempo": 87
+  },
+  "events": [
+    {
+      "type": "lessonLoaded",
+      "lessonId": "overdub-feeling-this",
+      "variantId": "default",
+      "scenarioId": "deterministic-baseline",
+      "atMs": 0
+    },
+    {
+      "type": "highwayShow",
+      "atMs": 0
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "leadIn",
+      "loopIndex": 0,
+      "phaseIndex": -1,
+      "phaseLabel": "Count In",
+      "atMs": 0
+    },
+    {
+      "type": "phaseEnter",
+      "phase": "overdub",
+      "loopIndex": 0,
+      "phaseIndex": 0,
+      "phaseLabel": "Overdub Playback",
+      "atMs": 2759
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "P1:1",
+      "segmentName": "Countermelody",
+      "segmentIndex": 0,
+      "atMs": 2759
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "P2:1",
+      "segmentName": "Melody",
+      "segmentIndex": 1,
+      "atMs": 2759
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "P3:1",
+      "segmentName": "Lead Harmony",
+      "segmentIndex": 2,
+      "atMs": 2759
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "P4:1",
+      "segmentName": "5th Harmony",
+      "segmentIndex": 3,
+      "atMs": 2759
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "P5:1",
+      "segmentName": "3rd Harmony",
+      "segmentIndex": 4,
+      "atMs": 2759
+    },
+    {
+      "type": "segmentStart",
+      "segmentId": "P6:1",
+      "segmentName": "Root Harmony",
+      "segmentIndex": 5,
+      "atMs": 2759
+    },
+    {
+      "type": "highwayHide",
+      "atMs": 13793
+    },
+    {
+      "type": "lessonComplete",
+      "passCount": 0,
+      "failCount": 0,
+      "totalInputs": 0,
+      "atMs": 13793
+    }
+  ],
+  "summary": {
+    "durationMs": 13793,
+    "totalEvents": 12,
+    "evaluations": {
+      "pass": 0,
+      "fail": 0
+    }
+  }
+}

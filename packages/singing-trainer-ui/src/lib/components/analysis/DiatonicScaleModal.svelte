@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { DiatonicMajorResult, Candidate } from '../../services/diatonicAnalysis.js';
-  import type { KeySegment } from '../../services/scanKeyChangesMajor.js';
+  import type { DiatonicMajorResult, Candidate } from '@mlt/singing-trainer-core/services/diatonicAnalysis.js';
+  import type { KeySegment } from '@mlt/singing-trainer-core/services/scanKeyChangesMajor.js';
 
   interface Props {
     result: DiatonicMajorResult;

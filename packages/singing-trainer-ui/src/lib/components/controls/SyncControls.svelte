@@ -6,7 +6,7 @@
    * Allows fine-tuning with +/- 0.01s and coarse with +/- 0.1s buttons.
    */
 
-  import { ultrastarState } from '../../stores/ultrastarState.svelte.js';
+  import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
 
   // Reactive state
   const manualOffset = $derived(ultrastarState.state.syncConfig.manualOffsetSec);

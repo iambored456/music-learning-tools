@@ -4,6 +4,7 @@
 
 import type * as Tone from 'tone';
 import type { TimbresMap, TimbreState } from '@mlt/types';
+import type { DrumManagerInstance } from '../transport/types.js';
 
 /**
  * Effects manager interface for synth-level effects (reverb, delay).
@@ -52,7 +53,7 @@ export interface SynthEngineInstance {
   init(): void;
 
   /** Play a note */
-  playNote(pitch: string | number, duration: number | string, time?: number): Promise<void>;
+  playNote(pitch: string | number, duration: number | string, time?: number, color?: string): Promise<void>;
 
   /** Trigger attack for a note (used by Transport scheduling) */
   triggerAttack(pitch: string | number, color: string, time?: number, isDrum?: boolean): void;
@@ -159,6 +160,8 @@ export interface SynthEngineConfig {
   audioInit?: AudioInitCallback;
   /** Optional drum volume callback */
   getDrumVolume?: GetDrumVolumeCallback;
+  /** Optional callback for resolving preview/play-note color */
+  getPreviewColor?: () => string | null;
   /** Callback when timbre is updated */
   onTimbreUpdated?: (color: string) => void;
 }
@@ -358,6 +361,8 @@ export interface TransportConfig {
   playbackMode?: PlaybackMode;
   /** Note Highway service instance (required when playbackMode is 'highway') */
   highwayService?: any; // Using 'any' to avoid circular dependency with highway module
+  /** Optional shared drum manager instance (reused by transport + UI previews) */
+  drumManager?: DrumManagerInstance;
 }
 
 /**

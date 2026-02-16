@@ -5,7 +5,7 @@
    * Toggles the yellow pitch highlight overlay.
    */
 
-  import { appState } from '../../stores/appState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 
   function handleToggle() {
     appState.togglePitchHighlight();

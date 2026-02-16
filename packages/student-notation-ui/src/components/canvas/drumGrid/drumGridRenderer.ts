@@ -195,7 +195,7 @@ function drawVerticalGridLines(ctx: CanvasRenderingContext2D, options: DrumGridR
   });
 
   for (let canvasCol = 0; canvasCol <= totalColumns; canvasCol++) {
-    const isGridStartOrEnd = canvasCol === 0 || canvasCol === totalColumns;
+    const isGridStartOrEnd = canvasCol === 0;
     const isTonicColumnStart = isTonicColumn(canvasCol, placedTonicSigns);
     const isTonicColumnEnd = placedTonicSigns.some(ts => canvasCol === ts.columnIndex + 2);
     const isMacrobeatEnd = macrobeatBoundaries.includes(canvasCol);
@@ -247,7 +247,7 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
 
   // Draw horizontal lines across the entire drum grid canvas
   // The canvas starts at x=0 (already positioned after left legend by layout)
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 3; i++) {
     const y = i * drumRowHeight;
     segments.forEach(seg => {
       if (seg.to <= seg.from) {return;}

@@ -7,6 +7,7 @@
  */
 
 import { createTransportService, type TransportServiceInstance } from '@mlt/student-notation-engine';
+import * as Tone from 'tone';
 import store from '@state/initStore.ts';
 import { getPlacedTonicSigns, getMacrobeatInfo } from '@state/selectors.ts';
 import SynthEngine from './initAudio.ts';
@@ -25,6 +26,7 @@ import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js
 import { getColumnStartX, getColumnWidth, getCanvasWidth, getMacrobeatHighlightRectForCanvasColumn } from '@services/playheadModel.ts';
 import { timeToCanvas } from '@services/columnMapService.ts';
 import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
+import { getSharedDrumManager } from '@services/transport/drumManager.ts';
 
 logger.moduleLoaded('EngineTransport', 'general');
 
@@ -256,7 +258,19 @@ const TransportService = {
         warn: (context, message, data) => {
           logger.warn(context, message, data, 'transport');
         }
-      }
+      },
+
+      // Reuse app-level audio init lifecycle to avoid duplicate Tone.start() races.
+      audioInit: async () => {
+        if (typeof window.initAudio === 'function') {
+          await window.initAudio();
+          return;
+        }
+        await Tone.start();
+      },
+
+      // Share one drum manager across transport playback and drum-grid preview.
+      drumManager: getSharedDrumManager()
     });
 
     // Initialize the engine

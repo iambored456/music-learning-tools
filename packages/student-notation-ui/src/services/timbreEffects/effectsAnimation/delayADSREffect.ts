@@ -59,12 +59,22 @@ class DelayADSREffect extends BaseAnimationEffect<DelayAnimationState, DelayEffe
       // - Visual ghost notes appearing at delay intervals
 
       const delayTimeMs = (time / 100) * 500; // 0-100% to 0-500ms
-      const feedbackAmount = feedback / 100; // 0-100% to 0-1
+      const feedbackAmount = Math.min(feedback / 100, 0.95); // 0-100% to 0-0.95 (matches Tone.js cap)
+
+      // Calculate true audible echo count: how many echoes until amplitude drops below threshold
+      // Each echo decays by feedback^n, so we solve feedback^n < threshold for n
+      const AUDIBILITY_THRESHOLD = 0.01; // -40dB
+      let echoCount = 0;
+      if (feedbackAmount > 0) {
+        echoCount = Math.ceil(Math.log(AUDIBILITY_THRESHOLD) / Math.log(feedbackAmount));
+      }
+
+      console.log(`[DelayADSR] ${color}: feedback=${feedbackAmount.toFixed(2)}, time=${delayTimeMs.toFixed(0)}ms, echoCount=${echoCount}`);
 
       const animationData: DelayAnimationState = {
         delayTime: delayTimeMs,
         feedback: feedbackAmount,
-        echoCount: Math.floor(feedbackAmount * 5), // Up to 5 echoes
+        echoCount,
         lastTrigger: 0,
         echoPhases: [], // Track multiple echo instances
         lastUpdate: performance.now()
@@ -112,13 +122,13 @@ class DelayADSREffect extends BaseAnimationEffect<DelayAnimationState, DelayEffe
       return [];
     }
 
-    // TODO: Calculate delay visual effects (multiple echo instances)
     const effects: Array<{ delay: number; opacity: number; scale: number; active: boolean }> = [];
     for (let i = 0; i < animation.echoCount; i++) {
+      const echoIndex = i + 1;
       effects.push({
-        delay: animation.delayTime * (i + 1),
-        opacity: 1 - (i * 0.3), // Each echo gets dimmer
-        scale: 1 - (i * 0.1), // Each echo gets smaller
+        delay: animation.delayTime * echoIndex,
+        opacity: Math.sqrt(Math.pow(animation.feedback, echoIndex)), // Perceptual opacity: sqrt of amplitude decay
+        scale: Math.max(0.7, 1 - i * 0.02), // Gentle scale reduction, floor at 0.7
         active: false // TODO: Track if this echo should be visible
       });
     }

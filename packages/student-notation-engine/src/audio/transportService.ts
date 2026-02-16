@@ -65,6 +65,10 @@ type TimedStampEvent = StampScheduleEvent & {
   slot?: number;
 };
 
+interface PlayheadAnimationOptions {
+  scheduledStartTime?: number;
+}
+
 function getQuarterDurationSeconds(tempoBpm: number): number {
   const safeTempo = Number.isFinite(tempoBpm) && tempoBpm > 0 ? tempoBpm : 120;
   return 60 / safeTempo;
@@ -123,7 +127,8 @@ export function createTransportService(config: TransportConfig): TransportServic
     logger,
     audioInit,
     playbackMode = 'standard',
-    highwayService
+    highwayService,
+    drumManager: injectedDrumManager
   } = config;
 
   // Logger helper
@@ -137,9 +142,11 @@ export function createTransportService(config: TransportConfig): TransportServic
   let playheadAnimationFrame: number | null = null;
   let shouldAnimatePlayhead = false;
   let timeMapCalculator: TimeMapCalculatorInstance | null = null;
-  let drumManager: DrumManagerInstance | null = null;
+  let drumManager: DrumManagerInstance | null = injectedDrumManager ?? null;
+  const ownsDrumManager = !injectedDrumManager;
   let lastAppliedTempoMultiplier = 1.0;
   let rescheduleTimerId: ReturnType<typeof setTimeout> | null = null;
+  let startSequenceToken = 0;
   const RESCHEDULE_DEBOUNCE_MS = 50;
 
   // Event listener cleanup
@@ -170,6 +177,47 @@ export function createTransportService(config: TransportConfig): TransportServic
         .replace(SHARP_SYMBOL, '#');
     }
     return 'C4';
+  }
+
+  function invalidatePendingStartSequence(): void {
+    startSequenceToken += 1;
+  }
+
+  function hasDrumNotes(state: TransportState): boolean {
+    return state.placedNotes.some(note => note.isDrum === true || note.drumTrack != null);
+  }
+
+  function nowMs(): number {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now();
+    }
+    return Date.now();
+  }
+
+  function logStartupTiming(phase: string, durationMs: number, data?: Record<string, unknown>): void {
+    const roundedMs = Number(durationMs.toFixed(2));
+    const payload = { durationMs: roundedMs, ...data };
+    log.info('TransportService', `[StartupTiming] ${phase}`, payload);
+
+    if (typeof window !== 'undefined' && (window as any).__audioDiag) {
+      console.log(`[AudioDiag] STARTUP | ${phase}=${roundedMs}ms`, data ?? {});
+    }
+  }
+
+  function logPlayheadTiming(phase: string, data?: Record<string, unknown>): void {
+    log.info('TransportService', `[PlayheadTiming] ${phase}`, data);
+    if (typeof window !== 'undefined' && (window as any).__audioDiag) {
+      console.log(`[AudioDiag] PLAYHEAD | ${phase}`, data ?? {});
+    }
+  }
+
+  async function ensureAudioContextRunning(): Promise<void> {
+    const init = audioInit || (() => Tone.start());
+    await init();
+
+    if (Tone.context.state !== 'running') {
+      await Tone.context.resume();
+    }
   }
 
   /**
@@ -454,11 +502,13 @@ export function createTransportService(config: TransportConfig): TransportServic
   /**
    * Animate the playhead.
    */
-  function animatePlayhead(): void {
+  function animatePlayhead(options: PlayheadAnimationOptions = {}): void {
     const state = stateCallbacks.getState();
     const baseTempo = state.tempo;
     const TEMPO_MULTIPLIER_EPSILON = 0.0001;
     const MARKER_PASS_EPSILON = 0.5;
+    const scheduledStartTime = options.scheduledStartTime;
+    let firstFrameLogged = false;
 
     const getMarkerX = (marker: { xPosition?: number | null } | null | undefined) => marker?.xPosition ?? 477.5;
     const initialBpm = typeof Tone.Transport?.bpm?.value === 'number'
@@ -486,6 +536,19 @@ export function createTransportService(config: TransportConfig): TransportServic
       const playbackEnd = (isLooping && transportLoopEnd > 0) ? transportLoopEnd : musicalEnd;
       const currentTime = Tone.Transport.seconds;
       const currentTimeMs = currentTime * 1000;
+      if (!firstFrameLogged) {
+        const toneNow = Tone.now();
+        const deltaFromScheduledMs = (typeof scheduledStartTime === 'number')
+          ? Number(((toneNow - scheduledStartTime) * 1000).toFixed(2))
+          : null;
+        logPlayheadTiming('first-frame', {
+          transportSeconds: Number(currentTime.toFixed(4)),
+          toneNow: Number(toneNow.toFixed(4)),
+          scheduledStartTime: typeof scheduledStartTime === 'number' ? Number(scheduledStartTime.toFixed(4)) : null,
+          deltaFromScheduledMs
+        });
+        firstFrameLogged = true;
+      }
 
       const reachedEnd = currentTime >= (playbackEnd - 0.001);
 
@@ -654,17 +717,13 @@ export function createTransportService(config: TransportConfig): TransportServic
         logger: log
       });
 
-      // Create drum manager with Tone.js sample URLs
-      drumManager = createDrumManager({
-        samples: {
-          H: 'https://tonejs.github.io/audio/drum-samples/CR78/hihat.mp3',
-          M: 'https://tonejs.github.io/audio/drum-samples/CR78/snare.mp3',
-          L: 'https://tonejs.github.io/audio/drum-samples/CR78/kick.mp3'
-        },
-        synthEngine: {
-          getMainVolumeNode: () => synthEngine.getMainVolumeNode()
-        }
-      });
+      if (!drumManager) {
+        drumManager = createDrumManager({
+          synthEngine: {
+            getMainVolumeNode: () => synthEngine.getMainVolumeNode()
+          }
+        });
+      }
 
       Tone.Transport.bpm.value = state.tempo;
 
@@ -783,66 +842,123 @@ export function createTransportService(config: TransportConfig): TransportServic
 
     start(): void {
       log.info('TransportService', 'Starting playback');
+      const runToken = ++startSequenceToken;
 
-      const init = audioInit || (() => Tone.start());
-      void init().then(async () => {
-        // Ensure context has fully transitioned to running state
-        if (Tone.context.state !== 'running') {
-          await Tone.context.resume();
+      void (async () => {
+        try {
+          const startSequenceBeginMs = nowMs();
+
+          const audioInitStartMs = nowMs();
+          await ensureAudioContextRunning();
+          if (runToken !== startSequenceToken) {return;}
+          logStartupTiming('audio-init', nowMs() - audioInitStartMs, {
+            contextState: Tone.context.state
+          });
+
+          const initialState = stateCallbacks.getState();
+          const shouldWaitForDrums = hasDrumNotes(initialState) && !!drumManager && !drumManager.isLoaded();
+
+          // Only block startup on drum loading when drum notes are present.
+          if (shouldWaitForDrums) {
+            const drumLoadStartMs = nowMs();
+            await drumManager!.waitForLoad();
+            if (runToken !== startSequenceToken) {return;}
+            logStartupTiming('drum-load', nowMs() - drumLoadStartMs, {
+              waited: true
+            });
+          } else {
+            logStartupTiming('drum-load', 0, {
+              waited: false
+            });
+          }
+
+          // IMPORTANT: Set loop bounds BEFORE scheduling notes
+          // Otherwise configuredLoopEnd is 0 and notes get near-instant release
+          const state = stateCallbacks.getState();
+          timeMapCalculator?.calculate(state);
+          const musicalDuration = timeMapCalculator?.getMusicalEndTime() ?? 0;
+          const loopStart = timeMapCalculator?.findNonAnacrusisStart(state) ?? 0;
+
+          timeMapCalculator?.setLoopBounds(loopStart, musicalDuration, state.tempo);
+          Tone.Transport.bpm.value = state.tempo;
+
+          const scheduleStartMs = nowMs();
+          scheduleNotes();
+          logStartupTiming('schedule', nowMs() - scheduleStartMs, {
+            notes: state.placedNotes.length
+          });
+
+          const toneNow = Tone.now();
+          const startTime = toneNow + 0.1;
+          logStartupTiming('transport-start-scheduled', (startTime - toneNow) * 1000, {
+            toneNow: Number(toneNow.toFixed(4)),
+            startTime: Number(startTime.toFixed(4)),
+            transportSeconds: Number(Tone.Transport.seconds.toFixed(4))
+          });
+          Tone.Transport.start(startTime, 0);
+
+          // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
+          if (playbackMode === 'standard') {
+            Tone.Draw.schedule(() => {
+              if (runToken !== startSequenceToken) {return;}
+              logPlayheadTiming('animation-start-scheduled', {
+                startTime: Number(startTime.toFixed(4)),
+                toneNow: Number(Tone.now().toFixed(4))
+              });
+              animatePlayhead({ scheduledStartTime: startTime });
+            }, startTime);
+          }
+
+          eventCallbacks.emit('playbackStarted');
+          logStartupTiming('total-start', nowMs() - startSequenceBeginMs, {
+            notes: state.placedNotes.length,
+            waitedForDrums: shouldWaitForDrums
+          });
+        } catch (error) {
+          if (runToken !== startSequenceToken) {return;}
+          log.warn('TransportService', 'Failed to start playback', error);
+          eventCallbacks.setPlaybackState?.(false, false);
+          eventCallbacks.emit('playbackStopped');
         }
-
-        // Wait for drum samples to be loaded
-        if (drumManager) {
-          await drumManager.waitForLoad();
-        }
-
-        // IMPORTANT: Set loop bounds BEFORE scheduling notes
-        // Otherwise configuredLoopEnd is 0 and notes get near-instant release
-        const state = stateCallbacks.getState();
-        timeMapCalculator?.calculate(state);
-        const musicalDuration = timeMapCalculator?.getMusicalEndTime() ?? 0;
-        const loopStart = timeMapCalculator?.findNonAnacrusisStart(state) ?? 0;
-
-        timeMapCalculator?.setLoopBounds(loopStart, musicalDuration, state.tempo);
-        Tone.Transport.bpm.value = state.tempo;
-
-        scheduleNotes();
-
-        const startTime = Tone.now() + 0.1;
-        Tone.Transport.start(startTime, 0);
-
-        // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
-        if (playbackMode === 'standard') {
-          animatePlayhead();
-        }
-
-        eventCallbacks.emit('playbackStarted');
-      });
+      })();
     },
 
     resume(): void {
       log.info('TransportService', 'Resuming playback');
+      const runToken = ++startSequenceToken;
 
-      const init = audioInit || (() => Tone.start());
-      void init().then(async () => {
-        // Ensure context has fully transitioned to running state
-        if (Tone.context.state !== 'running') {
-          await Tone.context.resume();
+      void (async () => {
+        try {
+          const resumeStartMs = nowMs();
+          const audioInitStartMs = nowMs();
+          await ensureAudioContextRunning();
+          if (runToken !== startSequenceToken) {return;}
+          logStartupTiming('resume-audio-init', nowMs() - audioInitStartMs, {
+            contextState: Tone.context.state
+          });
+
+          const toneNow = Tone.now();
+          Tone.Transport.start();
+
+          // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
+          if (playbackMode === 'standard') {
+            animatePlayhead({ scheduledStartTime: toneNow });
+          }
+
+          eventCallbacks.emit('playbackResumed');
+          logStartupTiming('resume-total', nowMs() - resumeStartMs);
+        } catch (error) {
+          if (runToken !== startSequenceToken) {return;}
+          log.warn('TransportService', 'Failed to resume playback', error);
+          eventCallbacks.setPlaybackState?.(false, false);
+          eventCallbacks.emit('playbackStopped');
         }
-
-        Tone.Transport.start();
-
-        // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
-        if (playbackMode === 'standard') {
-          animatePlayhead();
-        }
-
-        eventCallbacks.emit('playbackResumed');
-      });
+      })();
     },
 
     pause(): void {
       log.info('TransportService', 'Pausing playback');
+      invalidatePendingStartSequence();
       Tone.Transport.pause();
 
       if (playheadAnimationFrame) {
@@ -855,6 +971,7 @@ export function createTransportService(config: TransportConfig): TransportServic
 
     stop(): void {
       log.info('TransportService', 'Stopping playback and clearing visuals');
+      invalidatePendingStartSequence();
 
       if (rescheduleTimerId !== null) {
         clearTimeout(rescheduleTimerId);
@@ -887,7 +1004,9 @@ export function createTransportService(config: TransportConfig): TransportServic
 
     dispose(): void {
       this.stop();
-      drumManager?.dispose();
+      if (ownsDrumManager) {
+        drumManager?.dispose();
+      }
       eventCleanups.forEach(cleanup => cleanup());
       log.debug('TransportService', 'Disposed');
     }

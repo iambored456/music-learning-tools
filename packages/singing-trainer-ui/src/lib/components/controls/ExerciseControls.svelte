@@ -10,15 +10,15 @@
    * - Per-segment scoring summaries
    */
 
-  import { exerciseState, type SegmentSummary } from '../../stores/exerciseState.svelte.js';
-  import { highwayState } from '../../stores/highwayState.svelte.js';
-  import { appState } from '../../stores/appState.svelte.js';
-  import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
-  import { preferencesStore } from '../../stores/preferencesStore.svelte.js';
-  import { chooserState } from '../../stores/chooserState.svelte.js';
-  import { overdubExerciseChooserState } from '../../stores/overdubExerciseChooserState.svelte.js';
-  import { overdubExerciseState } from '../../stores/overdubExerciseState.svelte.js';
-  import { referenceAudio } from '../../services/referenceAudio.js';
+  import { exerciseState, type SegmentSummary } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { resultsState, type ResultsSummary } from '@mlt/singing-trainer-core/stores/resultsState.svelte.js';
+  import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
+  import { chooserState } from '@mlt/singing-trainer-core/stores/chooserState.svelte.js';
+  import { overdubExerciseChooserState } from '@mlt/singing-trainer-core/stores/overdubExerciseChooserState.svelte.js';
+  import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
+  import { referenceAudio } from '@mlt/singing-trainer-core/services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
   import { onDestroy } from 'svelte';
   import type { SpeakingPitchUsage, AnyLessonTemplate } from '@mlt/lesson-templates';
@@ -28,7 +28,7 @@
     disposeLessonAvatar,
     speakWithLessonAvatar,
     cancelLessonAvatarSpeech,
-  } from '../../engine/controllerAdapters.js';
+  } from '@mlt/singing-trainer-core/engine/controllerAdapters.js';
 
   // Local state for exercise defaults
   let numLoops = $state(5);

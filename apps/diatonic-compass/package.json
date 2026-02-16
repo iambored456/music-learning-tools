@@ -1,0 +1,19 @@
+{
+  "name": "diatonic-compass",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive diatonic relationships explorer - standalone app",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "echo \"App typecheck delegated to @mlt/diatonic-compass-ui package\""
+  },
+  "dependencies": {
+    "@mlt/diatonic-compass-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -6,7 +6,7 @@
    * Matches the Results modal styling and interaction patterns.
    */
 
-  import { chooserState } from '../../stores/chooserState.svelte.js';
+  import { chooserState } from '@mlt/singing-trainer-core/stores/chooserState.svelte.js';
   import {
     getRegistryEntriesByCategory,
     type RegistryEntry,

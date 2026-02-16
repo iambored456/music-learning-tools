@@ -11,6 +11,7 @@ interface ActiveLegendZone {
 }
 
 const WRAPPER_ID = 'pitch-canvas-wrapper';
+const PITCH_GRID_CONTAINER_ID = 'pitch-grid-container';
 const LEFT_LEGEND_CANVAS_ID = 'legend-left-canvas';
 const RIGHT_LEGEND_CANVAS_ID = 'legend-right-canvas';
 
@@ -78,19 +79,19 @@ function resolveLegendZone(
       continue;
     }
 
-    const rect = candidate.canvas.getBoundingClientRect();
-    const insideX = clientX >= rect.left && clientX <= rect.right;
-    const insideY = clientY >= rect.top && clientY <= rect.bottom;
+    const legendRect = candidate.canvas.getBoundingClientRect();
+    const insideX = clientX >= legendRect.left && clientX <= legendRect.right;
+    const insideY = clientY >= legendRect.top && clientY <= legendRect.bottom;
     if (!insideX || !insideY) {
       continue;
     }
 
-    const halfHeight = rect.height / 2;
-    const handle: LegendHandle = (clientY - rect.top) <= halfHeight ? 'top' : 'bottom';
+    const halfHeight = legendRect.height / 2;
+    const handle: LegendHandle = (clientY - legendRect.top) <= halfHeight ? 'top' : 'bottom';
     return {
       side: candidate.side,
       handle,
-      rect
+      rect: legendRect
     };
   }
 
@@ -106,17 +107,19 @@ function createTooltipElement(wrapper: HTMLElement): HTMLDivElement {
 
 export function initLegendPitchRangeDragInteraction(): void {
   const wrapper = document.getElementById(WRAPPER_ID) as HTMLElement | null;
+  const pitchGridContainer = document.getElementById(PITCH_GRID_CONTAINER_ID) as HTMLElement | null;
   const leftLegendCanvas = document.getElementById(LEFT_LEGEND_CANVAS_ID) as HTMLCanvasElement | null;
   const rightLegendCanvas = document.getElementById(RIGHT_LEGEND_CANVAS_ID) as HTMLCanvasElement | null;
+  const interactionSurface = pitchGridContainer ?? wrapper;
 
-  if (!wrapper || (!leftLegendCanvas && !rightLegendCanvas)) {
+  if (!wrapper || !interactionSurface || (!leftLegendCanvas && !rightLegendCanvas)) {
     return;
   }
 
-  if (wrapper.dataset['legendPitchDragInit'] === '1') {
+  if (interactionSurface.dataset['legendPitchDragInit'] === '1') {
     return;
   }
-  wrapper.dataset['legendPitchDragInit'] = '1';
+  interactionSurface.dataset['legendPitchDragInit'] = '1';
 
   const tooltipElement = createTooltipElement(wrapper);
 
@@ -125,6 +128,20 @@ export function initLegendPitchRangeDragInteraction(): void {
   let activePointerId: number | null = null;
   let dragStartClientY = 0;
   let dragStartIndex = 0;
+
+  const setInteractionCursor = (cursor: string): void => {
+    interactionSurface.style.cursor = cursor;
+    if (interactionSurface !== wrapper) {
+      wrapper.style.cursor = cursor;
+    }
+  };
+
+  const clearInteractionCursor = (): void => {
+    interactionSurface.style.cursor = '';
+    if (interactionSurface !== wrapper) {
+      wrapper.style.cursor = '';
+    }
+  };
 
   const hideTooltip = (): void => {
     tooltipElement.classList.remove('legend-drag-tooltip--visible');
@@ -159,7 +176,7 @@ export function initLegendPitchRangeDragInteraction(): void {
 
   const clearHoverState = (): void => {
     hoveredZone = null;
-    wrapper.style.cursor = '';
+    clearInteractionCursor();
     hideTooltip();
   };
 
@@ -168,7 +185,7 @@ export function initLegendPitchRangeDragInteraction(): void {
       return;
     }
 
-    // Inverted drag behavior: moving up now increases row index, moving down decreases it.
+    // Keep legend drag direction inverted for both handles to match existing wheel-style behavior.
     const deltaRows = Math.round((dragStartClientY - clientY) / getRowStepPixels());
     const candidateIndex = dragStartIndex + deltaRows;
 
@@ -189,7 +206,12 @@ export function initLegendPitchRangeDragInteraction(): void {
   };
 
   const handlePointerDown = (event: PointerEvent): void => {
-    const zone = resolveLegendZone(event.clientX, event.clientY, leftLegendCanvas, rightLegendCanvas);
+    const zone = resolveLegendZone(
+      event.clientX,
+      event.clientY,
+      leftLegendCanvas,
+      rightLegendCanvas
+    );
     if (!zone) {
       return;
     }
@@ -202,12 +224,12 @@ export function initLegendPitchRangeDragInteraction(): void {
     dragStartIndex = zone.handle === 'top' ? currentRange.topIndex : currentRange.bottomIndex;
 
     try {
-      wrapper.setPointerCapture(event.pointerId);
+      interactionSurface.setPointerCapture(event.pointerId);
     } catch {
       // Ignore if pointer capture is unavailable in the current environment.
     }
 
-    wrapper.style.cursor = 'grabbing';
+    setInteractionCursor('grabbing');
     updateVisualFeedback(zone, {
       message: getPitchLabelAtRow(dragStartIndex)
     });
@@ -221,7 +243,12 @@ export function initLegendPitchRangeDragInteraction(): void {
       return;
     }
 
-    const zone = resolveLegendZone(event.clientX, event.clientY, leftLegendCanvas, rightLegendCanvas);
+    const zone = resolveLegendZone(
+      event.clientX,
+      event.clientY,
+      leftLegendCanvas,
+      rightLegendCanvas
+    );
     hoveredZone = zone;
 
     if (!zone) {
@@ -229,7 +256,7 @@ export function initLegendPitchRangeDragInteraction(): void {
       return;
     }
 
-    wrapper.style.cursor = 'grab';
+    setInteractionCursor('grab');
     updateVisualFeedback(zone, {
       message: HOVER_MESSAGES[zone.handle]
     });
@@ -238,8 +265,8 @@ export function initLegendPitchRangeDragInteraction(): void {
   const endDrag = (): void => {
     if (activePointerId !== null) {
       try {
-        if (wrapper.hasPointerCapture(activePointerId)) {
-          wrapper.releasePointerCapture(activePointerId);
+        if (interactionSurface.hasPointerCapture(activePointerId)) {
+          interactionSurface.releasePointerCapture(activePointerId);
         }
       } catch {
         // Ignore if pointer capture has already been released.
@@ -249,7 +276,7 @@ export function initLegendPitchRangeDragInteraction(): void {
     activePointerId = null;
 
     if (hoveredZone) {
-      wrapper.style.cursor = 'grab';
+      setInteractionCursor('grab');
       updateVisualFeedback(hoveredZone, {
         message: HOVER_MESSAGES[hoveredZone.handle]
       });
@@ -262,7 +289,12 @@ export function initLegendPitchRangeDragInteraction(): void {
     if (activePointerId !== null && event.pointerId !== activePointerId) {
       return;
     }
-    hoveredZone = resolveLegendZone(event.clientX, event.clientY, leftLegendCanvas, rightLegendCanvas);
+    hoveredZone = resolveLegendZone(
+      event.clientX,
+      event.clientY,
+      leftLegendCanvas,
+      rightLegendCanvas
+    );
     endDrag();
   };
 
@@ -281,9 +313,9 @@ export function initLegendPitchRangeDragInteraction(): void {
     clearHoverState();
   };
 
-  wrapper.addEventListener('pointerdown', handlePointerDown);
-  wrapper.addEventListener('pointermove', handlePointerMove);
-  wrapper.addEventListener('pointerup', handlePointerUp);
-  wrapper.addEventListener('pointercancel', handlePointerCancel);
-  wrapper.addEventListener('pointerleave', handlePointerLeave);
+  interactionSurface.addEventListener('pointerdown', handlePointerDown);
+  interactionSurface.addEventListener('pointermove', handlePointerMove);
+  interactionSurface.addEventListener('pointerup', handlePointerUp);
+  interactionSurface.addEventListener('pointercancel', handlePointerCancel);
+  interactionSurface.addEventListener('pointerleave', handlePointerLeave);
 }

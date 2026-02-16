@@ -33,7 +33,8 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     harmonicFilter,
     logger,
     audioInit,
-    getDrumVolume
+    getDrumVolume,
+    getPreviewColor
   } = config;
 
   // Internal state
@@ -484,20 +485,22 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       }
     },
 
-    async playNote(pitch: string | number, duration: number | string, time = Tone.now()) {
+    async playNote(pitch: string | number, duration: number | string, time = Tone.now(), color?: string) {
       // Use provided audio init or default to Tone.start()
       const init = audioInit || (() => Tone.start());
       await init();
 
-      // Get the first available synth
-      const colors = Object.keys(synths);
-      if (colors.length === 0) return;
+      const resolvedColor = color ?? getPreviewColor?.() ?? null;
+      if (!resolvedColor) {
+        log.warn('SynthEngine', 'playNote skipped: no preview color resolved', null, 'audio');
+        return;
+      }
 
-      const [firstColor] = colors;
-      if (!firstColor) return;
-      const synth = synths[firstColor];
+      const synth = synths[resolvedColor];
       if (synth) {
         synth.triggerAttackRelease(pitch, duration, time);
+      } else {
+        log.warn('SynthEngine', `playNote skipped: no synth found for color ${resolvedColor}`, null, 'audio');
       }
     },
 

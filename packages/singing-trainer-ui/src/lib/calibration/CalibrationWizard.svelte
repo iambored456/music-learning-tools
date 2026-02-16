@@ -6,8 +6,8 @@
    * Manages the multi-step wizard UI.
    */
 
-  import { speakingPitchStore } from './speakingPitchStore.svelte.js';
-  import { CALIBRATION_PHRASES } from './types.js';
+  import { speakingPitchStore } from '@mlt/singing-trainer-core/calibration/speakingPitchStore.svelte.js';
+  import { CALIBRATION_PHRASES } from '@mlt/singing-trainer-core/calibration/types.js';
   import CalibrationRecordStep from './CalibrationRecordStep.svelte';
   import CalibrationResultStep from './CalibrationResultStep.svelte';
 

@@ -1,21 +1,3 @@
-<div id="app-loading-screen">
-  <div class="loading-container">
-    <div class="loading-logo">
-      <svg viewBox="0 0 100 100" class="logo-svg">
-        <circle cx="50" cy="50" r="45" class="logo-circle" />
-        <path d="M 30 50 Q 50 30, 70 50 T 70 70" class="logo-path" />
-      </svg>
-    </div>
-    <h1 class="loading-title">Student Notation</h1>
-    <div class="loading-progress-container">
-      <div class="loading-progress-bar">
-        <div class="loading-progress-fill" id="loading-progress-fill"></div>
-      </div>
-      <div class="loading-progress-text" id="loading-progress-text">0%</div>
-    </div>
-    <div class="loading-status" id="loading-status">Initializing...</div>
-  </div>
-</div>
 <!-- Sidebar for File/App Actions -->
 <div id="sidebar-overlay"></div>
 <aside id="sidebar" role="complementary" aria-label="Application settings and controls">
@@ -726,6 +708,7 @@
                                 </span>
                             </button>
                             <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="triplet">Triplets</button>
+                            <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="measures">Measures</button>
                         </div>
                         <div class="rhythm-stamp-tab-content">
                             <div class="rhythm-stamp-tab-panel active" id="sixteenth-stamps-panel">
@@ -741,69 +724,68 @@
                                     <!-- Triplets toolbar will be rendered here by JavaScript -->
                                 </div>
                             </div>
+                            <div class="rhythm-stamp-tab-panel" id="measures-stamps-panel">
+                                <div class="rhythm-controls-content-box">
+                                    <div class="rhythm-structure-container">
+                                        <div class="control-subsection">
+                                            <h4>Add/Del Beat</h4>
+                                            <div class="macrobeat-adjust-group">
+                                                <button class="toolkit-button" id="macrobeat-decrease">–</button>
+                                                <button class="toolkit-button" id="macrobeat-increase">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="control-subsection">
+                                            <h4>Pickup</h4>
+                                            <div class="toggle-button-group"><button class="sidebar-toggle-button" id="anacrusis-on-btn">On</button><button class="sidebar-toggle-button" id="anacrusis-off-btn">Off</button></div>
+                                        </div>
+                                    </div>
+                                    <div class="modulation-container">
+                                        <div class="control-subsection">
+                                            <h4>Modulation</h4>
+                                            <div class="modulation-controls">
+                                                <button class="toolkit-button modulation-ratio-btn" id="modulation-2-3-btn" data-ratio="2:3" title="Place 2:3 modulation marker (33% faster)">2:3 - 33% faster</button>
+                                                <button class="toolkit-button modulation-ratio-btn" id="modulation-3-2-btn" data-ratio="3:2" title="Place 3:2 modulation marker (33% slower)">3:2 - 33% slower</button>
+                                                <button class="toolkit-button" id="modulation-clear-btn" title="Clear all modulation markers">Clear</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                                <!-- Controls Section (Separate) -->
-                <div class="control-section rhythm-controls-container">
-                    <div class="rhythm-controls-section">
-                        <button class="rhythm-tab-button rhythm-controls-tab-button active" disabled>Controls</button>
-                        <div class="rhythm-controls-content-box">
-                            <div class="tempo-content-box">
-                                <div class="tempo-container">
-                                    <div class="tempo-boxes-container">
-                                        <div class="tempo-input-group tempo-row">
-                                            <img src="assets/tabicons/eigthNote.svg" alt="Eighth Note Tempo" class="tempo-label-icon">
-                                            <div class="tempo-stepper">
-                                                <button class="tempo-step-btn tempo-step-up" data-tempo="eighth" aria-label="Increase eighth note tempo">&#9650;</button>
-                                                <div id="eighth-note-tempo"></div>
-                                                <button class="tempo-step-btn tempo-step-down" data-tempo="eighth" aria-label="Decrease eighth note tempo">&#9660;</button>
-                                            </div>
-                                        </div>
-                                        <div class="tempo-input-group tempo-row">
-                                            <img src="assets/tabicons/quarterNote.svg" alt="Quarter Note Tempo" class="tempo-label-icon">
-                                            <div class="tempo-stepper">
-                                                <button class="tempo-step-btn tempo-step-up" data-tempo="quarter" aria-label="Increase quarter note tempo">&#9650;</button>
-                                                <div id="quarter-note-tempo"></div>
-                                                <button class="tempo-step-btn tempo-step-down" data-tempo="quarter" aria-label="Decrease quarter note tempo">&#9660;</button>
-                                            </div>
-                                        </div>
-                                        <div class="tempo-input-group tempo-row">
-                                            <img src="assets/tabicons/dottedQuarterNote.svg" alt="Dotted Quarter Note Tempo" class="tempo-label-icon">
-                                            <div class="tempo-stepper">
-                                                <button class="tempo-step-btn tempo-step-up" data-tempo="dotted" aria-label="Increase dotted quarter note tempo">&#9650;</button>
-                                                <div id="dotted-quarter-tempo"></div>
-                                                <button class="tempo-step-btn tempo-step-down" data-tempo="dotted" aria-label="Decrease dotted quarter note tempo">&#9660;</button>
-                                            </div>
-                                        </div>
+                                <!-- Tempo Section (Separate) -->
+                <div class="control-section rhythm-tempo-container">
+                    <div class="tempo-content-box">
+                        <div class="tempo-container">
+                            <div class="tempo-boxes-container">
+                                <div class="tempo-input-group tempo-row">
+                                    <img src="assets/tabicons/eigthNote.svg" alt="Eighth Note Tempo" class="tempo-label-icon">
+                                    <div class="tempo-stepper">
+                                        <button class="tempo-step-btn tempo-step-up" data-tempo="eighth" aria-label="Increase eighth note tempo">&#9650;</button>
+                                        <div id="eighth-note-tempo"></div>
+                                        <button class="tempo-step-btn tempo-step-down" data-tempo="eighth" aria-label="Decrease eighth note tempo">&#9660;</button>
                                     </div>
-                                    <div class="tempo-slider-container tempo-column-2">
-                                        <input type="range" id="tempo-slider" min="30" max="240" value="90">
+                                </div>
+                                <div class="tempo-input-group tempo-row">
+                                    <img src="assets/tabicons/quarterNote.svg" alt="Quarter Note Tempo" class="tempo-label-icon">
+                                    <div class="tempo-stepper">
+                                        <button class="tempo-step-btn tempo-step-up" data-tempo="quarter" aria-label="Increase quarter note tempo">&#9650;</button>
+                                        <div id="quarter-note-tempo"></div>
+                                        <button class="tempo-step-btn tempo-step-down" data-tempo="quarter" aria-label="Decrease quarter note tempo">&#9660;</button>
+                                    </div>
+                                </div>
+                                <div class="tempo-input-group tempo-row">
+                                    <img src="assets/tabicons/dottedQuarterNote.svg" alt="Dotted Quarter Note Tempo" class="tempo-label-icon">
+                                    <div class="tempo-stepper">
+                                        <button class="tempo-step-btn tempo-step-up" data-tempo="dotted" aria-label="Increase dotted quarter note tempo">&#9650;</button>
+                                        <div id="dotted-quarter-tempo"></div>
+                                        <button class="tempo-step-btn tempo-step-down" data-tempo="dotted" aria-label="Decrease dotted quarter note tempo">&#9660;</button>
                                     </div>
                                 </div>
                             </div>
-                            <div class="rhythm-structure-container">
-                                <div class="control-subsection">
-                                    <h4>Add/Del Beat</h4>
-                                    <div class="macrobeat-adjust-group">
-                                        <button class="toolkit-button" id="macrobeat-decrease">–</button>
-                                        <button class="toolkit-button" id="macrobeat-increase">+</button>
-                                    </div>
-                                </div>
-                                <div class="control-subsection">
-                                    <h4>Pickup</h4>
-                                    <div class="toggle-button-group"><button class="sidebar-toggle-button" id="anacrusis-on-btn">On</button><button class="sidebar-toggle-button" id="anacrusis-off-btn">Off</button></div>
-                                </div>
-                            </div>
-                            <div class="modulation-container">
-                                <div class="control-subsection">
-                                    <h4>Modulation</h4>
-                                    <div class="modulation-controls">
-                                        <button class="toolkit-button modulation-ratio-btn" id="modulation-2-3-btn" data-ratio="2:3" title="Place 2:3 modulation marker (33% faster)">2:3 - 33% faster</button>
-                                        <button class="toolkit-button modulation-ratio-btn" id="modulation-3-2-btn" data-ratio="3:2" title="Place 3:2 modulation marker (33% slower)">3:2 - 33% slower</button>
-                                        <button class="toolkit-button" id="modulation-clear-btn" title="Clear all modulation markers">Clear</button>
-                                    </div>
-                                </div>
+                            <div class="tempo-slider-container tempo-column-2">
+                                <input type="range" id="tempo-slider" min="30" max="240" value="90">
                             </div>
                         </div>
                     </div>

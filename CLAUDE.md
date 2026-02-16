@@ -167,7 +167,7 @@ The engine (`@mlt/student-notation-engine`) provides:
 | What you want to change | Edit this file |
 |------------------------|----------------|
 | Singing Trainer UI when accessed via hub | `packages/singing-trainer-ui/src/App.svelte` |
-| Standalone singing-trainer app | `apps/singing-trainer/src/App.svelte` |
+| Standalone singing-trainer app shell | `apps/singing-trainer/src/main.ts` |
 
 The hub entry point is at `apps/hub/singing-trainer/main.ts`:
 ```typescript

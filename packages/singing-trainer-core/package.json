@@ -1,0 +1,54 @@
+{
+  "name": "@mlt/singing-trainer-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Core state, services, and engine logic for the Singing Trainer",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./stores/*.js": "./src/lib/stores/*.ts",
+    "./stores/*.svelte.js": "./src/lib/stores/*.svelte.ts",
+    "./services/*.js": "./src/lib/services/*.ts",
+    "./types/*.js": "./src/lib/types/*.ts",
+    "./constants/*.js": "./src/lib/constants/*.ts",
+    "./engine/*.js": "./src/lib/engine/*.ts",
+    "./pitch-range/*.js": "./src/lib/pitch-range/*.ts",
+    "./calibration/*.js": "./src/lib/calibration/*.ts",
+    "./calibration/*.svelte.js": "./src/lib/calibration/*.svelte.ts"
+  },
+  "files": ["src"],
+  "scripts": {
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mlt/handoff": "workspace:*",
+    "@mlt/lesson-templates": "workspace:*",
+    "@mlt/overdub-engine": "workspace:*",
+    "@mlt/pitch-data": "workspace:*",
+    "@mlt/pitch-utils": "workspace:*",
+    "@mlt/student-notation-engine": "workspace:*",
+    "@mlt/talking-avatar": "workspace:*",
+    "@mlt/types": "workspace:*",
+    "@mlt/ui-components": "workspace:*",
+    "pitchy": "^4.1.0",
+    "tonal": "^6.4.2",
+    "tone": "^15.0.4"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "^5.46.1",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.1.1",
+    "vitest": "^3.0.0"
+  }
+}

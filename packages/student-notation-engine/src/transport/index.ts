@@ -15,7 +15,8 @@ export {
 // Drum manager
 export {
   createDrumManager,
-  DEFAULT_DRUM_SAMPLES
+  DEFAULT_DRUM_SAMPLES,
+  preloadDrumSamples
 } from './drumManager.js';
 
 // Types

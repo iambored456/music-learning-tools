@@ -5,8 +5,8 @@
    * Dropdown for selecting the tonic/key center.
    */
 
-  import { appState, type TonicNote } from '../../stores/appState.svelte.js';
-  import { updateDrone } from '../../services/droneAudio.js';
+  import { appState, type TonicNote } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { updateDrone } from '@mlt/singing-trainer-core/services/droneAudio.js';
 
   const TONIC_OPTIONS: TonicNote[] = [
     'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'

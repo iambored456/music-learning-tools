@@ -245,9 +245,12 @@ export function initAudioControls() {
         const currentColor = store.state.selectedNote?.color;
         if (currentColor) {
           store.applyPreset(currentColor, preset);
-          setTimeout(() => {
-            updatePresetSelection(currentColor);
-          }, 10);
+          updatePresetSelection(currentColor);
+          console.info('[PresetDebug] click', {
+            color: currentColor,
+            requestedPreset: presetId,
+            activePresetName: store.state.timbres[currentColor]?.activePresetName ?? null
+          });
         }
         button.blur();
       });
@@ -289,6 +292,7 @@ export function initAudioControls() {
       return;
     }
     const timbre = store.state.timbres[color];
+    const activePresetName = timbre?.activePresetName ?? null;
 
     // Get the light color from the color palette for button backgrounds
     const palette = store.state.colorPalette[color] || { primary: color, light: color };
@@ -297,12 +301,20 @@ export function initAudioControls() {
 
     // Debug logging
 
-    document.querySelectorAll('.preset-button').forEach(btn => {
-      const buttonEl = btn as HTMLElement;
-      const presetId = buttonEl.id.replace('preset-', '');
-      const isSelected = timbre?.activePresetName === presetId;
-      buttonEl.classList.toggle('selected', isSelected);
-      // Selected button styling is handled by the 'selected' class
+    const presetButtons = Array.from(document.querySelectorAll('#preset-buttons .preset-button')) as HTMLElement[];
+    presetButtons.forEach((buttonEl) => {
+      buttonEl.classList.remove('selected');
+    });
+    if (activePresetName) {
+      const activeButton = document.getElementById(`preset-${activePresetName}`);
+      activeButton?.classList.add('selected');
+    }
+    console.info('[PresetDebug] sync', {
+      color,
+      activePresetName,
+      selectedButtons: presetButtons
+        .filter((buttonEl) => buttonEl.classList.contains('selected'))
+        .map((buttonEl) => buttonEl.id)
     });
 
     // Create an even lighter version for button backgrounds

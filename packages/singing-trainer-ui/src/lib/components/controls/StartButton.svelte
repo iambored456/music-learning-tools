@@ -5,9 +5,9 @@
    * Button to start/stop pitch detection.
    */
 
-  import { appState } from '../../stores/appState.svelte.js';
-  import { startDetection, stopDetection } from '../../services/pitchDetection.js';
-  import { pitchState } from '../../stores/pitchState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
+  import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
 
   let isLoading = $state(false);
 

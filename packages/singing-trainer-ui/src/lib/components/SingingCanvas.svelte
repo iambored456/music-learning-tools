@@ -30,14 +30,14 @@
     ViewportWindow,
   } from '@mlt/ui-components/canvas';
   import { generateRowDataForMidiRange, getTonicPitchClass, type PitchRowData } from '@mlt/pitch-data';
-  import { appState } from '../stores/appState.svelte.js';
-  import { pitchState } from '../stores/pitchState.svelte.js';
-  import { highwayState } from '../stores/highwayState.svelte.js';
-  import { exerciseState } from '../stores/exerciseState.svelte.js';
-  import { ultrastarState } from '../stores/ultrastarState.svelte.js';
-  import { overdubState, type RenderableTakeTrail } from '../stores/overdubState.svelte.js';
-  import { overdubExerciseState } from '../stores/overdubExerciseState.svelte.js';
-  import { MODE_SCALE_DEGREES, MODE_DEGREE_LABELS } from '../constants/modes.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import { exerciseState } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
+  import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
+  import { overdubState, type RenderableTakeTrail } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
+  import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
+  import { MODE_SCALE_DEGREES, MODE_DEGREE_LABELS } from '@mlt/singing-trainer-core/constants/modes.js';
   import { LyricsDisplay } from './karaoke/index.js';
   import YAxisDragZones from './YAxisDragZones.svelte';
   import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';

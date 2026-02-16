@@ -506,6 +506,8 @@ export function initToolSelectors() {
       ? 'sixteenth'
       : savedRhythmTab === 'triplets'
         ? 'triplet'
+        : savedRhythmTab === 'controls'
+          ? 'measures'
         : (savedRhythmTab || 'sixteenth');
     const rhythmTabButton = document.querySelector<HTMLButtonElement>(`[data-rhythm-stamp-tab="${normalizedRhythmTab}"]`);
     const rhythmTabPanel = document.getElementById(`${normalizedRhythmTab}-stamps-panel`);

@@ -6,7 +6,7 @@
    * Shows accuracy, notes hit, letter grade, and optional phrase breakdown.
    */
 
-  import { resultsState, type ResultsSummary } from '../../stores/resultsState.svelte.js';
+  import { resultsState, type ResultsSummary } from '@mlt/singing-trainer-core/stores/resultsState.svelte.js';
 
   interface Props {
     onRetry?: () => void;

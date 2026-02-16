@@ -1,0 +1,22 @@
+{
+  "name": "@mlt/lesson-trace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic lesson trace simulator and component inventory reports",
+  "main": "./src/cli.ts",
+  "types": "./src/cli.ts",
+  "scripts": {
+    "trace": "tsx src/cli.ts trace",
+    "report": "tsx src/cli.ts report",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mlt/lesson-templates": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,17 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { appState } from '../../stores/appState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import {
     getPreferredInputDeviceId,
+    getRelaxedMicGatesEnabled,
     listAudioInputDevices,
     setPreferredInputDeviceId,
+    setRelaxedMicGatesEnabled,
     startDetection,
     stopDetection,
     type AudioInputDeviceInfo,
-  } from '../../services/pitchDetection.js';
+  } from '@mlt/singing-trainer-core/services/pitchDetection.js';
 
   let devices = $state<AudioInputDeviceInfo[]>([]);
   let selectedValue = $state<string>('default');
+  let relaxedMicGatesEnabled = $state(false);
   let isLoading = $state(false);
   let isApplying = $state(false);
   let loadError = $state<string | null>(null);
@@ -61,7 +64,14 @@
     void applySelection(nextValue);
   }
 
+  function handleRelaxedMicGatesToggle(event: Event): void {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    relaxedMicGatesEnabled = checked;
+    setRelaxedMicGatesEnabled(checked);
+  }
+
   onMount(() => {
+    relaxedMicGatesEnabled = getRelaxedMicGatesEnabled();
     void refreshDevices();
   });
 </script>
@@ -95,6 +105,19 @@
     <p class="hint">No input devices found yet. Click Start once, then Refresh.</p>
   {:else}
     <p class="hint">Choose a device if the current input is silent.</p>
+  {/if}
+
+  <label class="testing-toggle">
+    <input
+      id="mic-relaxed-gates"
+      type="checkbox"
+      checked={relaxedMicGatesEnabled}
+      onchange={handleRelaxedMicGatesToggle}
+    />
+    <span>User testing mode: ignore confidence and dB gates</span>
+  </label>
+  {#if relaxedMicGatesEnabled}
+    <p class="hint">Low-confidence and low-level mic input is accepted while this mode is on.</p>
   {/if}
 </div>
 
@@ -157,5 +180,20 @@
 
   .error {
     color: #ff8f8f;
+  }
+
+  .testing-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-xs);
+    color: var(--color-text);
+    cursor: pointer;
+    user-select: none;
+    margin-top: var(--spacing-xs);
+  }
+
+  .testing-toggle input[type='checkbox'] {
+    cursor: pointer;
   }
 </style>

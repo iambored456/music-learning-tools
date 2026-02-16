@@ -9,9 +9,9 @@
    * - Golden note syllables with special glow effect
    */
 
-  import { ultrastarState } from '../../stores/ultrastarState.svelte.js';
-  import { highwayState } from '../../stores/highwayState.svelte.js';
-  import type { LyricPhrase } from '../../types/ultrastar.js';
+  import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
+  import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import type { LyricPhrase } from '@mlt/singing-trainer-core/types/ultrastar.js';
 
   // Reactive state from stores
   const currentTimeMs = $derived(highwayState.state.currentTimeMs);

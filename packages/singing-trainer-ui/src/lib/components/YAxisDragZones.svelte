@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { setTop, setBottom, midiToLabel, type ActiveHandle } from '../pitch-range/pitchRangeController.js';
-  import { appState } from '../stores/appState.svelte.js';
+  import { setTop, setBottom, midiToLabel, type ActiveHandle } from '@mlt/singing-trainer-core/pitch-range/pitchRangeController.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
 
   interface Props {
     gridHeight: number;
