@@ -25,6 +25,7 @@
     "@mlt/pitch-data": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
     "@mlt/singing-trainer-core": "workspace:*",
+    "@mlt/tanpura-drone": "workspace:*",
     "@mlt/student-notation-engine": "workspace:*",
     "@mlt/ui-components": "workspace:*"
   },

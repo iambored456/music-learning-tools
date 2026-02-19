@@ -1,7 +1,7 @@
 /**
- * Overdub Exercise Definitions
+ * Workshop Definitions
  *
- * Multi-voice exercises for the singing trainer's overdub exercise mode.
+ * Multi-voice templates for workshop (overdub builder) mode.
  */
 
 import type { OverdubExerciseTemplate } from '../../types.js';
@@ -10,8 +10,8 @@ import { FEELING_THIS } from './feelingThis.js';
 
 export { SIMPLE_UNISON, FEELING_THIS };
 
-/** All available overdub exercises */
-export const ALL_OVERDUB_EXERCISES: OverdubExerciseTemplate[] = [
+/** All available workshop templates */
+export const ALL_WORKSHOP_EXERCISES: OverdubExerciseTemplate[] = [
   SIMPLE_UNISON,
   FEELING_THIS,
 ];

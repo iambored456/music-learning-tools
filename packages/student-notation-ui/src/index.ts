@@ -10,16 +10,6 @@ const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?
 const publicPrefix = '../public/';
 const THEME_STORAGE_KEY = 'app.themeMode';
 
-const t0 = performance.now();
-const initDebug = (message: string, data?: unknown): void => {
-  const elapsed = `+${(performance.now() - t0).toFixed(0)}ms`;
-  if (data === undefined) {
-    console.log(`[StudentNotation:mount] ${elapsed} ${message}`);
-    return;
-  }
-  console.log(`[StudentNotation:mount] ${elapsed} ${message}`, data);
-};
-
 function resolvePublicAsset(path: string): string {
   const normalized = path.replace(/^\/+/, '');
   const key = `${publicPrefix}${normalized}`;
@@ -66,22 +56,13 @@ function applyStoredThemeModeClass(): void {
 }
 
 export function mountStudentNotation(container: HTMLElement): StudentNotationInstance {
-  initDebug('[StudentNotation] mount:start', {
-    hasTemplate: Boolean(template),
-    templateLength: template.length,
-    containerId: container.id || null,
-  });
-
   applyStoredThemeModeClass();
   ensureMountContainerLayout(container);
   container.innerHTML = template;
-  initDebug('[StudentNotation] template injected');
 
   rewriteAssetUrls(container);
-  initDebug('[StudentNotation] assets rewritten');
 
   initStudentNotation();
-  initDebug('[StudentNotation] initStudentNotation:called');
 
   return {
     destroy: () => {

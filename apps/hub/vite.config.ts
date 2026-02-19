@@ -25,6 +25,7 @@ export default defineConfig({
       '@mlt/singing-trainer-core',
       '@mlt/singing-trainer-ui',
       '@mlt/diatonic-compass-ui',
+      '@mlt/visual-metronome-ui',
       '@mlt/pitch-utils',
       '@mlt/pitch-data',
       '@mlt/pitch-viewport',
@@ -56,6 +57,7 @@ export default defineConfig({
         'student-notation': resolve(root, 'student-notation/index.html'),
         'singing-trainer': resolve(root, 'singing-trainer/index.html'),
         'diatonic-compass': resolve(root, 'diatonic-compass/index.html'),
+        'visual-metronome': resolve(root, 'visual-metronome/index.html'),
       },
       output: {
         manualChunks(id) {

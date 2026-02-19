@@ -1,0 +1,102 @@
+<div id="page" class="visual-metronome">
+  <header class="vm-header">
+    <div class="vm-brand-wrap">
+      <p class="vm-eyebrow">Quinn Fleming's</p>
+      <h1>Visual Metronome Lab</h1>
+      <p class="vm-subtitle">Three pulse views for seeing rhythm from different angles.</p>
+    </div>
+    <nav class="vm-nav" aria-label="Music Learning Tools apps">
+      <a data-route="" href="/">Hub</a>
+      <a data-route="diatonic-compass/" href="/diatonic-compass/">Diatonic Compass</a>
+      <a data-route="student-notation/" href="/student-notation/">Student Notation</a>
+      <a data-route="singing-trainer/" href="/singing-trainer/">Singing Trainer</a>
+      <a data-route="visual-metronome/" href="/visual-metronome/" class="active">Visual Metronome</a>
+    </nav>
+  </header>
+
+  <main class="vm-main">
+    <section class="vm-stage-card">
+      <div class="vm-stage-topbar">
+        <div>
+          <p class="vm-stage-label">Visualization</p>
+          <h2 id="visual-mode-title">Arc Bounce</h2>
+        </div>
+        <div class="vm-readout">
+          <span id="hud-tempo" class="chip">60 BPM</span>
+          <span id="hud-subdivision" class="chip">1 microbeat</span>
+        </div>
+      </div>
+
+      <div class="vm-stage" id="canvas-container">
+        <canvas id="metronome-canvas" aria-label="Metronome visualization canvas"></canvas>
+      </div>
+
+      <div class="vm-mode-switch" role="radiogroup" aria-label="Visualization mode">
+        <button class="mode-toggle selected" data-mode="arc" aria-pressed="true">Arc Bounce</button>
+        <button class="mode-toggle" data-mode="pendulum" aria-pressed="false">Pendulum</button>
+        <button class="mode-toggle" data-mode="orbit" aria-pressed="false">Orbit Pulse</button>
+      </div>
+    </section>
+
+    <aside class="vm-controls" aria-label="Metronome controls">
+      <section class="control-card">
+        <h3>Tempo & Sound</h3>
+        <div class="control-row">
+          <button id="start-stop" class="cta">Start</button>
+          <button id="tap-tempo">Tap Tempo</button>
+        </div>
+        <div class="control-row inline">
+          <label for="bpm-select">BPM</label>
+          <button id="bpm-minus" aria-label="Decrease BPM">-</button>
+          <select id="bpm-select" aria-label="Beats per minute"></select>
+          <button id="bpm-plus" aria-label="Increase BPM">+</button>
+        </div>
+        <div class="control-row inline">
+          <label for="sound-select">Sound</label>
+          <select id="sound-select" aria-label="Select metronome sound"></select>
+        </div>
+        <div class="control-row inline">
+          <label for="volume-slider">Volume</label>
+          <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.25" />
+        </div>
+      </section>
+
+      <section class="control-card">
+        <h3>Subdivision</h3>
+        <div class="control-row inline">
+          <label for="microbeats-toggle">Microbeats</label>
+          <div id="microbeats-toggle" aria-label="Microbeat subdivisions">
+            <button data-value="1" class="microbeat-toggle selected">1</button>
+            <button data-value="2" class="microbeat-toggle">2</button>
+            <button data-value="3" class="microbeat-toggle">3</button>
+            <button data-value="4" class="microbeat-toggle">4</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="control-card">
+        <h3>Visual Settings</h3>
+        <div class="control-row inline">
+          <span>Ball Size</span>
+          <button id="ball-size-decrease">-</button>
+          <button id="ball-size-increase">+</button>
+        </div>
+        <div class="control-row inline">
+          <span>Path Height</span>
+          <button id="path-height-decrease">-</button>
+          <button id="path-height-increase">+</button>
+        </div>
+        <div class="control-row">
+          <button id="toggle-path">Show Guide</button>
+          <button id="flash-toggle">Flash: Off</button>
+        </div>
+        <div class="control-row inline color-row">
+          <label for="left-bar-color">Left</label>
+          <input type="color" id="left-bar-color" value="#2196F3" />
+          <label for="right-bar-color">Right</label>
+          <input type="color" id="right-bar-color" value="#4CAF50" />
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>

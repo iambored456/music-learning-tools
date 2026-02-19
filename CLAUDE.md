@@ -81,7 +81,7 @@ Components use modern Svelte 5 runes (`$state`, `$derived`, `$effect`) for react
 The `student-notation-engine` package uses event emitters (not Svelte stores) for cross-framework compatibility. State is passed via dependency injection, not window globals.
 
 ### Svelte Bridge Pattern
-In `student-notation`, legacy vanilla JS is integrated via "bridge" components (`*Bridge.svelte`) that mount Svelte UI into existing DOM placeholders. See `apps/student-notation/src/svelte-ui/` for examples.
+In `student-notation`, legacy vanilla JS is integrated via "bridge" components (`*Bridge.svelte`) that mount Svelte UI into existing DOM placeholders. See `packages/student-notation-ui/src/svelte-ui/` for examples.
 
 ### Package Dependencies
 Apps depend on workspace packages using `workspace:*` protocol. Changes to packages require rebuilding dependent apps.
@@ -92,7 +92,7 @@ The `student-notation` app uses the `@mlt/student-notation-engine` package for a
 
 ### Engine Integration
 
-The app initializes the engine through three main files in `apps/student-notation/src`:
+The app initializes the engine through three main files in `packages/student-notation-ui/src`:
 
 - **`state/initStore.ts`** - Initializes store with `createStore()` factory
   - Configures localStorage persistence
@@ -178,7 +178,9 @@ Changes to `apps/singing-trainer/src/` have **no effect** when viewing through t
 
 ### Validation
 
-Run `node scripts/check-deps.js` to validate dependency rules and app/package boundaries.
+Run these checks to validate dependency rules and app-shell boundaries:
+- `node scripts/check-deps.js`
+- `node scripts/check-app-shells.js`
 
 ### PitchGrid Separation (Intentional)
 
@@ -197,7 +199,7 @@ All packages extend `tsconfig.base.json`:
 
 ## GitHub Pages Deployment
 
-The hub builds all apps into a single deployment. Build uses:
-- `scripts/build-pages.js` - Orchestrates multi-app build
-- `scripts/assemble-pages.js` - Assembles apps for deployment
+The hub builds all routed app pages into a single deployment. Build uses:
+- `pnpm --filter hub run build` - Produces `apps/hub/dist` with `/student-notation/`, `/singing-trainer/`, and `/diatonic-compass/`
+- `scripts/assemble-pages.js` - Copies hub dist to deploy output (plus optional `amateur-music-theory`)
 - Dynamic base URL from `BASE_URL` env var or package.json homepage

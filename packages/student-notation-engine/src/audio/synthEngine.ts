@@ -48,6 +48,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
   let waveformAnalyzers: Record<string, Tone.Analyser> = {};
   let gainManager: GainManager | null = null;
   let clippingMonitor: ClippingMonitor | null = null;
+  let outputHardMuted = false;
 
   // Copy of timbres for internal mutation
   const internalTimbres: Record<string, InternalTimbreState> = { ...timbres };
@@ -70,6 +71,14 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       total += (synths[c] as any)?.activeVoices ?? 0;
     }
     return total;
+  }
+
+  function ensureOutputAudible(): void {
+    if (!outputHardMuted || !volumeControl) {
+      return;
+    }
+    volumeControl.mute = false;
+    outputHardMuted = false;
   }
 
   // [PERF:SHARED-LFO] Get all voices from a PolySynth (active + pool)
@@ -257,6 +266,8 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
       // 2. User volume control (independent of automatic gain scaling)
       volumeControl = new Tone.Volume(masterVolume);
+      volumeControl.mute = false;
+      outputHardMuted = false;
 
       // 3. Bus compressor (gentle glue, transparent action)
       compressor = new Tone.Compressor({
@@ -498,6 +509,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
       const synth = synths[resolvedColor];
       if (synth) {
+        ensureOutputAudible();
         synth.triggerAttackRelease(pitch, duration, time);
       } else {
         log.warn('SynthEngine', `playNote skipped: no synth found for color ${resolvedColor}`, null, 'audio');
@@ -511,6 +523,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     triggerAttack(pitch: string | number, color: string, time = Tone.now(), isDrum = false) {
       const synth = synths[color];
       if (!synth) return;
+      ensureOutputAudible();
 
       if (isDiag()) {
         const gm = gainManager?.getActiveVoiceCount() ?? -1;
@@ -606,6 +619,20 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         synths[color]?.releaseAll();
       }
       gainManager?.resetActiveVoiceCount();
+    },
+
+    flushPlaybackTails(colors?: string[]) {
+      effectsManager?.flushPlaybackTails?.(colors);
+    },
+
+    hardStopAllSound() {
+      this.releaseAll();
+      effectsManager?.flushPlaybackTails?.();
+
+      if (volumeControl) {
+        volumeControl.mute = true;
+        outputHardMuted = true;
+      }
     },
 
     // === Waveform Visualization ===
@@ -709,6 +736,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       compressor?.dispose();
       limiter?.dispose();
       clippingMeter?.dispose();
+      outputHardMuted = false;
 
       log.debug('SynthEngine', 'Disposed SynthEngine', null, 'audio');
     }

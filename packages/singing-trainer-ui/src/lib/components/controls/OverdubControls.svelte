@@ -27,8 +27,14 @@
   const overdubVoices = $derived(overdubExerciseState.getVoiceList());
   const overdubActiveVoiceId = $derived(overdubExerciseState.state.activeVoiceId);
   const overdubExercisePlaying = $derived(overdubExerciseState.state.isPlaying);
+  const overdubWaitForInputEnabled = $derived(overdubExerciseState.state.waitForInputEnabled);
   const beatLineMode = $derived(appState.state.beatLineMode);
   const overdubMicTrailColorMode = $derived(appState.state.overdubMicTrailColorMode);
+  const canToggleLabelMode = $derived(
+    overdubIsActive
+    && appState.state.noteScaleDegrees.length === highwayState.state.targetNotes.length
+    && highwayState.state.targetNotes.some((note) => typeof note.lyric === 'string' && note.lyric.length > 0)
+  );
   const DEFAULT_VOICE_GAIN = 1.1;
   const DEFAULT_SYNTH_GAIN = 1;
   const TIMELINE_MIN_ZOOM = 1;
@@ -303,6 +309,10 @@
     { enabled: true, label: 'On' },
     { enabled: false, label: 'Off' },
   ];
+  const WAIT_GATE_OPTIONS: Array<{ enabled: boolean; label: string }> = [
+    { enabled: true, label: 'On' },
+    { enabled: false, label: 'Off' },
+  ];
 
   function handleCountInSelect(countInBeats: number) {
     overdubState.setPhraseSettings({ countInBeats });
@@ -318,6 +328,14 @@
 
   function handleClickTrackEnabled(enabled: boolean) {
     overdubState.setClickEnabled(enabled);
+  }
+
+  function handleWaitGateEnabled(enabled: boolean) {
+    overdubExerciseState.setWaitForInputEnabled(enabled);
+  }
+
+  function handleLabelModeSelect(useDegrees: boolean) {
+    appState.setUseDegrees(useDegrees);
   }
 
   function handleOverdubReset() {
@@ -785,6 +803,48 @@
               {/each}
             </div>
           </div>
+
+          {#if overdubIsActive}
+            <div class="field">
+              <span>Waitgate</span>
+              <div class="mode-buttons" role="group" aria-label="Waitgate mode">
+                {#each WAIT_GATE_OPTIONS as option}
+                  <button
+                    type="button"
+                    class="mode-btn"
+                    class:mode-btn--active={overdubWaitForInputEnabled === option.enabled}
+                    onclick={() => handleWaitGateEnabled(option.enabled)}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if canToggleLabelMode}
+            <div class="field">
+              <span>Labels</span>
+              <div class="mode-buttons" role="group" aria-label="Melody label mode">
+                <button
+                  type="button"
+                  class="mode-btn"
+                  class:mode-btn--active={!appState.state.useDegrees}
+                  onclick={() => handleLabelModeSelect(false)}
+                >
+                  Lyrics
+                </button>
+                <button
+                  type="button"
+                  class="mode-btn"
+                  class:mode-btn--active={appState.state.useDegrees}
+                  onclick={() => handleLabelModeSelect(true)}
+                >
+                  Degrees
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
 
         <div class="controls-column controls-column--timeline">

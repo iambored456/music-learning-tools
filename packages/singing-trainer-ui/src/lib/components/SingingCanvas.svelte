@@ -13,6 +13,7 @@
     drawUserPitchIndicator,
     drawUserPitchTrace,
   } from '@mlt/ui-components/canvas';
+  import { ViewportInfoToast } from '@mlt/ui-components';
   import type {
     CoordinateUtils,
     CurrentPitch,
@@ -65,6 +66,14 @@
   let timelinePanStartClientX = 0;
   let timelinePanStartViewStartMs = 0;
   let timelinePanViewDurationMs = 0;
+  let highwayWaitFreezePerfMs = $state<number | null>(null);
+  let viewportInfoLines = $state<string[]>([]);
+  let viewportInfoTriggerKey = $state(0);
+  let hasSeenTimelineViewDuration = false;
+  let lastTimelineViewDurationMs = 0;
+  let hasSeenYAxisRange = false;
+  let lastYAxisMinMidi = 0;
+  let lastYAxisMaxMidi = 0;
 
   type RgbTuple = [number, number, number];
 
@@ -97,6 +106,11 @@
       minCellHeight: 20,
     })
   );
+  const rowVisualScale = $derived.by<number>(() => {
+    const baseCellHeight = 40;
+    const rawScale = viewportWindow.cellHeight / baseCellHeight;
+    return Math.min(2.2, Math.max(0.55, rawScale));
+  });
 
   // Derive the PitchGrid mode from app state
   const mode = $derived<PitchGridMode>(
@@ -233,7 +247,7 @@
     return map;
   })());
 
-  const showHorizontalGridLines = $derived(!appState.state.drone.isPlaying);
+  const showHorizontalGridLines = $derived(appState.state.showHorizontalGridLines);
 
   // Build MIDI → hex color lookup from fullRowData
   const midiToHex = $derived.by<Map<number, string>>(() => {
@@ -251,7 +265,11 @@
     const degrees = appState.state.noteScaleDegrees;
     const showDegrees = appState.state.useDegrees && degrees.length > 0;
     const usePitchColors = appState.state.noteColorMode === 'pitchColor';
-    return highwayState.state.targetNotes.map((n, i) => ({
+    return highwayState.state.targetNotes.map((n, i) => {
+      const degreeLabel = showDegrees && typeof n.midi === 'number'
+        ? degrees[i]
+        : undefined;
+      return ({
       id: `target-${i}`,
       targetKind: n.targetKind,
       midi: n.midi,
@@ -260,9 +278,10 @@
       slideDirection: n.slideDirection,
       startTimeMs: n.startTimeMs,
       durationMs: n.durationMs,
-      label: n.label ?? ((showDegrees && typeof n.midi === 'number') ? degrees[i] : n.lyric),
+      label: n.label ?? degreeLabel ?? n.lyric,
       color: usePitchColors && typeof n.midi === 'number' ? midiToHex.get(n.midi) : n.color,
-    }));
+      });
+    });
   }
 
   // Cache target notes separately — only recalculates when targetNotes array or degree settings change
@@ -292,8 +311,8 @@
   const trailConfig = $derived<PitchTrailConfig>({
     timeWindowMs: Infinity,
     pixelsPerSecond: 200,
-    circleRadius: appState.state.micTrailCircleRadiusPx,
-    indicatorRadius: appState.state.judgementLineCircleRadiusPx,
+    circleRadius: appState.state.micTrailCircleRadiusPx * rowVisualScale,
+    indicatorRadius: appState.state.judgementLineCircleRadiusPx * rowVisualScale,
     proximityThreshold: 35,
     maxConnections: 0,
     connectorLineWidth: 2.5,
@@ -382,7 +401,6 @@
       && !useLoopTimeline
       && !isUltrastarActive
       && (hasHighwayTargets || isOverdubExerciseActive)
-      && (!highwayState.state.isPlaying || overdubRecordingActive)
   );
   const timelineViewportProjection = $derived.by<{
     nowLineX: number;
@@ -432,12 +450,14 @@
   });
   const gridBeatIntervalMs = $derived.by<number>(() => {
     if (!showTimingGridLines) return 0;
-    if (appState.state.beatLineMode === 'none') return 0;
-    if (appState.state.beatLineMode === 'bar') return measureIntervalMs;
-    return beatIntervalMs;
+    const showBeatLines = appState.state.showBeatGridLines;
+    const showMeasureLines = appState.state.showMeasureGridLines;
+    if (!showBeatLines && !showMeasureLines) return 0;
+    if (showBeatLines) return beatIntervalMs;
+    return measureIntervalMs;
   });
   const gridMeasureIntervalMs = $derived.by<number | undefined>(() => {
-    if (!showTimingGridLines || appState.state.beatLineMode === 'none') return undefined;
+    if (!showTimingGridLines || !appState.state.showMeasureGridLines) return undefined;
     return measureIntervalMs;
   });
   const effectiveGridMode = $derived<PitchGridMode>(useLoopTimeline ? 'singing' : mode);
@@ -464,13 +484,9 @@
           targetNotes: cachedTargetNotes,
           nowLineX: timelineViewportProjection?.nowLineX ?? highwayState.state.nowLineX,
           pixelsPerSecond: timelineViewportProjection?.pixelsPerSecond ?? highwayState.state.pixelsPerSecond,
-          currentTimeMs: timelineViewportProjection
-            ? (
-                highwayState.state.isPlaying && overdubRecordingActive
-                  ? highwayState.state.currentTimeMs
-                  : timelineViewportProjection.currentTimeMs
-              )
-            : highwayState.state.currentTimeMs,
+          currentTimeMs: highwayState.state.isPlaying
+            ? highwayState.state.currentTimeMs
+            : (timelineViewportProjection?.currentTimeMs ?? highwayState.state.currentTimeMs),
           timeWindowMs: timelineViewportProjection?.timeWindowMs ?? highwayState.state.timeWindowMs,
           trailConfig: liveTrailConfig,
           labelConfig,
@@ -538,6 +554,33 @@
     const pointerXInGrid = getPointerXInGrid(clientX);
     if (pointerXInGrid === null) return false;
     return pointerXInGrid >= 0 && pointerXInGrid <= gridWidth;
+  }
+
+  function getYAxisRangeSemitones(): number {
+    const range = appState.state.yAxisRange;
+    return Math.max(0, Math.round(range.maxMidi - range.minMidi));
+  }
+
+  function getTimelineZoomPercent(): number | null {
+    if (!timelineViewportEnabled) return null;
+    const totalDurationMs = Math.max(1, Math.round(highwayState.state.timelineDurationMs));
+    const viewDurationMs = clampNumber(
+      Math.round(highwayState.state.timelineViewDurationMs),
+      1,
+      totalDurationMs,
+    );
+    return Math.max(1, Math.round((totalDurationMs / viewDurationMs) * 100));
+  }
+
+  function showViewportInfoToast(): void {
+    const nextLines: string[] = [];
+    const timelineZoomPercent = getTimelineZoomPercent();
+    if (timelineZoomPercent !== null) {
+      nextLines.push(`Timeline Zoom: ${timelineZoomPercent}%`);
+    }
+    nextLines.push(`Y-Axis Range: ~${getYAxisRangeSemitones()} semitones`);
+    viewportInfoLines = nextLines;
+    viewportInfoTriggerKey += 1;
   }
 
   function shiftYAxisRangeBySemitones(deltaSemitones: number): void {
@@ -705,6 +748,34 @@
     if (!activeConfig) return;
 
     const trailHistory = pitchState.state.history;
+    let trailHistoryForRender = trailHistory;
+    let trailCurrentTime = currentTime;
+
+    if (mode === 'highway' && highwayConfig) {
+      const waitingForInput = highwayState.state.isPlaying && highwayState.state.isWaitingForInput;
+      if (waitingForInput) {
+        if (highwayWaitFreezePerfMs === null) {
+          highwayWaitFreezePerfMs = currentTime;
+        }
+        trailCurrentTime = highwayWaitFreezePerfMs;
+
+        // Clamp post-freeze samples to the freeze timestamp so new points stack at the
+        // judgment line instead of scrolling while waitgate pauses highway time.
+        const freezeTime = highwayWaitFreezePerfMs;
+        const latestPointTime = trailHistory[trailHistory.length - 1]?.time ?? Number.NEGATIVE_INFINITY;
+        if (latestPointTime > freezeTime) {
+          trailHistoryForRender = trailHistory.map((point) => (
+            point.time > freezeTime
+              ? { ...point, time: freezeTime }
+              : point
+          ));
+        }
+      } else {
+        highwayWaitFreezePerfMs = null;
+      }
+    } else {
+      highwayWaitFreezePerfMs = null;
+    }
 
     // Use appropriate nowLineX based on mode
     const nowLineX = mode === 'highway' && highwayConfig
@@ -740,7 +811,7 @@
       drawPersistentOverdubTrailsInTimeline(trailCtx, highwayConfig, syncedTrailConfig);
     }
 
-    if (trailHistory.length === 0) return;
+    if (trailHistoryForRender.length === 0) return;
 
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight: viewportWindow.cellHeight,
@@ -755,8 +826,8 @@
     drawUserPitchTrace(
       trailCtx,
       coords,
-      trailHistory,
-      currentTime,
+      trailHistoryForRender,
+      trailCurrentTime,
       userPitchConfig,
       fullRowData
     );
@@ -1064,6 +1135,57 @@
   });
 
   $effect(() => {
+    const timelineDurationMs = Math.max(1, Math.round(highwayState.state.timelineDurationMs));
+    const timelineViewDurationMs = clampNumber(
+      Math.round(highwayState.state.timelineViewDurationMs),
+      1,
+      timelineDurationMs,
+    );
+
+    if (!timelineViewportEnabled) {
+      hasSeenTimelineViewDuration = true;
+      lastTimelineViewDurationMs = timelineViewDurationMs;
+      return;
+    }
+
+    if (!hasSeenTimelineViewDuration) {
+      hasSeenTimelineViewDuration = true;
+      lastTimelineViewDurationMs = timelineViewDurationMs;
+      return;
+    }
+
+    if (timelineViewDurationMs !== lastTimelineViewDurationMs) {
+      lastTimelineViewDurationMs = timelineViewDurationMs;
+      showViewportInfoToast();
+      return;
+    }
+
+    lastTimelineViewDurationMs = timelineViewDurationMs;
+  });
+
+  $effect(() => {
+    const minMidi = Math.round(appState.state.yAxisRange.minMidi);
+    const maxMidi = Math.round(appState.state.yAxisRange.maxMidi);
+
+    if (!hasSeenYAxisRange) {
+      hasSeenYAxisRange = true;
+      lastYAxisMinMidi = minMidi;
+      lastYAxisMaxMidi = maxMidi;
+      return;
+    }
+
+    if (minMidi !== lastYAxisMinMidi || maxMidi !== lastYAxisMaxMidi) {
+      lastYAxisMinMidi = minMidi;
+      lastYAxisMaxMidi = maxMidi;
+      showViewportInfoToast();
+      return;
+    }
+
+    lastYAxisMinMidi = minMidi;
+    lastYAxisMaxMidi = maxMidi;
+  });
+
+  $effect(() => {
     const trails = persistentOverdubTrails;
     const activeTakeIds = new Set<string>();
     for (const trail of trails) {
@@ -1148,6 +1270,7 @@
     focusColorsEnabled={modeFocusColorsEnabled}
     legendLabelOverrides={modeLabelOverrides}
     {showHorizontalGridLines}
+    horizontalGridReferencePitchClass={getTonicPitchClass(appState.state.tonic)}
     beatIntervalMs={gridBeatIntervalMs}
     measureIntervalMs={gridMeasureIntervalMs}
     {beatTimeOffsetMs}
@@ -1171,6 +1294,15 @@
   {#if isUltrastarActive && mode === 'highway'}
     <LyricsDisplay />
   {/if}
+
+  <ViewportInfoToast
+    lines={viewportInfoLines}
+    triggerKey={viewportInfoTriggerKey}
+    position="absolute"
+    top="16px"
+    right="16px"
+    zIndex={20}
+  />
 </div>
 
 <style>

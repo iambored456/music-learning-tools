@@ -48,12 +48,14 @@ const TARGETS: CaptureTarget[] = [
   {
     id: 'hub',
     distDir: 'apps/hub/dist',
+    route: '/',
     waitFor: '.cards .card',
     delayMs: 300,
   },
   {
     id: 'singing-trainer',
-    distDir: 'apps/singing-trainer/dist',
+    distDir: 'apps/hub/dist',
+    route: '/singing-trainer/',
     waitFor: '.app',
     delayMs: 350,
     injectCss: `
@@ -64,7 +66,8 @@ const TARGETS: CaptureTarget[] = [
   },
   {
     id: 'student-notation',
-    distDir: 'apps/student-notation/dist',
+    distDir: 'apps/hub/dist',
+    route: '/student-notation/',
     waitFor: '#app-container',
     delayMs: 750,
     injectCss: `
@@ -75,7 +78,8 @@ const TARGETS: CaptureTarget[] = [
   },
   {
     id: 'diatonic-compass',
-    distDir: 'apps/diatonic-compass/dist',
+    distDir: 'apps/hub/dist',
+    route: '/diatonic-compass/',
     waitFor: '.main-container',
     postReadyWaitFor: 'body.dark-mode .main-container.vertical-layout',
     postReadyScript: `
@@ -145,6 +149,13 @@ const TARGETS: CaptureTarget[] = [
   color-scheme: dark !important;
 }
 `,
+  },
+  {
+    id: 'visual-metronome',
+    distDir: 'apps/hub/dist',
+    route: '/visual-metronome/',
+    waitFor: '#page',
+    delayMs: 350,
   },
 ];
 

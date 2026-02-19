@@ -8,6 +8,18 @@
 import type { ExerciseVoice, ExerciseTimeGrid } from '@mlt/lesson-templates';
 import type { TargetNote } from '../stores/highwayState.svelte.js';
 
+export interface ConvertExerciseVoiceOptions {
+  /** Default wait-gate behavior applied to active input notes. */
+  waitForInput?: boolean;
+  /** Optional semitone transposition applied to all note MIDI pitches. */
+  transposeSemitones?: number;
+  /**
+   * Optional placeholder lyric for notes that have no explicit lyric.
+   * When provided, this is emitted as `lyric` and no static pitch-name label is injected.
+   */
+  missingLyricPlaceholder?: string;
+}
+
 /**
  * Converts microbeat column positions to milliseconds.
  * In overdub exercises, one macrobeat corresponds to an eighth note.
@@ -35,8 +47,20 @@ export function convertExerciseVoicesToTargetNotes(
   timeGrid: ExerciseTimeGrid,
   tempo: number,
   activeVoiceId?: string | null,
+  options: ConvertExerciseVoiceOptions = {},
 ): TargetNote[] {
   const notes: TargetNote[] = [];
+  const waitForInputEnabled = options.waitForInput ?? false;
+  const transposeSemitones = Number.isFinite(options.transposeSemitones)
+    ? Math.round(options.transposeSemitones as number)
+    : 0;
+
+  function midiToPitchName(midi: number): string {
+    const pitchClasses = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const pitchClass = ((midi % 12) + 12) % 12;
+    const octave = Math.floor(midi / 12) - 1;
+    return `${pitchClasses[pitchClass]}${octave}`;
+  }
 
   for (const voice of voices) {
     const isActiveVoice = activeVoiceId != null && voice.voiceId === activeVoiceId;
@@ -45,16 +69,25 @@ export function convertExerciseVoicesToTargetNotes(
       const startTimeMs = microbeatColToMs(note.startMicrobeatCol, timeGrid.microbeatsPerMacrobeat, tempo);
       // endMicrobeatCol is inclusive, so duration spans from start to end+1
       const endTimeMs = microbeatColToMs(note.endMicrobeatCol + 1, timeGrid.microbeatsPerMacrobeat, tempo);
+      const transposedMidi = Math.max(0, Math.min(127, note.midiPitch + transposeSemitones));
+      const trimmedLyric = typeof note.lyric === 'string' ? note.lyric.trim() : '';
+      const hasExplicitLyric = trimmedLyric.length > 0;
+      const missingLyricPlaceholder = options.missingLyricPlaceholder;
+      const lyric = hasExplicitLyric
+        ? trimmedLyric
+        : (typeof missingLyricPlaceholder === 'string' ? missingLyricPlaceholder : undefined);
 
       notes.push({
-        midi: note.midiPitch,
+        midi: transposedMidi,
         voiceId: voice.voiceId,
         startTimeMs,
         durationMs: endTimeMs - startTimeMs,
-        lyric: note.lyric,
-        label: note.lyric ?? note.pitchName,
+        lyric,
+        // Keep lyric-driven notes dynamic so they can switch to scale-degree labels.
+        label: lyric ? undefined : midiToPitchName(transposedMidi),
         color: voice.color,
         role: isActiveVoice ? 'input' : 'reference',
+        waitForInput: isActiveVoice ? (note.waitForInput ?? waitForInputEnabled) : undefined,
       });
     }
   }

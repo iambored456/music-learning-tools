@@ -14,10 +14,12 @@ import {
   type OverdubExerciseTemplate,
 } from '@mlt/lesson-templates';
 import { convertExerciseVoicesToTargetNotes, calculateExerciseDurationMs } from '../services/exerciseVoiceConverter.js';
+import { midiToScaleDegreeLabel } from '../services/diatonicAnalysis.js';
 import { guideVoicePlayer } from '../services/guideVoicePlayer.js';
 import { highwayState, type TargetNote } from './highwayState.svelte.js';
-import { appState } from './appState.svelte.js';
+import { appState, type TonicNote } from './appState.svelte.js';
 import { overdubState } from './overdubState.svelte.js';
+import { preferencesStore } from './preferencesStore.svelte.js';
 
 export interface VoiceInfo {
   voiceId: string;
@@ -51,6 +53,14 @@ export interface OverdubExerciseSessionState {
   tempo: number;
   /** Total exercise duration in ms */
   durationMs: number;
+  /** Current wait-gate mode for active input notes */
+  waitForInputEnabled: boolean;
+  /** Base semitone transposition (e.g., speaking-pitch anchoring) */
+  exerciseBaseTransposeSemitones: number;
+  /** Manual key shift in semitones (clamped to [-6, +6] for exercises) */
+  exerciseManualShiftSemitones: number;
+  /** Effective tonic after transposition */
+  effectiveTonic: TonicNote | null;
 }
 
 const DEFAULT_STATE: OverdubExerciseSessionState = {
@@ -66,13 +76,54 @@ const DEFAULT_STATE: OverdubExerciseSessionState = {
   isPlaying: false,
   tempo: 80,
   durationMs: 0,
+  waitForInputEnabled: false,
+  exerciseBaseTransposeSemitones: 0,
+  exerciseManualShiftSemitones: 0,
+  effectiveTonic: null,
 };
 
 const DEFAULT_SYNTH_GAIN = 1;
 const DEFAULT_SYNTH_PAN = 0;
+const TONIC_TO_PC: Record<TonicNote, number> = {
+  C: 0,
+  'C#': 1,
+  Db: 1,
+  D: 2,
+  'D#': 3,
+  Eb: 3,
+  E: 4,
+  F: 5,
+  'F#': 6,
+  Gb: 6,
+  G: 7,
+  'G#': 8,
+  Ab: 8,
+  A: 9,
+  'A#': 10,
+  Bb: 10,
+  B: 11,
+};
+const PC_TO_TONIC_SHARP: TonicNote[] = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const MIN_EXERCISE_KEY_SHIFT = -6;
+const MAX_EXERCISE_KEY_SHIFT = 6;
+const DEFAULT_EXERCISE_RANGE_PADDING_SEMITONES = 2;
+const AMAZING_GRACE_EXERCISE_ID = 'exercise-amazing-grace';
+const AMAZING_GRACE_RANGE_PADDING_SEMITONES = 1;
+const AMAZING_GRACE_START_ZOOM_RATIO = 3.5;
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function parseTonicNote(value: string | undefined): TonicNote | null {
+  if (!value) return null;
+  return Object.prototype.hasOwnProperty.call(TONIC_TO_PC, value)
+    ? (value as TonicNote)
+    : null;
+}
+
+function wrapPitchClass(value: number): number {
+  return ((value % 12) + 12) % 12;
 }
 
 function createDefaultSynthMixByVoiceId(voiceIds: string[]): Record<string, VoiceSynthMix> {
@@ -98,9 +149,130 @@ function createOverdubExerciseState() {
   }
 
   function clearPendingAutoStop() {
-    if (playbackAutoStopTimeoutId === null) return;
-    window.clearTimeout(playbackAutoStopTimeoutId);
+    if (playbackAutoStopTimeoutId !== null) {
+      window.clearTimeout(playbackAutoStopTimeoutId);
+    }
     playbackAutoStopTimeoutId = null;
+  }
+
+  function setHighwayTargetNotes() {
+    highwayState.setTargetNotes(state.allTargetNotes, {
+      preserveTimelinePadding: true,
+      contentDurationMs: state.durationMs,
+    });
+  }
+
+  function isWorkshopTemplate(): boolean {
+    return state.template?.category === 'workshop';
+  }
+
+  function isStandaloneExerciseTemplate(): boolean {
+    return state.template?.category === 'exercises';
+  }
+
+  function getTotalTransposeSemitones(): number {
+    return state.exerciseBaseTransposeSemitones + state.exerciseManualShiftSemitones;
+  }
+
+  function getLowestMidiInTemplate(template: OverdubExerciseTemplate): number | null {
+    let lowest = Infinity;
+    for (const voice of template.config.voices) {
+      for (const note of voice.notes) {
+        if (note.midiPitch < lowest) {
+          lowest = note.midiPitch;
+        }
+      }
+    }
+    return Number.isFinite(lowest) ? lowest : null;
+  }
+
+  function computeBaseTransposeSemitones(template: OverdubExerciseTemplate): number {
+    if (template.category !== 'exercises') {
+      return 0;
+    }
+    const lowestMidi = getLowestMidiInTemplate(template);
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    if (lowestMidi === null || typeof speakingPitchMidi !== 'number' || !Number.isFinite(speakingPitchMidi)) {
+      return 0;
+    }
+    return Math.round(speakingPitchMidi) - lowestMidi;
+  }
+
+  function getCurrentPitchRange(): { minMidi: number; maxMidi: number } | null {
+    if (!state.template) return null;
+
+    if (isStandaloneExerciseTemplate()) {
+      const rangePaddingSemitones = state.exerciseId === AMAZING_GRACE_EXERCISE_ID
+        ? AMAZING_GRACE_RANGE_PADDING_SEMITONES
+        : DEFAULT_EXERCISE_RANGE_PADDING_SEMITONES;
+      const midiValues = state.allTargetNotes
+        .map((note) => note.midi)
+        .filter((midi): midi is number => typeof midi === 'number' && Number.isFinite(midi));
+
+      if (midiValues.length > 0) {
+        const lowestMidi = Math.min(...midiValues);
+        const highestMidi = Math.max(...midiValues);
+        const paddedMin = clampNumber(lowestMidi - rangePaddingSemitones, 0, 127);
+        const paddedMax = clampNumber(highestMidi + rangePaddingSemitones, 0, 127);
+        return {
+          minMidi: Math.min(paddedMin, paddedMax),
+          maxMidi: Math.max(paddedMin, paddedMax),
+        };
+      }
+    }
+
+    const config = state.template.config;
+    const transposeSemitones = getTotalTransposeSemitones();
+    const minMidi = clampNumber(config.minMidiPitch + transposeSemitones, 0, 127);
+    const maxMidi = clampNumber(config.maxMidiPitch + transposeSemitones, 0, 127);
+    return {
+      minMidi: Math.min(minMidi, maxMidi),
+      maxMidi: Math.max(minMidi, maxMidi),
+    };
+  }
+
+  function restoreExerciseRangeView() {
+    const range = getCurrentPitchRange();
+    if (range) {
+      appState.setYAxisRange(range);
+    }
+    const beatDurationMs = 60_000 / Math.max(20, state.tempo);
+    const boundaryPaddingMs = Math.max(0, Math.round(beatDurationMs * 4));
+    highwayState.fitTimelineToDuration(state.durationMs, {
+      paddingBeforeMs: boundaryPaddingMs,
+      paddingAfterMs: boundaryPaddingMs,
+    });
+  }
+
+  function applyPreferredStartZoomIfNeeded() {
+    if (state.exerciseId !== AMAZING_GRACE_EXERCISE_ID) return;
+    const timelineDurationMs = Math.max(1, Math.round(highwayState.state.timelineDurationMs));
+    const preferredViewDurationMs = Math.max(
+      1,
+      Math.round(timelineDurationMs / AMAZING_GRACE_START_ZOOM_RATIO),
+    );
+    // Keep the first note aligned at playback start by anchoring zoom to timeline start.
+    highwayState.setTimelineViewDurationMs(preferredViewDurationMs, 0);
+    highwayState.setTimelineViewStartMs(0);
+  }
+
+  function syncScaleDegreeLabels() {
+    const tonic = parseTonicNote(state.template?.config.tonalCenter?.pitchClass);
+    if (!tonic) {
+      state.effectiveTonic = null;
+      appState.setNoteScaleDegrees([]);
+      return;
+    }
+    const transposedTonicPc = wrapPitchClass(TONIC_TO_PC[tonic] + getTotalTransposeSemitones());
+    const effectiveTonic = PC_TO_TONIC_SHARP[transposedTonicPc] ?? 'C';
+    state.effectiveTonic = effectiveTonic;
+    appState.setTonic(effectiveTonic);
+    const tonicPc = TONIC_TO_PC[effectiveTonic];
+    const degreeLabels = state.allTargetNotes.map((note) => {
+      if (typeof note.midi !== 'number') return '';
+      return midiToScaleDegreeLabel(note.midi, tonicPc);
+    });
+    appState.setNoteScaleDegrees(degreeLabels);
   }
 
   function stopPlaybackSession() {
@@ -114,6 +286,7 @@ function createOverdubExerciseState() {
       void overdubState.stopCompositePlayback();
     }
     state.isPlaying = false;
+    restoreExerciseRangeView();
   }
 
   /**
@@ -123,19 +296,38 @@ function createOverdubExerciseState() {
   function rebuildNotes() {
     if (!state.template) return;
     const config = state.template.config;
+    const transposeSemitones = getTotalTransposeSemitones();
+    const missingLyricPlaceholder = isStandaloneExerciseTemplate() ? '~' : undefined;
     const visibleVoiceIds = new Set(state.visibleVoiceIds);
     const visibleVoices = config.voices.filter((voice) => visibleVoiceIds.has(voice.voiceId));
 
     // All visible notes with roles assigned based on activeVoiceId
     state.allTargetNotes = convertExerciseVoicesToTargetNotes(
-      visibleVoices, config.timeGrid, state.tempo, state.activeVoiceId,
+      visibleVoices,
+      config.timeGrid,
+      state.tempo,
+      state.activeVoiceId,
+      {
+        waitForInput: state.waitForInputEnabled,
+        transposeSemitones,
+        missingLyricPlaceholder,
+      },
     );
 
     const enabledGuideVoiceIds = new Set(state.guideEnabledVoiceIds);
     const guideVoices = config.voices.filter((voice) => enabledGuideVoiceIds.has(voice.voiceId));
     state.guideTargetNotes = convertExerciseVoicesToTargetNotes(
-      guideVoices, config.timeGrid, state.tempo,
+      guideVoices,
+      config.timeGrid,
+      state.tempo,
+      null,
+      {
+        waitForInput: false,
+        transposeSemitones,
+        missingLyricPlaceholder,
+      },
     );
+    syncScaleDegreeLabels();
   }
 
   function hasVoice(voiceId: string): boolean {
@@ -161,6 +353,7 @@ function createOverdubExerciseState() {
   }
 
   function rescheduleGuidePlaybackIfPlaying() {
+    if (!isWorkshopTemplate()) return;
     if (!state.isPlaying) return;
     guideVoicePlayer.stop();
     if (playbackStartTimeoutId === null) {
@@ -217,37 +410,43 @@ function createOverdubExerciseState() {
       const config = overdubTemplate.config;
 
       // Apply tempo override from settings if provided
-      const tempo = (settings?.tempo as number) ?? config.tempo;
+      const tempoSetting = settings?.tempo;
+      const tempo = typeof tempoSetting === 'number' ? tempoSetting : config.tempo;
+      const waitSetting = settings?.waitForInput;
+      const waitForInput = typeof waitSetting === 'boolean'
+        ? waitSetting
+        : (config.waitForInput ?? false);
       const durationMs = calculateExerciseDurationMs(config.timeGrid, tempo);
+      const baseTransposeSemitones = computeBaseTransposeSemitones(overdubTemplate);
 
       state.exerciseId = exerciseId;
       state.template = overdubTemplate;
       state.tempo = tempo;
       state.durationMs = durationMs;
-      state.activeVoiceId = null;
+      state.waitForInputEnabled = waitForInput;
+      state.exerciseBaseTransposeSemitones = baseTransposeSemitones;
+      state.exerciseManualShiftSemitones = 0;
+      state.effectiveTonic = null;
+      state.activeVoiceId = config.voices.length === 1
+        ? (config.voices[0]?.voiceId ?? null)
+        : null;
       state.guideEnabledVoiceIds = config.voices.map((voice) => voice.voiceId);
       state.visibleVoiceIds = config.voices.map((voice) => voice.voiceId);
       state.synthMixByVoiceId = createDefaultSynthMixByVoiceId(config.voices.map((voice) => voice.voiceId));
       state.isActive = true;
+      appState.setUseDegrees(false);
 
       rebuildNotes();
-      appState.setYAxisRange({
-        minMidi: config.minMidiPitch,
-        maxMidi: config.maxMidiPitch,
-      });
       appState.setVisualizationMode('highway');
-      appState.setOverdubMicTrailColorMode('voice');
-      overdubState.setRenderableTrailsVisible(true);
-      highwayState.setTargetNotes(state.allTargetNotes, {
-        preserveTimelinePadding: true,
-        contentDurationMs: state.durationMs,
-      });
-      const beatDurationMs = 60_000 / Math.max(20, tempo);
-      const boundaryPaddingMs = Math.max(0, Math.round(beatDurationMs * 4));
-      highwayState.fitTimelineToDuration(durationMs, {
-        paddingBeforeMs: boundaryPaddingMs,
-        paddingAfterMs: boundaryPaddingMs,
-      });
+      if (isWorkshopTemplate()) {
+        appState.setOverdubMicTrailColorMode('voice');
+        overdubState.setRenderableTrailsVisible(true);
+      } else {
+        overdubState.setRenderableTrailsVisible(false);
+      }
+      highwayState.setWaitForInput(state.waitForInputEnabled);
+      setHighwayTargetNotes();
+      restoreExerciseRangeView();
 
     },
 
@@ -257,13 +456,60 @@ function createOverdubExerciseState() {
     setActiveVoice(voiceId: string | null) {
       state.activeVoiceId = voiceId;
       rebuildNotes();
-      highwayState.setTargetNotes(state.allTargetNotes, {
-        preserveTimelinePadding: true,
-        contentDurationMs: state.durationMs,
-      });
+      setHighwayTargetNotes();
 
       // If currently playing, restart guide audio for the new voice selection.
       rescheduleGuidePlaybackIfPlaying();
+    },
+
+    setWaitForInputEnabled(enabled: boolean) {
+      const nextEnabled = !!enabled;
+      if (state.waitForInputEnabled === nextEnabled && !state.isPlaying) {
+        return;
+      }
+
+      const wasPlaying = state.isPlaying && highwayState.state.isPlaying;
+      const resumeTimeMs = highwayState.state.currentTimeMs;
+
+      state.waitForInputEnabled = nextEnabled;
+      rebuildNotes();
+      highwayState.setWaitForInput(nextEnabled);
+      setHighwayTargetNotes();
+
+      if (wasPlaying) {
+        highwayState.hardCutTo(resumeTimeMs, true);
+      }
+    },
+
+    getExerciseKeyShiftSemitones(): number {
+      return state.exerciseManualShiftSemitones;
+    },
+
+    getExerciseLockedTonic(): TonicNote | null {
+      if (!isStandaloneExerciseTemplate()) return null;
+      return state.effectiveTonic;
+    },
+
+    shiftExerciseKey(deltaSemitones: number) {
+      if (!isStandaloneExerciseTemplate()) return;
+      if (!Number.isFinite(deltaSemitones) || deltaSemitones === 0) return;
+      const nextShift = clampNumber(
+        state.exerciseManualShiftSemitones + Math.round(deltaSemitones),
+        MIN_EXERCISE_KEY_SHIFT,
+        MAX_EXERCISE_KEY_SHIFT,
+      );
+      if (nextShift === state.exerciseManualShiftSemitones) return;
+
+      const wasPlaying = state.isPlaying && highwayState.state.isPlaying;
+      const resumeTimeMs = highwayState.state.currentTimeMs;
+      state.exerciseManualShiftSemitones = nextShift;
+      rebuildNotes();
+      setHighwayTargetNotes();
+      restoreExerciseRangeView();
+
+      if (wasPlaying) {
+        highwayState.hardCutTo(resumeTimeMs, true);
+      }
     },
 
     isGuideVoiceEnabled(voiceId: string): boolean {
@@ -332,10 +578,7 @@ function createOverdubExerciseState() {
       }
       state.visibleVoiceIds = Array.from(current);
       rebuildNotes();
-      highwayState.setTargetNotes(state.allTargetNotes, {
-        preserveTimelinePadding: true,
-        contentDurationMs: state.durationMs,
-      });
+      setHighwayTargetNotes();
 
     },
 
@@ -363,6 +606,7 @@ function createOverdubExerciseState() {
       const tempoBpm = Math.max(20, Math.round(options?.tempoBpm ?? state.tempo));
       const tailBeatsAfterLastNote = 4;
       const guidePreScheduleMs = 60;
+      const shouldPlayGuideSynth = isWorkshopTemplate();
       const targetDownbeatPerfMs = (
         typeof options?.startAtPerfMs === 'number' && Number.isFinite(options.startAtPerfMs)
       )
@@ -371,23 +615,14 @@ function createOverdubExerciseState() {
       playbackDownbeatPerfMs = targetDownbeatPerfMs;
 
       try {
-        // Set viewport pitch range from exercise config
-        if (state.template) {
-          const config = state.template.config;
-          appState.setYAxisRange({
-            minMidi: config.minMidiPitch,
-            maxMidi: config.maxMidiPitch,
-          });
-        }
-
         // Switch to highway visualization
         appState.setVisualizationMode('highway');
 
         // Set highway target notes (all voices with per-voice colors)
-        highwayState.setTargetNotes(state.allTargetNotes, {
-          preserveTimelinePadding: true,
-          contentDurationMs: state.durationMs,
-        });
+        highwayState.setWaitForInput(state.waitForInputEnabled);
+        setHighwayTargetNotes();
+        restoreExerciseRangeView();
+        applyPreferredStartZoomIfNeeded();
         highwayState.setTempoBpm(tempoBpm);
         highwayState.setLeadInBeats(leadInBeats);
 
@@ -395,38 +630,69 @@ function createOverdubExerciseState() {
         const scheduledExerciseId = state.exerciseId;
         highwayState.start();
         highwayState.setCurrentTime(performance.now() - targetDownbeatPerfMs);
-        await guideVoicePlayer.init();
+        if (shouldPlayGuideSynth) {
+          await guideVoicePlayer.init();
+        }
 
         const beginPlayback = () => {
           playbackStartTimeoutId = null;
           if (!state.isPlaying || state.exerciseId !== scheduledExerciseId) return;
 
-          guideVoicePlayer.scheduleNotes(state.guideTargetNotes, {
-            startAtPerfMs: targetDownbeatPerfMs,
-            preScheduleMs: guidePreScheduleMs,
-            voiceMixById: getGuideVoiceMixById(),
-          });
+          if (shouldPlayGuideSynth) {
+            guideVoicePlayer.scheduleNotes(state.guideTargetNotes, {
+              startAtPerfMs: targetDownbeatPerfMs,
+              preScheduleMs: guidePreScheduleMs,
+              voiceMixById: getGuideVoiceMixById(),
+            });
+          }
           const maxVisibleNoteEndMs = state.allTargetNotes.reduce(
             (latest, note) => Math.max(latest, note.startTimeMs + note.durationMs),
             0,
           );
-          const maxGuideNoteEndMs = state.guideTargetNotes.reduce(
-            (latest, note) => Math.max(latest, note.startTimeMs + note.durationMs),
-            0,
-          );
+          const maxGuideNoteEndMs = shouldPlayGuideSynth
+            ? state.guideTargetNotes.reduce(
+              (latest, note) => Math.max(latest, note.startTimeMs + note.durationMs),
+              0,
+            )
+            : 0;
           const beatDurationMs = 60_000 / tempoBpm;
           const autoStopOffsetMs = Math.max(
             maxVisibleNoteEndMs,
             maxGuideNoteEndMs,
           ) + (tailBeatsAfterLastNote * beatDurationMs);
-          const autoStopAtPerfMs = targetDownbeatPerfMs + autoStopOffsetMs;
-          const autoStopDelayMs = Math.max(0, Math.round(autoStopAtPerfMs - performance.now()));
+
+          const scheduleAutoStopCheck = (delayMs: number) => {
+            clearPendingAutoStop();
+            playbackAutoStopTimeoutId = window.setTimeout(() => {
+              playbackAutoStopTimeoutId = null;
+              if (!state.isPlaying || state.exerciseId !== scheduledExerciseId) return;
+              const timelineTimeMs = Math.max(0, highwayState.state.currentTimeMs);
+              const timelineRemainingMs = autoStopOffsetMs - timelineTimeMs;
+              if (timelineRemainingMs <= 0 && !highwayState.state.isWaitingForInput) {
+                stopPlaybackSession();
+                return;
+              }
+
+              // Keep checking against timeline progress so wait-gate pauses do not trigger early stop.
+              const nextDelayMs = clampNumber(
+                Number.isFinite(timelineRemainingMs)
+                  ? Math.round(timelineRemainingMs)
+                  : 500,
+                150,
+                1200,
+              );
+              scheduleAutoStopCheck(nextDelayMs);
+            }, Math.max(0, Math.round(delayMs)));
+          };
+
+          const initialTimelineTimeMs = Math.max(0, highwayState.state.currentTimeMs);
+          const initialDelayMs = clampNumber(
+            Math.round(autoStopOffsetMs - initialTimelineTimeMs),
+            150,
+            1200,
+          );
           clearPendingAutoStop();
-          playbackAutoStopTimeoutId = window.setTimeout(() => {
-            playbackAutoStopTimeoutId = null;
-            if (!state.isPlaying || state.exerciseId !== scheduledExerciseId) return;
-            stopPlaybackSession();
-          }, autoStopDelayMs);
+          scheduleAutoStopCheck(initialDelayMs);
         };
 
         const remainingStartDelayMs = Math.max(0, Math.round(targetDownbeatPerfMs - performance.now()));
@@ -464,6 +730,7 @@ function createOverdubExerciseState() {
       guideVoicePlayer.dispose();
       highwayState.setTargetNotes([]);
       overdubState.setRenderableTrailsVisible(false);
+      appState.setNoteScaleDegrees([]);
       startInFlight = false;
       state = { ...DEFAULT_STATE };
     },

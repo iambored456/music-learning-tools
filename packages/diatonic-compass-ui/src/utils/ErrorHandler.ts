@@ -4,6 +4,8 @@
  * Centralized error handling and recovery system for Diatonic Compass
  * Provides graceful degradation and debugging capabilities
  */
+import { appState } from '../state/appState.ts';
+
 export class ErrorHandler {
   static isDebugMode = false;
 
@@ -101,28 +103,25 @@ export class ErrorHandler {
    * Recover from audio context errors
    */
   static recoverAudioContext() {
-    // Import appState dynamically to avoid circular dependencies
-    import('../state/appState.ts').then(({ appState }) => {
-      if (appState.playback.audioContext) {
-        try {
-          appState.playback.audioContext.close();
-        } catch (e) {
-          // Ignore close errors
-        }
-        appState.playback.audioContext = null;
+    if (appState.playback.audioContext) {
+      try {
+        appState.playback.audioContext.close();
+      } catch (e) {
+        // Ignore close errors
       }
-      
-      // Stop any ongoing playback
-      if (appState.playback.isPlaying) {
-        appState.playback.isPlaying = false;
-        appState.playback.currentNoteIndex = null;
-        appState.playback.sequence = [];
-        if (appState.playback.timeoutId) {
-          clearTimeout(appState.playback.timeoutId);
-          appState.playback.timeoutId = null;
-        }
+      appState.playback.audioContext = null;
+    }
+
+    // Stop any ongoing playback
+    if (appState.playback.isPlaying) {
+      appState.playback.isPlaying = false;
+      appState.playback.currentNoteIndex = null;
+      appState.playback.sequence = [];
+      if (appState.playback.timeoutId) {
+        clearTimeout(appState.playback.timeoutId);
+        appState.playback.timeoutId = null;
       }
-    });
+    }
   }
 
   /**
@@ -138,11 +137,9 @@ export class ErrorHandler {
    * Recover from animation errors
    */
   static recoverAnimation() {
-    import('../state/appState.ts').then(({ appState }) => {
-      // Clear any stuck animations
-      appState.animation = null;
-      appState.drag.active = null;
-    });
+    // Clear any stuck animations
+    appState.animation = null;
+    appState.drag.active = null;
   }
 
   /**

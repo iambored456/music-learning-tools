@@ -514,6 +514,11 @@ export function drawUserPitchIndicator(
   const radius = Number.isFinite(configuredRadius) && configuredRadius > 0
     ? configuredRadius
     : (cellHeight / 2) * 0.8;
+  const midiBounds = getVisibleMidiBounds(fullRowData);
+  const overflowDirection = midiBounds
+    ? getPitchOverflowDirection(midi, midiBounds.minMidi, midiBounds.maxMidi)
+    : 'inRange';
+  const indicatorBounds = getIndicatorVerticalBounds(coords, cellHeight, fullRowData);
 
   // Get interpolated color based on fractional MIDI value
   const color: RGB =
@@ -527,19 +532,160 @@ export function drawUserPitchIndicator(
 
   ctx.save();
 
-  // Draw glow
+  if (overflowDirection === 'tooHigh') {
+    drawOverflowArrow(
+      ctx,
+      nowLineX,
+      indicatorBounds.topY,
+      'up',
+      radius,
+      color,
+      clarity,
+    );
+  } else if (overflowDirection === 'tooLow') {
+    drawOverflowArrow(
+      ctx,
+      nowLineX,
+      indicatorBounds.bottomY,
+      'down',
+      radius,
+      color,
+      clarity,
+    );
+  } else {
+    // Draw glow
+    ctx.beginPath();
+    ctx.arc(nowLineX, y, radius + 4, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${clarity * 0.3})`;
+    ctx.fill();
+
+    // Draw solid indicator
+    ctx.beginPath();
+    ctx.arc(nowLineX, y, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${clarity})`;
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+interface MidiBounds {
+  minMidi: number;
+  maxMidi: number;
+}
+
+type PitchOverflowDirection = 'tooHigh' | 'tooLow' | 'inRange';
+const OVERFLOW_TRIGGER_MARGIN_SEMITONES = 1;
+
+function getVisibleMidiBounds(fullRowData: PitchRowData[]): MidiBounds | null {
+  if (fullRowData.length === 0) return null;
+  const midiValues = fullRowData
+    .map((row) => row.midi)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (midiValues.length === 0) return null;
+  return {
+    minMidi: Math.min(...midiValues),
+    maxMidi: Math.max(...midiValues),
+  };
+}
+
+function getPitchOverflowDirection(midi: number, minMidi: number, maxMidi: number): PitchOverflowDirection {
+  const epsilon = 0.001;
+  const upperTrigger = maxMidi + OVERFLOW_TRIGGER_MARGIN_SEMITONES;
+  const lowerTrigger = minMidi - OVERFLOW_TRIGGER_MARGIN_SEMITONES;
+  if (midi >= upperTrigger - epsilon) return 'tooHigh';
+  if (midi <= lowerTrigger + epsilon) return 'tooLow';
+  return 'inRange';
+}
+
+function getIndicatorVerticalBounds(
+  coords: CoordinateUtils,
+  cellHeight: number,
+  fullRowData: PitchRowData[],
+): { topY: number; bottomY: number } {
+  if (fullRowData.length === 0) {
+    return { topY: 0, bottomY: 0 };
+  }
+  const rowStep = cellHeight / 2;
+  const topCenterY = coords.getRowY(0);
+  const bottomCenterY = coords.getRowY(fullRowData.length - 1);
+  return {
+    topY: topCenterY - rowStep,
+    bottomY: bottomCenterY + rowStep,
+  };
+}
+
+function drawOverflowArrow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  boundaryY: number,
+  direction: 'up' | 'down',
+  radius: number,
+  color: RGB,
+  clarity: number,
+): void {
+  // Keep overflow arrow compact relative to the in-range indicator.
+  const size = Math.max(3, radius * 0.775);
+  const glowSize = size + 2;
   ctx.beginPath();
-  ctx.arc(nowLineX, y, radius + 4, 0, 2 * Math.PI);
+  traceRoundedArrowPath(ctx, x, boundaryY, direction, glowSize);
   ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${clarity * 0.3})`;
   ctx.fill();
 
-  // Draw solid indicator
   ctx.beginPath();
-  ctx.arc(nowLineX, y, radius, 0, 2 * Math.PI);
+  traceRoundedArrowPath(ctx, x, boundaryY, direction, size);
   ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${clarity})`;
   ctx.fill();
+}
 
-  ctx.restore();
+function traceRoundedArrowPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  boundaryY: number,
+  direction: 'up' | 'down',
+  size: number,
+): void {
+  const tipInset = 2;
+  const headHalfWidth = size * 0.78;
+  const shaftHalfWidth = size * 0.36;
+  const headHeight = size * 0.8;
+  const shaftLength = size * 0.85;
+  const tailRadius = Math.max(1, size * 0.2);
+
+  const tipY = direction === 'up'
+    ? boundaryY + tipInset
+    : boundaryY - tipInset;
+  const headBaseY = direction === 'up'
+    ? tipY + headHeight
+    : tipY - headHeight;
+  const tailY = direction === 'up'
+    ? headBaseY + shaftLength
+    : headBaseY - shaftLength;
+
+  const rightHeadX = x + headHalfWidth;
+  const leftHeadX = x - headHalfWidth;
+  const rightShaftX = x + shaftHalfWidth;
+  const leftShaftX = x - shaftHalfWidth;
+
+  ctx.moveTo(x, tipY);
+  ctx.lineTo(rightHeadX, headBaseY);
+  ctx.lineTo(rightShaftX, headBaseY);
+
+  if (direction === 'up') {
+    ctx.lineTo(rightShaftX, tailY - tailRadius);
+    ctx.quadraticCurveTo(rightShaftX, tailY, rightShaftX - tailRadius, tailY);
+    ctx.lineTo(leftShaftX + tailRadius, tailY);
+    ctx.quadraticCurveTo(leftShaftX, tailY, leftShaftX, tailY - tailRadius);
+  } else {
+    ctx.lineTo(rightShaftX, tailY + tailRadius);
+    ctx.quadraticCurveTo(rightShaftX, tailY, rightShaftX - tailRadius, tailY);
+    ctx.lineTo(leftShaftX + tailRadius, tailY);
+    ctx.quadraticCurveTo(leftShaftX, tailY, leftShaftX, tailY + tailRadius);
+  }
+
+  ctx.lineTo(leftShaftX, headBaseY);
+  ctx.lineTo(leftHeadX, headBaseY);
+  ctx.closePath();
 }
 
 /**
@@ -626,6 +772,7 @@ export function drawUserPitchTrace(
   const timeWindowMs = trail.timeWindowMs;
   const pixelsPerSecond = trail.pixelsPerSecond;
   const includeFuturePoints = trail.includeFuturePoints;
+  const midiBounds = getVisibleMidiBounds(fullRowData);
 
   // Use nowLineX as origin if provided (highway mode), otherwise use right edge (stationary mode)
   const trailOriginX = config.nowLineX ?? viewportWidth;
@@ -639,6 +786,12 @@ export function drawUserPitchTrace(
     const point = history[i];
     if (!point) continue;
     if (point.midi <= 0 || point.clarity < trail.clarityThreshold) continue;
+    if (
+      midiBounds
+      && getPitchOverflowDirection(point.midi, midiBounds.minMidi, midiBounds.maxMidi) !== 'inRange'
+    ) {
+      continue;
+    }
 
     const age = currentTime - point.time;
     if (!includeFuturePoints && age < 0) continue;

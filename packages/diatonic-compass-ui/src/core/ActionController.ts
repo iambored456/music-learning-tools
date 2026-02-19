@@ -188,9 +188,7 @@ export const ActionController = {
       appState.ui.cursorFill = hasFill;
 
       // Save to preferences
-      import('../services/PreferencesService.ts').then(({ savePreferences }) => {
-        savePreferences({ cursorColor: color, cursorFill: hasFill });
-      });
+      savePreferences({ cursorColor: color, cursorFill: hasFill });
 
       // Mark state as dirty for redraw
       if (appState.performance) {

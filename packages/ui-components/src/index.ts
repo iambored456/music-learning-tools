@@ -10,3 +10,6 @@ export * from './canvas/index.js';
 
 // Re-export pitch wheel components
 export * from './pitch-wheels/index.js';
+
+// Re-export shared overlay components
+export * from './overlays/index.js';

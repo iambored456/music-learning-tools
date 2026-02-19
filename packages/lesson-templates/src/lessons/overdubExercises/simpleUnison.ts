@@ -14,7 +14,7 @@ export const SIMPLE_UNISON: OverdubExerciseTemplate = {
   description: 'Sing along with a simple melody in unison',
   type: 'overdub',
   difficulty: 1,
-  category: 'overdub-exercises',
+  category: 'workshop',
   speakingPitchUsage: 'none',
   durationEstimate: '~15s',
   settingsSchema: {

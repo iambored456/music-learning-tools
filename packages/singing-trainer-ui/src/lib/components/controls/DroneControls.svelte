@@ -9,6 +9,7 @@
   import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
   import { toggleDrone, updateDrone } from '@mlt/singing-trainer-core/services/droneAudio.js';
   import { MODE_NAMES, MODE_KEYS } from '@mlt/singing-trainer-core/constants/modes.js';
+  import TanpuraTuningModal from './TanpuraTuningModal.svelte';
 
   const TONIC_OPTIONS: TonicNote[] = [
     'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'
@@ -16,6 +17,7 @@
   const OCTAVE_OPTIONS = [2, 3, 4, 5];
 
   let useSpeakingPitch = $state(false);
+  let showTuningModal = $state(false);
 
   const speakingPitchMidi = $derived(preferencesStore.speakingPitchMidi);
   const speakingPitchAvailable = $derived(preferencesStore.isCalibrated);
@@ -50,6 +52,20 @@
 
   function handleModeToggle() {
     appState.setDroneModeEnabled(!appState.state.drone.modeEnabled);
+  }
+
+  function handleEngineToggle(event: Event) {
+    const target = event.target as HTMLInputElement;
+    appState.setDroneEngine(target.checked ? 'tanpura' : 'synth');
+    updateDrone();
+  }
+
+  function openTuningModal() {
+    showTuningModal = true;
+  }
+
+  function closeTuningModal() {
+    showTuningModal = false;
   }
 
   function handleModeChange(event: Event) {
@@ -100,6 +116,32 @@
   >
     {appState.state.drone.isPlaying ? 'Drone On' : 'Drone Off'}
   </button>
+
+  <div class="engine-row">
+    <span class="control-label">Engine:</span>
+    <div class="engine-toggle-wrap">
+      <span class="engine-label">Synth</span>
+      <label class="switch" aria-label="Toggle drone engine">
+        <input
+          type="checkbox"
+          checked={appState.state.drone.engine === 'tanpura'}
+          onchange={handleEngineToggle}
+        />
+        <span class="slider"></span>
+      </label>
+      <span class="engine-label">Tanpura</span>
+    </div>
+    <button
+      class="tuning-button"
+      onclick={openTuningModal}
+      disabled={appState.state.drone.engine !== 'tanpura'}
+      title={appState.state.drone.engine === 'tanpura'
+        ? 'Open tanpura tuning controls'
+        : 'Switch to Tanpura engine to tune behavior'}
+    >
+      Tuning...
+    </button>
+  </div>
 
   <div class="pitch-octave-grid">
     <label class="grid-label" for="drone-tonic-select">Pitch:</label>
@@ -201,6 +243,10 @@
   </div>
 </div>
 
+{#if showTuningModal}
+  <TanpuraTuningModal onClose={closeTuningModal} />
+{/if}
+
 <style>
   .drone-controls {
     display: flex;
@@ -244,6 +290,90 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     min-width: 52px;
+  }
+
+  .engine-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+  }
+
+  .engine-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .engine-label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    min-width: 3.5rem;
+    text-align: center;
+  }
+
+  .switch {
+    position: relative;
+    width: 46px;
+    height: 24px;
+    display: inline-block;
+  }
+
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: all 0.2s ease;
+  }
+
+  .slider::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 2px;
+    top: 2px;
+    border-radius: 999px;
+    background: #fff;
+    transition: transform 0.2s ease;
+  }
+
+  .switch input:checked + .slider {
+    background: rgba(95, 149, 255, 0.55);
+    border-color: rgba(95, 149, 255, 0.9);
+  }
+
+  .switch input:checked + .slider::before {
+    transform: translateX(22px);
+  }
+
+  .tuning-button {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text);
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .tuning-button:hover:not(:disabled) {
+    border-color: var(--color-secondary);
+  }
+
+  .tuning-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   .pitch-octave-grid {

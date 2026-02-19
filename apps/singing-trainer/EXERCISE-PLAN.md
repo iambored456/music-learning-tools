@@ -23,8 +23,10 @@ Add an interactive pitch-matching exercise to the Singing Trainer with visual cu
 
 ## File Structure
 
+Path note: implementation lives in `packages/singing-trainer-core` and `packages/singing-trainer-ui`; `apps/singing-trainer` is a thin shell.
+
 ### 1. New Store: `exerciseState.svelte.ts`
-**Location**: `apps/singing-trainer/src/lib/stores/exerciseState.svelte.ts`
+**Location**: `packages/singing-trainer-core/src/lib/stores/exerciseState.svelte.ts`
 
 ```typescript
 export interface ExerciseConfig {
@@ -70,7 +72,7 @@ interface ExerciseStore {
 - Internal: `collectResults()` - Gather performance data from highway service
 
 ### 2. New Component: `ExerciseControls.svelte`
-**Location**: `apps/singing-trainer/src/lib/components/controls/ExerciseControls.svelte`
+**Location**: `packages/singing-trainer-ui/src/lib/components/controls/ExerciseControls.svelte`
 
 **UI Elements**:
 ```svelte

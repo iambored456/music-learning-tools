@@ -6,7 +6,8 @@ import { dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
-const pnpmCmd = 'pnpm';
+const isWindows = process.platform === 'win32';
+const comspec = process.env.ComSpec ?? 'cmd.exe';
 
 const normalizeBase = (value) => {
   if (!value) return '/';
@@ -73,10 +74,16 @@ const spawnOptions = {
   cwd: rootDir,
   stdio: 'inherit',
   env: { ...process.env, BASE_URL: baseUrl },
-  shell: process.platform === 'win32',
 };
 
-const buildResult = spawnSync(pnpmCmd, ['run', 'build'], {
+const runPnpm = (args, options) => {
+  if (isWindows) {
+    return spawnSync(comspec, ['/d', '/s', '/c', 'pnpm', ...args], options);
+  }
+  return spawnSync('pnpm', args, options);
+};
+
+const buildResult = runPnpm(['--filter', 'hub', 'run', 'build'], {
   ...spawnOptions,
   env: { ...spawnOptions.env, PAGES_BUILD: 'true' },
 });
@@ -89,11 +96,10 @@ if (buildResult.status !== 0) {
   process.exit(buildResult.status ?? 1);
 }
 
-const assembleResult = spawnSync('node', ['scripts/assemble-pages.js', '--out', 'docs'], {
+const assembleResult = spawnSync(process.execPath, ['scripts/assemble-pages.js', '--out', 'docs'], {
   cwd: rootDir,
   stdio: 'inherit',
   env: process.env,
-  shell: process.platform === 'win32',
 });
 
 if (assembleResult.error) {

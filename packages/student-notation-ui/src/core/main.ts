@@ -91,8 +91,15 @@ const disableToneClassDebugLogging = (): void => {
 
 disableToneClassDebugLogging();
 
+const shouldInitDebug = (): boolean => {
+  if (typeof window === 'undefined') {return false;}
+  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
+  return override === true;
+};
+
 const initT0 = performance.now();
 const initDebug = (message: string, data?: unknown): void => {
+  if (!shouldInitDebug()) {return;}
   const elapsed = `+${(performance.now() - initT0).toFixed(0)}ms`;
   if (data === undefined) {
     console.log(`[Init] ${elapsed} ${message}`);

@@ -100,10 +100,6 @@ class DrawToolsController {
     this.setupChordTabListeners();
     this.setupMainTabListeners();
     this.populateAllPanels();
-    this.initializePanelWidthSync();
-    this.logPanelMetrics();
-
-    window.addEventListener('resize', () => this.logPanelMetrics(), { passive: true });
 
     store.on('noteChanged', ({ newNote }: { newNote?: any } = {}) => {
       this.lastSelectedNote = newNote ?? null;
@@ -193,33 +189,6 @@ class DrawToolsController {
     this.populateTextOptions();
     this.populateMarkerOptions();
     this.populateHighlighterOptions();
-  }
-
-  private initializePanelWidthSync() {
-    const panels = Array.from(this.toolPanels);
-    if (!panels.length) {return;}
-
-    // Allow panels to shrink to their own content instead of syncing widths
-    panels.forEach(panel => {
-      (panel).style.minWidth = '';
-      (panel).style.width = 'fit-content';
-      (panel).style.maxWidth = '100%';
-      (panel).style.flex = '0 0 auto';
-    });
-  }
-
-  private logPanelMetrics() {
-    try {
-      const grid = document.querySelector<HTMLElement>('.draw-layout-grid');
-      const panels = Array.from(this.toolPanels ?? []);
-      panels.forEach(panel => {
-        // Measure panels during resize to keep layout diagnostics accurate
-        panel.getBoundingClientRect();
-      });
-      grid?.getBoundingClientRect();
-    } catch {
-      // Failed to log panel metrics
-    }
   }
 
   private populateArrowOptions() {

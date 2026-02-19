@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
-   * Overdub Exercise Chooser Modal
+   * Workshop Chooser Modal
    *
-   * Separate modal for browsing and selecting provided overdub exercises.
+   * Separate modal for browsing and selecting workshop templates.
    * Simpler than the lesson chooser (single-column, no category navigation).
    */
 
@@ -25,7 +25,7 @@
   const localSettings = $derived(overdubExerciseChooserState.state.localSettings);
 
   // Get all overdub exercises from the registry
-  const exercises = $derived(getRegistryEntriesByCategory('overdub-exercises'));
+  const exercises = $derived(getRegistryEntriesByCategory('workshop'));
 
   function handleBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {
@@ -77,13 +77,13 @@
     onkeydown={handleKeydown}
     role="dialog"
     aria-modal="true"
-    aria-labelledby="exercise-chooser-title"
+    aria-labelledby="workshop-chooser-title"
     tabindex="-1"
   >
     <div class="modal-content">
       <!-- Header -->
       <div class="modal-header">
-        <h2 id="exercise-chooser-title" class="modal-title">Choose Exercise</h2>
+        <h2 id="workshop-chooser-title" class="modal-title">Choose Workshop</h2>
         <button class="close-btn" onclick={handleClose} aria-label="Close">
           <span class="close-icon">&times;</span>
         </button>
@@ -93,7 +93,7 @@
       <div class="modal-body">
         {#if exercises.length === 0}
           <div class="empty-state">
-            <p>No exercises available yet.</p>
+            <p>No workshop templates available yet.</p>
           </div>
         {:else}
           <div class="exercise-list">

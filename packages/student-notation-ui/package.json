@@ -23,6 +23,7 @@
     "@mlt/handoff": "workspace:*",
     "@mlt/pitch-viewport": "workspace:*",
     "@mlt/student-notation-engine": "workspace:*",
+    "@mlt/ui-components": "workspace:*",
     "@mlt/types": "workspace:*",
     "html2canvas": "^1.4.1",
     "pitchy": "^4.1.0",

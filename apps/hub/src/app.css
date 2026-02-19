@@ -232,6 +232,7 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  align-items: center;
 }
 
 .tag {
@@ -240,6 +241,10 @@ h1 {
   border-radius: 999px;
   background: rgba(60, 52, 46, 0.08);
   color: #514338;
+}
+
+.tags .status {
+  margin-left: auto;
 }
 
 .launch {
@@ -277,14 +282,5 @@ h1 {
 @media (max-width: 720px) {
   .hub {
     padding: 2.5rem 1.25rem 3rem;
-  }
-
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .status {
-    align-self: flex-start;
   }
 }

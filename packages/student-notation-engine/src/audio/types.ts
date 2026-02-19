@@ -15,6 +15,8 @@ export interface EffectsManager {
   applySynthEffects(synth: unknown, color: string, masterGain: Tone.Gain): void;
   /** Apply effects to a specific voice */
   applyEffectsToVoice(voice: unknown, color: string): void;
+  /** Flush any persistent effect tails/buffers (e.g., delay feedback) */
+  flushPlaybackTails?(colors?: string[]): void;
 }
 
 /**
@@ -72,6 +74,12 @@ export interface SynthEngineInstance {
 
   /** Release all voices */
   releaseAll(): void;
+
+  /** Flush persistent effect tails/buffers (e.g., delay feedback) */
+  flushPlaybackTails?(colors?: string[]): void;
+
+  /** Immediately silence output and clear effect tails */
+  hardStopAllSound?(): void;
 
   /** Update synth for a specific timbre color */
   updateSynthForColor(color: string): void;

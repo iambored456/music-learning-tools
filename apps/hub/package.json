@@ -24,6 +24,7 @@
     "@mlt/pitch-utils": "workspace:*",
     "@mlt/singing-trainer-ui": "workspace:*",
     "@mlt/student-notation-ui": "workspace:*",
+    "@mlt/visual-metronome-ui": "workspace:*",
     "clsx": "^2.1.1",
     "esm-env": "^1.2.2"
   }

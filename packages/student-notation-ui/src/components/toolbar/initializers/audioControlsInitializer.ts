@@ -246,11 +246,6 @@ export function initAudioControls() {
         if (currentColor) {
           store.applyPreset(currentColor, preset);
           updatePresetSelection(currentColor);
-          console.info('[PresetDebug] click', {
-            color: currentColor,
-            requestedPreset: presetId,
-            activePresetName: store.state.timbres[currentColor]?.activePresetName ?? null
-          });
         }
         button.blur();
       });
@@ -299,8 +294,6 @@ export function initAudioControls() {
     const lightColor = palette.light;
     const primaryColor = palette.primary;
 
-    // Debug logging
-
     const presetButtons = Array.from(document.querySelectorAll('#preset-buttons .preset-button')) as HTMLElement[];
     presetButtons.forEach((buttonEl) => {
       buttonEl.classList.remove('selected');
@@ -309,14 +302,6 @@ export function initAudioControls() {
       const activeButton = document.getElementById(`preset-${activePresetName}`);
       activeButton?.classList.add('selected');
     }
-    console.info('[PresetDebug] sync', {
-      color,
-      activePresetName,
-      selectedButtons: presetButtons
-        .filter((buttonEl) => buttonEl.classList.contains('selected'))
-        .map((buttonEl) => buttonEl.id)
-    });
-
     // Create an even lighter version for button backgrounds
     const extraLightColor = lightenColor(lightColor, 60);
 

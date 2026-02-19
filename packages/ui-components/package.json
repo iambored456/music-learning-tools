@@ -22,6 +22,11 @@
       "types": "./src/pitch-wheels/index.ts",
       "svelte": "./src/pitch-wheels/index.ts",
       "import": "./src/pitch-wheels/index.ts"
+    },
+    "./overlays": {
+      "types": "./src/overlays/index.ts",
+      "svelte": "./src/overlays/index.ts",
+      "import": "./src/overlays/index.ts"
     }
   },
   "files": ["src"],

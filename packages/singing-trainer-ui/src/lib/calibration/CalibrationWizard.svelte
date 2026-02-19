@@ -51,6 +51,12 @@
     onCancel();
   }
 
+  function handleOverlayClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) {
+      handleClose();
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       handleClose();
@@ -59,9 +65,8 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="wizard-overlay" onclick={handleClose} onkeydown={handleKeydown} role="presentation">
-  <!-- svelte-ignore a11y_no_static_element_interactions a11y_interactive_supports_focus a11y_click_events_have_key_events -->
-  <div class="wizard-modal" role="dialog" aria-modal="true" aria-labelledby="wizard-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+<div class="wizard-overlay" onclick={handleOverlayClick} onkeydown={handleKeydown} role="presentation">
+  <div class="wizard-modal" role="dialog" aria-modal="true" aria-labelledby="wizard-title" tabindex="-1">
     <button class="close-btn" onclick={handleClose} aria-label="Close">
       &times;
     </button>

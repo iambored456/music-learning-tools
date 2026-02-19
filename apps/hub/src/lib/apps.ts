@@ -39,4 +39,13 @@ export const appCards: AppCard[] = [
     tags: ['Theory', 'Modes', 'Keys'],
     accent: '#27b6a1',
   },
+  {
+    id: 'visual-metronome',
+    name: 'Visual Metronome',
+    description: 'Animated bouncing-ball metronome with color, path, and subdivision controls.',
+    href: withBase('visual-metronome/'),
+    preview: withBase('previews/visual-metronome.png'),
+    tags: ['Rhythm', 'Subdivision', 'Practice'],
+    accent: '#829ae9',
+  },
 ];

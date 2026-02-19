@@ -17,7 +17,6 @@
       <article class="card" style={`--card-accent: ${app.accent}; --card-delay: ${index * 90}ms;`}>
         <div class="card-header">
           <h2>{app.name}</h2>
-          <span class="status" aria-hidden="true"></span>
         </div>
         <a class="preview-link" href={app.href} aria-label={`Open ${app.name}`}>
           <div class="preview">
@@ -36,6 +35,7 @@
           {#each app.tags as tag}
             <span class="tag">{tag}</span>
           {/each}
+          <span class="status" aria-hidden="true"></span>
         </div>
         <a class="launch is-hidden" href={app.href}>
           Open

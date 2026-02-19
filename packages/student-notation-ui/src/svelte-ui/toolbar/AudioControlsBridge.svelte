@@ -148,14 +148,6 @@
       activeButton?.classList.add('selected');
     }
 
-    console.info('[PresetDebug] sync', {
-      color,
-      activePresetName,
-      selectedButtons: presetButtons
-        .filter((buttonEl) => buttonEl.classList.contains('selected'))
-        .map((buttonEl) => buttonEl.id)
-    });
-
     const extraLightColor = lightenColor(lightColor, 60);
     presetContainer.style.setProperty('--c-accent', primaryColor);
     presetContainer.style.setProperty('--c-accent-light', extraLightColor);
@@ -324,11 +316,6 @@
           if (currentColor) {
             store.applyPreset(currentColor, preset);
             updatePresetSelection(currentColor);
-            console.info('[PresetDebug] click', {
-              color: currentColor,
-              requestedPreset: presetId,
-              activePresetName: store.state.timbres[currentColor]?.activePresetName ?? null
-            });
           }
           button.blur();
         });
@@ -345,8 +332,6 @@
     if (initialColor) {
       updatePresetSelection(initialColor);
     }
-
-    if ((window as any).__initDebug) console.log('[Svelte] AudioControlsBridge mounted');
   });
 
   onDestroy(() => {
@@ -359,8 +344,6 @@
     document.removeEventListener('mouseup', handleDocumentMouseUp);
     document.removeEventListener('touchend', handleDocumentTouchEnd);
     document.removeEventListener('touchcancel', handleDocumentTouchCancel);
-
-    if ((window as any).__initDebug) console.log('[Svelte] AudioControlsBridge unmounted');
   });
 </script>
 

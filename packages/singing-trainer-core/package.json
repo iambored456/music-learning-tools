@@ -34,6 +34,7 @@
     "@mlt/pitch-data": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
     "@mlt/student-notation-engine": "workspace:*",
+    "@mlt/tanpura-drone": "workspace:*",
     "@mlt/talking-avatar": "workspace:*",
     "@mlt/types": "workspace:*",
     "@mlt/ui-components": "workspace:*",

@@ -182,7 +182,7 @@ export function convertSpecToExercise(
     description: metadata.description,
     type: 'overdub',
     difficulty: metadata.difficulty,
-    category: 'overdub-exercises',
+    category: 'workshop',
     speakingPitchUsage: 'none',
     durationEstimate: metadata.durationEstimate,
     settingsSchema: metadata.settingsSchema ?? {

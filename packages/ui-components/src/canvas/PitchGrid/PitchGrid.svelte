@@ -84,6 +84,7 @@
     legendHighlight?: LegendHighlightConfig;
     rowHighlight?: PitchRowHighlightConfig;
     showHorizontalGridLines?: boolean;
+    horizontalGridReferencePitchClass?: number | null;
     focusedPitchClasses?: Set<number> | null;
     focusColorsEnabled?: boolean;
     legendLabelOverrides?: Map<number, string>;
@@ -124,6 +125,7 @@
     legendHighlight,
     rowHighlight,
     showHorizontalGridLines = true,
+    horizontalGridReferencePitchClass = null,
     focusedPitchClasses = null,
     focusColorsEnabled = false,
     legendLabelOverrides,
@@ -228,6 +230,7 @@
         viewportHeight: viewport.containerHeight,
         viewportWidth: gridWidth,
         colorMode,
+        horizontalGridReferencePitchClass,
       };
       drawHorizontalLines(ctx, horizontalConfig, coords, paddedStartRow, paddedEndRow);
     }
@@ -642,8 +645,11 @@
   }
 
   function drawJudgmentLine(ctx: CanvasRenderingContext2D, x: number, height: number): void {
+    const baseLineWidth = 3;
+    const rowScaledLineWidth = (cellHeight / 40) * baseLineWidth;
+    const lineWidth = clamp(rowScaledLineWidth, 1.25, 7);
     ctx.strokeStyle = 'rgba(255, 0, 0, 0.9)';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);
@@ -801,6 +807,7 @@
     void columnWidths;
     void rowHighlight;
     void showHorizontalGridLines;
+    void horizontalGridReferencePitchClass;
 
     if (ctx && isNotationMode) {
       render();

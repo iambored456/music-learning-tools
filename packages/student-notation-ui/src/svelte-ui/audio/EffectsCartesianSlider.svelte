@@ -252,10 +252,10 @@
 <div
   class="effects-cartesian-slider"
   bind:this={host}
-  on:pointerdown={handleInteractionStart}
-  on:pointerup={handleInteractionEnd}
-  on:pointerleave={handleInteractionEnd}
-  on:pointercancel={handleInteractionEnd}
+  onpointerdown={handleInteractionStart}
+  onpointerup={handleInteractionEnd}
+  onpointerleave={handleInteractionEnd}
+  onpointercancel={handleInteractionEnd}
 >
   {#if config}
     <CartesianSlider

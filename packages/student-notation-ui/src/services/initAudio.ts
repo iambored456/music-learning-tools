@@ -43,6 +43,9 @@ const SynthEngine = {
         },
         applyEffectsToVoice: (voice: any, color: string) => {
           window.audioEffectsManager?.applyEffectsToVoice(voice, color);
+        },
+        flushPlaybackTails: (colors?: string[]) => {
+          window.audioEffectsManager?.flushPlaybackTails(colors);
         }
       },
 
@@ -139,6 +142,21 @@ const SynthEngine = {
   releaseAll() {
     if (!engineInstance) return;
     engineInstance.releaseAll();
+  },
+
+  flushPlaybackTails(colors?: string[]) {
+    if (!engineInstance) return;
+    engineInstance.flushPlaybackTails?.(colors);
+  },
+
+  hardStopAllSound() {
+    if (!engineInstance) return;
+    if (typeof engineInstance.hardStopAllSound === 'function') {
+      engineInstance.hardStopAllSound();
+      return;
+    }
+    engineInstance.releaseAll();
+    engineInstance.flushPlaybackTails?.();
   },
 
   quickReleasePitches(pitches: Array<string | number>, color: string) {

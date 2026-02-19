@@ -46,6 +46,7 @@ const APP_PACKAGE_NAMES = [
   '@mlt/singing-trainer',
   '@mlt/student-notation',
   '@mlt/diatonic-compass',
+  '@mlt/visual-metronome',
 ];
 
 // Simple app names (allowed in apps/ but nowhere else)
@@ -53,6 +54,7 @@ const SIMPLE_APP_NAMES = [
   'singing-trainer',
   'student-notation',
   'diatonic-compass',
+  'visual-metronome',
   'hub',
 ];
 

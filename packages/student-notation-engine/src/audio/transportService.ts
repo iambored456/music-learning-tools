@@ -220,6 +220,42 @@ export function createTransportService(config: TransportConfig): TransportServic
     }
   }
 
+  function clearLoopCarryoverAudio(): void {
+    synthEngine.releaseAll();
+    synthEngine.flushPlaybackTails?.();
+  }
+
+  function hardStopPlaybackAudio(): void {
+    if (typeof synthEngine.hardStopAllSound === 'function') {
+      synthEngine.hardStopAllSound();
+      return;
+    }
+    clearLoopCarryoverAudio();
+  }
+
+  function clampReleaseToLoopBoundary(
+    triggerTime: number,
+    releaseTime: number,
+    configuredLoopEnd: number
+  ): number | null {
+    if (!Number.isFinite(configuredLoopEnd) || configuredLoopEnd <= 0) {
+      return releaseTime;
+    }
+
+    // Notes at or beyond loop end never fire in looping mode, so drop them.
+    if (triggerTime >= configuredLoopEnd) {
+      return null;
+    }
+
+    const RELEASE_SAFETY_MARGIN = 0.001;
+    const maxReleaseTime = configuredLoopEnd - RELEASE_SAFETY_MARGIN;
+    if (releaseTime >= configuredLoopEnd) {
+      return Math.max(triggerTime + 0.001, maxReleaseTime);
+    }
+
+    return releaseTime;
+  }
+
   /**
    * Schedule all notes, stamps, and triplets on Transport.
    */
@@ -273,19 +309,19 @@ export function createTransportService(config: TransportConfig): TransportServic
     // Schedule stamps
     const stampPlaybackData = stateCallbacks.getStampPlaybackData?.() ?? [];
     stampPlaybackData.forEach(stampData => {
-      scheduleStamp(stampData, timeMap, state);
+      scheduleStamp(stampData, timeMap, state, configuredLoopEnd);
     });
 
     // Schedule triplets
     const tripletPlaybackData = stateCallbacks.getTripletPlaybackData?.() ?? [];
     tripletPlaybackData.forEach(tripletData => {
-      scheduleTriplet(tripletData, timeMap, state);
+      scheduleTriplet(tripletData, timeMap, state, configuredLoopEnd);
     });
 
     // Schedule three-sixteenth stamps
     const threeStampPlaybackData = stateCallbacks.getThreeStampPlaybackData?.() ?? [];
     threeStampPlaybackData.forEach(stampData => {
-      scheduleThreeStamp(stampData, timeMap, state);
+      scheduleThreeStamp(stampData, timeMap, state, configuredLoopEnd);
     });
 
     log.debug('TransportService', 'scheduleNotes', `Finished scheduling ${state.placedNotes.length} notes, ${stampPlaybackData.length} stamps, ${tripletPlaybackData.length} triplets, and ${threeStampPlaybackData.length} three-stamps`);
@@ -339,13 +375,13 @@ export function createTransportService(config: TransportConfig): TransportServic
       return;
     }
 
-    let releaseTime = scheduleTime + duration;
-
-    // Ensure release happens BEFORE loop end to prevent feedback loop
-    const RELEASE_SAFETY_MARGIN = 0.001;
-    const maxReleaseTime = configuredLoopEnd - RELEASE_SAFETY_MARGIN;
-    if (releaseTime >= configuredLoopEnd) {
-      releaseTime = Math.max(scheduleTime + 0.001, maxReleaseTime);
+    const releaseTime = clampReleaseToLoopBoundary(
+      scheduleTime,
+      scheduleTime + duration,
+      configuredLoopEnd
+    );
+    if (releaseTime === null) {
+      return;
     }
 
     // Schedule attack
@@ -403,7 +439,8 @@ export function createTransportService(config: TransportConfig): TransportServic
   function scheduleStamp(
     stampData: SchedulableStamp,
     timeMap: number[],
-    state: TransportState
+    state: TransportState,
+    configuredLoopEnd: number
   ): void {
     const canvasColumnIndex = stampData.column;
     const cellStartTime = getCellStartTime(timeMap, canvasColumnIndex);
@@ -412,7 +449,7 @@ export function createTransportService(config: TransportConfig): TransportServic
     const scheduleEvents = stateCallbacks.getStampScheduleEvents?.(stampData.sixteenthStampId, stampData.placement) ?? [];
 
     scheduleEvents.forEach(event => {
-      scheduleStampEvent(event, cellStartTime, stampData.row, stampData.color, state);
+      scheduleStampEvent(event, cellStartTime, stampData.row, stampData.color, state, configuredLoopEnd);
     });
   }
 
@@ -422,7 +459,8 @@ export function createTransportService(config: TransportConfig): TransportServic
   function scheduleTriplet(
     tripletData: SchedulableTriplet,
     timeMap: number[],
-    state: TransportState
+    state: TransportState,
+    configuredLoopEnd: number
   ): void {
     const canvasColumnIndex = stateCallbacks.timeToCanvas?.(tripletData.startTimeIndex, state) ?? tripletData.startTimeIndex;
     const cellStartTime = getCellStartTime(timeMap, canvasColumnIndex);
@@ -431,7 +469,7 @@ export function createTransportService(config: TransportConfig): TransportServic
     const scheduleEvents = stateCallbacks.getTripletScheduleEvents?.(tripletData.tripletStampId, tripletData.placement) ?? [];
 
     scheduleEvents.forEach(event => {
-      scheduleStampEvent(event, cellStartTime, tripletData.row, tripletData.color, state);
+      scheduleStampEvent(event, cellStartTime, tripletData.row, tripletData.color, state, configuredLoopEnd);
     });
   }
 
@@ -441,7 +479,8 @@ export function createTransportService(config: TransportConfig): TransportServic
   function scheduleThreeStamp(
     stampData: SchedulableThreeStamp,
     timeMap: number[],
-    state: TransportState
+    state: TransportState,
+    configuredLoopEnd: number
   ): void {
     // Convert time-space → canvas-space (same pattern as scheduleTriplet)
     const canvasColumnIndex = stateCallbacks.timeToCanvas?.(stampData.startTimeIndex, state) ?? stampData.startTimeIndex;
@@ -451,7 +490,7 @@ export function createTransportService(config: TransportConfig): TransportServic
     const scheduleEvents = stateCallbacks.getThreeStampScheduleEvents?.(stampData.sixteenthThreeStampId, stampData.placement) ?? [];
 
     scheduleEvents.forEach(event => {
-      scheduleStampEvent(event, cellStartTime, stampData.row, stampData.color, state);
+      scheduleStampEvent(event, cellStartTime, stampData.row, stampData.color, state, configuredLoopEnd);
     });
   }
 
@@ -463,14 +502,22 @@ export function createTransportService(config: TransportConfig): TransportServic
     cellStartTime: number,
     baseRow: number,
     color: string,
-    state: TransportState
+    state: TransportState,
+    configuredLoopEnd: number
   ): void {
     const { offsetSeconds, durationSeconds } = resolveEventTiming(
       event as TimedStampEvent,
       state.tempo
     );
     const triggerTime = cellStartTime + offsetSeconds;
-    const releaseTime = triggerTime + durationSeconds;
+    const safeReleaseTime = clampReleaseToLoopBoundary(
+      triggerTime,
+      triggerTime + durationSeconds,
+      configuredLoopEnd
+    );
+    if (safeReleaseTime === null) {
+      return;
+    }
 
     const shapeRow = baseRow + event.rowOffset;
     const shapePitch = getPitchFromRow(shapeRow, state);
@@ -496,7 +543,7 @@ export function createTransportService(config: TransportConfig): TransportServic
           eventCallbacks.emit('noteRelease', { noteId, color });
         }, time);
       }
-    }, releaseTime);
+    }, safeReleaseTime);
   }
 
   /**
@@ -800,12 +847,7 @@ export function createTransportService(config: TransportConfig): TransportServic
       eventCallbacks.on('loopingChanged', loopingHandler);
 
       // Store cleanup functions
-      eventCleanups.push(
-        () => {}, // These would be off() calls if the event system supports them
-      );
-
-      // Handle Transport stop event
-      Tone.Transport.on('stop', () => {
+      const transportStopHandler = () => {
         log.info('TransportService', "Tone.Transport 'stop' fired. Resetting playback state");
         eventCallbacks.setPlaybackState?.(false, false);
         visualCallbacks?.clearAdsrVisuals?.();
@@ -813,6 +855,21 @@ export function createTransportService(config: TransportConfig): TransportServic
           cancelAnimationFrame(playheadAnimationFrame);
           playheadAnimationFrame = null;
         }
+      };
+      Tone.Transport.on('stop', transportStopHandler);
+
+      const transportLoopEndHandler = () => {
+        if (!stateCallbacks.getState().isLooping) {
+          return;
+        }
+        clearLoopCarryoverAudio();
+        visualCallbacks?.clearAdsrVisuals?.();
+      };
+      Tone.Transport.on('loopEnd', transportLoopEndHandler);
+
+      eventCleanups.push(() => {
+        Tone.Transport.off('stop', transportStopHandler);
+        Tone.Transport.off('loopEnd', transportLoopEndHandler);
       });
 
       log.info('TransportService', 'Initialized');
@@ -992,7 +1049,7 @@ export function createTransportService(config: TransportConfig): TransportServic
       Tone.Transport.bpm.value = state.tempo;
       timeMapCalculator?.reapplyConfiguredLoopBounds(state.isLooping);
 
-      synthEngine.releaseAll();
+      hardStopPlaybackAudio();
 
       // Clear visuals
       visualCallbacks?.clearPlayheadCanvas?.();

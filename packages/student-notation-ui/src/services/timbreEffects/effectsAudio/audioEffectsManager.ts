@@ -143,6 +143,10 @@ class AudioEffectsManager {
     this.tremoloEffect.applyToVoice(voice, color);
   }
 
+  flushPlaybackTails(colors?: string[]): void {
+    this.delayEffect.flushPlaybackTails(colors);
+  }
+
   dispose(): void {
     this.vibratoEffect.dispose();
     this.tremoloEffect.dispose();

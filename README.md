@@ -7,7 +7,7 @@ Layout sizing docs: `packages/student-notation-ui/docs/layout-sizing.md`
 Generate deterministic 4:3 screenshots (1200x900 at 2x scale) for Hub preview cards:
 
 ```bash
-pnpm -w build:all
+pnpm --filter hub run build
 pnpm -w capture:previews
 ```
 
@@ -31,6 +31,7 @@ Install Playwright Chromium before running capture:
 ```bash
 pnpm install --frozen-lockfile
 pnpm exec playwright install --with-deps chromium
-pnpm -w build:all
+pnpm run check:architecture
+pnpm --filter hub run build
 pnpm -w capture:previews
 ```

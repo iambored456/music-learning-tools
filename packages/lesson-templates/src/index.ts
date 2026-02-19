@@ -151,8 +151,11 @@ export {
   ANCHORED_PITCH_MATCHING,
   FOUNDATIONS_1_MERGED,
   ALL_LESSONS,
-  // Overdub exercises
+  // Workshop templates
   SIMPLE_UNISON,
   FEELING_THIS,
-  ALL_OVERDUB_EXERCISES,
+  ALL_WORKSHOP_EXERCISES,
+  // Exercises
+  AMAZING_GRACE,
+  ALL_EXERCISES,
 } from './lessons/index.js';

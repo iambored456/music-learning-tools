@@ -1,0 +1,19 @@
+{
+  "name": "visual-metronome",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Visual metronome with animated bounce path and synthesized click sounds - standalone app",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "echo \"App typecheck delegated to @mlt/visual-metronome-ui package\""
+  },
+  "dependencies": {
+    "@mlt/visual-metronome-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5"
+  }
+}

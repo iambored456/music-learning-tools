@@ -28,30 +28,24 @@
   function handleClick(category: LessonCategory) {
     onselect(category);
   }
-
-  function handleKeydown(event: KeyboardEvent, category: LessonCategory) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onselect(category);
-    }
-  }
 </script>
 
-<nav class="category-nav" role="tablist" aria-label="Lesson categories">
-  {#each categories as cat}
-    <button
-      class="category-btn"
-      class:selected={selectedCategory === cat.id}
-      onclick={() => handleClick(cat.id)}
-      onkeydown={(e) => handleKeydown(e, cat.id)}
-      role="tab"
-      aria-selected={selectedCategory === cat.id}
-      tabindex={selectedCategory === cat.id ? 0 : -1}
-    >
-      <span class="category-icon">{cat.icon}</span>
-      <span class="category-label">{cat.label}</span>
-    </button>
-  {/each}
+<nav aria-label="Lesson categories">
+  <div class="category-nav" role="tablist" aria-orientation="vertical">
+    {#each categories as cat}
+      <button
+        class="category-btn"
+        class:selected={selectedCategory === cat.id}
+        onclick={() => handleClick(cat.id)}
+        role="tab"
+        aria-selected={selectedCategory === cat.id}
+        tabindex={selectedCategory === cat.id ? 0 : -1}
+      >
+        <span class="category-icon">{cat.icon}</span>
+        <span class="category-label">{cat.label}</span>
+      </button>
+    {/each}
+  </div>
 </nav>
 
 <style>

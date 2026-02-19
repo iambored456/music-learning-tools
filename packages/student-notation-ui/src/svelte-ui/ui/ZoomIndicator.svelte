@@ -9,13 +9,12 @@
    */
   import store from '@state/initStore.ts';
   import pitchGridViewportService from '@services/pitchGridViewportService.ts';
+  import { ViewportInfoToast } from '@mlt/ui-components';
 
-  // Reactive state using Svelte 5 runes
-  let isVisible = $state(false);
-  let zoomText = $state('Zoom: 100%');
-  let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+  let lines = $state<string[]>([]);
+  let triggerKey = $state(0);
 
-  function updateZoomDisplay() {
+  function buildZoomDisplayText(): string {
     let zoomPercent = 100;
     let visibilityText = '';
 
@@ -34,21 +33,12 @@
       }
     }
 
-    zoomText = `Zoom: ${zoomPercent}%${visibilityText}`;
+    return `Zoom: ${zoomPercent}%${visibilityText}`;
   }
 
   function show() {
-    updateZoomDisplay();
-    isVisible = true;
-
-    // Auto-hide after 2 seconds
-    if (hideTimeout !== null) {
-      clearTimeout(hideTimeout);
-    }
-    hideTimeout = setTimeout(() => {
-      isVisible = false;
-      hideTimeout = null;
-    }, 2000);
+    lines = [buildZoomDisplayText()];
+    triggerKey += 1;
   }
 
   // Subscribe to zoom events using $effect
@@ -62,42 +52,8 @@
     return () => {
       store.off('zoomIn', handleZoom);
       store.off('zoomOut', handleZoom);
-
-      if (hideTimeout !== null) {
-        clearTimeout(hideTimeout);
-      }
     };
   });
 </script>
 
-{#if isVisible}
-  <div class="zoom-indicator">
-    {zoomText}
-  </div>
-{/if}
-
-<style>
-  .zoom-indicator {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-family: monospace;
-    font-size: 12px;
-    z-index: 1000;
-    pointer-events: none;
-    animation: fadeIn 0.3s ease;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-</style>
+<ViewportInfoToast {lines} {triggerKey} />

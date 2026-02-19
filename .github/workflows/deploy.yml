@@ -1,11 +1,13 @@
 # Deploy to GitHub Pages
 #
-# This workflow builds all apps and assembles them into a single
+# This workflow builds the hub multi-page bundle and assembles it into a single
 # static site for GitHub Pages deployment.
 #
 # Output structure:
 #   /                     -> hub (launcher)
 #   /student-notation/    -> Student Notation app
+#   /singing-trainer/     -> Singing Trainer app
+#   /diatonic-compass/    -> Diatonic Compass app
 #   /amateur-music-theory/ -> Amateur Music Theory (when added)
 
 name: Deploy to GitHub Pages
@@ -50,8 +52,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build all apps
-        run: pnpm build
+      - name: Validate app/package boundaries
+        run: pnpm run check:architecture
+
+      - name: Build hub bundle
+        run: pnpm --filter hub run build
         env:
           NODE_ENV: production
           BASE_URL: /${{ github.event.repository.name }}/

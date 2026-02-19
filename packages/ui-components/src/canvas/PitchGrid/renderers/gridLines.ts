@@ -7,7 +7,6 @@
 
 import type { PitchRowData, MacrobeatGrouping, MacrobeatBoundaryStyle, TonicSign } from '@mlt/types';
 import type { CoordinateUtils } from '../types.js';
-import { getPitchClass, getLineStyleFromPitchClass } from './coordinateUtils.js';
 
 // ============================================================================
 // Types
@@ -19,6 +18,12 @@ export interface HorizontalLinesConfig {
   viewportHeight: number;
   viewportWidth: number;
   colorMode: 'color' | 'bw';
+  /**
+   * Reference pitch class for horizontal line styling.
+   * 0 = legacy C-reference behavior.
+   * Non-zero rotates the full pattern relative to tonic.
+   */
+  horizontalGridReferencePitchClass?: number | null;
 }
 
 export interface VerticalLinesConfig {
@@ -72,6 +77,93 @@ function getAnacrusisColors(): typeof DEFAULT_ANACRUSIS_COLORS {
 // Horizontal Lines (Pitch Lines)
 // ============================================================================
 
+const SKIPPED_INTERVALS_FROM_REFERENCE = new Set<number>([1, 3, 5, 9, 11]);
+const EMPHASIZED_SOLID_INTERVAL = 0; // Legacy C line
+const EMPHASIZED_DASHED_INTERVAL = 4; // Legacy E line
+const FILLED_INTERVAL = 7; // Legacy G row
+
+const BASE_C_LINE_WIDTH = 3.33;
+const EMPHASIZED_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.5;
+const LINE_STYLE_EMPHASIZED_SOLID = { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [] as number[], color: '#adb5bd' };
+const LINE_STYLE_EMPHASIZED_DASHED = { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [5, 5], color: '#adb5bd' };
+const LINE_STYLE_DEFAULT = { lineWidth: 1, dash: [] as number[], color: '#ced4da' };
+const LINE_STYLE_FILLED = { lineWidth: 1, dash: [] as number[], color: 'rgba(222, 226, 230, 0.42)' };
+
+function normalizePitchClass(value: number): number {
+  const rounded = Math.round(value);
+  return ((rounded % 12) + 12) % 12;
+}
+
+function parsePitchClassFromPitchString(pitchWithOctave: string): number | null {
+  if (typeof pitchWithOctave !== 'string' || pitchWithOctave.length === 0) return null;
+  const token = pitchWithOctave
+    .replace(/[0-9]/g, '')
+    .replace(/\u266D/g, 'b')
+    .replace(/\u266F/g, '#')
+    .trim()
+    .split('/')[0]
+    .trim();
+
+  switch (token) {
+    case 'C': return 0;
+    case 'B#': return 0;
+    case 'C#': return 1;
+    case 'Db': return 1;
+    case 'D': return 2;
+    case 'D#': return 3;
+    case 'Eb': return 3;
+    case 'E': return 4;
+    case 'Fb': return 4;
+    case 'F': return 5;
+    case 'E#': return 5;
+    case 'F#': return 6;
+    case 'Gb': return 6;
+    case 'G': return 7;
+    case 'G#': return 8;
+    case 'Ab': return 8;
+    case 'A': return 9;
+    case 'A#': return 10;
+    case 'Bb': return 10;
+    case 'B': return 11;
+    case 'Cb': return 11;
+    default:
+      return null;
+  }
+}
+
+function resolveRowPitchClass(row: PitchRowData): number | null {
+  if (typeof row.pitchClass === 'number' && Number.isFinite(row.pitchClass)) {
+    return normalizePitchClass(row.pitchClass);
+  }
+
+  if (typeof row.midi === 'number' && Number.isFinite(row.midi)) {
+    return normalizePitchClass(row.midi);
+  }
+
+  return parsePitchClassFromPitchString(row.pitch);
+}
+
+function getLineStyleFromInterval(intervalFromReference: number): {
+  lineWidth: number;
+  dash: number[];
+  color: string;
+  fillRow: boolean;
+} {
+  if (intervalFromReference === EMPHASIZED_SOLID_INTERVAL) {
+    return { ...LINE_STYLE_EMPHASIZED_SOLID, fillRow: false };
+  }
+
+  if (intervalFromReference === EMPHASIZED_DASHED_INTERVAL) {
+    return { ...LINE_STYLE_EMPHASIZED_DASHED, fillRow: false };
+  }
+
+  if (intervalFromReference === FILLED_INTERVAL) {
+    return { ...LINE_STYLE_FILLED, fillRow: true };
+  }
+
+  return { ...LINE_STYLE_DEFAULT, fillRow: false };
+}
+
 /**
  * Draw horizontal grid lines for visible rows.
  */
@@ -84,11 +176,19 @@ export function drawHorizontalLines(
   startX: number = 0,
   endX?: number
 ): void {
-  const { fullRowData, viewportHeight, viewportWidth, cellHeight } = config;
+  const {
+    fullRowData,
+    viewportHeight,
+    viewportWidth,
+    cellHeight,
+    horizontalGridReferencePitchClass,
+  } = config;
   const finalEndX = endX ?? viewportWidth;
-
-  // Pitch classes to skip (for cleaner visual appearance)
-  const pitchClassesToSkip = ['B', 'A', 'F', 'E♭/D♯', 'D♭/C♯'];
+  const referencePitchClass = (
+    typeof horizontalGridReferencePitchClass === 'number' && Number.isFinite(horizontalGridReferencePitchClass)
+      ? normalizePitchClass(horizontalGridReferencePitchClass)
+      : 0
+  );
 
   for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
     const row = fullRowData[rowIndex];
@@ -102,21 +202,22 @@ export function drawHorizontalLines(
     // Skip if outside viewport (with small buffer)
     if (y < -10 || y > viewportHeight + 10) continue;
 
-    const pitchClass = getPitchClass(row.pitch);
+    const pitchClass = resolveRowPitchClass(row);
+    if (pitchClass === null) continue;
 
-    // Skip certain pitch classes for cleaner appearance
-    if (pitchClassesToSkip.includes(pitchClass)) continue;
+    const intervalFromReference = (pitchClass - referencePitchClass + 12) % 12;
+    if (SKIPPED_INTERVALS_FROM_REFERENCE.has(intervalFromReference)) continue;
 
-    const style = getLineStyleFromPitchClass(pitchClass);
+    const style = getLineStyleFromInterval(intervalFromReference);
 
-    if (pitchClass === 'G') {
-      // G-line: Draw filled rectangle
+    if (style.fillRow) {
+      // Fill row style (legacy "G" behavior), now rotated relative to reference pitch class.
       ctx.save();
       ctx.fillStyle = style.color;
       ctx.fillRect(startX, y - cellHeight / 2, finalEndX - startX, cellHeight);
       ctx.restore();
     } else {
-      // All other lines: Draw stroke
+      // Stroke line styles (legacy C/E/default behavior), now tonic-relative when configured.
       ctx.beginPath();
       ctx.moveTo(startX, y);
       ctx.lineTo(finalEndX, y);

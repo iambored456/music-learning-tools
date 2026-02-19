@@ -1,6 +1,7 @@
 // (file path: src/components/UIControls.ts)
 import { updateResultText } from '../core/logic.ts';
 import OrderManager from './OrderManager.ts';
+import { loadPreferences } from '../services/PreferencesService.ts';
 import type { AppState } from '../state/appState.ts';
 import type { BeltOrientation } from '../types.ts';
 
@@ -168,9 +169,8 @@ export default class UIControls {
     }
   }
 
-  async _loadSavedPreferences() {
+  _loadSavedPreferences() {
     try {
-      const { loadPreferences } = await import('../services/PreferencesService.ts');
       const prefs = loadPreferences();
 
       if (prefs) {

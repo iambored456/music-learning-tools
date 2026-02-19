@@ -5,6 +5,7 @@ import { snapRing, snapChromaticAndSettleMode, snapDegreeToDiatonic } from '../c
 import { setRingAngle, rotateCoupledRings } from '../core/actions.ts';
 import { normAngle } from '../core/math.ts';
 import { getContrastColor } from '../core/color.ts';
+import { StateTracker } from '../utils/StateTracker.ts';
 import type { AppState } from '../state/appState.ts';
 import type { BeltOrientation, DisplayLabels } from '../types.ts';
 
@@ -168,9 +169,7 @@ export default class Belts {
         if (sizesCalculated) {
           this.state.belts.init = true;
           // Force a redraw after initialization to apply colors
-          import('../utils/StateTracker.ts').then(({ StateTracker }) => {
-            StateTracker.markDirty(this.state);
-          });
+          StateTracker.markDirty(this.state);
         }
       });
       return;

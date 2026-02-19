@@ -370,6 +370,11 @@ export interface PitchGridBaseProps {
   legendHighlight?: LegendHighlightConfig;
   /** Whether to render horizontal pitch grid lines */
   showHorizontalGridLines?: boolean;
+  /**
+   * Optional tonic/reference pitch class for horizontal grid line styling.
+   * 0 preserves legacy C-referenced pattern; other values rotate the full pattern.
+   */
+  horizontalGridReferencePitchClass?: number | null;
 }
 
 /**

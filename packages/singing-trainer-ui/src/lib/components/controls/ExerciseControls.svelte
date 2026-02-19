@@ -16,6 +16,7 @@
   import { resultsState, type ResultsSummary } from '@mlt/singing-trainer-core/stores/resultsState.svelte.js';
   import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
   import { chooserState } from '@mlt/singing-trainer-core/stores/chooserState.svelte.js';
+  import { exerciseChooserState } from '@mlt/singing-trainer-core/stores/exerciseChooserState.svelte.js';
   import { overdubExerciseChooserState } from '@mlt/singing-trainer-core/stores/overdubExerciseChooserState.svelte.js';
   import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { referenceAudio } from '@mlt/singing-trainer-core/services/referenceAudio.js';
@@ -77,8 +78,21 @@
   let lessonGuideDismissed = $state(false);
   let isRetryingPortion = $state(false);
 
-  // Overdub exercise state
-  const overdubIsActive = $derived(overdubExerciseState.state.isActive);
+  // Non-workshop exercise state (overdub-format exercise templates)
+  const standaloneExerciseActive = $derived(
+    overdubExerciseState.state.isActive
+      && overdubExerciseState.state.template?.category === 'exercises'
+  );
+  const standaloneExercisePlaying = $derived(
+    standaloneExerciseActive && overdubExerciseState.state.isPlaying
+  );
+  const standaloneExerciseName = $derived(
+    standaloneExerciseActive ? (overdubExerciseState.state.template?.name ?? '') : ''
+  );
+  const workshopActive = $derived(
+    overdubExerciseState.state.isActive
+      && overdubExerciseState.state.template?.category === 'workshop'
+  );
 
   // Reactive state from stores
   const isActive = $derived(exerciseState.state.isActive);
@@ -565,6 +579,9 @@
     if (isActive) {
       handleStop();
     }
+    if (standaloneExerciseActive || workshopActive) {
+      overdubExerciseState.reset();
+    }
   });
 
   /**
@@ -732,14 +749,21 @@
   /**
    * Open the lesson chooser modal
    */
-  function handleOpenChooser() {
+  function handleOpenLessonChooser() {
     chooserState.show();
   }
 
   /**
-   * Open the overdub exercise chooser modal
+   * Open the standalone exercise chooser modal
    */
   function handleOpenExerciseChooser() {
+    exerciseChooserState.show();
+  }
+
+  /**
+   * Open the workshop chooser modal
+   */
+  function handleOpenWorkshopChooser() {
     overdubExerciseChooserState.show();
   }
 
@@ -835,6 +859,23 @@
   }
 
   /**
+   * Handle starting a standalone exercise from its chooser modal.
+   */
+  export function handleExerciseStart(
+    exerciseId: string,
+    settings: Record<string, number | boolean>
+  ) {
+    const template = getTemplate(exerciseId);
+    if (!template || template.type !== 'overdub' || template.category !== 'exercises') {
+      console.error('[Exercise] Exercise template not found or invalid:', exerciseId);
+      return;
+    }
+
+    appState.setUseDegrees(false);
+    overdubExerciseState.loadExercise(exerciseId, settings);
+  }
+
+  /**
    * Clear active lesson on stop
    */
   function clearActiveLesson() {
@@ -843,15 +884,30 @@
 </script>
 
 <div class="exercise-panel">
-  <!-- Choose Lesson / Exercise Buttons -->
-  {#if !isActive && !overdubIsActive}
+  <!-- Choose Lesson / Exercise / Workshop Buttons -->
+  {#if !isActive && !standaloneExerciseActive && !workshopActive}
     <div class="chooser-buttons">
-      <button class="choose-exercise-btn" onclick={handleOpenChooser}>
+      <button class="choose-exercise-btn" onclick={handleOpenLessonChooser}>
         Choose Lesson
       </button>
       <button class="choose-exercise-btn choose-exercise-btn--exercise" onclick={handleOpenExerciseChooser}>
         Choose Exercise
       </button>
+      <button class="choose-exercise-btn choose-exercise-btn--workshop" onclick={handleOpenWorkshopChooser}>
+        Choose Workshop
+      </button>
+    </div>
+  {/if}
+
+  {#if workshopActive}
+    <div class="workshop-active-note">
+      Workshop loaded. Use the bottom workshop toolbar for playback and recording.
+    </div>
+  {/if}
+
+  {#if standaloneExerciseActive}
+    <div class="exercise-active-note">
+      Exercise loaded. Use the bottom exercise toolbar for controls.
     </div>
   {/if}
 
@@ -869,6 +925,15 @@
       {#if currentSegmentName}
         <span class="segment-name">{currentSegmentName}</span>
       {/if}
+    </div>
+  {/if}
+
+  {#if standaloneExerciseActive}
+    <div class="active-lesson-info">
+      <span class="lesson-name">{standaloneExerciseName}</span>
+      <span class="segment-name">
+        {standaloneExercisePlaying ? 'Playing' : 'Ready to start'}
+      </span>
     </div>
   {/if}
 
@@ -939,10 +1004,11 @@
         </div>
       {/if}
     {/if}
+
   </div>
 
   <!-- Results Display (after completion) -->
-  {#if hasResults && !isActive}
+  {#if hasResults && !isActive && !standaloneExerciseActive && !workshopActive}
     <div class="exercise-results">
       <h4 class="results-title">Results</h4>
       <div class="results-summary">
@@ -997,11 +1063,12 @@
 
   .chooser-buttons {
     display: flex;
+    flex-direction: column;
     gap: var(--spacing-sm);
   }
 
   .choose-exercise-btn {
-    flex: 1;
+    width: 100%;
     padding: var(--spacing-md);
     font-size: var(--font-size-md);
     font-weight: 600;
@@ -1023,6 +1090,34 @@
 
   .choose-exercise-btn--exercise:hover {
     background-color: #574a7a;
+  }
+
+  .choose-exercise-btn--workshop {
+    background-color: #236b4d;
+  }
+
+  .choose-exercise-btn--workshop:hover {
+    background-color: #1a5139;
+  }
+
+  .workshop-active-note {
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(95, 149, 255, 0.45);
+    background: rgba(95, 149, 255, 0.16);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    line-height: 1.35;
+  }
+
+  .exercise-active-note {
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(35, 107, 77, 0.5);
+    background: rgba(35, 107, 77, 0.18);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    line-height: 1.35;
   }
 
   .speaking-pitch-anchor {

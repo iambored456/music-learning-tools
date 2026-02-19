@@ -42,6 +42,9 @@ importers:
       '@mlt/student-notation-ui':
         specifier: workspace:*
         version: link:../../packages/student-notation-ui
+      '@mlt/visual-metronome-ui':
+        specifier: workspace:*
+        version: link:../../packages/visual-metronome-ui
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -117,6 +120,19 @@ importers:
       vite:
         specifier: ^6.1.1
         version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
+
+  apps/visual-metronome:
+    dependencies:
+      '@mlt/visual-metronome-ui':
+        specifier: workspace:*
+        version: link:../../packages/visual-metronome-ui
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.3.5
+        version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
   packages/audio-samples:
     devDependencies:
@@ -283,6 +299,9 @@ importers:
       '@mlt/talking-avatar':
         specifier: workspace:*
         version: link:../talking-avatar
+      '@mlt/tanpura-drone':
+        specifier: workspace:*
+        version: link:../tanpura-drone
       '@mlt/types':
         specifier: workspace:*
         version: link:../types
@@ -332,6 +351,9 @@ importers:
       '@mlt/student-notation-engine':
         specifier: workspace:*
         version: link:../student-notation-engine
+      '@mlt/tanpura-drone':
+        specifier: workspace:*
+        version: link:../tanpura-drone
       '@mlt/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -388,6 +410,9 @@ importers:
       '@mlt/types':
         specifier: workspace:*
         version: link:../types
+      '@mlt/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
@@ -426,6 +451,12 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  packages/tanpura-drone:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   packages/types:
     devDependencies:
       typescript:
@@ -461,6 +492,12 @@ importers:
         version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
       typescript:
         specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/visual-metronome-ui:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
 
 packages:

@@ -20,6 +20,7 @@ type Section = 'four' | 'three';
 declare global {
   interface Window {
     __sixteenthStampLayoutDebugRegistered?: boolean;
+    __SN_DEBUG_SIXTEENTH_LAYOUT?: boolean;
     logSixteenthStampLayoutComparison?: () => void;
   }
 }
@@ -27,6 +28,30 @@ declare global {
 const round = (value: number): number => Number(value.toFixed(2));
 const FOUR_CONTAINER_ID = 'sixteenth-stamps-four-toolbar-container';
 const THREE_CONTAINER_ID = 'sixteenth-stamps-three-toolbar-container';
+
+function isSixteenthStampLayoutDebugEnabled(): boolean {
+  try {
+    if (Boolean(window.__SN_DEBUG_SIXTEENTH_LAYOUT)) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (new URLSearchParams(window.location.search).get('debugSixteenthLayout') === '1') {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    return localStorage.getItem('sn:debugSixteenthLayout') === '1';
+  } catch {
+    return false;
+  }
+}
 
 const withSectionVisible = <T>(section: Section, callback: () => T): T => {
   const fourContainer = document.getElementById(FOUR_CONTAINER_ID) as HTMLElement | null;
@@ -151,7 +176,11 @@ const logSummary = (snapshots: LayoutSnapshot[]): void => {
 };
 
 export function registerSixteenthStampLayoutDebug(): void {
-  if (typeof window === 'undefined' || window.__sixteenthStampLayoutDebugRegistered) {
+  if (
+    typeof window === 'undefined'
+    || window.__sixteenthStampLayoutDebugRegistered
+    || !isSixteenthStampLayoutDebugEnabled()
+  ) {
     return;
   }
 

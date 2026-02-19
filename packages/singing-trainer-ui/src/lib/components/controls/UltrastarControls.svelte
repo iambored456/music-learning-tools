@@ -31,6 +31,7 @@
   // Video linking state
   let videoUrlInput = $state('');
   let videoLinkError = $state<string | null>(null);
+  const videoLinkInputId = 'ultrastar-video-link-input';
 
   // Scale analysis state
   let showScaleModal = $state(false);
@@ -331,9 +332,10 @@
         </button>
       {:else}
         <div class="video-link-form">
-          <label class="video-link-label">Link YouTube Video</label>
+          <label class="video-link-label" for={videoLinkInputId}>Link YouTube Video</label>
           <div class="video-link-row">
             <input
+              id={videoLinkInputId}
               type="text"
               class="video-link-input"
               placeholder="Paste YouTube URL or video ID"
@@ -485,7 +487,9 @@
   .song-artist {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
-  }\n.analyze-btn {
+  }
+
+  .analyze-btn {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-sm);

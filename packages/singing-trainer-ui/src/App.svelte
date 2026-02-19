@@ -20,10 +20,15 @@
     SpeakingPitchPanel,
     DifficultySettings,
     OverdubBuilderToolbar,
+    ExerciseBuilderToolbar,
     InputDecibelMeter,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
-  import { ExerciseChooserModal, OverdubExerciseChooserModal } from './lib/components/chooser/index.js';
+  import {
+    ExerciseChooserModal,
+    OverdubExerciseChooserModal,
+    SimpleExerciseChooserModal,
+  } from './lib/components/chooser/index.js';
   import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { CalibrationWizard } from './lib/calibration/index.js';
   import { handoffState } from '@mlt/singing-trainer-core/stores/handoffState.svelte.js';
@@ -53,7 +58,10 @@
   }
 
   // Exercise Controls component reference
-  let exerciseControlsRef: { handleLessonStart: (lessonId: string, settings: Record<string, number | boolean>) => void } | undefined;
+  let exerciseControlsRef: {
+    handleLessonStart: (lessonId: string, settings: Record<string, number | boolean>) => void;
+    handleExerciseStart: (exerciseId: string, settings: Record<string, number | boolean>) => void;
+  } | undefined;
 
   function openCalibrationWizard() {
     showCalibrationWizard = true;
@@ -70,7 +78,12 @@
   // Reactive state for Ultrastar
   const isUltrastarActive = $derived(ultrastarState.state.isActive);
   const showOverdubBuilderToolbar = $derived(
-    openSection === 5 || overdubExerciseState.state.isActive
+    overdubExerciseState.state.isActive
+      && overdubExerciseState.state.template?.category === 'workshop'
+  );
+  const showExerciseBuilderToolbar = $derived(
+    overdubExerciseState.state.isActive
+      && overdubExerciseState.state.template?.category === 'exercises'
   );
 
   // Register performance complete callbacks
@@ -180,9 +193,16 @@
   }
 
   /**
-   * Handle starting an overdub exercise from the exercise chooser modal
+   * Handle starting an exercise from the exercise chooser modal
    */
   function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
+    exerciseControlsRef?.handleExerciseStart(exerciseId, settings);
+  }
+
+  /**
+   * Handle starting a workshop template from the workshop chooser modal
+   */
+  function handleWorkshopStart(exerciseId: string, settings: Record<string, number | boolean>) {
     overdubExerciseState.loadExercise(exerciseId, settings);
   }
 </script>
@@ -255,25 +275,13 @@
       </details>
 
       <details class="settings-details" open={openSection === 5} ontoggle={handleToggle(5)}>
-        <summary class="settings-summary">Overdub Builder</summary>
-        <div class="settings-content">
-          <p class="builder-toolbar-hint">
-            Builder controls are in the bottom toolbar.
-          </p>
-          <p class="builder-toolbar-hint builder-toolbar-hint--subtle">
-            Keep this section open to pin the toolbar while not in an exercise.
-          </p>
-        </div>
-      </details>
-
-      <details class="settings-details" open={openSection === 6} ontoggle={handleToggle(6)}>
-        <summary class="settings-summary">Exercises &amp; Lessons</summary>
+        <summary class="settings-summary">Lessons, Exercises, Workshop</summary>
         <div class="settings-content">
           <ExerciseControls bind:this={exerciseControlsRef} />
         </div>
       </details>
 
-      <details class="settings-details" open={openSection === 7} ontoggle={handleToggle(7)}>
+      <details class="settings-details" open={openSection === 6} ontoggle={handleToggle(6)}>
         <summary class="settings-summary">UltraStar Karaoke</summary>
         <div class="settings-content">
           <UltrastarControls />
@@ -306,6 +314,7 @@
       <div class="canvas-main">
         <SingingCanvas />
       </div>
+      <ExerciseBuilderToolbar visible={showExerciseBuilderToolbar} />
       <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
     </section>
   </main>
@@ -316,8 +325,11 @@
   <!-- Lesson Chooser Modal -->
   <ExerciseChooserModal onstart={handleLessonStart} />
 
-  <!-- Overdub Exercise Chooser Modal -->
-  <OverdubExerciseChooserModal onstart={handleExerciseStart} />
+  <!-- Exercise Chooser Modal -->
+  <SimpleExerciseChooserModal onstart={handleExerciseStart} />
+
+  <!-- Workshop Chooser Modal -->
+  <OverdubExerciseChooserModal onstart={handleWorkshopStart} />
 
   <!-- Results Modal -->
   <ResultsModal onRetry={handleResultsRetry} onClose={handleResultsClose} />
@@ -540,18 +552,6 @@
     padding: var(--spacing-sm);
     padding-top: var(--spacing-md);
     width: 100%;
-  }
-
-  .builder-toolbar-hint {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    line-height: 1.35;
-  }
-
-  .builder-toolbar-hint--subtle {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
   }
 
   @media (max-width: 900px) {

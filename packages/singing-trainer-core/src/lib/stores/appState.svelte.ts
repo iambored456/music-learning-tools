@@ -4,6 +4,16 @@
  * Main application state for the Singing Trainer.
  */
 
+import {
+  DEFAULT_TANPURA_STRING_BEHAVIORS,
+  DEFAULT_TANPURA_TUNING_BEHAVIOR,
+  normalizeTanpuraStringBehavior,
+  normalizeTanpuraTuningBehavior,
+  type DroneEngine,
+  type TanpuraStringBehavior,
+  type TanpuraTuningBehavior,
+} from '@mlt/tanpura-drone';
+
 export type VisualizationMode = 'stationary' | 'highway';
 export type LyricLabelMode = 'auto' | 'fixed';
 export type NoteColorMode = 'green' | 'pitchColor';
@@ -32,6 +42,9 @@ export interface DroneState {
   isPlaying: boolean;
   octave: number;
   volume: number;
+  engine: DroneEngine;
+  tuning: TanpuraTuningBehavior;
+  strings: TanpuraStringBehavior[];
   modeEnabled: boolean;
   selectedMode: string;
   focusLegend: boolean;
@@ -66,6 +79,9 @@ export interface AppState {
   lyricLabelFixedPx: number;
   noteColorMode: NoteColorMode;
   beatLineMode: BeatLineMode;
+  showBeatGridLines: boolean;
+  showMeasureGridLines: boolean;
+  showHorizontalGridLines: boolean;
   overdubMicTrailColorMode: MicTrailColorMode;
   judgementLineCircleRadiusPx: number;
   micTrailCircleRadiusPx: number;
@@ -81,19 +97,41 @@ const DEFAULT_STATE: AppState = {
   showAccidentals: true,
   pitchHighlightEnabled: true,
   yAxisRange: { minMidi: 40, maxMidi: 72 }, // E2 to C5
-  drone: { isPlaying: false, octave: 3, volume: -12, modeEnabled: false, selectedMode: '1', focusLegend: false, showDegrees: false },
+  drone: {
+    isPlaying: false,
+    octave: 3,
+    volume: -12,
+    engine: 'tanpura',
+    tuning: { ...DEFAULT_TANPURA_TUNING_BEHAVIOR },
+    strings: DEFAULT_TANPURA_STRING_BEHAVIORS.map((item) => ({ ...item })),
+    modeEnabled: false,
+    selectedMode: '1',
+    focusLegend: false,
+    showDegrees: false,
+  },
   lyricLabelMode: 'auto',
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
   noteColorMode: 'green',
   beatLineMode: 'bar',
+  showBeatGridLines: false,
+  showMeasureGridLines: true,
+  showHorizontalGridLines: true,
   overdubMicTrailColorMode: 'rainbow',
-  judgementLineCircleRadiusPx: 16,
-  micTrailCircleRadiusPx: 9.5,
+  judgementLineCircleRadiusPx: 12,
+  micTrailCircleRadiusPx: 5,
 };
 
 function createAppState() {
   let state = $state<AppState>({ ...DEFAULT_STATE });
+
+  function syncLegacyBeatLineMode(): void {
+    if (state.showMeasureGridLines) {
+      state.beatLineMode = state.showBeatGridLines ? 'beat' : 'bar';
+      return;
+    }
+    state.beatLineMode = state.showBeatGridLines ? 'beat' : 'none';
+  }
 
   return {
     get state() {
@@ -172,6 +210,35 @@ function createAppState() {
 
     setBeatLineMode(mode: BeatLineMode) {
       state.beatLineMode = mode;
+      switch (mode) {
+        case 'none':
+          state.showBeatGridLines = false;
+          state.showMeasureGridLines = false;
+          break;
+        case 'bar':
+          state.showBeatGridLines = false;
+          state.showMeasureGridLines = true;
+          break;
+        case 'beat':
+        default:
+          state.showBeatGridLines = true;
+          state.showMeasureGridLines = true;
+          break;
+      }
+    },
+
+    setShowBeatGridLines(show: boolean) {
+      state.showBeatGridLines = show;
+      syncLegacyBeatLineMode();
+    },
+
+    setShowMeasureGridLines(show: boolean) {
+      state.showMeasureGridLines = show;
+      syncLegacyBeatLineMode();
+    },
+
+    setShowHorizontalGridLines(show: boolean) {
+      state.showHorizontalGridLines = show;
     },
 
     setOverdubMicTrailColorMode(mode: MicTrailColorMode) {
@@ -226,6 +293,44 @@ function createAppState() {
 
     setDroneVolume(volume: number) {
       state.drone = { ...state.drone, volume };
+    },
+
+    setDroneEngine(engine: DroneEngine) {
+      state.drone = { ...state.drone, engine };
+    },
+
+    setDroneTuning(tuning: Partial<TanpuraTuningBehavior>) {
+      state.drone = {
+        ...state.drone,
+        tuning: normalizeTanpuraTuningBehavior({
+          ...state.drone.tuning,
+          ...tuning,
+        }),
+      };
+    },
+
+    resetDroneTuning() {
+      state.drone = {
+        ...state.drone,
+        tuning: { ...DEFAULT_TANPURA_TUNING_BEHAVIOR },
+      };
+    },
+
+    setDroneString(index: number, patch: Partial<TanpuraStringBehavior>) {
+      if (index < 0 || index >= state.drone.strings.length) return;
+      state.drone = {
+        ...state.drone,
+        strings: state.drone.strings.map((item, i) =>
+          i === index ? normalizeTanpuraStringBehavior({ ...item, ...patch }, item) : item
+        ),
+      };
+    },
+
+    resetDroneStrings() {
+      state.drone = {
+        ...state.drone,
+        strings: DEFAULT_TANPURA_STRING_BEHAVIORS.map((item) => ({ ...item })),
+      };
     },
 
     setDroneModeEnabled(enabled: boolean) {

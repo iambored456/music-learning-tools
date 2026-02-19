@@ -149,25 +149,56 @@ class DelayAudioEffect {
 
   disableForColor(color: string): void {
     this.updateParameters({ time: 0, feedback: 0, wet: 0 }, color);
-    const delayInstance = this.delayInstances.get(color);
-    if (delayInstance) {
-      try {
-        delayInstance._crossFade?.dispose();
-        delayInstance.dispose();
-      } finally {
-        this.delayInstances.delete(color);
+    this.disposeDelayInstance(color);
+  }
+
+  flushPlaybackTails(colors?: string[]): void {
+    const targets = Array.isArray(colors) && colors.length > 0
+      ? Array.from(new Set(colors))
+      : Array.from(this.delayInstances.keys());
+
+    targets.forEach(color => {
+      this.rebuildDelayInstance(color);
+    });
+  }
+
+  private rebuildDelayInstance(color: string): void {
+    const hadDelay = this.disposeDelayInstance(color);
+    const settings = this.currentSettings.get(color);
+
+    if (settings && settings.wet > 0) {
+      const delayInstance = this.createDelayInstance(settings.time, settings.feedback, settings.wet);
+      if (delayInstance) {
+        this.delayInstances.set(color, delayInstance);
       }
+    }
+
+    if (hadDelay || (settings?.wet ?? 0) > 0) {
+      getSynthEngine()?.updateSynthForColor?.(color);
     }
   }
 
+  private disposeDelayInstance(color: string): boolean {
+    const delayInstance = this.delayInstances.get(color);
+    if (!delayInstance) {
+      return false;
+    }
+
+    try {
+      delayInstance._crossFade?.dispose();
+      delayInstance.dispose();
+    } catch (error) {
+      logger.warn('DelayAudioEffect', `Failed to dispose delay for ${color}`, error, 'audio');
+    } finally {
+      this.delayInstances.delete(color);
+    }
+
+    return true;
+  }
+
   dispose(): void {
-    this.delayInstances.forEach((delay, color) => {
-      try {
-        delay._crossFade?.dispose();
-        delay.dispose();
-      } catch (error) {
-        logger.warn('DelayAudioEffect', `Failed to dispose delay for ${color}`, error, 'audio');
-      }
+    Array.from(this.delayInstances.keys()).forEach(color => {
+      this.disposeDelayInstance(color);
     });
 
     this.currentSettings.clear();

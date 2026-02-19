@@ -14,4 +14,6 @@ export { default as ThemeSettings } from './ThemeSettings.svelte';
 export { default as DifficultySettings } from './DifficultySettings.svelte';
 export { default as OverdubControls } from './OverdubControls.svelte';
 export { default as OverdubBuilderToolbar } from './OverdubBuilderToolbar.svelte';
+export { default as ExerciseBottomControls } from './ExerciseBottomControls.svelte';
+export { default as ExerciseBuilderToolbar } from './ExerciseBuilderToolbar.svelte';
 export { default as InputDecibelMeter } from './InputDecibelMeter.svelte';

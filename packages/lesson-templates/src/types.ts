@@ -16,7 +16,7 @@ export type LessonType = 'pitch-matching' | 'interval' | 'rhythm' | 'melody' | '
 export type DifficultyLevel = 1 | 2 | 3;
 
 /** Lesson categories for browsing/filtering */
-export type LessonCategory = 'foundations' | 'beginning' | 'overdub-exercises';
+export type LessonCategory = 'foundations' | 'beginning' | 'exercises' | 'workshop';
 
 // ============================================================================
 // Settings Schema Types
@@ -329,6 +329,8 @@ export interface ExerciseNote {
   pitchName: string;
   /** Optional lyric syllable for this note */
   lyric?: string;
+  /** Optional per-note wait-gate override for input voice notes */
+  waitForInput?: boolean;
 }
 
 /** A voice within an overdub exercise */
@@ -369,6 +371,8 @@ export interface OverdubExerciseConfig {
   tonalCenter?: { pitchClass: string; mode?: string };
   /** Count-in beats before exercise starts */
   countInBeats?: number;
+  /** Enable wait-gate by default for active input notes */
+  waitForInput?: boolean;
 }
 
 /** Overdub exercise template */
