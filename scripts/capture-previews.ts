@@ -155,7 +155,37 @@ const TARGETS: CaptureTarget[] = [
     distDir: 'apps/hub/dist',
     route: '/visual-metronome/',
     waitFor: '#page',
-    delayMs: 350,
+    postReadyScript: `
+(() => {
+  const orbitButton = document.querySelector('button[data-mode="orbit"]');
+  if (orbitButton instanceof HTMLButtonElement) {
+    orbitButton.click();
+  }
+
+  const microbeatFour = document.querySelector('#microbeats-toggle button[data-value="4"]');
+  if (microbeatFour instanceof HTMLButtonElement) {
+    microbeatFour.click();
+  }
+
+  const guideToggle = document.getElementById('toggle-path');
+  if (guideToggle instanceof HTMLButtonElement && /show/i.test(guideToggle.textContent ?? '')) {
+    guideToggle.click();
+  }
+
+  const bpmSelect = document.getElementById('bpm-select');
+  if (bpmSelect instanceof HTMLSelectElement) {
+    bpmSelect.value = '96';
+    bpmSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+})();
+`,
+    postReadyWaitForFunction: `
+(() => {
+  const title = document.getElementById('visual-mode-title');
+  return title?.textContent?.includes('Orbit Pulse') ?? false;
+})()
+`,
+    delayMs: 300,
   },
 ];
 

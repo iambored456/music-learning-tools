@@ -219,6 +219,13 @@ body {
   color: #d5e8f8;
 }
 
+.control-hint {
+  margin: 0.1rem 0 0;
+  color: #95b3c8;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .control-row {
   display: flex;
   gap: 0.5rem;
