@@ -9,12 +9,14 @@
   border: 2px solid var(--c-border) !important;
   color: var(--c-text-muted) !important;
   font-size: clamp(0.85rem, 1.8vw, 1.125rem);
+  font-size: clamp(0.8rem, min(22cqi, 28cqb), 1.65rem);
   font-weight: 600;
   box-sizing: border-box;
   flex: 1 1 auto;
   width: 100%;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   text-align: center;
@@ -22,6 +24,10 @@
   align-items: center;
   justify-content: center;
   padding: clamp(0.15rem, 0.4vw, 0.35rem);
+  padding: clamp(1px, min(2.2cqi, 2.2cqb), 6px);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
   user-select: none;
   transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
   opacity: 0.5 !important;
@@ -73,15 +79,34 @@
   filter: brightness(0.95);
 }
 
+#flat-toggle-btn,
+#sharp-toggle-btn {
+  font-size: clamp(0.95rem, min(24cqi, 30cqb), 1.8rem);
+}
+
+#hz-toggle-btn {
+  font-size: clamp(0.72rem, min(19cqi, 24cqb), 1.35rem);
+  letter-spacing: 0.01em;
+}
+
+#spn-octave-toggle-btn {
+  --octave-label-size: clamp(0.72rem, min(18cqi, 24cqb), 1.35rem);
+  --octave-digit-scale: 0.72;
+  font-size: clamp(0.72rem, min(18cqi, 24cqb), 1.35rem);
+}
+
 .octave-toggle-btn .octave-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.1em;
+  gap: 0.08em;
   white-space: nowrap;
+  line-height: 1;
+  font-size: var(--octave-label-size, 1em);
 }
 
 .octave-toggle-btn .octave-digit {
   font-weight: 600;
+  font-size: calc(var(--octave-label-size, 1em) * var(--octave-digit-scale, 0.72));
   transition: opacity 0.15s ease, color 0.15s ease;
   display: inline-block;
 }

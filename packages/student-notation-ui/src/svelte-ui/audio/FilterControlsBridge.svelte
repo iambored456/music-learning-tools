@@ -39,6 +39,23 @@
   let verticalBlendSlider: HTMLElement | null = null;
   let verticalBlendTrack: HTMLElement | null = null;
 
+  function updateMixDependentControlState(mix: number) {
+    if (!container) return;
+    const isMixInactive = mix <= 0;
+
+    container.classList.toggle('mix-inactive', isMixInactive);
+
+    if (blendThumb) {
+      blendThumb.setAttribute('aria-disabled', String(isMixInactive));
+      blendThumb.tabIndex = isMixInactive ? -1 : 0;
+    }
+
+    if (cutoffThumb) {
+      cutoffThumb.setAttribute('aria-disabled', String(isMixInactive));
+      cutoffThumb.tabIndex = isMixInactive ? -1 : 0;
+    }
+  }
+
   function getFilterState(): FilterSettings | null {
     if (!currentColor) return null;
     const timbre = store.state.timbres[currentColor];
@@ -53,9 +70,15 @@
 
   function updateFromStore() {
     const filter = getFilterState();
-    if (!filter) return;
+    if (!filter) {
+      if (container) {
+        container.classList.remove('mix-inactive');
+      }
+      return;
+    }
 
     const { cutoff = 16, blend = 0, mix = 0 } = filter;
+    updateMixDependentControlState(mix);
 
     if (blendThumb && blendTrack) {
       const blendPercent = (BLEND_MAX - blend) / (BLEND_MAX - BLEND_MIN);

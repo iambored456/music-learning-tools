@@ -248,6 +248,7 @@ class ClefViewportController {
   private rangeCount: HTMLElement | null = null;
   private fullRangeButton: HTMLElement | null = null;
   private trebleButton: HTMLElement | null = null;
+  private grandStaffButton: HTMLElement | null = null;
   private altoButton: HTMLElement | null = null;
   private bassButton: HTMLElement | null = null;
   private voice1Button: HTMLElement | null = null;
@@ -268,6 +269,7 @@ class ClefViewportController {
     this.rangeCount = document.getElementById('clef-range-count');
     this.fullRangeButton = document.getElementById('clef-full-range-button');
     this.trebleButton = document.getElementById('clef-treble-button');
+    this.grandStaffButton = document.getElementById('clef-grandstaff-button');
     this.altoButton = document.getElementById('clef-alto-button');
     this.bassButton = document.getElementById('clef-bass-button');
     this.voice1Button = document.getElementById('clef-voice1-button');
@@ -313,6 +315,9 @@ class ClefViewportController {
     }
     if (this.trebleButton) {
       this.trebleButton.addEventListener('click', () => this.applyPresetView('treble'));
+    }
+    if (this.grandStaffButton) {
+      this.grandStaffButton.addEventListener('click', () => this.applyPresetView('grandstaff'));
     }
     if (this.altoButton) {
       this.altoButton.addEventListener('click', () => this.applyPresetView('alto'));
@@ -441,11 +446,21 @@ class ClefViewportController {
       });
     };
 
+    const trebleRange = snapToLadder(resolvePresetFromToneNotes('G5', 'C4'));
+    const bassRange = snapToLadder(resolvePresetFromToneNotes('C4', 'F2'));
+    const grandStaffRange = (trebleRange && bassRange)
+      ? {
+          topIndex: Math.min(trebleRange.topIndex, bassRange.bottomIndex),
+          bottomIndex: Math.max(trebleRange.topIndex, bassRange.bottomIndex)
+        }
+      : null;
+
     this.presetRanges = {
       full: { topIndex: 0, bottomIndex: Math.max(0, this.masterOptions.length - 1) },
-      treble: snapToLadder(resolvePresetFromToneNotes('G5', 'C4')),
+      treble: trebleRange,
+      grandstaff: grandStaffRange,
       alto: snapToLadder(resolvePresetFromToneNotes('A4', 'D3')),
-      bass: snapToLadder(resolvePresetFromToneNotes('C4', 'F2')),
+      bass: bassRange,
       voice1: snapToLadder(resolvePresetFromToneNotes('A5', 'A3')),  // Voice I
       voice2: snapToLadder(resolvePresetFromToneNotes('C5', 'C3')),  // Voice II
       voice3: snapToLadder(resolvePresetFromToneNotes('E4', 'E2'))   // Voice III

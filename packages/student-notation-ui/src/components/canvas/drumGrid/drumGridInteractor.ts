@@ -274,15 +274,20 @@ function createVolumeSlider(): void {
     volumeButton.className = 'drum-volume-button';
     volumeButton.type = 'button';
     volumeButton.setAttribute('aria-label', 'Drum volume');
-    volumeButton.innerHTML = `
-      <span class="drum-volume-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" focusable="false" role="img">
-          <path d="M3 10v4h4l5 5V5L7 10H3z" fill="currentColor"></path>
-          <path d="M16 8.82v6.36c1.18-.85 2-2.22 2-3.64s-.82-2.79-2-3.64z" fill="currentColor"></path>
-          <path d="M16 4v2c2.9 1.06 5 3.86 5 7s-2.1 5.94-5 7v2c4.01-1.15 7-4.97 7-9s-2.99-7.85-7-9z" fill="currentColor"></path>
-        </svg>
-      </span>
-    `;
+    const volumeIconSpan = document.createElement('span');
+    volumeIconSpan.className = 'drum-volume-icon';
+    volumeIconSpan.setAttribute('aria-hidden', 'true');
+
+    // Reuse the already-resolved main volume icon URL to avoid relative-path breakage.
+    const mainVolumeImg = document.querySelector<HTMLImageElement>('#volume-icon-button img');
+    const volumeIconSrc = mainVolumeImg?.currentSrc || mainVolumeImg?.src || 'assets/icons/volume.svg';
+
+    const volumeIconImg = document.createElement('img');
+    volumeIconImg.src = volumeIconSrc;
+    volumeIconImg.alt = '';
+
+    volumeIconSpan.appendChild(volumeIconImg);
+    volumeButton.appendChild(volumeIconSpan);
     volumeButton.style.gridRow = '1 / span 3';
     volumeButton.style.gridColumn = '1';
     leftContentEl.appendChild(volumeButton);

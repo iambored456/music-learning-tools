@@ -34,7 +34,7 @@ interface _DegreeModeToggleElements {
   flatBtn: HTMLElement | null;
   sharpBtn: HTMLElement | null;
   frequencyBtn: HTMLElement | null;
-  focusColoursToggle: HTMLInputElement | null;
+  focusColoursToggle: HTMLButtonElement | null;
 }
 
 type DegreeDisplayMode = 'off' | 'diatonic' | 'modal';
@@ -42,6 +42,32 @@ type DegreeDisplayMode = 'off' | 'diatonic' | 'modal';
 let lastDegreeMode: Exclude<DegreeDisplayMode, 'off'> = 'diatonic';
 
 const SIXTEENTH_FULL_STAMP_ID = 15;
+
+const shouldDebugFocusColours = (): boolean => {
+  if (typeof window === 'undefined') {return true;}
+  const win = window as Window & { __focusColoursDebug?: boolean };
+  // Debug logging is ON by default; set window.__focusColoursDebug = false to silence.
+  return win.__focusColoursDebug !== false;
+};
+
+const debugFocusColours = (message: string, data?: unknown): void => {
+  if (!shouldDebugFocusColours()) {return;}
+  if (data === undefined) {
+    console.log(`[FocusColours][UI] ${message}`);
+    return;
+  }
+  console.log(`[FocusColours][UI] ${message}`, data);
+};
+
+const getLiveFocusColoursToggle = (
+  cachedButton: HTMLButtonElement | null
+): HTMLButtonElement | null => {
+  if (cachedButton && cachedButton.isConnected) {
+    return cachedButton;
+  }
+  const live = document.getElementById('focus-colours-toggle');
+  return live instanceof HTMLButtonElement ? live : null;
+};
 
 /**
  * Checks if there are any tonic shapes placed on the canvas
@@ -232,7 +258,14 @@ export function initToolSelectors() {
   const sharpBtn = cachedElements['sharpBtn'];
   const frequencyBtn = cachedElements['frequencyBtn'];
   const octaveToggleBtn = cachedElements['octaveLabelBtn'];
-  const focusColoursToggle = cachedElements['focusColoursToggle'] as HTMLInputElement | null;
+  const cachedFocusColoursToggle = cachedElements['focusColoursToggle'] as HTMLButtonElement | null;
+  const focusColoursToggle = getLiveFocusColoursToggle(cachedFocusColoursToggle);
+  debugFocusColours('Resolved focus toggle element', {
+    cachedFound: Boolean(cachedFocusColoursToggle),
+    cachedConnected: Boolean(cachedFocusColoursToggle?.isConnected),
+    resolvedFound: Boolean(focusColoursToggle),
+    resolvedTag: focusColoursToggle?.tagName ?? null
+  });
 
   const getPreferredDegreeMode = (): Exclude<DegreeDisplayMode, 'off'> => {
     if (degreeModeModalButton?.classList.contains('active')) {
@@ -840,19 +873,66 @@ export function initToolSelectors() {
     octaveToggleBtn.classList.toggle('active', showOctaveLabels);
     octaveToggleBtn.setAttribute('aria-pressed', showOctaveLabels ? 'true' : 'false');
   };
-  if (focusColoursToggle) {focusColoursToggle.addEventListener('change', () => {
+  const syncFocusColoursUiState = (focusColoursEnabled: boolean): void => {
+    const liveFocusButton = getLiveFocusColoursToggle(cachedFocusColoursToggle);
+    if (!liveFocusButton) {return;}
+    liveFocusButton.classList.toggle('active', focusColoursEnabled);
+    liveFocusButton.setAttribute('aria-pressed', focusColoursEnabled ? 'true' : 'false');
+  };
+
+  const handleFocusColoursToggleClick = (source: 'direct' | 'delegated'): void => {
+    const tonicShapesPresent = hasTonicShapesOnCanvas();
+    debugFocusColours(`Focus button clicked via ${source}`, {
+      currentState: store.state.focusColours,
+      tonicShapesPresent
+    });
+
     // If turning on Focus Colours, check for tonic shapes
-    if (!store.state.focusColours && !hasTonicShapesOnCanvas()) {
+    if (!store.state.focusColours && !tonicShapesPresent) {
       notificationSystem.alert(
         'Please place a tonal center on the canvas before enabling focus colours.',
         'Tonal Center Required'
       );
-      // Reset the checkbox since we're not proceeding
-      focusColoursToggle.checked = false;
+      syncFocusColoursUiState(false);
+      debugFocusColours('Blocked enabling focus colours: no tonic shapes found');
+      getLiveFocusColoursToggle(cachedFocusColoursToggle)?.blur();
       return;
     }
     store.toggleFocusColours();
-  });}
+    debugFocusColours('toggleFocusColours invoked', { nextState: store.state.focusColours });
+    getLiveFocusColoursToggle(cachedFocusColoursToggle)?.blur();
+  };
+
+  if (focusColoursToggle) {
+    focusColoursToggle.style.pointerEvents = 'auto';
+    focusColoursToggle.dataset['focusDirectBound'] = 'true';
+    focusColoursToggle.addEventListener('pointerdown', () => {
+      debugFocusColours('pointerdown received on focus button');
+    });
+    focusColoursToggle.addEventListener('click', () => {
+      handleFocusColoursToggleClick('direct');
+    });
+  } else {
+    debugFocusColours('Direct focus button binding skipped: button not found');
+  }
+
+  const focusDebugWindow = window as Window & { __focusColoursDelegatedBound?: boolean };
+  if (!focusDebugWindow.__focusColoursDelegatedBound) {
+    document.addEventListener('click', (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const focusButton = target?.closest?.('#focus-colours-toggle');
+      if (!focusButton) {return;}
+      const directBound = (focusButton as HTMLElement).dataset['focusDirectBound'] === 'true';
+      debugFocusColours('Delegated click captured for #focus-colours-toggle', {
+        targetTag: target?.tagName ?? null,
+        directBound
+      });
+      if (directBound) {return;}
+      handleFocusColoursToggleClick('delegated');
+    }, true);
+    focusDebugWindow.__focusColoursDelegatedBound = true;
+    debugFocusColours('Delegated focus button listener attached');
+  }
 
   // --- UI State Change Listeners (Visual Feedback) ---
   store.on('toolChanged', ({ newTool }: ToolChangedPayload = {}) => {
@@ -935,8 +1015,14 @@ export function initToolSelectors() {
     if (typeof showOctaveLabels !== 'boolean') {return;}
     syncOctaveUiState(showOctaveLabels);
   });
+  store.on('focusColoursChanged', (focusColoursEnabled?: boolean) => {
+    if (typeof focusColoursEnabled !== 'boolean') {return;}
+    syncFocusColoursUiState(focusColoursEnabled);
+    debugFocusColours('focusColoursChanged event received', { focusColoursEnabled });
+  });
   syncFrequencyUiState(store.state.showFrequencyLabels);
   syncOctaveUiState(store.state.showOctaveLabels);
+  syncFocusColoursUiState(store.state.focusColours);
 
   // Initialize accent colors on startup
   if (harmonyContainer && store.state.selectedNote) {

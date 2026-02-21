@@ -11,8 +11,15 @@ interface TripletStamp {
   label?: string;
 }
 
+interface TripletStampButtonColors {
+  primary: string;
+  light: string;
+  hover: string;
+}
+
 const TripletStampsToolbar = {
   selectedTripletStampId: 1 as number,
+  updateTripletStampColors: (_color: string) => {},
 
   init() {
     this.render();
@@ -32,17 +39,21 @@ const TripletStampsToolbar = {
     // Separate eighth and quarter triplets
     const eighthTriplets = TRIPLET_STAMPS.filter(t => t.span === 'eighth');
     const quarterTriplets = TRIPLET_STAMPS.filter(t => t.span === 'quarter');
+    const firstRowEighthTriplets = [...eighthTriplets].reverse();
 
     // Create main container
     const mainContainer = document.createElement('div');
     mainContainer.className = 'triplet-stamps-grid';
+    const renderedRows = Number(eighthTriplets.length > 0) + Number(quarterTriplets.length > 0) + Number(quarterTriplets.length > 3);
+    mainContainer.style.gridTemplateRows = `repeat(${Math.max(1, renderedRows)}, minmax(0, 1fr))`;
 
     // Create eighth triplets row
     if (eighthTriplets.length > 0) {
       const eighthRow = document.createElement('div');
       eighthRow.className = 'triplet-stamps-row triplet-stamps-eighth-row';
+      eighthRow.style.gridTemplateColumns = `repeat(${firstRowEighthTriplets.length}, minmax(0, 1fr))`;
 
-      eighthTriplets.forEach(triplet => {
+      firstRowEighthTriplets.forEach(triplet => {
         const button = this.createTripletStampButton(triplet);
         eighthRow.appendChild(button);
       });
@@ -55,8 +66,10 @@ const TripletStampsToolbar = {
       // First row - first 3 quarter triplets
       const quarterRow1 = document.createElement('div');
       quarterRow1.className = 'triplet-stamps-row triplet-stamps-quarter-row';
+      const quarterRow1Stamps = quarterTriplets.slice(0, 3);
+      quarterRow1.style.gridTemplateColumns = `repeat(${quarterRow1Stamps.length}, minmax(0, 1fr))`;
 
-      quarterTriplets.slice(0, 3).forEach(triplet => {
+      quarterRow1Stamps.forEach(triplet => {
         const button = this.createTripletStampButton(triplet);
         button.classList.add('triplet-stamp-button-wide');
         quarterRow1.appendChild(button);
@@ -68,8 +81,10 @@ const TripletStampsToolbar = {
       if (quarterTriplets.length > 3) {
         const quarterRow2 = document.createElement('div');
         quarterRow2.className = 'triplet-stamps-row triplet-stamps-quarter-row';
+        const quarterRow2Stamps = quarterTriplets.slice(3);
+        quarterRow2.style.gridTemplateColumns = `repeat(${quarterRow2Stamps.length}, minmax(0, 1fr))`;
 
-        quarterTriplets.slice(3).forEach(triplet => {
+        quarterRow2Stamps.forEach(triplet => {
           const button = this.createTripletStampButton(triplet);
           button.classList.add('triplet-stamp-button-wide');
           quarterRow2.appendChild(button);
@@ -124,6 +139,50 @@ const TripletStampsToolbar = {
         this.clearSelection();
       }
     });
+
+    this.updateTripletStampColors = (color: string) => {
+      if (!color || !container) {return;}
+
+      const createLighterColor = (hexColor: string, percentage = 50) => {
+        const r = parseInt(hexColor.slice(1, 3), 16);
+        const g = parseInt(hexColor.slice(3, 5), 16);
+        const b = parseInt(hexColor.slice(5, 7), 16);
+        const newR = Math.min(255, Math.floor(r + (255 - r) * (percentage / 100)));
+        const newG = Math.min(255, Math.floor(g + (255 - g) * (percentage / 100)));
+        const newB = Math.min(255, Math.floor(b + (255 - b) * (percentage / 100)));
+        return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+      };
+
+      const createDarkerColor = (hexColor: string, percentage = 20) => {
+        const r = parseInt(hexColor.slice(1, 3), 16);
+        const g = parseInt(hexColor.slice(3, 5), 16);
+        const b = parseInt(hexColor.slice(5, 7), 16);
+        const newR = Math.max(0, Math.floor(r * (1 - percentage / 100)));
+        const newG = Math.max(0, Math.floor(g * (1 - percentage / 100)));
+        const newB = Math.max(0, Math.floor(b * (1 - percentage / 100)));
+        return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+      };
+
+      const palette = store.state.colorPalette[color] || { primary: color, light: color } as TripletStampButtonColors;
+      const lightColor = createLighterColor(palette.light, 60);
+      const primaryColor = palette.primary;
+      const hoverColor = createDarkerColor(primaryColor, 20);
+
+      container.style.setProperty('--c-accent', primaryColor);
+      container.style.setProperty('--c-accent-light', lightColor);
+      container.style.setProperty('--c-accent-hover', hoverColor);
+    };
+
+    store.on('noteChanged', ({ newNote }: { newNote?: { color?: string } } = {}) => {
+      if (newNote?.color) {
+        this.updateTripletStampColors(newNote.color);
+      }
+    });
+
+    const currentNote = store.state.selectedNote;
+    if (currentNote?.color) {
+      this.updateTripletStampColors(currentNote.color);
+    }
 
     store.on('sixteenthStampToolSelected', () => {
       this.clearSelection();

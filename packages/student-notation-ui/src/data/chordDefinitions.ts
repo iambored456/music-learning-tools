@@ -19,7 +19,7 @@ export const BASIC_CHORD_SHAPES: HarmonyChordShapes = {
   'X+':      ['1P', '3M', '5A'],           // Augmented triad
   'X⁷':      ['1P', '3M', '5P', '7m'],     // Dominant 7
   'x⁷':      ['1P', '3m', '5P', '7m'],     // Minor 7
-  'Xmaj⁷':   ['1P', '3M', '5P', '7M'],     // Major 7
+  'Xmaj7':   ['1P', '3M', '5P', '7M'],     // Major 7
   'ø⁷':      ['1P', '3m', '5d', '7m'],     // Half-diminished 7
   'x°⁷':     ['1P', '3m', '5d', '6M'],     // Fully diminished 7
   'X⁶':      ['1P', '3M', '5P', '6M'],     // Major 6 (add 6)
@@ -32,7 +32,7 @@ export const BASIC_CHORD_SHAPES: HarmonyChordShapes = {
  * Extended harmony including 9ths, 11ths, 13ths, and altered chords.
  */
 export const ADVANCED_CHORD_SHAPES: HarmonyChordShapes = {
-  'xmaj⁷':     ['1P', '3m', '5P', '7M'],           // Minor-major 7
+  'xmaj7':     ['1P', '3m', '5P', '7M'],           // Minor-major 7
   'Xadd9':     ['1P', '3M', '5P', '9M'],           // Major add 9 (9th up an octave)
   'xadd9':     ['1P', '3m', '5P', '9M'],           // Minor add 9 (9th up an octave)
   'X6/9':      ['1P', '3M', '5P', '6M', '9M'],     // Major 6/9 (9th up an octave)
@@ -111,7 +111,7 @@ export function getAllChordSymbols(): string[] {
 
 /**
  * Get the intervals for a chord by symbol.
- * @param symbol - Chord symbol like "X", "x⁷", "Xmaj⁷"
+ * @param symbol - Chord symbol like "X", "x⁷", "Xmaj7"
  * @returns Array of intervals or undefined if not found
  */
 export function getChordIntervals(symbol: string): string[] | undefined {

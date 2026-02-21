@@ -16,6 +16,34 @@ import type { PitchRowData } from '@app-types/state.js';
 type ExtendedPitchRow = PitchRowData & { isDummy?: boolean };
 
 let lastLegendViewportDebugLogAt = 0;
+let lastFocusColoursDebugSignature = '';
+let lastFocusColoursDebugAt = 0;
+
+function shouldDebugFocusColours(): boolean {
+  try {
+    const win = globalThis as typeof globalThis & { __focusColoursDebug?: boolean };
+    return win.__focusColoursDebug !== false;
+  } catch {
+    return true;
+  }
+}
+
+function logFocusColoursDebug(message: string, data: Record<string, unknown>): void {
+  if (!shouldDebugFocusColours()) {return;}
+  try {
+    const now = performance?.now?.() ?? Date.now();
+    const signature = `${message}:${JSON.stringify(data)}`;
+    if (signature === lastFocusColoursDebugSignature && (now - lastFocusColoursDebugAt) < 250) {
+      return;
+    }
+    lastFocusColoursDebugSignature = signature;
+    lastFocusColoursDebugAt = now;
+    console.log(`[FocusColours][Legend] ${message}`, data);
+  } catch {
+    // Never let debug logging break rendering.
+  }
+}
+
 function isViewportDebugEnabled(): boolean {
   // Be defensive: in some contexts `localStorage` access can throw (privacy modes, file://, etc).
   // We want `window.__SN_DEBUG_VIEWPORT = true` to work even if storage/query parsing fails.
@@ -206,9 +234,11 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
   // Focus colours logic - union of all tonic scales
   let focusScale: string[] = [];
   let focusSet: Set<string> = new Set<string>();
+  let tonicCount = 0;
 
   if (focusColours) {
     const tonics = getPlacedTonicSigns(store.state);
+    tonicCount = tonics.length;
     const allNotes = new Set<string>();
 
     tonics.forEach(tonic => {
@@ -219,6 +249,12 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
 
     focusScale = Array.from(allNotes);
     focusSet = buildFocusSet(focusScale);
+    logFocusColoursDebug('drawLegends focus set built', {
+      tonicCount,
+      focusScale,
+      focusSetSize: focusSet.size,
+      showFrequencyLabels
+    });
   }
 
 
@@ -312,15 +348,15 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
           }
 
           let bgColor = colorMode === 'bw' ? '#ffffff' : (row.hex || '#ffffff');
-          if (focusColours && !isFocused && !showFrequencyLabels) {
+          if (focusColours && focusSet.size > 0 && !isFocused && !showFrequencyLabels) {
             bgColor = '#ffffff';
           }
 
           let textAlpha = 'FF';
           if (shouldHideAccidental) {
             textAlpha = '00';
-          } else if (focusColours && !isFocused) {
-            textAlpha = '55';
+          } else if (focusColours && focusSet.size > 0 && !isFocused) {
+            textAlpha = '00';
           }
 
           ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
@@ -353,6 +389,15 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
     });
 
     if (focusColours && focusSet.size > 0) {
+      logFocusColoursDebug('drawLegends column summary', {
+        side: startCol === 0 ? 'left' : 'right',
+        tonicCount,
+        focusSetSize: focusSet.size,
+        focusScale,
+        totalLabels: totalCount,
+        filteredLabels: filteredCount,
+        showFrequencyLabels
+      });
       logger.debug('LegendRenderer', 'Focus filter summary', {
         side: startCol === 0 ? 'left' : 'right',
         startCol,
@@ -463,9 +508,11 @@ export function drawLegendsToSeparateCanvases(
   // Focus colours logic - union of all tonic scales
   let focusScale: string[] = [];
   let focusSet: Set<string> = new Set<string>();
+  let tonicCount = 0;
 
   if (focusColours) {
     const tonics = getPlacedTonicSigns(store.state);
+    tonicCount = tonics.length;
     const allNotes = new Set<string>();
 
     if (!tonics.length) {
@@ -487,6 +534,12 @@ export function drawLegendsToSeparateCanvases(
     logger.debug('LegendRenderer', 'Focus Colours combined scale', { focusScale }, 'grid');
 
     focusSet = buildFocusSet(focusScale);
+    logFocusColoursDebug('drawLegendsToSeparateCanvases focus set built', {
+      tonicCount,
+      focusScale,
+      focusSetSize: focusSet.size,
+      showFrequencyLabels
+    });
   }
 
   const processLabel = (
@@ -591,12 +644,14 @@ export function drawLegendsToSeparateCanvases(
           const isBoundaryRow = Boolean(row.isBoundary);
 
           let bgColor = colorMode === 'bw' ? '#ffffff' : (row.hex || '#ffffff');
-          if (focusColours && !isFocused && !showFrequencyLabels) {
+          if (focusColours && focusSet.size > 0 && !isFocused && !showFrequencyLabels) {
             bgColor = '#ffffff';
           }
 
-          // Hide text for boundary rows and hidden accidentals, fade text for unfocused rows when using focus colors
-          const textAlpha = (shouldHideAccidental || isBoundaryRow) ? '00' : (focusColours && !isFocused ? '55' : 'FF');
+          // Hide text for boundary rows, hidden accidentals, and unfocused rows when using focus colours.
+          const textAlpha = (shouldHideAccidental || isBoundaryRow)
+            ? '00'
+            : (focusColours && focusSet.size > 0 && !isFocused ? '00' : 'FF');
 
           if (focusColours && focusSet.size > 0) {
             totalCount += 1;
@@ -628,6 +683,15 @@ export function drawLegendsToSeparateCanvases(
     });
 
     if (focusColours && focusSet.size > 0) {
+      logFocusColoursDebug('drawLegendsToSeparateCanvases column summary', {
+        side: startCol === 0 ? 'left' : 'right',
+        tonicCount,
+        focusSetSize: focusSet.size,
+        focusScale,
+        totalLabels: totalCount,
+        filteredLabels: filteredCount,
+        showFrequencyLabels
+      });
       logger.debug('LegendRenderer', 'Focus filter summary (separate)', {
         side: startCol === 0 ? 'left' : 'right',
         startCol,

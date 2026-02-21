@@ -77,6 +77,9 @@
   let colors = $state<SliderColors>({});
   let currentColor: string | null = store.state.selectedNote?.color ?? null;
   let isDragging = false;
+  const isEffectOff = $derived(config ? (
+    xValue === config.xRange.min && yValue === config.yRange.min
+  ) : false);
 
   const clampChannel = (value: number) => Math.max(0, Math.min(255, value));
 
@@ -251,6 +254,7 @@
 
 <div
   class="effects-cartesian-slider"
+  class:is-off={isEffectOff}
   bind:this={host}
   onpointerdown={handleInteractionStart}
   onpointerup={handleInteractionEnd}
@@ -280,5 +284,11 @@
     width: 100%;
     height: 100%;
     display: block;
+    transition: opacity 0.18s ease, filter 0.18s ease;
+  }
+
+  .effects-cartesian-slider.is-off {
+    opacity: 0.5;
+    filter: saturate(0.55);
   }
 </style>

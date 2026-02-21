@@ -322,12 +322,17 @@
 }
 
 /* --- Filter Disabled States --- */
-.multislider-container.filter-disabled #blend-slider-container,
-.multislider-container.filter-disabled #cutoff-slider-container {
+.filter-container.mix-inactive #blend-slider-container,
+.filter-container.mix-inactive #cutoff-slider-container {
     opacity: 0.5;
     pointer-events: none;
 }
 
-.multislider-container.filter-disabled .filter-overlay-canvas {
+.filter-container.mix-inactive .filter-blend-thumb,
+.filter-container.mix-inactive .filter-cutoff-thumb {
+    cursor: default;
+}
+
+.filter-container.mix-inactive .filter-overlay-canvas {
     display: none; 
 }

@@ -11,9 +11,23 @@ const publicPrefix = '../public/';
 const THEME_STORAGE_KEY = 'app.themeMode';
 
 function resolvePublicAsset(path: string): string {
-  const normalized = path.replace(/^\/+/, '');
+  const [pathWithNoHash, hashFragment = ''] = path.split('#', 2);
+  const [pathWithNoQuery, queryString = ''] = pathWithNoHash.split('?', 2);
+
+  // Tolerate malformed tonic icon paths that may include a space before the number.
+  const tonicPathSanitized = pathWithNoQuery.replace(
+    /assets\/tabicons\/tonicShape\s+([1-7])\.svg$/i,
+    'assets/tabicons/tonicShape_$1.svg'
+  );
+
+  const normalized = tonicPathSanitized.replace(/^\/+/, '');
   const key = `${publicPrefix}${normalized}`;
-  return publicAssets[key] ?? path;
+  const resolved = publicAssets[key];
+  if (!resolved) {return path;}
+
+  const querySuffix = queryString ? `?${queryString}` : '';
+  const hashSuffix = hashFragment ? `#${hashFragment}` : '';
+  return `${resolved}${querySuffix}${hashSuffix}`;
 }
 
 function rewriteAssetUrls(container: HTMLElement): void {

@@ -14,8 +14,8 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  margin-block-end: var(--space-015);
-  gap: var(--space-015);
+  margin-block-end: 0;
+  gap: 0;
 }
 
 #canvas-macrobeat-tools #accidental-controls-container-v2 {
@@ -24,14 +24,14 @@
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  margin-right: var(--space-015);
+  margin-right: 0;
 }
 
 #beat-line-ui {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-015);
+  gap: 0;
   min-height: 2.25rem;
 }
 
@@ -93,6 +93,11 @@
   transform: translate(-50%, 0);
 }
 
+/* Boundary button size should track boundary row height */
+#boundary-buttons-row .buttonGrid-ui-button--boundary {
+  --buttonGrid-ui-button-size: calc(var(--boundary-row-height, 1.25rem) - clamp(0px, 0.2cqi, 2px));
+}
+
 .buttonGrid-ui-button--boundary:hover,
 .buttonGrid-ui-button--boundary:focus-visible {
   background-color: transparent;
@@ -124,7 +129,7 @@
 }
 
 .boundary-diamond[data-style='dashed'] {
-  background-color: transparent;
+  background-color: var(--c-surface, #fff);
 }
 
 .boundary-diamond[data-style='anacrusis'] {
@@ -138,15 +143,22 @@
 }
 
 .grouping-segment {
+  --grouping-divider-width: 2px;
+  --grouping-divider-dash-length: 5px;
+  --grouping-divider-dash-gap: 5px;
+  --grouping-divider-anacrusis-dash-length: 4px;
+  --grouping-divider-anacrusis-dash-gap: 4px;
   position: absolute;
   top: 0;
-  bottom: 0;
+  bottom: calc(var(--boundary-row-height, 1.25rem) * -0.5);
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   border: none;
   background-color: transparent;
   color: var(--c-text);
+  font-size: clamp(1.5rem, 3.6cqi, 2.2rem);
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -156,7 +168,18 @@
 
 .grouping-segment:hover,
 .grouping-segment:focus-visible {
-  background-color: var(--c-surface-overlay);
+  background-color: transparent;
+  background-image: linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--grouping-divider-width) * 0.5),
+    var(--c-surface-overlay) calc(var(--grouping-divider-width) * 0.5),
+    var(--c-surface-overlay) calc(100% - (var(--grouping-divider-width) * 0.5)),
+    transparent calc(100% - (var(--grouping-divider-width) * 0.5)),
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   color: var(--c-text);
   outline: none;
 }
@@ -166,21 +189,40 @@
 }
 
 .grouping-segment[data-next-boundary-style='solid']::after,
-.grouping-segment[data-next-boundary-style='dashed']::after {
+.grouping-segment[data-next-boundary-style='dashed']::after,
+.grouping-segment[data-next-boundary-style='anacrusis']::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 0;
-  border-right: 2px solid var(--buttonGrid-boundary-color);
+  right: calc(var(--grouping-divider-width) * -0.5);
+  width: var(--grouping-divider-width);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.grouping-segment[data-next-boundary-style='solid']::after {
+  background-color: var(--buttonGrid-boundary-color);
 }
 
 .grouping-segment[data-next-boundary-style='dashed']::after {
-  border-right-style: dashed;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--buttonGrid-boundary-color) 0,
+    var(--buttonGrid-boundary-color) var(--grouping-divider-dash-length),
+    transparent var(--grouping-divider-dash-length),
+    transparent calc(var(--grouping-divider-dash-length) + var(--grouping-divider-dash-gap))
+  );
 }
 
 .grouping-segment[data-next-boundary-style='anacrusis']::after {
-  border-right: 2px dashed var(--c-anacrusis-border);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--buttonGrid-boundary-color) 0,
+    var(--buttonGrid-boundary-color) var(--grouping-divider-anacrusis-dash-length),
+    transparent var(--grouping-divider-anacrusis-dash-length),
+    transparent calc(var(--grouping-divider-anacrusis-dash-length) + var(--grouping-divider-anacrusis-dash-gap))
+  );
 }
 
 .grouping-segment[data-has-left-divider='true']::before {
@@ -188,21 +230,36 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
-  border-left: 2px solid var(--buttonGrid-boundary-color);
+  left: calc(var(--grouping-divider-width) * -0.5);
+  width: var(--grouping-divider-width);
+  background-color: var(--buttonGrid-boundary-color);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .grouping-segment[data-prev-boundary-style='dashed'][data-has-left-divider='true']::before {
-  border-left-style: dashed;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--buttonGrid-boundary-color) 0,
+    var(--buttonGrid-boundary-color) var(--grouping-divider-dash-length),
+    transparent var(--grouping-divider-dash-length),
+    transparent calc(var(--grouping-divider-dash-length) + var(--grouping-divider-dash-gap))
+  );
 }
 
 .grouping-segment[data-prev-boundary-style='anacrusis'][data-has-left-divider='true']::before {
-  border-left: 2px dashed var(--c-anacrusis-border);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--buttonGrid-boundary-color) 0,
+    var(--buttonGrid-boundary-color) var(--grouping-divider-anacrusis-dash-length),
+    transparent var(--grouping-divider-anacrusis-dash-length),
+    transparent calc(var(--grouping-divider-anacrusis-dash-length) + var(--grouping-divider-anacrusis-dash-gap))
+  );
 }
 
 .macrobeat-adjust-group {
   display: flex;
-  gap: var(--space-025);
+  gap: 0;
   justify-content: center;
 }
 
@@ -214,11 +271,15 @@
   color: var(--c-text-muted);
   user-select: none;
   position: absolute;
-  transform: translateX(-50%);
-  top: var(--time-sig-vertical-offset, 0.25rem);
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   backdrop-filter: blur(2px);
   border: 2px solid var(--c-border);
-  padding: 0.125rem 0.375rem;
+  padding: 0;
   cursor: pointer;
 }
 

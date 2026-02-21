@@ -42,7 +42,7 @@
 
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;
-  let degreeVisibilityToggle: HTMLElement | null = null;
+  let degreeVisibilityToggle: HTMLButtonElement | null = null;
   let degreeModeToggle: HTMLElement | null = null;
   let degreeModeScaleButton: HTMLButtonElement | null = null;
   let degreeModeModalButton: HTMLButtonElement | null = null;
@@ -50,7 +50,7 @@
   let sharpBtn: HTMLElement | null = null;
   let frequencyBtn: HTMLElement | null = null;
   let octaveToggleBtn: HTMLElement | null = null;
-  let focusColoursToggle: HTMLInputElement | null = null;
+  let focusColoursToggle: HTMLButtonElement | null = null;
   let harmonyContainer: HTMLElement | null = null;
   let unifiedPositionToggle: HTMLElement | null = null;
   let chordsPanel: HTMLElement | null = null;
@@ -60,6 +60,20 @@
   // Helper functions
   function hasTonicShapesOnCanvas(): boolean {
     return Object.keys(store.state.tonicSignGroups).length > 0;
+  }
+
+  function shouldDebugFocusColours(): boolean {
+    if (typeof window === 'undefined') {return true;}
+    return (window as Window & { __focusColoursDebug?: boolean }).__focusColoursDebug !== false;
+  }
+
+  function debugFocusColours(message: string, data?: unknown): void {
+    if (!shouldDebugFocusColours()) {return;}
+    if (typeof data === 'undefined') {
+      console.log(`[FocusColours][SvelteUI] ${message}`);
+      return;
+    }
+    console.log(`[FocusColours][SvelteUI] ${message}`, data);
   }
 
   function updateScaleModeToggleState(mode: DegreeDisplayMode = store.state.degreeDisplayMode): void {
@@ -403,15 +417,37 @@
     );
 
     eraserBtn = cachedElements['eraserButton'];
-    degreeVisibilityToggle = cachedElements['degreeVisibilityToggle'] ?? null;
-    degreeModeToggle = cachedElements['degreeModeToggle'];
+    const cachedDegreeVisibilityToggle = cachedElements['degreeVisibilityToggle'];
+    const liveDegreeVisibilityToggle = (cachedDegreeVisibilityToggle && cachedDegreeVisibilityToggle.isConnected)
+      ? cachedDegreeVisibilityToggle
+      : document.getElementById('degree-visibility-toggle');
+    degreeVisibilityToggle = liveDegreeVisibilityToggle instanceof HTMLButtonElement
+      ? liveDegreeVisibilityToggle
+      : null;
+
+    const cachedDegreeModeToggle = cachedElements['degreeModeToggle'];
+    degreeModeToggle = (cachedDegreeModeToggle && cachedDegreeModeToggle.isConnected)
+      ? cachedDegreeModeToggle
+      : document.getElementById('degree-mode-toggle');
     degreeModeScaleButton = degreeModeToggle?.querySelector<HTMLButtonElement>('[data-mode="diatonic"]') ?? null;
     degreeModeModalButton = degreeModeToggle?.querySelector<HTMLButtonElement>('[data-mode="modal"]') ?? null;
     flatBtn = cachedElements['flatBtn'];
     sharpBtn = cachedElements['sharpBtn'];
     frequencyBtn = cachedElements['frequencyBtn'];
     octaveToggleBtn = cachedElements['octaveLabelBtn'];
-    focusColoursToggle = cachedElements['focusColoursToggle'] as HTMLInputElement | null;
+    const cachedFocusColoursToggle = cachedElements['focusColoursToggle'];
+    const liveFocusColoursToggle = (cachedFocusColoursToggle && cachedFocusColoursToggle.isConnected)
+      ? cachedFocusColoursToggle
+      : document.getElementById('focus-colours-toggle');
+    focusColoursToggle = liveFocusColoursToggle instanceof HTMLButtonElement
+      ? liveFocusColoursToggle
+      : null;
+    debugFocusColours('Resolved focus button element', {
+      cachedFound: Boolean(cachedFocusColoursToggle),
+      cachedConnected: Boolean(cachedFocusColoursToggle?.isConnected),
+      resolvedFound: Boolean(focusColoursToggle),
+      resolvedTag: focusColoursToggle?.tagName ?? null
+    });
 
     harmonyContainer = document.querySelector<HTMLElement>('.pitch-tabs-container');
     unifiedPositionToggle = document.getElementById('unified-position-toggle');
@@ -755,15 +791,36 @@
       });
     }
 
+    const syncFocusColoursUiState = (focusColoursEnabled: boolean): void => {
+      if (!focusColoursToggle) {return;}
+      focusColoursToggle.classList.toggle('active', focusColoursEnabled);
+      focusColoursToggle.setAttribute('aria-pressed', focusColoursEnabled ? 'true' : 'false');
+    };
+
     if (focusColoursToggle) {
-      focusColoursToggle.addEventListener('change', () => {
-        if (!store.state.focusColours && !hasTonicShapesOnCanvas()) {
+      focusColoursToggle.style.pointerEvents = 'auto';
+      focusColoursToggle.addEventListener('pointerdown', () => {
+        debugFocusColours('pointerdown received on focus button');
+      });
+      focusColoursToggle.addEventListener('click', () => {
+        const tonicShapesPresent = hasTonicShapesOnCanvas();
+        debugFocusColours('click received on focus button', {
+          currentState: store.state.focusColours,
+          tonicShapesPresent
+        });
+        if (!store.state.focusColours && !tonicShapesPresent) {
           notificationSystem.alert('Please place a tonal center on the canvas before enabling focus colours.', 'Tonal Center Required');
-          if (focusColoursToggle) focusColoursToggle.checked = false;
+          syncFocusColoursUiState(false);
+          debugFocusColours('Blocked enable: no tonic shapes present');
+          focusColoursToggle?.blur();
           return;
         }
         store.toggleFocusColours();
+        debugFocusColours('store.toggleFocusColours invoked', { nextState: store.state.focusColours });
+        focusColoursToggle?.blur();
       });
+    } else {
+      debugFocusColours('Focus button binding skipped: button not found');
     }
 
     // Store event subscriptions
@@ -774,10 +831,17 @@
     store.on('accidentalModeChanged', handleAccidentalModeChanged);
     store.on('frequencyLabelsChanged', syncFrequencyUiState);
     store.on('octaveLabelsChanged', syncOctaveUiState);
+    store.on('focusColoursChanged', (focusColoursEnabled?: boolean) => {
+      if (typeof focusColoursEnabled !== 'boolean') {return;}
+      syncFocusColoursUiState(focusColoursEnabled);
+      debugFocusColours('focusColoursChanged event', { focusColoursEnabled });
+    });
 
     // Initialize UI states
     syncFrequencyUiState(store.state.showFrequencyLabels);
     syncOctaveUiState(store.state.showOctaveLabels);
+
+    syncFocusColoursUiState(store.state.focusColours);
 
     if (harmonyContainer && store.state.selectedNote) {
       applyHarmonyAccentColors(harmonyContainer, store.state.selectedNote.color);

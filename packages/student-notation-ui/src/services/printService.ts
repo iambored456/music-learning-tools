@@ -10,6 +10,8 @@ const buttonGridCapturePromises: Partial<Record<SnapshotKey, Promise<HTMLCanvasE
 
 const IDLE_TIMEOUT_MS = 600;
 const PRINT_MARGIN_IN = 0.25;
+const PRINT_STYLE_RULES_ID = 'print-style-rules';
+const PRINT_STAGING_AREA_ID = 'print-staging-area';
 
 const PAPER_SIZES_IN: Record<PrintOptions['pageSize'], { width: number; height: number }> = {
   letter: { width: 8.5, height: 11 },
@@ -25,6 +27,32 @@ interface CapturedCanvas {
 interface TargetDimensions {
   width: number;
   height: number;
+}
+
+function ensurePrintStagingArea(): HTMLElement | null {
+  let stagingArea = document.getElementById(PRINT_STAGING_AREA_ID);
+  if (!stagingArea) {
+    stagingArea = document.createElement('div');
+    stagingArea.id = PRINT_STAGING_AREA_ID;
+    document.body.appendChild(stagingArea);
+    logger.warn('PrintService', 'Print staging area was missing and has been created dynamically', null, 'print');
+  }
+  return stagingArea;
+}
+
+function ensurePrintStyleTag(): HTMLStyleElement | null {
+  const existing = document.getElementById(PRINT_STYLE_RULES_ID);
+  if (existing instanceof HTMLStyleElement) {
+    return existing;
+  }
+  if (existing) {
+    logger.error('PrintService', `Element with id "${PRINT_STYLE_RULES_ID}" exists but is not a <style> tag`, null, 'print');
+    return null;
+  }
+  const styleTag = document.createElement('style');
+  styleTag.id = PRINT_STYLE_RULES_ID;
+  document.head.appendChild(styleTag);
+  return styleTag;
 }
 
 /**
@@ -313,10 +341,18 @@ const PrintService = {
       return;
     }
 
-    const stagingArea = document.getElementById('print-staging-area')!;
+    const stagingArea = ensurePrintStagingArea();
+    if (!stagingArea) {
+      logger.error('PrintService', 'Print staging area is unavailable', null, 'print');
+      return;
+    }
     stagingArea.innerHTML = '';
 
-    const styleTag = document.getElementById('print-style-rules')!;
+    const styleTag = ensurePrintStyleTag();
+    if (!styleTag) {
+      logger.error('PrintService', 'Print style tag is unavailable', null, 'print');
+      return;
+    }
     styleTag.textContent = `@page { size: ${paperWidthInches}in ${paperHeightInches}in; margin: ${PRINT_MARGIN_IN}in; }`;
 
     const img = document.createElement('img');

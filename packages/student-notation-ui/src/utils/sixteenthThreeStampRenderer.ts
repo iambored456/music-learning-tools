@@ -1,5 +1,5 @@
 import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.js';
-import { createHexDiamondBase, renderSixteenthStampRowSVG } from '@utils/sharedDiamondStampSvg.ts';
+import { createHexDiamondBase, renderSixteenthStampRowSVG, svgPathFromPoints } from '@utils/sharedDiamondStampSvg.ts';
 
 export interface SixteenthThreeStampShape {
   ovals: number[];
@@ -22,6 +22,7 @@ export interface SixteenthThreeStampRendererOptions {
 type ShapeFillLevels = Record<string, number>;
 const snapToHalf = (value: number): number => Math.round(value * 2) / 2;
 const CANVAS_SCALE_FACTOR = 0.8;
+let svgGradientCounter = 0;
 
 /**
  * Shared three-sixteenth stamp rendering utility for both canvas and SVG contexts.
@@ -130,7 +131,6 @@ export class SixteenthThreeStampRenderer {
   renderToSVG(stamp: SixteenthThreeStampShape, viewBoxWidth = 100, viewBoxHeight = 100): SVGSVGElement {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
-    svg.style.color = '#000000';
 
     const strokeWidth = this.options.strokeWidth * 2;
     const inset = Math.max(strokeWidth / 2, 0.5);
@@ -143,6 +143,51 @@ export class SixteenthThreeStampRenderer {
 
     const selected = Array.from({ length: 3 }, (_, index) => stamp.diamonds.includes(index));
     const base = createHexDiamondBase(slotWidth, diamondH, centerY);
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const playbackFillPaths: SVGPathElement[] = [];
+    const gradientPrefix = `sixteenth-three-playback-fill-${svgGradientCounter++}`;
+    selected.forEach((isSelected, slot) => {
+      if (!isSelected) {
+        return;
+      }
+
+      const slotOffsetX = slotStartX + (slot * slotWidth);
+      const translatedBase = base.map(point => ({ x: point.x + slotOffsetX, y: point.y }));
+      const gradientId = `${gradientPrefix}-${slot}`;
+      const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+      gradient.setAttribute('id', gradientId);
+      gradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+      gradient.setAttribute('cx', String(slotOffsetX + (slotWidth / 2)));
+      gradient.setAttribute('cy', String(centerY));
+      gradient.setAttribute('r', String(Math.max(slotWidth, diamondH) / 2));
+
+      const innerStop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      innerStop.setAttribute('offset', '0%');
+      innerStop.setAttribute('stop-color', 'currentColor');
+      innerStop.setAttribute('stop-opacity', String(0x1F / 255));
+
+      const outerStop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      outerStop.setAttribute('offset', '100%');
+      outerStop.setAttribute('stop-color', 'currentColor');
+      outerStop.setAttribute('stop-opacity', String(0xBF / 255));
+
+      gradient.appendChild(innerStop);
+      gradient.appendChild(outerStop);
+      defs.appendChild(gradient);
+
+      const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      fillPath.setAttribute('data-segment', 'playback-fill');
+      fillPath.setAttribute('d', svgPathFromPoints(translatedBase));
+      fillPath.setAttribute('fill', `url(#${gradientId})`);
+      playbackFillPaths.push(fillPath);
+    });
+
+    if (playbackFillPaths.length > 0) {
+      svg.appendChild(defs);
+      playbackFillPaths.forEach(path => svg.appendChild(path));
+    }
+
     const rowMarkup = renderSixteenthStampRowSVG({
       slots: 3,
       selected,

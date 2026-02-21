@@ -37,14 +37,16 @@ const SixteenthStampsToolbar = {
     grid.className = 'sixteenth-four-stamp-grid';
 
     const stampRows = [
-      [1, 2, 3, 4],
+      [15, 1, 2, 3, 4],
       [5, 8, 14, 6, 9, 7],
-      [10, 13, 12, 11, 15]
+      [10, 13, 12, 11]
     ];
+    grid.style.gridTemplateRows = `repeat(${stampRows.length}, minmax(0, 1fr))`;
 
     stampRows.forEach((rowStampIds, rowIndex) => {
       const row = document.createElement('div');
       row.className = `sixteenth-stamps-row sixteenth-stamps-row-${rowIndex + 1}`;
+      row.style.gridTemplateColumns = `repeat(${rowStampIds.length}, minmax(0, 1fr))`;
 
       rowStampIds.forEach(stampId => {
         const stamp = SIXTEENTH_STAMPS.find(s => s.id === stampId) as SixteenthStamp | undefined;

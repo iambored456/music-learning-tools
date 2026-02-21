@@ -88,9 +88,23 @@
     color: var(--c-surface);
 }
 
+.draw-tool-button img,
 .draw-tool-button svg {
     width: 100%;
     height: 100%;
+}
+
+/* Lasso/marker buttons should render without frame borders */
+#draw-marker-controls .draw-tool-button,
+#draw-lasso-controls .draw-tool-button {
+    border: none;
+}
+
+#draw-marker-controls .draw-tool-button:hover,
+#draw-lasso-controls .draw-tool-button:hover,
+#draw-marker-controls .draw-tool-button.active,
+#draw-lasso-controls .draw-tool-button.active {
+    border-color: transparent;
 }
 
 /* Draw tool options container - appears below tool button in each panel */
@@ -238,6 +252,18 @@
     display: flex;
     flex-direction: column;
     gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+}
+
+/* Grow option groups to fill draw-tool-options */
+.draw-tool-options > .draw-option-group {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Grow toolbar rows within an option group (e.g. arrow tool's two rows split evenly) */
+.draw-option-group > .draw-toolbar-row {
+    flex: 1;
+    min-height: 0;
 }
 
 /* Allow certain groups to sit in a horizontal row */
@@ -409,6 +435,11 @@
     overflow-wrap: anywhere;
     white-space: normal;
     overflow: hidden;
+}
+
+#lasso-tool-options {
+    /* ~3.5× the draw-tool-button width: clamp(2rem, 4.5dvh, 3.2rem) × 3.5 */
+    min-width: clamp(7rem, 15.75dvh, 11.2rem);
 }
 
 #lasso-tool-options .draw-option-help {

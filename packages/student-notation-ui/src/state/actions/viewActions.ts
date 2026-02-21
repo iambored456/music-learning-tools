@@ -8,6 +8,11 @@ interface PitchRange {
   bottomIndex: number;
 }
 
+const shouldDebugFocusColours = (): boolean =>
+  typeof window === 'undefined'
+    ? true
+    : ((window as Window & { __focusColoursDebug?: boolean }).__focusColoursDebug !== false);
+
 export const viewActions = {
   // Tools
   toggleAccidentalMode(this: Store, type: 'flat' | 'sharp'): void {
@@ -72,8 +77,12 @@ export const viewActions = {
   },
 
   toggleFocusColours(this: Store): void {
+    const previous = this.state.focusColours;
     this.state.focusColours = !this.state.focusColours;
     const focusColoursEnabled = this.state.focusColours;
+    if (shouldDebugFocusColours()) {
+      console.log('[FocusColours][State] toggleFocusColours', { previous, next: focusColoursEnabled });
+    }
     this.emit('focusColoursChanged', focusColoursEnabled);
 
     this.emit('layoutConfigChanged');

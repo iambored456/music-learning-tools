@@ -149,12 +149,9 @@
     fill: var(--note-color);
 }
 
-/* Lasso and marker shortcut buttons */
-#lasso-shortcut-button,
-#marker-shortcut-button {
-    border: 1px solid var(--c-border);
-}
-
+/* Lasso and marker shortcut icon sizing */
+#lasso-shortcut-button img,
+#marker-shortcut-button img,
 #lasso-shortcut-button svg,
 #marker-shortcut-button svg {
     width: 60%;
