@@ -1,0 +1,1 @@
+function a(t,r,E){const n=t*.5,o=Math.max(1,r-2*n),c=E-(o/2+n),s=c+n,e=s+o,y=e+n;return[{x:t/2,y:c},{x:0,y:s},{x:0,y:e},{x:t/2,y},{x:t,y:e},{x:t,y:s}]}function L(t,r,E,n){const o=E*.5,c=Math.max(1,n-2*o),s=r-(c/2+o),e=s+o,y=e+c,$=y+o,x=t-E/2,H=t+E/2;return`M ${t} ${s} L ${x} ${e} L ${x} ${y} L ${t} ${$} L ${H} ${y} L ${H} ${e} Z`}export{a,L as c};

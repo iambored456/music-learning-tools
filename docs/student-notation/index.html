@@ -168,15 +168,18 @@
         .logo-path { stroke-dashoffset: 0; }
       }
     </style>
-    <script type="module" crossorigin src="/music-learning-tools/assets/student-notation-C19Ve8M_.js"></script>
+    <script type="module" crossorigin src="/music-learning-tools/assets/student-notation-D83N1g7t.js"></script>
     <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/modulepreload-polyfill-B5Qt9EMX.js">
-    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/vendor-tone-m1YpgwB8.js">
-    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/legacy-hyAVhlZU.js">
-    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/ViewportInfoToast-DQJiBAvx.js">
+    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/vendor-tone-Df6bss8p.js">
+    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/legacy-DXCvj3Fs.js">
+    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/index-client-B2D3WCNu.js">
+    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/ViewportInfoToast-DUQb75II.js">
     <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/vendor-tonal-NhM_OQIN.js">
+    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/index-BSNe0i-N.js">
     <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/vendor-html2canvas-k0ITeQhV.js">
+    <link rel="modulepreload" crossorigin href="/music-learning-tools/assets/preload-helper-DHcIAiwC.js">
     <link rel="stylesheet" crossorigin href="/music-learning-tools/assets/ViewportInfoToast-Cro4Kgc3.css">
-    <link rel="stylesheet" crossorigin href="/music-learning-tools/assets/student-notation-L80Kck7r.css">
+    <link rel="stylesheet" crossorigin href="/music-learning-tools/assets/student-notation-xp0hw4sA.css">
   </head>
   <body>
     <div id="app-loading-screen">
@@ -198,5 +201,25 @@
       </div>
     </div>
     <div id="app"></div>
+    <script>
+      (function () {
+        var fill = document.getElementById('loading-progress-fill');
+        var txt  = document.getElementById('loading-progress-text');
+        if (!fill) return;
+        var started = Date.now();
+        var handle;
+        function tick() {
+          var elapsed = Date.now() - started;
+          var pct = 14 * (1 - Math.exp(-elapsed / 6000));
+          fill.style.width = pct.toFixed(2) + '%';
+          if (txt) txt.textContent = Math.floor(pct) + '%';
+          handle = requestAnimationFrame(tick);
+        }
+        handle = requestAnimationFrame(tick);
+        window.__clearStage1Progress = function () {
+          cancelAnimationFrame(handle);
+        };
+      })();
+    </script>
   </body>
 </html>

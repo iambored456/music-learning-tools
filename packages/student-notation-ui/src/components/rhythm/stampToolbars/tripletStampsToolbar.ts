@@ -82,9 +82,12 @@ const TripletStampsToolbar = {
         const quarterRow2 = document.createElement('div');
         quarterRow2.className = 'triplet-stamps-row triplet-stamps-quarter-row';
         const quarterRow2Stamps = quarterTriplets.slice(3);
-        quarterRow2.style.gridTemplateColumns = `repeat(${quarterRow2Stamps.length}, minmax(0, 1fr))`;
+        const quarterRow2OrderedStamps = quarterRow2Stamps.length > 1
+          ? [quarterRow2Stamps[quarterRow2Stamps.length - 1]!, ...quarterRow2Stamps.slice(0, -1)]
+          : quarterRow2Stamps;
+        quarterRow2.style.gridTemplateColumns = `repeat(${quarterRow2OrderedStamps.length}, minmax(0, 1fr))`;
 
-        quarterRow2Stamps.forEach(triplet => {
+        quarterRow2OrderedStamps.forEach(triplet => {
           const button = this.createTripletStampButton(triplet);
           button.classList.add('triplet-stamp-button-wide');
           quarterRow2.appendChild(button);
