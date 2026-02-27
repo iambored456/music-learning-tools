@@ -10,6 +10,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./local-samples": {
+      "types": "./src/localDrumSamples.ts",
+      "import": "./src/localDrumSamples.ts"
     }
   },
   "files": [

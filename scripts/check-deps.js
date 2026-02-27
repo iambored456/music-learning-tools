@@ -53,6 +53,7 @@ const APP_PACKAGE_NAMES = [
 const SIMPLE_APP_NAMES = [
   'singing-trainer',
   'student-notation',
+  'simple-notation',
   'diatonic-compass',
   'visual-metronome',
   'hub',

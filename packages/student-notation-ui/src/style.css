@@ -12,6 +12,7 @@
 @import url('../style/layout/appLayout.css');
 @import url('../style/layout/primaryToolbarLayout.css');
 @import url('../style/layout/secondaryToolbarLayout.css');
+@import url('../style/layout/mobilePocketConsole.css');
 @import url('../style/layout/timbreToolbarLayout.css');
 @import url('../style/layout/pitchToolbarLayout.css');
 @import url('../style/layout/rhythmToolbarLayout.css');

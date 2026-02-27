@@ -7,7 +7,19 @@ import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/
 import { isPlayableColumn } from '@services/columnMapService.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
-import { getDrumPlayers, initDrumPlayers, triggerDrum } from '@services/transport/drumManager.ts';
+import {
+  getDrumSampleSet,
+  listDrumMachines,
+  type DrumVoiceCategory,
+  type LocalDrumSampleEntry
+} from '@mlt/audio-samples';
+import {
+  getCurrentDrumLayerSamples,
+  getDrumPlayers,
+  initDrumPlayers,
+  setDrumLayerSamples,
+  triggerDrum
+} from '@services/transport/drumManager.ts';
 
 /**
  * COORDINATE SYSTEM NOTE:
@@ -17,11 +29,71 @@ import { getDrumPlayers, initDrumPlayers, triggerDrum } from '@services/transpor
 
 type DrumTrack = 'H' | 'M' | 'L';
 const DRUM_TRACKS: DrumTrack[] = ['H', 'M', 'L'];
+const DRUM_TRACK_LABELS: Record<DrumTrack, string> = {
+  H: 'High Layer (H)',
+  M: 'Mid Layer (M)',
+  L: 'Low Layer (L)'
+};
 const CANVAS_CONTAINER_ID = 'canvas-container';
 const DRUM_GRID_WRAPPER_ID = 'drum-grid-wrapper';
 const ERASER_BUTTON_ID = 'eraser-tool-button';
 const DRUM_CANVAS_ID = 'drum-grid';
 const DRUM_HOVER_CANVAS_ID = 'drum-hover-canvas';
+const DRUM_LAYER_SAMPLE_MODAL_ID = 'drum-layer-sample-modal';
+const DRUM_SAMPLE_ASSIGNMENT_HINT: Record<DrumTrack, string> = {
+  H: 'High (H)',
+  M: 'Mid (M)',
+  L: 'Low (L)'
+};
+
+type DrumSamplePickerCategory = 'low' | 'mid' | 'high' | 'sfx';
+
+const DRUM_SAMPLE_PICKER_CATEGORY_ORDER: DrumSamplePickerCategory[] = [
+  'low',
+  'mid',
+  'high',
+  'sfx'
+];
+
+const DRUM_SAMPLE_PICKER_CATEGORY_CONFIG: Record<
+  DrumSamplePickerCategory,
+  { label: string; description: string }
+> = {
+  low: {
+    label: 'Low',
+    description: 'Kick and low-end percussion voices'
+  },
+  mid: {
+    label: 'Mid',
+    description: 'Snare and body percussion voices'
+  },
+  high: {
+    label: 'High',
+    description: 'Hi-hats and bright percussion voices'
+  },
+  sfx: {
+    label: 'Sound Effects',
+    description: 'Claps, vocals, and special effects'
+  }
+};
+
+const DRUM_TRACK_TO_SAMPLE_CATEGORY: Record<DrumTrack, DrumSamplePickerCategory> = {
+  H: 'high',
+  M: 'mid',
+  L: 'low'
+};
+
+type DrumSampleChoice = {
+  id: string;
+  machineId: string;
+  machineLabel: string;
+  label: string;
+  suggestedLayer: DrumTrack;
+  url: string;
+  voiceCategory?: DrumVoiceCategory;
+  voiceDescription?: string;
+  pickerCategory: DrumSamplePickerCategory;
+};
 
 let drumHoverCtx: CanvasRenderingContext2D | null = null;
 let isRightClickActive = false;
@@ -31,6 +103,124 @@ let volumeSlider: HTMLInputElement | null = null;
 const volumeIconState: VolumeIconState = 'normal';
 let lastDrumPlaybackTime = 0;
 const DRUM_PLAYBACK_THROTTLE_MS = 500;
+let activeDrumModalTrack: DrumTrack = 'M';
+let activeDrumSampleCategory: DrumSamplePickerCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY.M;
+let pendingDrumLayerSamples: Record<DrumTrack, string> | null = null;
+let activeSamplePreviewAudio: HTMLAudioElement | null = null;
+
+function resolveSamplePickerCategory(
+  suggestedLayer: DrumTrack,
+  voiceCategory?: DrumVoiceCategory
+): DrumSamplePickerCategory {
+  if (voiceCategory === 'sfx' || voiceCategory === 'vocal' || voiceCategory === 'clap') {
+    return 'sfx';
+  }
+  if (suggestedLayer === 'L') {return 'low';}
+  if (suggestedLayer === 'M') {return 'mid';}
+  return 'high';
+}
+
+const remoteDefaultSamples = getDrumSampleSet();
+
+const remoteSampleChoices: DrumSampleChoice[] = [
+  {
+    id: 'remote-cr78-h',
+    machineId: 'cr-78-remote',
+    machineLabel: 'CR-78 (Remote)',
+    label: 'Hi-Hat',
+    suggestedLayer: 'H',
+    url: remoteDefaultSamples.H,
+    voiceCategory: 'hihat',
+    voiceDescription: 'Hi-Hat',
+    pickerCategory: resolveSamplePickerCategory('H', 'hihat')
+  },
+  {
+    id: 'remote-cr78-m',
+    machineId: 'cr-78-remote',
+    machineLabel: 'CR-78 (Remote)',
+    label: 'Snare',
+    suggestedLayer: 'M',
+    url: remoteDefaultSamples.M,
+    voiceCategory: 'snare',
+    voiceDescription: 'Snare Drum',
+    pickerCategory: resolveSamplePickerCategory('M', 'snare')
+  },
+  {
+    id: 'remote-cr78-l',
+    machineId: 'cr-78-remote',
+    machineLabel: 'CR-78 (Remote)',
+    label: 'Kick',
+    suggestedLayer: 'L',
+    url: remoteDefaultSamples.L,
+    voiceCategory: 'kick',
+    voiceDescription: 'Bass Drum',
+    pickerCategory: resolveSamplePickerCategory('L', 'kick')
+  }
+];
+
+const drumMachineLabelById = new Map(listDrumMachines().map((machine) => [machine.id, machine.label]));
+
+function getMachineLabel(machineId: string, fallback: string): string {
+  return drumMachineLabelById.get(machineId) ?? fallback;
+}
+
+function compareDrumSampleChoices(a: DrumSampleChoice, b: DrumSampleChoice): number {
+  const machineA = getMachineLabel(a.machineId, a.machineLabel);
+  const machineB = getMachineLabel(b.machineId, b.machineLabel);
+  if (machineA !== machineB) {
+    return machineA.localeCompare(machineB);
+  }
+  return a.label.localeCompare(b.label);
+}
+
+const drumSampleChoiceByUrl = new Map<string, DrumSampleChoice>();
+const drumSampleChoicesByCategory = new Map<
+  DrumSamplePickerCategory,
+  Map<string, DrumSampleChoice[]>
+>();
+
+for (const category of DRUM_SAMPLE_PICKER_CATEGORY_ORDER) {
+  drumSampleChoicesByCategory.set(category, new Map());
+}
+
+export async function initLocalDrumSampleChoices(): Promise<void> {
+  try {
+    const mod = await import('@mlt/audio-samples/local-samples');
+    const localChoices: DrumSampleChoice[] = mod.LOCAL_DRUM_SAMPLE_ENTRIES.map(
+      (entry: LocalDrumSampleEntry) => ({
+        id: entry.id,
+        machineId: entry.machineId,
+        machineLabel: entry.machineLabel,
+        label: entry.label,
+        suggestedLayer: entry.suggestedLayer as DrumTrack,
+        url: entry.url,
+        voiceCategory: entry.voiceMetadata?.category,
+        voiceDescription: entry.voiceMetadata?.description,
+        pickerCategory: resolveSamplePickerCategory(
+          entry.suggestedLayer as DrumTrack,
+          entry.voiceMetadata?.category
+        )
+      })
+    );
+    const allChoices = [...remoteSampleChoices, ...localChoices].sort(compareDrumSampleChoices);
+    for (const choice of allChoices) {
+      if (!drumSampleChoiceByUrl.has(choice.url)) {
+        drumSampleChoiceByUrl.set(choice.url, choice);
+      }
+      const categoryGroup = drumSampleChoicesByCategory.get(choice.pickerCategory);
+      if (!categoryGroup) { continue; }
+      const machineLabel = getMachineLabel(choice.machineId, choice.machineLabel);
+      const existing = categoryGroup.get(machineLabel);
+      if (existing) {
+        existing.push(choice);
+      } else {
+        categoryGroup.set(machineLabel, [choice]);
+      }
+    }
+  } catch (error) {
+    console.error('[drumGridInteractor] Failed to load local drum samples', error);
+  }
+}
 
 const ensureDrumPlayersReady = (): boolean => {
   if (getDrumPlayers()) {return true;}
@@ -256,6 +446,484 @@ function handleGlobalMouseUp(): void {
   handleMouseLeave();
 }
 
+function isDrumLayerSampleModalOpen(): boolean {
+  const modal = document.getElementById(DRUM_LAYER_SAMPLE_MODAL_ID);
+  return Boolean(modal && !modal.hasAttribute('hidden'));
+}
+
+function closeDrumLayerSampleModal(): void {
+  const modal = document.getElementById(DRUM_LAYER_SAMPLE_MODAL_ID) as HTMLElement | null;
+  if (!modal) {return;}
+
+  if (activeSamplePreviewAudio) {
+    activeSamplePreviewAudio.pause();
+    activeSamplePreviewAudio.currentTime = 0;
+    activeSamplePreviewAudio = null;
+  }
+
+  pendingDrumLayerSamples = null;
+  modal.setAttribute('hidden', '');
+  document.body.classList.remove('drum-layer-modal-open');
+}
+
+function playDrumSamplePreview(choice: DrumSampleChoice): void {
+  const play = () => {
+    if (activeSamplePreviewAudio) {
+      activeSamplePreviewAudio.pause();
+      activeSamplePreviewAudio.currentTime = 0;
+      activeSamplePreviewAudio = null;
+    }
+
+    const previewAudio = new Audio(choice.url);
+    previewAudio.preload = 'auto';
+    previewAudio.volume = 0.9;
+    previewAudio.addEventListener('ended', () => {
+      if (activeSamplePreviewAudio === previewAudio) {
+        activeSamplePreviewAudio = null;
+      }
+    });
+    activeSamplePreviewAudio = previewAudio;
+    void previewAudio.play().catch(() => {});
+  };
+
+  const initPromise = (window as any).initAudio?.();
+  if (initPromise && typeof (initPromise as Promise<void>).then === 'function') {
+    void (initPromise as Promise<void>).then(play).catch(() => {});
+    return;
+  }
+
+  play();
+}
+
+function setDrumLayerSampleModalStatus(modal: HTMLElement, message = ''): void {
+  const statusEl = modal.querySelector('[data-role="status"]') as HTMLParagraphElement | null;
+  if (statusEl) {
+    statusEl.textContent = message;
+  }
+}
+
+function updateModalCategoryTabs(modal: HTMLElement): void {
+  const tabs = modal.querySelectorAll<HTMLButtonElement>('button[data-role="category-tab"]');
+  tabs.forEach((tab) => {
+    const category = tab.dataset.category as DrumSamplePickerCategory | undefined;
+    const isActive = category === activeDrumSampleCategory;
+    tab.classList.toggle('is-active', isActive);
+    tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
+function updateModalTrackAssignments(modal: HTMLElement): void {
+  if (!pendingDrumLayerSamples) {return;}
+
+  for (const track of DRUM_TRACKS) {
+    const assignmentEl = modal.querySelector<HTMLElement>(
+      `[data-role="track-assignment"][data-track="${track}"]`
+    );
+    if (!assignmentEl) {continue;}
+
+    const assignedUrl = pendingDrumLayerSamples[track];
+    const assignedChoice = drumSampleChoiceByUrl.get(assignedUrl);
+    if (!assignedChoice) {
+      assignmentEl.textContent = 'Current custom sample';
+      continue;
+    }
+
+    const machine = getMachineLabel(assignedChoice.machineId, assignedChoice.machineLabel);
+    assignmentEl.textContent = `${assignedChoice.label} - ${machine}`;
+  }
+}
+
+function updateModalAssignButtons(modal: HTMLElement): void {
+  if (!pendingDrumLayerSamples) {return;}
+  const selectedSamples = pendingDrumLayerSamples;
+
+  const buttons = modal.querySelectorAll<HTMLButtonElement>('button[data-role="assign-sample"]');
+  buttons.forEach((button) => {
+    const track = button.dataset.track as DrumTrack | undefined;
+    const sampleUrl = button.dataset.url;
+    if (!track || !sampleUrl) {return;}
+
+    const isActive = selectedSamples[track] === sampleUrl;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
+function getSampleCountForCategory(category: DrumSamplePickerCategory): number {
+  const groups = drumSampleChoicesByCategory.get(category);
+  if (!groups) {return 0;}
+  let count = 0;
+  groups.forEach((group) => {
+    count += group.length;
+  });
+  return count;
+}
+
+function renderSampleChoicesForCategory(modal: HTMLElement): void {
+  const titleEl = modal.querySelector<HTMLElement>('[data-role="category-title"]');
+  const hintEl = modal.querySelector<HTMLElement>('[data-role="category-hint"]');
+  const sampleList = modal.querySelector<HTMLElement>('[data-role="sample-list"]');
+  if (!titleEl || !hintEl || !sampleList) {return;}
+
+  const categoryConfig = DRUM_SAMPLE_PICKER_CATEGORY_CONFIG[activeDrumSampleCategory];
+  const groups = drumSampleChoicesByCategory.get(activeDrumSampleCategory)
+    ?? new Map<string, DrumSampleChoice[]>();
+  const sampleCount = getSampleCountForCategory(activeDrumSampleCategory);
+
+  titleEl.textContent = `${categoryConfig.label} Voices`;
+  hintEl.textContent = `${categoryConfig.description} (${sampleCount} samples)`;
+
+  sampleList.innerHTML = '';
+
+  if (!groups.size) {
+    const emptyState = document.createElement('p');
+    emptyState.className = 'drum-layer-sample-modal__empty';
+    emptyState.textContent = 'No samples in this category.';
+    sampleList.appendChild(emptyState);
+    return;
+  }
+
+  groups.forEach((choices, machineLabel) => {
+    const machineGroup = document.createElement('section');
+    machineGroup.className = 'drum-layer-sample-modal__machine-group';
+
+    const machineTitle = document.createElement('h4');
+    machineTitle.className = 'drum-layer-sample-modal__machine-title';
+    machineTitle.textContent = machineLabel;
+    machineGroup.appendChild(machineTitle);
+
+    const cards = document.createElement('div');
+    cards.className = 'drum-layer-sample-modal__cards';
+
+    choices.forEach((choice) => {
+      const card = document.createElement('article');
+      card.className = 'drum-layer-sample-modal__sample-card';
+
+      const name = document.createElement('h5');
+      name.className = 'drum-layer-sample-modal__sample-name';
+      name.textContent = choice.label;
+      card.appendChild(name);
+
+      const details = document.createElement('p');
+      details.className = 'drum-layer-sample-modal__sample-details';
+      const voiceDescription = choice.voiceDescription
+        ? ` - ${choice.voiceDescription}`
+        : '';
+      details.textContent = `Suggested: ${DRUM_SAMPLE_ASSIGNMENT_HINT[choice.suggestedLayer]}${voiceDescription}`;
+      card.appendChild(details);
+
+      const controls = document.createElement('div');
+      controls.className = 'drum-layer-sample-modal__sample-controls';
+
+      const previewButton = document.createElement('button');
+      previewButton.type = 'button';
+      previewButton.className = 'drum-layer-sample-modal__preview-button';
+      previewButton.dataset.role = 'preview-sample';
+      previewButton.dataset.url = choice.url;
+      previewButton.textContent = 'Play';
+      controls.appendChild(previewButton);
+
+      const assignButtons = document.createElement('div');
+      assignButtons.className = 'drum-layer-sample-modal__assign-buttons';
+
+      DRUM_TRACKS.forEach((track) => {
+        const assignButton = document.createElement('button');
+        assignButton.type = 'button';
+        assignButton.className = 'drum-layer-sample-modal__assign-button';
+        assignButton.dataset.role = 'assign-sample';
+        assignButton.dataset.track = track;
+        assignButton.dataset.url = choice.url;
+        assignButton.textContent = track;
+        assignButton.title = `Assign to ${DRUM_SAMPLE_ASSIGNMENT_HINT[track]}`;
+        assignButtons.appendChild(assignButton);
+      });
+
+      controls.appendChild(assignButtons);
+      card.appendChild(controls);
+      cards.appendChild(card);
+    });
+
+    machineGroup.appendChild(cards);
+    sampleList.appendChild(machineGroup);
+  });
+
+  updateModalAssignButtons(modal);
+}
+
+function ensureDrumLayerSampleModal(): HTMLElement {
+  let modal = document.getElementById(DRUM_LAYER_SAMPLE_MODAL_ID) as HTMLElement | null;
+  if (modal) {
+    return modal;
+  }
+
+  modal = document.createElement('div');
+  modal.id = DRUM_LAYER_SAMPLE_MODAL_ID;
+  modal.className = 'drum-layer-sample-modal';
+  modal.setAttribute('hidden', '');
+
+  const dialog = document.createElement('div');
+  dialog.className = 'drum-layer-sample-modal__dialog';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'drum-layer-sample-title');
+
+  const header = document.createElement('div');
+  header.className = 'drum-layer-sample-modal__header';
+
+  const title = document.createElement('h3');
+  title.id = 'drum-layer-sample-title';
+  title.className = 'drum-layer-sample-modal__title';
+  title.textContent = 'Drum Layer Samples';
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'drum-layer-sample-modal__close';
+  closeButton.setAttribute('aria-label', 'Close drum sample modal');
+  closeButton.textContent = 'X';
+  closeButton.addEventListener('click', () => {
+    closeDrumLayerSampleModal();
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeButton);
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'drum-layer-sample-modal__subtitle';
+  subtitle.textContent = 'Browse grouped voices, preview sounds, and assign samples to H/M/L layers.';
+
+  const layout = document.createElement('div');
+  layout.className = 'drum-layer-sample-modal__layout';
+
+  const categorySidebar = document.createElement('aside');
+  categorySidebar.className = 'drum-layer-sample-modal__categories';
+  categorySidebar.setAttribute('aria-label', 'Sample categories');
+
+  DRUM_SAMPLE_PICKER_CATEGORY_ORDER.forEach((category) => {
+    const categoryButton = document.createElement('button');
+    categoryButton.type = 'button';
+    categoryButton.className = 'drum-layer-sample-modal__category-button';
+    categoryButton.dataset.role = 'category-tab';
+    categoryButton.dataset.category = category;
+    categoryButton.setAttribute('aria-pressed', 'false');
+
+    const categoryLabel = document.createElement('span');
+    categoryLabel.textContent = DRUM_SAMPLE_PICKER_CATEGORY_CONFIG[category].label;
+
+    const categoryCount = document.createElement('span');
+    categoryCount.className = 'drum-layer-sample-modal__category-count';
+    categoryCount.textContent = String(getSampleCountForCategory(category));
+
+    categoryButton.appendChild(categoryLabel);
+    categoryButton.appendChild(categoryCount);
+    categorySidebar.appendChild(categoryButton);
+  });
+
+  const content = document.createElement('section');
+  content.className = 'drum-layer-sample-modal__content';
+
+  const assignments = document.createElement('div');
+  assignments.className = 'drum-layer-sample-modal__assignments';
+
+  DRUM_TRACKS.forEach((track) => {
+    const assignmentCard = document.createElement('div');
+    assignmentCard.className = 'drum-layer-sample-modal__assignment-card';
+
+    const assignmentHeader = document.createElement('div');
+    assignmentHeader.className = 'drum-layer-sample-modal__assignment-header';
+
+    const assignmentTrack = document.createElement('h4');
+    assignmentTrack.className = 'drum-layer-sample-modal__assignment-track';
+    assignmentTrack.textContent = DRUM_TRACK_LABELS[track];
+
+    const previewTrackButton = document.createElement('button');
+    previewTrackButton.type = 'button';
+    previewTrackButton.className = 'drum-layer-sample-modal__track-preview-button';
+    previewTrackButton.dataset.role = 'preview-track';
+    previewTrackButton.dataset.track = track;
+    previewTrackButton.textContent = 'Test';
+
+    assignmentHeader.appendChild(assignmentTrack);
+    assignmentHeader.appendChild(previewTrackButton);
+
+    const assignmentValue = document.createElement('p');
+    assignmentValue.className = 'drum-layer-sample-modal__assignment-value';
+    assignmentValue.dataset.role = 'track-assignment';
+    assignmentValue.dataset.track = track;
+    assignmentCard.appendChild(assignmentHeader);
+    assignmentCard.appendChild(assignmentValue);
+    assignments.appendChild(assignmentCard);
+  });
+
+  const browserHeader = document.createElement('div');
+  browserHeader.className = 'drum-layer-sample-modal__browser-header';
+
+  const browserTitle = document.createElement('h4');
+  browserTitle.className = 'drum-layer-sample-modal__browser-title';
+  browserTitle.dataset.role = 'category-title';
+
+  const browserHint = document.createElement('p');
+  browserHint.className = 'drum-layer-sample-modal__browser-hint';
+  browserHint.dataset.role = 'category-hint';
+
+  browserHeader.appendChild(browserTitle);
+  browserHeader.appendChild(browserHint);
+
+  const sampleList = document.createElement('div');
+  sampleList.className = 'drum-layer-sample-modal__sample-list';
+  sampleList.dataset.role = 'sample-list';
+
+  content.appendChild(assignments);
+  content.appendChild(browserHeader);
+  content.appendChild(sampleList);
+
+  layout.appendChild(categorySidebar);
+  layout.appendChild(content);
+
+  const status = document.createElement('p');
+  status.className = 'drum-layer-sample-modal__status';
+  status.dataset.role = 'status';
+  status.setAttribute('aria-live', 'polite');
+
+  const actions = document.createElement('div');
+  actions.className = 'drum-layer-sample-modal__actions';
+
+  const cancelButton = document.createElement('button');
+  cancelButton.type = 'button';
+  cancelButton.className = 'drum-layer-sample-modal__button drum-layer-sample-modal__button--secondary';
+  cancelButton.textContent = 'Cancel';
+  cancelButton.addEventListener('click', () => {
+    closeDrumLayerSampleModal();
+  });
+
+  const applyButton = document.createElement('button');
+  applyButton.type = 'button';
+  applyButton.className = 'drum-layer-sample-modal__button drum-layer-sample-modal__button--primary';
+  applyButton.textContent = 'Apply';
+  applyButton.addEventListener('click', async () => {
+    if (!pendingDrumLayerSamples) {
+      return;
+    }
+
+    const selectedSamples: Record<DrumTrack, string> = { ...pendingDrumLayerSamples };
+
+    applyButton.disabled = true;
+    cancelButton.disabled = true;
+    setDrumLayerSampleModalStatus(modal, 'Loading samples...');
+
+    try {
+      await setDrumLayerSamples(selectedSamples);
+      setDrumLayerSampleModalStatus(modal, 'Samples updated.');
+      triggerDrumHit(activeDrumModalTrack, 0.05);
+      closeDrumLayerSampleModal();
+    } catch (error) {
+      setDrumLayerSampleModalStatus(modal, 'Failed to load one or more samples.');
+      console.error('[DrumGridInteractor] Failed to update drum layer samples', error);
+    } finally {
+      applyButton.disabled = false;
+      cancelButton.disabled = false;
+    }
+  });
+
+  actions.appendChild(cancelButton);
+  actions.appendChild(applyButton);
+
+  dialog.appendChild(header);
+  dialog.appendChild(subtitle);
+  dialog.appendChild(layout);
+  dialog.appendChild(status);
+  dialog.appendChild(actions);
+  modal.appendChild(dialog);
+
+  categorySidebar.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest<HTMLButtonElement>('button[data-role="category-tab"]');
+    if (!button) {return;}
+    const category = button.dataset.category as DrumSamplePickerCategory | undefined;
+    if (!category || category === activeDrumSampleCategory) {return;}
+
+    activeDrumSampleCategory = category;
+    updateModalCategoryTabs(modal);
+    renderSampleChoicesForCategory(modal);
+    setDrumLayerSampleModalStatus(
+      modal,
+      `Viewing ${DRUM_SAMPLE_PICKER_CATEGORY_CONFIG[category].label} voices.`
+    );
+  });
+
+  assignments.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest<HTMLButtonElement>('button[data-role="preview-track"]');
+    const track = button?.dataset.track as DrumTrack | undefined;
+    if (!track) {return;}
+    triggerDrumHit(track, 0.05);
+  });
+
+  sampleList.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest<HTMLButtonElement>('button[data-role]');
+    if (!button) {return;}
+
+    const sampleUrl = button.dataset.url;
+    if (!sampleUrl) {return;}
+    const choice = drumSampleChoiceByUrl.get(sampleUrl);
+    if (!choice) {return;}
+
+    if (button.dataset.role === 'preview-sample') {
+      playDrumSamplePreview(choice);
+      setDrumLayerSampleModalStatus(modal, `Previewing ${choice.label}.`);
+      return;
+    }
+
+    if (button.dataset.role !== 'assign-sample' || !pendingDrumLayerSamples) {
+      return;
+    }
+
+    const track = button.dataset.track as DrumTrack | undefined;
+    if (!track) {return;}
+
+    pendingDrumLayerSamples[track] = sampleUrl;
+    updateModalTrackAssignments(modal);
+    updateModalAssignButtons(modal);
+    playDrumSamplePreview(choice);
+    setDrumLayerSampleModalStatus(modal, `${DRUM_TRACK_LABELS[track]} set to ${choice.label}.`);
+  });
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeDrumLayerSampleModal();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && isDrumLayerSampleModalOpen()) {
+      closeDrumLayerSampleModal();
+    }
+  });
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function openDrumLayerSampleModal(trackToFocus: DrumTrack): void {
+  activeDrumModalTrack = trackToFocus;
+  activeDrumSampleCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY[trackToFocus];
+  pendingDrumLayerSamples = getCurrentDrumLayerSamples();
+
+  const modal = ensureDrumLayerSampleModal();
+  updateModalCategoryTabs(modal);
+  updateModalTrackAssignments(modal);
+  renderSampleChoicesForCategory(modal);
+  setDrumLayerSampleModalStatus(modal, '');
+
+  modal.removeAttribute('hidden');
+  document.body.classList.add('drum-layer-modal-open');
+
+  const activeCategoryButton = modal.querySelector<HTMLButtonElement>(
+    `button[data-role="category-tab"][data-category="${activeDrumSampleCategory}"]`
+  );
+  activeCategoryButton?.focus();
+}
+
 function createVolumeSlider(): void {
   const drumWrapper = document.getElementById(DRUM_GRID_WRAPPER_ID);
   const leftCell = drumWrapper?.querySelector('.drum-grid-left-cell') as HTMLElement | null;
@@ -292,7 +960,7 @@ function createVolumeSlider(): void {
     volumeButton.style.gridColumn = '1';
     leftContentEl.appendChild(volumeButton);
 
-    // Column 2: Gear icon buttons (one per row) with popup menus
+    // Column 2: Gear icon buttons (one per row) opening the layer sample modal.
     const gearSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg>`;
 
     (['H', 'M', 'L'] as const).forEach((track, index) => {
@@ -307,22 +975,12 @@ function createVolumeSlider(): void {
       gearBtn.setAttribute('aria-label', `${track} drum settings`);
       gearBtn.innerHTML = gearSvg;
 
-      const popup = document.createElement('div');
-      popup.className = 'drum-gear-popup';
-      popup.dataset.drumTrack = track;
-
       gearBtn.addEventListener('click', (event) => {
         event.stopPropagation();
-        const isVisible = popup.classList.contains('visible');
-        // Close all gear popups first
-        leftContentEl.querySelectorAll('.drum-gear-popup').forEach(p => p.classList.remove('visible'));
-        if (!isVisible) {
-          popup.classList.add('visible');
-        }
+        openDrumLayerSampleModal(track);
       });
 
       wrapper.appendChild(gearBtn);
-      wrapper.appendChild(popup);
       leftContentEl.appendChild(wrapper);
     });
 
@@ -339,7 +997,7 @@ function createVolumeSlider(): void {
     leftCell.appendChild(leftContentEl);
   }
 
-  // Volume button ↔ inline slider swap
+  // Volume button <-> inline slider swap
   const volumeButton = leftCell.querySelector('.drum-volume-button') as HTMLElement | null;
 
   let sliderWrap: HTMLElement | null = null;
@@ -407,12 +1065,6 @@ function createVolumeSlider(): void {
     if (sliderWrap && !target?.closest('.drum-volume-slider-wrap')) {
       hideSlider();
     }
-    // Close gear popups on outside click
-    const clickedGearButton = target?.closest('.drum-gear-button');
-    const clickedGearPopup = target?.closest('.drum-gear-popup');
-    if (!clickedGearButton && !clickedGearPopup) {
-      leftCell?.querySelectorAll('.drum-gear-popup').forEach(p => p.classList.remove('visible'));
-    }
   });
 }
 
@@ -445,3 +1097,4 @@ export function initDrumGridInteraction(): void {
 
   createVolumeSlider();
 }
+

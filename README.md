@@ -24,6 +24,22 @@ Output files are written to `apps/hub/public/previews/<app>.png`.
 
 `pnpm -w build:hub` is wired to rebuild the Hub preview screenshot automatically (`--only hub`) after a Hub build.
 
+## Simple Notation (Refactor)
+
+Legacy source was imported into `0C. Simple Notation/`.
+
+Refactored monorepo targets:
+
+- `apps/simple-notation`
+- `packages/simple-notation-core`
+- `packages/simple-notation-ui`
+
+Run locally:
+
+```bash
+pnpm --filter simple-notation run dev
+```
+
 ### CI notes
 
 Install Playwright Chromium before running capture:

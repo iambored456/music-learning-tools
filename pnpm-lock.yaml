@@ -36,6 +36,9 @@ importers:
       '@mlt/pitch-utils':
         specifier: workspace:*
         version: link:../../packages/pitch-utils
+      '@mlt/simple-notation-ui':
+        specifier: workspace:*
+        version: link:../../packages/simple-notation-ui
       '@mlt/singing-trainer-ui':
         specifier: workspace:*
         version: link:../../packages/singing-trainer-ui
@@ -76,6 +79,28 @@ importers:
       vite-tsconfig-paths:
         specifier: ^6.0.3
         version: 6.0.3(typescript@5.9.3)(vite@7.3.0(@types/node@24.10.4)(tsx@4.21.0))
+
+  apps/simple-notation:
+    dependencies:
+      '@mlt/simple-notation-ui':
+        specifier: workspace:*
+        version: link:../../packages/simple-notation-ui
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^5.0.3
+        version: 5.1.1(svelte@5.46.1)(vite@6.4.1(@types/node@22.19.3)(tsx@4.21.0))
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.1.1
+        version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
 
   apps/singing-trainer:
     dependencies:
@@ -156,6 +181,8 @@ importers:
         specifier: ^6.3.5
         version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
+  packages/font-atkinson: {}
+
   packages/handoff:
     dependencies:
       '@mlt/types':
@@ -204,6 +231,12 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@24.10.4)(tsx@4.21.0)
+
+  packages/notation-glyphs:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/note-highway:
     dependencies:
@@ -275,6 +308,44 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  packages/simple-notation-core:
+    dependencies:
+      tone:
+        specifier: ^15.1.22
+        version: 15.1.22
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/simple-notation-ui:
+    dependencies:
+      '@mlt/font-atkinson':
+        specifier: workspace:*
+        version: link:../font-atkinson
+      '@mlt/notation-glyphs':
+        specifier: workspace:*
+        version: link:../notation-glyphs
+      '@mlt/simple-notation-core':
+        specifier: workspace:*
+        version: link:../simple-notation-core
+      '@mlt/tempo-controls-ui':
+        specifier: workspace:*
+        version: link:../tempo-controls-ui
+    devDependencies:
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.1.1
+        version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
   packages/singing-trainer-core:
     dependencies:
@@ -398,9 +469,15 @@ importers:
 
   packages/student-notation-ui:
     dependencies:
+      '@mlt/audio-samples':
+        specifier: workspace:*
+        version: link:../audio-samples
       '@mlt/handoff':
         specifier: workspace:*
         version: link:../handoff
+      '@mlt/notation-glyphs':
+        specifier: workspace:*
+        version: link:../notation-glyphs
       '@mlt/pitch-viewport':
         specifier: workspace:*
         version: link:../pitch-viewport
@@ -455,6 +532,18 @@ importers:
     devDependencies:
       typescript:
         specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/tempo-controls-ui:
+    devDependencies:
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
 
   packages/types:

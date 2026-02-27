@@ -20,7 +20,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@mlt/audio-samples": "workspace:*",
     "@mlt/handoff": "workspace:*",
+    "@mlt/notation-glyphs": "workspace:*",
     "@mlt/pitch-viewport": "workspace:*",
     "@mlt/student-notation-engine": "workspace:*",
     "@mlt/ui-components": "workspace:*",

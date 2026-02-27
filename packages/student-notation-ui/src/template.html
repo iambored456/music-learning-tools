@@ -50,6 +50,27 @@
 <main id="app-container" role="main">
   <!-- Toolbar Container -->
   <nav id="toolbar" role="navigation" aria-label="Music notation tools">
+    <!-- Mobile Pocket Console -->
+    <div id="mobile-pocket-console" aria-label="Mobile pocket console">
+        <button id="mobile-tab-prev" class="mobile-pocket-nav-button" type="button" aria-label="Previous tab">&lt;</button>
+        <button id="mobile-tab-chip" class="mobile-pocket-tab-chip" type="button" aria-label="Open tab panel">
+            <span id="mobile-tab-chip-label">Timbre</span>
+        </button>
+        <button id="mobile-tab-next" class="mobile-pocket-nav-button" type="button" aria-label="Next tab">&gt;</button>
+        <button class="toolkit-icon-button mobile-pocket-icon-button" id="mobile-undo-button" type="button" title="Undo" aria-label="Undo">
+            <img src="assets/icons/undo.svg" alt="Undo">
+        </button>
+        <button class="toolkit-icon-button mobile-pocket-icon-button" id="mobile-eraser-button" type="button" title="Eraser" aria-label="Eraser">
+            <img src="assets/icons/eraser.svg" alt="Eraser">
+        </button>
+        <button class="toolkit-icon-button mobile-pocket-icon-button" id="mobile-play-button" type="button" title="Play/Pause" aria-label="Play or pause">
+            <img src="assets/icons/play.svg" alt="Play">
+        </button>
+        <button class="toolkit-icon-button mobile-pocket-icon-button" id="mobile-stop-button" type="button" title="Stop" aria-label="Stop">
+            <img src="assets/icons/stop.svg" alt="Stop">
+        </button>
+        <button id="mobile-tools-toggle" class="mobile-pocket-more-button" type="button" aria-label="More tools">...</button>
+    </div>
     <!-- Primary Toolbar -->
     <div id="toolbar-primary" class="toolbar-primary">
         <div class="primary-toolbar-grid-5x5">
@@ -797,6 +818,7 @@
         </div>
     </div>
   </nav>
+  <div id="mobile-console-backdrop" hidden aria-hidden="true"></div>
   <div id="canvas-container" role="region" aria-label="Musical notation canvas">
     <div id="canvas-content">
         <div id="grids-wrapper">
@@ -937,6 +959,7 @@
 <div data-svelte-component="sidebar-bridge" style="display: none;"></div>
 <div data-svelte-component="tool-selector-bridge" style="display: none;"></div>
 <div data-svelte-component="audio-controls-bridge" style="display: none;"></div>
+<div data-svelte-component="mobile-pocket-console-bridge" style="display: none;"></div>
 <!-- Tab management bridge -->
 <div data-svelte-component="tab-management-bridge" style="display: none;"></div>
 <!-- Modal bridges -->

@@ -20,6 +20,7 @@ import ModulationBridge from './toolbar/ModulationBridge.svelte';
 import SidebarBridge from './toolbar/SidebarBridge.svelte';
 import ToolSelectorBridge from './toolbar/ToolSelectorBridge.svelte';
 import AudioControlsBridge from './toolbar/AudioControlsBridge.svelte';
+import MobilePocketConsoleBridge from './toolbar/MobilePocketConsoleBridge.svelte';
 import TabManagementBridge from './tabs/TabManagementBridge.svelte';
 import PrintPreviewBridge from './modals/PrintPreviewBridge.svelte';
 // Phase 3: Modernized Svelte 5 components
@@ -132,6 +133,7 @@ const componentRegistry: Record<string, any> = {
   'sidebar-bridge': SidebarBridge,
   'tool-selector-bridge': ToolSelectorBridge,
   'audio-controls-bridge': AudioControlsBridge,
+  'mobile-pocket-console-bridge': MobilePocketConsoleBridge,
   // Tab management bridge
   'tab-management-bridge': TabManagementBridge,
   // Modal bridges

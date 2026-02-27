@@ -189,6 +189,26 @@
       </div>
     </div>
     <div id="app"></div>
+    <script>
+      (function () {
+        var fill = document.getElementById('loading-progress-fill');
+        var txt  = document.getElementById('loading-progress-text');
+        if (!fill) return;
+        var started = Date.now();
+        var handle;
+        function tick() {
+          var elapsed = Date.now() - started;
+          var pct = 14 * (1 - Math.exp(-elapsed / 6000));
+          fill.style.width = pct.toFixed(2) + '%';
+          if (txt) txt.textContent = Math.floor(pct) + '%';
+          handle = requestAnimationFrame(tick);
+        }
+        handle = requestAnimationFrame(tick);
+        window.__clearStage1Progress = function () {
+          cancelAnimationFrame(handle);
+        };
+      })();
+    </script>
     <script type="module" src="/student-notation/main.ts"></script>
   </body>
 </html>

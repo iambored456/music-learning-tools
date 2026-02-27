@@ -1,3 +1,5 @@
+import { createSixteenthHexBase } from '@mlt/notation-glyphs';
+
 export type Point = { x: number; y: number };
 export type Diamond = { T: Point; R: Point; B: Point; L: Point };
 
@@ -260,20 +262,5 @@ export function renderSixteenthStampRowSVG(options: RenderSixteenthStampRowSVGOp
 }
 
 export function createHexDiamondBase(width: number, totalHeight: number, centerY: number): Point[] {
-  const triHeight = (Math.sqrt(3) / 2) * width;
-  const bodyHeight = Math.max(1, totalHeight - (2 * triHeight));
-
-  const yTop = centerY - ((bodyHeight / 2) + triHeight);
-  const yUpper = yTop + triHeight;
-  const yLower = yUpper + bodyHeight;
-  const yBottom = yLower + triHeight;
-
-  return [
-    { x: width / 2, y: yTop },
-    { x: 0, y: yUpper },
-    { x: 0, y: yLower },
-    { x: width / 2, y: yBottom },
-    { x: width, y: yLower },
-    { x: width, y: yUpper }
-  ];
+  return createSixteenthHexBase(width, totalHeight, centerY);
 }

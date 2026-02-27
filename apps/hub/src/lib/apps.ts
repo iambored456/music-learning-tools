@@ -31,6 +31,15 @@ export const appCards: AppCard[] = [
     accent: '#bb9b3b',
   },
   {
+    id: 'simple-notation',
+    name: 'Simple Notation',
+    description: 'Diatonic oval notation with block rhythms, drone, and keyboard-first practice.',
+    href: withBase('simple-notation/'),
+    preview: withBase('previews/simple-notation.png'),
+    tags: ['Diatonic', 'Rhythm Blocks', 'Drone'],
+    accent: '#4d9b7f',
+  },
+  {
     id: 'diatonic-compass',
     name: 'Diatonic Compass',
     description: 'Interactive compass for keys, modes, and diatonic relationships.',

@@ -229,3 +229,10 @@ export function getDrumMachineMetadata(
 export function listDrumMachines(): DrumMachineMetadata[] {
   return Object.values(DRUM_MACHINE_METADATA);
 }
+
+export type {
+  DrumVoiceCategory,
+  DrumVoiceMetadata,
+  LocalDrumLayer,
+  LocalDrumSampleEntry
+} from './localDrumSamples.js';

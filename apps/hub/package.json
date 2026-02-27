@@ -22,6 +22,7 @@
   "dependencies": {
     "@mlt/diatonic-compass-ui": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
+    "@mlt/simple-notation-ui": "workspace:*",
     "@mlt/singing-trainer-ui": "workspace:*",
     "@mlt/student-notation-ui": "workspace:*",
     "@mlt/visual-metronome-ui": "workspace:*",

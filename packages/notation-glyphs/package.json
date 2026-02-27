@@ -1,0 +1,22 @@
+{
+  "name": "@mlt/notation-glyphs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared notation glyph geometry utilities",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": ["src"],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

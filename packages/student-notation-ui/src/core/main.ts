@@ -55,6 +55,7 @@ import { initDrawSystem } from '@/bootstrap/draw/initDrawSystem.ts';
 import { initInputAndDiagnostics } from '@/bootstrap/input/initInputAndDiagnostics.ts';
 import toolbar from '@components/toolbar/toolbar.ts';
 import { mountSvelteComponents, unmountSvelteComponents } from '@/svelte-ui/index.ts';
+import { initLocalDrumSampleChoices } from '@components/canvas/drumGrid/drumGridInteractor.ts';
 import rhythmUI from '@components/canvas/macrobeatTools/rhythmUI.js';
 import sixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
 import tripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.js';
@@ -300,6 +301,8 @@ async function startStudentNotation(): Promise<void> {
   // Weighted loading tasks — heavier phases get higher weight so the progress
   // bar advances in proportion to actual work done.
   const loadingPhases: Array<[name: string, weight: number]> = [
+    // Pre-JS loading phase — immediately completed to claim credit for Stage 1 animation
+    ['loading-scripts',       8],  // 8/50 ≈ 16%, always ahead of Stage 1 asymptote (~14%)
     // Setup
     ['detect-device',         1],
     ['configure-audio-ctx',   1],
@@ -344,10 +347,17 @@ async function startStudentNotation(): Promise<void> {
 
   try {
     initDebug('loadingManager.init()');
+    // Stop Stage 1 progress animation (inline script from index.html) before taking over
+    if (typeof (window as Window & { __clearStage1Progress?: () => void }).__clearStage1Progress === 'function') {
+      (window as Window & { __clearStage1Progress?: () => void }).__clearStage1Progress!();
+      delete (window as Window & { __clearStage1Progress?: () => void }).__clearStage1Progress;
+    }
     loadingManager.init();
-    loadingManager.updateStatus('Registering loading phases...');
+    loadingManager.updateStatus('Loading application...');
     loadingPhases.forEach(([name, weight]) => loadingManager.registerTask(name, weight));
     initDebug(`registered ${loadingPhases.length} loading phases (total weight ${loadingPhases.reduce((s, [, w]) => s + w, 0)})`);
+    // Immediately claim credit for the pre-JS loading phase so the bar advances past Stage 1
+    loadingManager.completeTask('loading-scripts');
     initDebug('startup rhythm defaults', {
       macrobeatGroupings: store.state.macrobeatGroupings,
       macrobeatBoundaryStyles: store.state.macrobeatBoundaryStyles
@@ -359,7 +369,7 @@ async function startStudentNotation(): Promise<void> {
       adsr: startupTimbre?.adsr ?? null,
       preset: startupTimbre?.activePresetName ?? null
     });
-    // Yield so the browser paints the status update before synchronous work begins
+    // Yield so the browser paints the progress advance before synchronous work begins
     await loadingManager.nextFrame();
 
     // ── Setup ──────────────────────────────────────────────
@@ -680,6 +690,9 @@ async function startStudentNotation(): Promise<void> {
     initDebug('all phases complete — removing loading screen');
     await loadingManager.complete();
     initDebug('loading screen removed — app ready');
+    // Kick off local drum sample loading AFTER the loading screen is gone.
+    // Calling this earlier (at module-eval time) triggers a Vite dev-server full-reload.
+    void initLocalDrumSampleChoices();
 
     // Initialize modulation testing (keep for advanced debugging)
     window.ModulationTest = ModulationTest;

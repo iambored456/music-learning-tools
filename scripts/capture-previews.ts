@@ -77,6 +77,18 @@ const TARGETS: CaptureTarget[] = [
 `,
   },
   {
+    id: 'simple-notation',
+    distDir: 'apps/hub/dist',
+    route: '/simple-notation/',
+    waitFor: '#simple-notation-app',
+    delayMs: 600,
+    injectCss: `
+.audio-gate {
+  display: none !important;
+}
+`,
+  },
+  {
     id: 'diatonic-compass',
     distDir: 'apps/hub/dist',
     route: '/diatonic-compass/',

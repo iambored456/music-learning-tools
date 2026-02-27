@@ -19,11 +19,15 @@ export default defineConfig({
   plugins: [svelte()],
   optimizeDeps: {
     exclude: [
+      '@mlt/audio-samples',
       '@mlt/ui-components',
       '@mlt/student-notation-engine',
       '@mlt/student-notation-ui',
       '@mlt/singing-trainer-core',
       '@mlt/singing-trainer-ui',
+      '@mlt/simple-notation-ui',
+      '@mlt/simple-notation-core',
+      '@mlt/tempo-controls-ui',
       '@mlt/diatonic-compass-ui',
       '@mlt/visual-metronome-ui',
       '@mlt/pitch-utils',
@@ -55,6 +59,7 @@ export default defineConfig({
       input: {
         main: resolve(root, 'index.html'),
         'student-notation': resolve(root, 'student-notation/index.html'),
+        'simple-notation': resolve(root, 'simple-notation/index.html'),
         'singing-trainer': resolve(root, 'singing-trainer/index.html'),
         'diatonic-compass': resolve(root, 'diatonic-compass/index.html'),
         'visual-metronome': resolve(root, 'visual-metronome/index.html'),

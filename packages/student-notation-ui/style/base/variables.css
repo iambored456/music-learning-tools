@@ -72,6 +72,7 @@
   --toolbar-block-max: 300px;
   --toolbar-block-size: clamp(var(--toolbar-block-min), var(--toolbar-block-ideal), var(--toolbar-block-max));
   --toolbar-padding: clamp(var(--space-010), 1dvh, var(--space-025));
+  --mobile-pocket-console-height: 56px;
   /* Sub-tab rail height (Presets/Effects tabs in Timbre) */
   --preset-tab-rail-height: 28px;
 
