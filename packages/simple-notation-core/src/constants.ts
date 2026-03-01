@@ -15,7 +15,7 @@ export const MAX_ROW_WIDTH_MICROBEATS = 25;
 export const MIN_MICROBEAT_PIXEL_WIDTH = 12;
 export const TARGET_MICROBEAT_PIXEL_WIDTH = 32;
 
-export const MICROBEAT_TEMPO_MIN = 120;
+export const MICROBEAT_TEMPO_MIN = 40;
 export const MICROBEAT_TEMPO_MAX = 360;
 
 export const MIN_MEASURE_MICROBEATS = 4;
@@ -129,7 +129,7 @@ export const DEFAULTS = {
     type: TOOL_TYPES.BLOCK,
     id: BLOCK_TYPES.START_2,
   },
-  MAIN_PLAYBACK_VOICE: 'sine',
+  MAIN_PLAYBACK_VOICE: 'triangle',
   DRONE_VOICE: 'sawtooth',
   DRONE_IS_ON: false,
   MAIN_VOLUME: 0.75,

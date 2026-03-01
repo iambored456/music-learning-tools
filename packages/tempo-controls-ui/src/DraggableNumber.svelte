@@ -37,6 +37,7 @@
   let isEditing = $state(false);
   let dragStart = $state({ y: 0, value: 0 });
   let changeFactor = $state(1);
+  let activePointerId = $state<number | null>(null);
 
   const width = $derived(size[0]);
   const height = $derived(size[1]);
@@ -72,10 +73,13 @@
     displayValue = formatValue(value);
   }
 
-  function handleMouseDown(e: MouseEvent): void {
+  function handlePointerDown(e: PointerEvent): void {
     if (!inputElement) return;
+    if (!e.isPrimary) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
 
     isDragging = true;
+    activePointerId = e.pointerId;
     dragStart = { y: e.clientY, value };
 
     const rect = inputElement.getBoundingClientRect();
@@ -83,9 +87,10 @@
     changeFactor = invert(relX);
 
     inputElement.readOnly = true;
+    inputElement.setPointerCapture?.(e.pointerId);
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isDragging) return;
+    const handlePointerMove = (ev: PointerEvent) => {
+      if (!isDragging || ev.pointerId !== activePointerId) return;
 
       const dy = ev.clientY - dragStart.y;
       const range = clip(max - min, 0, 1000);
@@ -95,10 +100,14 @@
       updateValue(newValue);
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== activePointerId) return;
       isDragging = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      activePointerId = null;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      inputElement?.releasePointerCapture?.(ev.pointerId);
 
       if (Math.abs(e.clientY - dragStart.y) < 3) {
         isEditing = true;
@@ -108,8 +117,9 @@
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
   }
 
   function handleInput(e: Event): void {
@@ -162,7 +172,7 @@
   style:--font-size={useAppStyling ? '13px' : `${minDimension / 2}px`}
   style:--padding={useAppStyling ? '0' : `${minDimension / 4}px`}
   oninput={handleInput}
-  onmousedown={handleMouseDown}
+  onpointerdown={handlePointerDown}
   onblur={handleBlur}
   onkeydown={handleKeyDown}
   ondragstart={(e) => e.preventDefault()}
@@ -181,6 +191,7 @@
     box-sizing: border-box;
     user-select: text;
     text-align: center;
+    touch-action: none;
   }
 
   input.app-styling {

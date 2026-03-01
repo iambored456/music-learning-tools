@@ -4,6 +4,7 @@
   import { TempoControls } from '@mlt/tempo-controls-ui';
   import {
     COLOR_PALETTE,
+    DEFAULTS,
     KEY_CODES,
     MICROBEAT_TEMPO_MAX,
     MICROBEAT_TEMPO_MIN,
@@ -16,7 +17,9 @@
     getPitchNameForDisplay,
     type NoteDefinition,
     type SimpleNotationState,
+    type TonicValue,
   } from '@mlt/simple-notation-core';
+
 
   type NoteShape = 'oval' | 'diamond' | 'circle';
 
@@ -70,6 +73,13 @@
   type PersistedCanvasState = {
     version: 1;
     pickupBeats: number;
+    microbeatTempo?: number;
+    rows: Array<Array<PersistedCanvasCell | null>>;
+    pickupCells: Array<PersistedCanvasCell | null>;
+  };
+
+  type CanvasHistorySnapshot = {
+    pickupBeats: number;
     rows: Array<Array<PersistedCanvasCell | null>>;
     pickupCells: Array<PersistedCanvasCell | null>;
   };
@@ -121,6 +131,64 @@
 
   type ColorPaletteMode = 'oklch' | 'chromanotes';
 
+  type MobileViewportProfile = {
+    name: string;
+    width: number;
+    height: number;
+  };
+
+  type AdaptiveLayoutProfile = 'comfortable' | 'compact' | 'tight';
+
+  type AdaptiveLayoutConfig = {
+    profile: AdaptiveLayoutProfile;
+    controlsColumns: number;
+    rowsColumns: number;
+    controlsScale: number;
+    controlsGapPx: number;
+    controlsPanelPaddingPx: number;
+    groupMinWidthPx: number;
+    bankScale: number;
+    cellHeightRatio: number;
+    rowsGapPx: number;
+  };
+
+  type AdaptiveLayoutMetrics = {
+    viewportWidth: number;
+    viewportHeight: number;
+    coarsePointer: boolean;
+    controlsGroupCount: number;
+    rowCount: number;
+  };
+
+  type StudentViewSettings = {
+    hideMainVoice?: boolean;
+    hideVolumeSlider?: boolean;
+    hideGearSettings?: boolean;
+    hideEighthBank?: boolean;
+    hideSixteenthBank?: boolean;
+    hidePickupBeats?: boolean;
+    hideCanvasActions?: boolean;
+    hideEighthTempo?: boolean;
+    hideQuarterTempo?: boolean;
+    hideDottedQuarterTempo?: boolean;
+    hideTempoSlider?: boolean;
+  };
+
+  type ShareDocument = {
+    v: 1;
+    tonic: TonicValue;
+    tempo: number;
+    timeSig?: [number, number];
+    pickupBeats: number;
+    rows: Array<Array<PersistedCanvasCell | null>>;
+    pickupCells: Array<PersistedCanvasCell | null>;
+    sv?: StudentViewSettings;
+  };
+
+  type ShareDecodeResult =
+    | { ok: true; doc: ShareDocument }
+    | { ok: false; reason: 'checksum' | 'decode' | 'decompress' | 'parse' | 'version-unknown' | 'schema' | 'version-mismatch' };
+
   const CHROMANOTES_PALETTE: Record<string, string> = {
     '1': '#e20011',
     b2_s1: '#e32302',
@@ -145,6 +213,10 @@
   const PICKUP_MAX_BEATS = 3;
   const CANVAS_PERSISTENCE_KEY = 'simple-notation-ui:canvas:v1';
   const CANVAS_PERSISTENCE_VERSION = 1;
+  const SHARE_FRAGMENT_PREFIX = 'share/';
+  const SHARE_ROUTE_VERSION = 'v1';
+  const SHARE_URL_WARN_LENGTH = 2000;
+  const SHARE_URL_SEVERE_LENGTH = 4000;
   const KARAOKE_ARC_HEIGHT_MIN = 0;
   const KARAOKE_ARC_HEIGHT_MAX = 100;
   const KARAOKE_BALL_SIZE_MIN = 8;
@@ -161,14 +233,49 @@
   const BANK_LATTICE_COLUMN_COUNT_CIRCLE = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_CIRCLE);
   const BANK_LATTICE_COLUMN_COUNT_OVAL = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_OVAL);
   const BANK_LATTICE_COLUMN_COUNT_DIAMOND = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
+  const loopIconUrl = new URL('./assets/loop.svg', import.meta.url).href;
+  const volumeIconUrl = new URL('./assets/volume.svg', import.meta.url).href;
+  const undoIconUrl = new URL('./assets/undo.svg', import.meta.url).href;
+  const redoIconUrl = new URL('./assets/redo.svg', import.meta.url).href;
+  const eraserIconUrl = new URL('./assets/eraser.svg', import.meta.url).href;
+  const CANVAS_HISTORY_MAX_SIZE = 300;
   const PLAYBACK_HIGHLIGHT_DEBUG = false;
   const PLAYED_NOTE_MUTING_DEBUG = false;
+  const PICKUP_RENDER_DEBUG = false;
+  const MOBILE_LAYOUT_DEBUG = true;
+  const VIEWPORT_FIT_HEIGHT_MAX = 1100;
+  const VIEWPORT_FIT_WIDTH_MIN = 700;
+  const ADAPTIVE_LAYOUT_DEFAULT: AdaptiveLayoutConfig = {
+    profile: 'comfortable',
+    controlsColumns: 4,
+    rowsColumns: 1,
+    controlsScale: 1,
+    controlsGapPx: 8,
+    controlsPanelPaddingPx: 8,
+    groupMinWidthPx: 146,
+    bankScale: 1,
+    cellHeightRatio: 2,
+    rowsGapPx: 14,
+  };
+  const IPAD_VIEWPORT_PROFILES: MobileViewportProfile[] = [
+    { name: 'iPad 9.7 portrait', width: 768, height: 1024 },
+    { name: 'iPad 9.7 landscape', width: 1024, height: 768 },
+    { name: 'iPad Air 10.9 portrait', width: 820, height: 1180 },
+    { name: 'iPad Air 10.9 landscape', width: 1180, height: 820 },
+    { name: 'iPad Pro 11 portrait', width: 834, height: 1194 },
+    { name: 'iPad Pro 11 landscape', width: 1194, height: 834 },
+    { name: 'iPad Pro 12.9 portrait', width: 1024, height: 1366 },
+    { name: 'iPad Pro 12.9 landscape', width: 1366, height: 1024 },
+    { name: 'iPad Mini 8.3 portrait', width: 744, height: 1133 },
+    { name: 'iPad Mini 8.3 landscape', width: 1133, height: 744 },
+  ];
 
   // Keep notebank sizing from Student Notation while allowing cell-placed sixteenths to fill slot height.
   const BANK_SIXTEENTH_HEX_PATH = createSixteenthHexPath(60, 60, 50, 110);
   // Keep placed sixteenths close to slot bounds while avoiding top/bottom stroke clipping.
   const PLACED_SIXTEENTH_HEX_PATH = createSixteenthHexPath(12.5, 50, 21, 96);
   const PLACED_SIXTEENTH_HEX_VIEWBOX = '0 0 25 100';
+  const SIXTEENTH_SLOTS: SixteenthSlot[] = [0, 1];
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
@@ -178,6 +285,7 @@
   let audioStartPromise: Promise<boolean> | null = null;
 
   let isPlaying = false;
+  let isLooping = false;
   let playbackIndex = 0;
   let playbackTimer: ReturnType<typeof setInterval> | null = null;
   let pendingPlaybackTimeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -198,9 +306,46 @@
 
   let dragPayload: DragPayload | null = null;
   let dragOverCell: GridDropTarget | null = null;
+  let tapPlacementPayload: DragPayload | null = null;
+  let cursorPreview: { note: PlacedNote; x: number; y: number } | null = null;
+  let cursorOverCanvas = false;
+  let pickupPreviewLogKey: string | null = null;
+  let mobileLayoutLogKey: string | null = null;
+  let adaptiveLayoutLogKey: string | null = null;
   let keyboardHighlightedNoteId: string | null = null;
+  let viewportFitMode = false;
+  let adaptiveLayout: AdaptiveLayoutConfig = ADAPTIVE_LAYOUT_DEFAULT;
   let colorPaletteMode: ColorPaletteMode = 'oklch';
   let showAccidentals = false;
+  let showEighthsBank = true;
+  let showSixteenthsBank = false;
+  let settingsOpen = false;
+  let settingsDialog: HTMLDialogElement | undefined;
+  let shareModalOpen = false;
+  let shareUrl = '';
+  let shareCode = '';
+  let shareCopied = false;
+  let shareCodeCopied = false;
+  let shareFailed = false;
+  let shareDecodeError: string | null = null;
+  let loadCodeValue = '';
+
+  let studentViewModalOpen = false;
+  let pickupBeatsModalOpen = false;
+  let studentViewSettings: StudentViewSettings = {};
+  let shareStudentViewUrl = '';
+  let shareStudentViewCode = '';
+  let shareStudentViewCopied = false;
+  let shareStudentViewCodeCopied = false;
+  let isStudentView = false;
+  let activeStudentView: StudentViewSettings = {};
+  let volumePopupOpen = false;
+  let volumeControlWrapper: HTMLDivElement | null = null;
+  let showTapPlacementHint = true;
+  let eraserMode = false;
+  let canvasHistory: CanvasHistorySnapshot[] = [];
+  let canvasHistoryPointer = -1;
+  let suppressCanvasHistoryTracking = false;
 
   let pickupBeats = 0;
   let pickupRow: GridRow = createEmptyRow('pickup');
@@ -224,12 +369,34 @@
     gridRows;
     pickupRow;
     pickupBeats;
+    state.microbeatTempo;
     persistCanvasState();
+    trackCanvasHistorySnapshot();
+  }
+
+  $: if (canvasPersistenceReady && MOBILE_LAYOUT_DEBUG && typeof window !== 'undefined') {
+    pickupBeats;
+    gridRows.length;
+    showAccidentals;
+    viewportFitMode;
+    updateAdaptiveLayout();
+    settingsOpen;
+    shareModalOpen;
+    queueMobileLayoutSnapshot('UI state changed.');
+  }
+
+  $: if ((isStudentView && activeStudentView.hideVolumeSlider) || shareModalOpen || studentViewModalOpen || settingsOpen) {
+    volumePopupOpen = false;
   }
 
   onMount(() => {
-    loadPersistedCanvasState();
-    canvasPersistenceReady = true;
+    void (async () => {
+      const loadedFromShare = await tryLoadShareFragment();
+      if (!loadedFromShare) {
+        loadPersistedCanvasState();
+      }
+      canvasPersistenceReady = true;
+    })();
 
     unsubscribeModel = model.subscribe((nextState) => {
       const previousState = state;
@@ -239,11 +406,34 @@
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     window.addEventListener('keyup', handleGlobalKeyUp);
-
+    window.addEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
+    const handleViewportDiagnostics = () => {
+      updateViewportFitMode();
+      updateTapPlacementHintVisibility();
+      updateAdaptiveLayout();
+      queueMobileLayoutSnapshot('Viewport changed.');
+    };
+    const handleVisualViewportDiagnostics = () => {
+      updateViewportFitMode();
+      updateTapPlacementHintVisibility();
+      updateAdaptiveLayout();
+      queueMobileLayoutSnapshot('Visual viewport changed.');
+    };
+    updateViewportFitMode();
+    updateTapPlacementHintVisibility();
+    updateAdaptiveLayout();
+    window.addEventListener('resize', handleViewportDiagnostics);
+    window.addEventListener('orientationchange', handleViewportDiagnostics);
+    window.visualViewport?.addEventListener('resize', handleVisualViewportDiagnostics);
+    queueMobileLayoutSnapshot('Mounted.');
     return () => {
       stopPlayback();
       window.removeEventListener('keydown', handleGlobalKeyDown);
       window.removeEventListener('keyup', handleGlobalKeyUp);
+      window.removeEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
+      window.removeEventListener('resize', handleViewportDiagnostics);
+      window.removeEventListener('orientationchange', handleViewportDiagnostics);
+      window.visualViewport?.removeEventListener('resize', handleVisualViewportDiagnostics);
       unsubscribeModel?.();
       audio.dispose();
     };
@@ -496,17 +686,20 @@
         };
       }
 
-      return {
-        shape: 'circle',
-        role: 'continuation',
-        startCellIndex: cell.startCellIndex,
-      };
+      // Legacy continuation cells are normalized away in-memory.
+      return null;
     }
 
     return {
       shape: 'diamond',
       notes: [cell.notes[0] ? clonePlacedNote(cell.notes[0]) : null, cell.notes[1] ? clonePlacedNote(cell.notes[1]) : null],
     };
+  }
+
+  function noteShapeLabel(shape: NoteShape): string {
+    if (shape === 'circle') return 'quarter';
+    if (shape === 'oval') return 'eighth';
+    return 'sixteenth';
   }
 
   function serializeCellForPersistence(cell: GridCellContent | null): PersistedCanvasCell | null {
@@ -521,7 +714,8 @@
         return cell.notes[0] ? { shape: 'circle', role: 'start', noteId: cell.notes[0].noteId } : null;
       }
 
-      return { shape: 'circle', role: 'continuation', startCellIndex: cell.startCellIndex };
+      // Continuation cells are legacy-only and no longer persisted.
+      return null;
     }
 
     const leftNoteId = cell.notes[0]?.noteId ?? null;
@@ -556,13 +750,8 @@
       }
 
       if (role === 'continuation') {
-        const startCellIndex = Number(cell.startCellIndex);
-        if (!Number.isFinite(startCellIndex)) return null;
-        return {
-          shape: 'circle',
-          role: 'continuation',
-          startCellIndex: Math.max(0, Math.floor(startCellIndex)),
-        };
+        // Legacy continuation cells are ignored; start cells render across both microbeats.
+        return null;
       }
 
       return null;
@@ -584,12 +773,96 @@
     return null;
   }
 
+  function captureCanvasHistorySnapshot(): CanvasHistorySnapshot {
+    return {
+      pickupBeats,
+      rows: gridRows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
+      pickupCells: pickupRow.cells.map((cell) => serializeCellForPersistence(cell)),
+    };
+  }
+
+  function applyCanvasHistorySnapshot(snapshot: CanvasHistorySnapshot): void {
+    const restoredRows = snapshot.rows
+      .map((rawRow) => ({
+        id: createId('row'),
+        cells: Array.from({ length: GRID_COLUMNS }, (_, index) => deserializePersistedCell(rawRow[index] ?? null)),
+      }));
+    const restoredPickupCells = Array.from({ length: GRID_COLUMNS }, (_, index) =>
+      deserializePersistedCell(snapshot.pickupCells[index] ?? null),
+    );
+    enforcePickupCellBoundaries(restoredPickupCells, snapshot.pickupBeats);
+
+    suppressCanvasHistoryTracking = true;
+    pickupBeats = snapshot.pickupBeats;
+    gridRows = restoredRows.length > 0 ? restoredRows : Array.from({ length: INITIAL_ROWS }, () => createEmptyRow());
+    pickupRow = { id: createId('pickup'), cells: restoredPickupCells };
+    suppressCanvasHistoryTracking = false;
+
+    tapPlacementPayload = null;
+    dragPayload = null;
+    dragOverCell = null;
+    pickupPreviewLogKey = null;
+  }
+
+  function trackCanvasHistorySnapshot(): void {
+    if (suppressCanvasHistoryTracking) return;
+
+    const snapshot = captureCanvasHistorySnapshot();
+    const snapshotKey = JSON.stringify(snapshot);
+    const currentSnapshot = canvasHistoryPointer >= 0 ? canvasHistory[canvasHistoryPointer] : null;
+    const currentKey = currentSnapshot ? JSON.stringify(currentSnapshot) : null;
+    if (snapshotKey === currentKey) return;
+
+    const truncatedHistory = canvasHistory.slice(0, canvasHistoryPointer + 1);
+    truncatedHistory.push(snapshot);
+
+    if (truncatedHistory.length > CANVAS_HISTORY_MAX_SIZE) {
+      truncatedHistory.splice(0, truncatedHistory.length - CANVAS_HISTORY_MAX_SIZE);
+    }
+
+    canvasHistory = truncatedHistory;
+    canvasHistoryPointer = canvasHistory.length - 1;
+  }
+
+  function resetCanvasHistoryToCurrent(): void {
+    const snapshot = captureCanvasHistorySnapshot();
+    canvasHistory = [snapshot];
+    canvasHistoryPointer = 0;
+  }
+
+  function canCanvasUndo(): boolean {
+    return canvasHistoryPointer > 0;
+  }
+
+  function canCanvasRedo(): boolean {
+    return canvasHistoryPointer >= 0 && canvasHistoryPointer < canvasHistory.length - 1;
+  }
+
+  function undoCanvas(): void {
+    if (!canCanvasUndo()) return;
+    canvasHistoryPointer -= 1;
+    applyCanvasHistorySnapshot(canvasHistory[canvasHistoryPointer]);
+    if (isPlaying) {
+      stopPlayback();
+    }
+  }
+
+  function redoCanvas(): void {
+    if (!canCanvasRedo()) return;
+    canvasHistoryPointer += 1;
+    applyCanvasHistorySnapshot(canvasHistory[canvasHistoryPointer]);
+    if (isPlaying) {
+      stopPlayback();
+    }
+  }
+
   function persistCanvasState(): void {
     if (typeof window === 'undefined') return;
 
     const persistedState: PersistedCanvasState = {
       version: 1,
       pickupBeats,
+      microbeatTempo: state.microbeatTempo,
       rows: gridRows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
       pickupCells: pickupRow.cells.map((cell) => serializeCellForPersistence(cell)),
     };
@@ -621,6 +894,10 @@
     const pickupValue = Number(persisted.pickupBeats);
     const nextPickupBeats =
       Number.isFinite(pickupValue) ? Math.max(0, Math.min(PICKUP_MAX_BEATS, Math.round(pickupValue))) : 0;
+    const persistedTempoValue = Number(persisted.microbeatTempo);
+    const nextMicrobeatTempo = Number.isFinite(persistedTempoValue)
+      ? Math.max(MICROBEAT_TEMPO_MIN, Math.min(MICROBEAT_TEMPO_MAX, Math.round(persistedTempoValue)))
+      : DEFAULTS.MICROBEAT_TEMPO;
 
     const rowsInput = Array.isArray(persisted.rows) ? persisted.rows : [];
     const restoredRows = rowsInput
@@ -645,7 +922,316 @@
       id: createId('pickup'),
       cells: restoredPickupCells,
     };
+    model.setMicrobeatTempo(nextMicrobeatTempo);
+    resetCanvasHistoryToCurrent();
   }
+
+  // --- Share feature ---
+
+  function buildShareDocument(): ShareDocument {
+    return {
+      v: 1,
+      tonic: state.rootNoteTonic,
+      tempo: state.microbeatTempo,
+      timeSig: [4, 4],
+      pickupBeats,
+      rows: gridRows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
+      pickupCells: pickupRow.cells.map((cell) => serializeCellForPersistence(cell)),
+    };
+  }
+
+  async function computeChecksum(payload: string): Promise<string | null> {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+    try {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+      return Array.from(new Uint8Array(hashBuffer).slice(0, 4))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch {
+      return null;
+    }
+  }
+
+  async function encodeShareDocument(doc: ShareDocument): Promise<{ payload: string; code: string }> {
+    const inputBytes = new TextEncoder().encode(JSON.stringify(doc));
+    const cs = new CompressionStream('deflate-raw');
+    const writer = cs.writable.getWriter();
+    void writer.write(inputBytes);
+    void writer.close();
+    const compressed = await new Response(cs.readable).arrayBuffer();
+    const compressedArray = new Uint8Array(compressed);
+    let binary = '';
+    for (let i = 0; i < compressedArray.length; i++) {
+      binary += String.fromCharCode(compressedArray[i]);
+    }
+    const base64url = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    const checksum = await computeChecksum(base64url);
+    const code = checksum ? `${base64url}.${checksum}` : base64url;
+    const payload = `${SHARE_FRAGMENT_PREFIX}${SHARE_ROUTE_VERSION}/${code}`;
+    return { payload, code };
+  }
+
+  async function decodeBase64urlPayload(base64url: string): Promise<ShareDecodeResult> {
+    let binaryString: string;
+    try {
+      const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+      binaryString = atob(padded);
+    } catch (error) {
+      console.warn('Simple Notation share decode (base64) failed.', error);
+      return { ok: false, reason: 'decode' };
+    }
+
+    let decompressed: ArrayBuffer;
+    try {
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const ds = new DecompressionStream('deflate-raw');
+      const dsWriter = ds.writable.getWriter();
+      void dsWriter.write(bytes);
+      void dsWriter.close();
+      decompressed = await new Response(ds.readable).arrayBuffer();
+    } catch (error) {
+      console.warn('Simple Notation share decode (decompress) failed.', error);
+      return { ok: false, reason: 'decompress' };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder().decode(decompressed));
+    } catch (error) {
+      console.warn('Simple Notation share decode (JSON) failed.', error);
+      return { ok: false, reason: 'parse' };
+    }
+
+    return validateShareDocument(parsed);
+  }
+
+  async function decodeShareFragment(rawFragment: string): Promise<ShareDecodeResult | null> {
+    const fragment = rawFragment.startsWith('#') ? rawFragment.slice(1) : rawFragment;
+    if (!fragment.startsWith(SHARE_FRAGMENT_PREFIX)) return null;
+
+    const afterPrefix = fragment.slice(SHARE_FRAGMENT_PREFIX.length);
+
+    // New versioned format: share/v1/<code>
+    const versionMatch = afterPrefix.match(/^(v\d+)\/(.+)$/);
+    if (versionMatch) {
+      const routeVersion = versionMatch[1];
+      const codeStr = versionMatch[2];
+
+      if (routeVersion !== SHARE_ROUTE_VERSION) {
+        console.warn('Simple Notation share link has unrecognized route version:', routeVersion);
+        return { ok: false, reason: 'version-unknown' };
+      }
+
+      // Split code into payload + optional checksum (last '.', followed by exactly 8 hex chars)
+      const dotIndex = codeStr.lastIndexOf('.');
+      const hasChecksum = dotIndex !== -1 && codeStr.length - dotIndex === 9;
+      const base64url = hasChecksum ? codeStr.slice(0, dotIndex) : codeStr;
+      const storedChecksum = hasChecksum ? codeStr.slice(dotIndex + 1) : null;
+
+      if (storedChecksum) {
+        const expectedChecksum = await computeChecksum(base64url);
+        if (expectedChecksum && storedChecksum !== expectedChecksum) {
+          console.warn('Simple Notation share link checksum mismatch.');
+          return { ok: false, reason: 'checksum' };
+        }
+      }
+
+      return decodeBase64urlPayload(base64url);
+    }
+
+    // Legacy format: share/<payload> (no version segment, no checksum)
+    return decodeBase64urlPayload(afterPrefix);
+  }
+
+  function validateShareDocument(parsed: unknown): ShareDecodeResult {
+    if (!parsed || typeof parsed !== 'object') return { ok: false, reason: 'schema' };
+    const doc = parsed as Record<string, unknown>;
+    if (typeof doc.v !== 'number') return { ok: false, reason: 'schema' };
+    if (doc.v !== 1) return { ok: false, reason: 'version-mismatch' };
+    if (typeof doc.tonic !== 'string') return { ok: false, reason: 'schema' };
+    if (typeof doc.tempo !== 'number') return { ok: false, reason: 'schema' };
+    if (typeof doc.pickupBeats !== 'number') return { ok: false, reason: 'schema' };
+    if (!Array.isArray(doc.rows)) return { ok: false, reason: 'schema' };
+    if (!Array.isArray(doc.pickupCells)) return { ok: false, reason: 'schema' };
+    return { ok: true, doc: doc as unknown as ShareDocument };
+  }
+
+  function loadFromShareDocument(doc: ShareDocument): void {
+    model.setRootNoteTonic(doc.tonic);
+    model.setMicrobeatTempo(doc.tempo);
+
+    const clampedPickupBeats = Math.max(0, Math.min(PICKUP_MAX_BEATS, Math.round(doc.pickupBeats)));
+    const restoredRows = doc.rows
+      .map((rawRow) => {
+        if (!Array.isArray(rawRow)) return null;
+        return {
+          id: createId('row'),
+          cells: Array.from({ length: GRID_COLUMNS }, (_, index) => deserializePersistedCell(rawRow[index] ?? null)),
+        };
+      })
+      .filter((row): row is GridRow => row !== null);
+
+    const restoredPickupCells = Array.from({ length: GRID_COLUMNS }, (_, index) =>
+      deserializePersistedCell(doc.pickupCells[index] ?? null),
+    );
+    enforcePickupCellBoundaries(restoredPickupCells, clampedPickupBeats);
+
+    pickupBeats = clampedPickupBeats;
+    gridRows = restoredRows.length > 0 ? restoredRows : Array.from({ length: INITIAL_ROWS }, () => createEmptyRow());
+    pickupRow = { id: createId('pickup'), cells: restoredPickupCells };
+    resetCanvasHistoryToCurrent();
+
+    if (doc.sv && Object.keys(doc.sv).length > 0) {
+      isStudentView = true;
+      activeStudentView = doc.sv;
+    }
+  }
+
+  type ShareErrorReason = Exclude<ShareDecodeResult, { ok: true }>['reason'];
+
+  function shareDecodeErrorMessage(reason: ShareErrorReason): string {
+    switch (reason) {
+      case 'checksum': return 'Link appears altered in transit — ask the sender to share again.';
+      case 'decode': return 'Link characters appear corrupted — try copying fresh from the browser.';
+      case 'decompress': return 'Link appears truncated — copy the full URL or ask the sender to reshare.';
+      case 'parse': return 'Share link is unreadable — it may have been modified.';
+      case 'version-unknown': return 'This link needs a newer version of Simple Notation to open.';
+      case 'version-mismatch': return 'This share link was created with a newer version of Simple Notation.';
+      case 'schema': return 'Share link format is invalid — it may not have come from Simple Notation.';
+    }
+  }
+
+  async function tryLoadShareFragment(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith('#' + SHARE_FRAGMENT_PREFIX)) return false;
+
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    const result = await decodeShareFragment(hash);
+    if (!result) return false;
+
+    if (!result.ok) {
+      shareDecodeError = shareDecodeErrorMessage(result.reason);
+      console.warn('Simple Notation share load failed:', result.reason);
+      return false;
+    }
+
+    loadFromShareDocument(result.doc);
+    return true;
+  }
+
+  async function handleShare(): Promise<void> {
+    try {
+      shareFailed = false;
+      const doc = buildShareDocument();
+      const { payload, code } = await encodeShareDocument(doc);
+      shareUrl = `${window.location.origin}${window.location.pathname}#${payload}`;
+      shareCode = code;
+      shareCopied = false;
+      shareCodeCopied = false;
+      shareModalOpen = true;
+    } catch (error) {
+      console.error('Simple Notation share encoding failed.', error);
+      shareFailed = true;
+      shareUrl = '';
+      shareCode = '';
+      shareModalOpen = true;
+    }
+  }
+
+  async function copyShareUrl(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      shareCopied = true;
+      setTimeout(() => { shareCopied = false; }, 3000);
+    } catch {
+      // URL is visible in modal for manual selection
+    }
+  }
+
+  async function copyShareCode(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(shareCode);
+      shareCodeCopied = true;
+      setTimeout(() => { shareCodeCopied = false; }, 3000);
+    } catch {
+      // Code is visible in modal for manual selection
+    }
+  }
+
+  async function handleLoadFromCode(): Promise<void> {
+    const trimmed = loadCodeValue.trim();
+    if (!trimmed) return;
+    const syntheticHash = `#${SHARE_FRAGMENT_PREFIX}${SHARE_ROUTE_VERSION}/${trimmed}`;
+    const result = await decodeShareFragment(syntheticHash);
+    if (!result || !result.ok) {
+      shareDecodeError = result ? shareDecodeErrorMessage(result.reason) : 'Code could not be recognized.';
+      return;
+    }
+    loadFromShareDocument(result.doc);
+    loadCodeValue = '';
+    shareModalOpen = false;
+  }
+
+  async function handleShareStudentView(): Promise<void> {
+    try {
+      const doc: ShareDocument = { ...buildShareDocument(), sv: studentViewSettings };
+      const { payload, code } = await encodeShareDocument(doc);
+      shareStudentViewUrl = `${window.location.origin}${window.location.pathname}#${payload}`;
+      shareStudentViewCode = code;
+      shareStudentViewCopied = false;
+      shareStudentViewCodeCopied = false;
+    } catch (error) {
+      console.error('Simple Notation student view share encoding failed.', error);
+      shareStudentViewUrl = '';
+      shareStudentViewCode = '';
+    }
+  }
+
+  async function copyStudentViewUrl(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(shareStudentViewUrl);
+      shareStudentViewCopied = true;
+      setTimeout(() => { shareStudentViewCopied = false; }, 3000);
+    } catch {
+      // URL is visible in modal for manual selection
+    }
+  }
+
+  async function copyStudentViewCode(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(shareStudentViewCode);
+      shareStudentViewCodeCopied = true;
+      setTimeout(() => { shareStudentViewCodeCopied = false; }, 3000);
+    } catch {
+      // Code is visible in modal for manual selection
+    }
+  }
+
+  function buildGmailComposeUrl(code: string): string {
+    const subject = encodeURIComponent('Simple Notation composition');
+    const body = encodeURIComponent(
+      `Hello, I'd like to share my Simple Notation composition with you.\n\nTo open it:\n1. Go to https://iambored456.github.io/music-learning-tools/simple-notation/\n2. Click the Share button\n3. Paste this code into the "Load from code" field:\n\n${code}\n\nEnjoy!`
+    );
+    return `https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`;
+  }
+
+  function openGmailShare(): void {
+    if (!shareCode) return;
+    window.open(buildGmailComposeUrl(shareCode), '_blank', 'noopener,noreferrer');
+  }
+
+  function openGmailShareStudentView(): void {
+    if (!shareStudentViewCode) return;
+    window.open(buildGmailComposeUrl(shareStudentViewCode), '_blank', 'noopener,noreferrer');
+  }
+
+  // --- End share feature ---
 
   function createCellContentForNote(note: PlacedNote, slot: SixteenthSlot = 0): GridCellContent {
     if (note.shape === 'oval') {
@@ -705,25 +1291,63 @@
 
   function clearCircleAtCell(cells: Array<GridCellContent | null>, cellIndex: number): void {
     const cell = cells[cellIndex];
-    if (!cell || cell.shape !== 'circle') return;
+    if (cell && cell.shape === 'circle') {
+      if (cell.role === 'start') {
+        cells[cellIndex] = null;
+        const continuationCell = cells[cellIndex + 1];
+        if (
+          continuationCell &&
+          continuationCell.shape === 'circle' &&
+          continuationCell.role === 'continuation' &&
+          continuationCell.startCellIndex === cellIndex
+        ) {
+          cells[cellIndex + 1] = null;
+        }
+        return;
+      }
 
-    if (cell.role === 'start') {
       cells[cellIndex] = null;
-      const continuationCell = cells[cellIndex + 1];
-      if (continuationCell && continuationCell.shape === 'circle' && continuationCell.role === 'continuation' && continuationCell.startCellIndex === cellIndex) {
-        cells[cellIndex + 1] = null;
+      const startCellIndex = cell.startCellIndex;
+      if (startCellIndex < 0 || startCellIndex >= cells.length) return;
+
+      const startCell = cells[startCellIndex];
+      if (startCell && startCell.shape === 'circle' && startCell.role === 'start') {
+        cells[startCellIndex] = null;
       }
       return;
     }
 
-    cells[cellIndex] = null;
-    const startCellIndex = cell.startCellIndex;
-    if (startCellIndex < 0 || startCellIndex >= cells.length) return;
+    const macrobeatStart = macrobeatStartCellIndex(cellIndex);
+    if (macrobeatStart === cellIndex) return;
 
-    const startCell = cells[startCellIndex];
-    if (startCell && startCell.shape === 'circle' && startCell.role === 'start') {
-      cells[startCellIndex] = null;
+    const startCell = cells[macrobeatStart];
+    if (!startCell || startCell.shape !== 'circle' || startCell.role !== 'start') return;
+
+    cells[macrobeatStart] = null;
+    const continuationCell = cells[macrobeatStart + 1];
+    if (
+      continuationCell &&
+      continuationCell.shape === 'circle' &&
+      continuationCell.role === 'continuation' &&
+      continuationCell.startCellIndex === macrobeatStart
+    ) {
+      cells[macrobeatStart + 1] = null;
     }
+  }
+
+  function clearCirclePairAtStartCell(cells: Array<GridCellContent | null>, startCellIndex: number): void {
+    clearCircleAtCell(cells, startCellIndex);
+    if (startCellIndex + 1 < cells.length) {
+      // Circle notes reserve the paired microbeat even though only the first cell stores data.
+      cells[startCellIndex + 1] = null;
+    }
+  }
+
+  function isCircleSpanContinuationCell(cells: Array<GridCellContent | null>, cellIndex: number): boolean {
+    const macrobeatStart = macrobeatStartCellIndex(cellIndex);
+    if (macrobeatStart === cellIndex) return false;
+    const startCell = cells[macrobeatStart] ?? null;
+    return Boolean(startCell && startCell.shape === 'circle' && startCell.role === 'start' && startCell.notes[0]);
   }
 
   function placeNoteAtLocation(
@@ -750,18 +1374,12 @@
         return;
       }
 
-      clearCircleAtCell(cells, cellIndex);
-      clearCircleAtCell(cells, cellIndex + 1);
+      clearCirclePairAtStartCell(cells, cellIndex);
 
       cells[cellIndex] = {
         shape: 'circle',
         role: 'start',
         notes: [clonePlacedNote(incoming)],
-      };
-      cells[cellIndex + 1] = {
-        shape: 'circle',
-        role: 'continuation',
-        startCellIndex: cellIndex,
       };
       return;
     }
@@ -867,25 +1485,111 @@
     if (!cell) return false;
     if (cell.shape === 'oval') return Boolean(cell.notes[0]);
     if (cell.shape === 'circle') {
-      return cell.role === 'start' ? Boolean(cell.notes[0]) : true;
+      return cell.role === 'start' ? Boolean(cell.notes[0]) : false;
     }
     return Boolean(cell.notes[0] || cell.notes[1]);
   }
 
-  function resolveSixteenthSlotFromEvent(event: DragEvent): SixteenthSlot {
-    const currentTarget = event.currentTarget;
+  function resolveSixteenthSlotFromClientX(currentTarget: EventTarget | null, clientX: number): SixteenthSlot {
     if (currentTarget instanceof HTMLElement) {
       const rect = currentTarget.getBoundingClientRect();
       if (rect.width > 0) {
-        return event.clientX >= rect.left + rect.width / 2 ? 1 : 0;
+        return clientX >= rect.left + rect.width / 2 ? 1 : 0;
       }
     }
 
     return 0;
   }
 
+  function resolveSixteenthSlotFromEvent(event: DragEvent): SixteenthSlot {
+    return resolveSixteenthSlotFromClientX(event.currentTarget, event.clientX);
+  }
+
+  function macrobeatStartCellIndex(cellIndex: number): number {
+    return cellIndex - (cellIndex % MICROBEATS_PER_BEAT);
+  }
+
   function isMacrobeatStartCell(cellIndex: number): boolean {
     return cellIndex % MICROBEATS_PER_BEAT === 0;
+  }
+
+  function isTouchLikePointerEvent(event: PointerEvent): boolean {
+    return event.pointerType === 'touch' || event.pointerType === 'pen';
+  }
+
+  function tapPlacementSelectionMatches(noteId: string, shape: NoteShape): boolean {
+    return Boolean(tapPlacementPayload && tapPlacementPayload.note.noteId === noteId && tapPlacementPayload.note.shape === shape);
+  }
+
+  function armTapPlacementSelection(noteId: string, shape: NoteShape): boolean {
+    if (tapPlacementSelectionMatches(noteId, shape)) {
+      tapPlacementPayload = null;
+      dragPayload = null;
+      dragOverCell = null;
+      pickupPreviewLogKey = null;
+      return false;
+    }
+
+    const note = createPlacedNote(noteId, shape);
+    if (!note) return false;
+
+    tapPlacementPayload = {
+      source: 'bank',
+      note,
+    };
+    dragPayload = null;
+    dragOverCell = null;
+    pickupPreviewLogKey = null;
+    return true;
+  }
+
+  function handleBankTokenPointerDown(event: PointerEvent, noteId: string, shape: NoteShape): void {
+    if (eraserMode) return;
+    if (!isTouchLikePointerEvent(event)) return;
+
+    event.preventDefault();
+    const armed = armTapPlacementSelection(noteId, shape);
+    if (armed) {
+      void previewBankNote(noteId);
+    }
+  }
+
+  function handleBankTokenMouseDown(event: MouseEvent, noteId: string, shape: NoteShape): void {
+    if (eraserMode) return;
+    if (event.button !== 0) return;
+
+    const note = createPlacedNote(noteId, shape);
+    if (!note) return;
+
+    cursorPreview = { note, x: event.clientX, y: event.clientY };
+
+    const onMove = (e: MouseEvent) => {
+      if (cursorPreview) cursorPreview = { ...cursorPreview, x: e.clientX, y: e.clientY };
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (!dragPayload) cursorPreview = null;
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  function handleCursorGhostDragOver(event: DragEvent): void {
+    if (!cursorPreview) return;
+    cursorPreview = { ...cursorPreview, x: event.clientX, y: event.clientY };
+  }
+
+  function handleCanvasDragEnter(): void {
+    cursorOverCanvas = true;
+  }
+
+  function handleCanvasDragLeave(event: DragEvent): void {
+    const target = event.currentTarget as HTMLElement;
+    if (!target.contains(event.relatedTarget as Node | null)) {
+      cursorOverCanvas = false;
+      dragOverCell = null;
+    }
   }
 
   function removeDraggedSource(rows: GridRow[], pickupCells: Array<GridCellContent | null>, payload: DragPayload): void {
@@ -1023,6 +1727,27 @@
     model.setMainVolume(Number(target.value) / 100);
   }
 
+  function toggleEraserMode(): void {
+    eraserMode = !eraserMode;
+    tapPlacementPayload = null;
+    dragPayload = null;
+    dragOverCell = null;
+    pickupPreviewLogKey = null;
+  }
+
+  function handleVolumeIconClick(event: Event): void {
+    event.stopPropagation();
+    volumePopupOpen = !volumePopupOpen;
+  }
+
+  function handleDocumentPointerDownForVolumePopup(event: PointerEvent): void {
+    if (!volumePopupOpen) return;
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (volumeControlWrapper?.contains(target)) return;
+    volumePopupOpen = false;
+  }
+
   function handleQuarterTempoChange(quarterTempo: number): void {
     model.setMicrobeatTempo(quarterTempo * 2);
 
@@ -1057,6 +1782,7 @@
     });
 
     stopPlayback();
+    model.setMicrobeatTempo(DEFAULTS.MICROBEAT_TEMPO);
   }
 
   async function previewBankNote(noteId: string): Promise<void> {
@@ -1073,17 +1799,28 @@
   }
 
   function handleBankDragStart(event: DragEvent, noteId: string, shape: NoteShape): void {
+    if (eraserMode) {
+      event.preventDefault();
+      return;
+    }
+
     const note = createPlacedNote(noteId, shape);
     if (!note) return;
 
+    tapPlacementPayload = null;
     dragPayload = {
       source: 'bank',
       note,
     };
+    pickupPreviewLogKey = null;
 
     event.dataTransfer?.setData('text/plain', `${noteId}:${shape}`);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'copyMove';
+      const emptyImg = document.createElement('canvas');
+      emptyImg.width = 1;
+      emptyImg.height = 1;
+      event.dataTransfer.setDragImage(emptyImg, 0, 0);
     }
   }
 
@@ -1095,6 +1832,12 @@
     note: PlacedNote,
     noteIndex: number | null = null,
   ): void {
+    if (eraserMode) {
+      event.preventDefault();
+      return;
+    }
+
+    tapPlacementPayload = null;
     dragPayload = {
       source: 'cell',
       note: clonePlacedNote(note),
@@ -1103,6 +1846,7 @@
       cellIndex,
       noteIndex: noteIndex ?? undefined,
     };
+    pickupPreviewLogKey = null;
 
     event.dataTransfer?.setData('text/plain', `${note.noteId}:${note.shape}`);
     if (event.dataTransfer) {
@@ -1113,6 +1857,10 @@
   function handleAnyDragEnd(): void {
     dragPayload = null;
     dragOverCell = null;
+    cursorPreview = null;
+    cursorOverCanvas = false;
+    pickupPreviewLogKey = null;
+    debugPickupRender('Drag ended; pickup preview state cleared.');
   }
 
   function handleCellDragOver(event: DragEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
@@ -1120,7 +1868,16 @@
 
     if (dragPayload.note.shape === 'circle') {
       const maxCells = maxCellsForZone(zone);
-      if (!isMacrobeatStartCell(cellIndex) || cellIndex + 1 >= maxCells) {
+      const circleStartCellIndex = macrobeatStartCellIndex(cellIndex);
+      if (circleStartCellIndex + 1 >= maxCells) {
+        if (zone === 'pickup') {
+          debugPickupRender('Ignoring pickup circle hover target: pair would overflow.', {
+            rowIndex,
+            hoverCellIndex: cellIndex,
+            circleStartCellIndex,
+            maxCells,
+          });
+        }
         dragOverCell = null;
         return;
       }
@@ -1137,36 +1894,39 @@
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = dragPayload.source === 'bank' ? 'copy' : 'move';
     }
+
+    if (zone === 'pickup') {
+      debugPickupRender('Pickup drag over target updated.', {
+        rowIndex,
+        hoverCellIndex: cellIndex,
+        normalizedCircleStartCellIndex: dragPayload.note.shape === 'circle' ? macrobeatStartCellIndex(cellIndex) : null,
+        shape: dragPayload.note.shape,
+      });
+    }
   }
 
-  function handleCellDrop(event: DragEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
-    event.preventDefault();
+  function applyPayloadDropToCell(
+    activePayload: DragPayload,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    targetSixteenthSlot: SixteenthSlot | null,
+  ): void {
+    const placementCellIndex = activePayload.note.shape === 'circle' ? macrobeatStartCellIndex(cellIndex) : cellIndex;
 
-    if (!dragPayload) {
-      dragOverCell = null;
-      return;
-    }
-
-    const activePayload = dragPayload;
-    const targetSixteenthSlot: SixteenthSlot | null =
-      activePayload.note.shape === 'diamond' ? resolveSixteenthSlotFromEvent(event) : null;
     const droppingIntoOriginCell =
       activePayload.source === 'cell' &&
       activePayload.zone === zone &&
       activePayload.rowIndex === rowIndex &&
-      activePayload.cellIndex === cellIndex;
+      activePayload.cellIndex === placementCellIndex;
 
     if (droppingIntoOriginCell) {
-      dragPayload = null;
-      dragOverCell = null;
       return;
     }
 
     if (activePayload.note.shape === 'circle') {
       const maxCells = maxCellsForZone(zone);
-      if (!isMacrobeatStartCell(cellIndex) || cellIndex + 1 >= maxCells) {
-        dragPayload = null;
-        dragOverCell = null;
+      if (placementCellIndex + 1 >= maxCells) {
         return;
       }
     }
@@ -1178,11 +1938,90 @@
         removeDraggedSource(rows, pickupCells, activePayload);
       }
 
-      placeNoteAtLocation(rows, pickupCells, zone, rowIndex, cellIndex, incoming, targetSixteenthSlot);
+      placeNoteAtLocation(rows, pickupCells, zone, rowIndex, placementCellIndex, incoming, targetSixteenthSlot);
     });
+
+    if (zone === 'pickup') {
+      debugPickupRender('Pickup drop applied.', {
+        rowIndex,
+        hoverCellIndex: cellIndex,
+        placementCellIndex,
+        shape: activePayload.note.shape,
+      });
+    }
+  }
+
+  function handleCellDrop(event: DragEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    event.preventDefault();
+
+    if (!dragPayload) {
+      dragOverCell = null;
+      pickupPreviewLogKey = null;
+      return;
+    }
+
+    const activePayload = dragPayload;
+    const targetSixteenthSlot: SixteenthSlot | null =
+      activePayload.note.shape === 'diamond' ? resolveSixteenthSlotFromEvent(event) : null;
+    applyPayloadDropToCell(activePayload, zone, rowIndex, cellIndex, targetSixteenthSlot);
 
     dragPayload = null;
     dragOverCell = null;
+    pickupPreviewLogKey = null;
+  }
+
+  function handleCellPointerDown(event: PointerEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    if (eraserMode) {
+      event.preventDefault();
+      const targetSixteenthSlot = resolveSixteenthSlotFromClientX(event.currentTarget, event.clientX);
+      eraseCellAtLocation(zone, rowIndex, cellIndex, targetSixteenthSlot);
+      return;
+    }
+
+    if (!isTouchLikePointerEvent(event)) return;
+    if (!tapPlacementPayload) return;
+
+    event.preventDefault();
+    const targetSixteenthSlot: SixteenthSlot | null =
+      tapPlacementPayload.note.shape === 'diamond'
+        ? resolveSixteenthSlotFromClientX(event.currentTarget, event.clientX)
+        : null;
+
+    applyPayloadDropToCell(tapPlacementPayload, zone, rowIndex, cellIndex, targetSixteenthSlot);
+    dragPayload = null;
+    dragOverCell = null;
+    pickupPreviewLogKey = null;
+  }
+
+  function eraseCellAtLocation(
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    preferredSlot: SixteenthSlot | null,
+  ): void {
+    updateGridData((rows, pickupCells) => {
+      const cells = getCellsForZone(rows, pickupCells, zone, rowIndex);
+      if (!cells) return;
+
+      const currentCell = cells[cellIndex] ?? null;
+      if (!currentCell && !isCircleSpanContinuationCell(cells, cellIndex)) return;
+
+      if ((currentCell && currentCell.shape === 'circle') || isCircleSpanContinuationCell(cells, cellIndex)) {
+        clearCircleAtCell(cells, cellIndex);
+        return;
+      }
+
+      if (!currentCell) return;
+
+      if (currentCell.shape === 'diamond') {
+        const slotToErase = resolvePreferredSixteenthSlot(currentCell, preferredSlot);
+        const nextCell = removeNoteFromCell(currentCell, slotToErase);
+        setDraftCell(rows, pickupCells, zone, rowIndex, cellIndex, nextCell);
+        return;
+      }
+
+      setDraftCell(rows, pickupCells, zone, rowIndex, cellIndex, null);
+    });
   }
 
   function removeCellNote(
@@ -1199,7 +2038,7 @@
       if (!cells) return;
 
       const currentCell = cells[cellIndex] ?? null;
-      if (currentCell && currentCell.shape === 'circle') {
+      if ((currentCell && currentCell.shape === 'circle') || isCircleSpanContinuationCell(cells, cellIndex)) {
         clearCircleAtCell(cells, cellIndex);
         return;
       }
@@ -1255,6 +2094,355 @@
     console.log(`[SimpleNotation][PlayedNoteMuting] ${message}`, details ?? {});
   }
 
+  function debugPickupRender(message: string, details?: Record<string, unknown>): void {
+    if (!PICKUP_RENDER_DEBUG) return;
+    console.log(`[SimpleNotation][PickupRender] ${message}`, details ?? {});
+  }
+
+  function debugMobileLayout(message: string, details?: Record<string, unknown>): void {
+    if (!MOBILE_LAYOUT_DEBUG) return;
+    console.log(`[SimpleNotation][MobileLayout] ${message}`, details ?? {});
+  }
+
+  function shouldUseViewportFitMode(): boolean {
+    if (typeof window === 'undefined') return false;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const anyCoarsePointer = window.matchMedia('(any-pointer: coarse)').matches;
+
+    return anyCoarsePointer && viewportWidth >= VIEWPORT_FIT_WIDTH_MIN && viewportHeight <= VIEWPORT_FIT_HEIGHT_MAX;
+  }
+
+  function updateViewportFitMode(): void {
+    viewportFitMode = shouldUseViewportFitMode();
+  }
+
+  function updateTapPlacementHintVisibility(): void {
+    if (typeof window === 'undefined') {
+      showTapPlacementHint = true;
+      return;
+    }
+
+    showTapPlacementHint = !window.matchMedia('(any-pointer: coarse)').matches;
+  }
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function collectAdaptiveLayoutMetrics(): AdaptiveLayoutMetrics {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return {
+        viewportWidth: 1024,
+        viewportHeight: 768,
+        coarsePointer: false,
+        controlsGroupCount: 5,
+        rowCount: gridRows.length,
+      };
+    }
+
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const coarsePointer = window.matchMedia('(any-pointer: coarse)').matches;
+    const controlsGroupCount = document.querySelectorAll('#simple-notation-app .controls-panel > .controls-group').length;
+
+    return {
+      viewportWidth,
+      viewportHeight,
+      coarsePointer,
+      controlsGroupCount: controlsGroupCount > 0 ? controlsGroupCount : 5,
+      rowCount: gridRows.length,
+    };
+  }
+
+  function computeAdaptiveLayout(metrics: AdaptiveLayoutMetrics): AdaptiveLayoutConfig {
+    if (!viewportFitMode || !metrics.coarsePointer) {
+      return {
+        ...ADAPTIVE_LAYOUT_DEFAULT,
+        rowsColumns: 1,
+        cellHeightRatio: 2,
+      };
+    }
+
+    const veryShortViewport = metrics.viewportHeight <= 760;
+    const shortViewport = metrics.viewportHeight <= 860;
+    const narrowViewport = metrics.viewportWidth < 940;
+    const mediumWidth = metrics.viewportWidth < 1240;
+
+    let profile: AdaptiveLayoutProfile = 'comfortable';
+    if (veryShortViewport || narrowViewport) {
+      profile = 'tight';
+    } else if (shortViewport || mediumWidth) {
+      profile = 'compact';
+    }
+
+    const profileTuning: Record<
+      AdaptiveLayoutProfile,
+      Omit<AdaptiveLayoutConfig, 'profile' | 'controlsColumns' | 'rowsColumns'>
+    > = {
+      comfortable: {
+        controlsScale: 0.96,
+        controlsGapPx: 5,
+        controlsPanelPaddingPx: 5,
+        groupMinWidthPx: 132,
+        bankScale: 0.8,
+        cellHeightRatio: 1.2,
+        rowsGapPx: 8,
+      },
+      compact: {
+        controlsScale: 0.86,
+        controlsGapPx: 4,
+        controlsPanelPaddingPx: 4,
+        groupMinWidthPx: 116,
+        bankScale: 0.68,
+        cellHeightRatio: 1.02,
+        rowsGapPx: 6,
+      },
+      tight: {
+        controlsScale: 0.8,
+        controlsGapPx: 3,
+        controlsPanelPaddingPx: 3,
+        groupMinWidthPx: 104,
+        bankScale: 0.6,
+        cellHeightRatio: 0.9,
+        rowsGapPx: 5,
+      },
+    };
+
+    const tuning = profileTuning[profile];
+    const controlsGroupCount = clamp(metrics.controlsGroupCount, 1, 5);
+    const availableControlsWidth = Math.max(320, metrics.viewportWidth - tuning.controlsPanelPaddingPx * 2 - 20);
+    const tempoGroupWidthPremium = 34;
+    const estimatedSingleRowWidth =
+      (controlsGroupCount - 1) * tuning.groupMinWidthPx +
+      (tuning.groupMinWidthPx + tempoGroupWidthPremium) +
+      (controlsGroupCount - 1) * tuning.controlsGapPx;
+
+    let controlsColumns = controlsGroupCount;
+    if (estimatedSingleRowWidth > availableControlsWidth) {
+      const estimatedGroupWidth = tuning.groupMinWidthPx + tuning.controlsGapPx;
+      const fittedColumns = Math.floor((availableControlsWidth + tuning.controlsGapPx) / estimatedGroupWidth);
+      const minimumColumns = controlsGroupCount > 1 ? 2 : 1;
+      controlsColumns = clamp(fittedColumns, minimumColumns, controlsGroupCount);
+    }
+
+    const canTryTwoCanvasColumns = metrics.rowCount >= 4 && metrics.viewportWidth >= 700;
+    const rowsColumns = canTryTwoCanvasColumns ? 2 : 1;
+
+    return {
+      profile,
+      controlsColumns,
+      rowsColumns,
+      ...tuning,
+    };
+  }
+
+  function updateAdaptiveLayout(): void {
+    const metrics = collectAdaptiveLayoutMetrics();
+    const next = computeAdaptiveLayout(metrics);
+    const key = JSON.stringify(next);
+    if (key === adaptiveLayoutLogKey) return;
+
+    adaptiveLayoutLogKey = key;
+    adaptiveLayout = next;
+  }
+
+  function roundTo2(value: number): number {
+    return Number(value.toFixed(2));
+  }
+
+  function elementLayoutSnapshot(selector: string): Record<string, unknown> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return { selector, exists: false };
+    }
+
+    const element = document.querySelector<HTMLElement>(selector);
+    if (!element) {
+      return { selector, exists: false };
+    }
+
+    const rect = element.getBoundingClientRect();
+    const computed = window.getComputedStyle(element);
+    return {
+      selector,
+      exists: true,
+      width: roundTo2(rect.width),
+      height: roundTo2(rect.height),
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      hasHorizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+      hasVerticalOverflow: element.scrollHeight > element.clientHeight + 1,
+      display: computed.display,
+      position: computed.position,
+      overflowX: computed.overflowX,
+      overflowY: computed.overflowY,
+      gridTemplateColumns: computed.gridTemplateColumns,
+    };
+  }
+
+  function firstHitTargetSize(selector: string): Record<string, number | null> {
+    if (typeof document === 'undefined') {
+      return { width: null, height: null, minSide: null };
+    }
+
+    const element = document.querySelector<HTMLElement>(selector);
+    if (!element) {
+      return { width: null, height: null, minSide: null };
+    }
+
+    const rect = element.getBoundingClientRect();
+    const width = roundTo2(rect.width);
+    const height = roundTo2(rect.height);
+    return {
+      width,
+      height,
+      minSide: roundTo2(Math.min(width, height)),
+    };
+  }
+
+  function responsiveCssEstimateForWidth(width: number): Record<string, unknown> {
+    const max1200 = width <= 1200;
+    const max760 = width <= 760;
+    return {
+      width,
+      breakpoints: {
+        max1200,
+        max760,
+      },
+      controlsPanelColumns: max760 ? '1fr' : max1200 ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr)) auto',
+      rowsGridColumns: max1200 ? '1fr' : 'repeat(auto-fit, minmax(430px, 1fr))',
+      bankRowPairColumns: max760 ? '1fr' : 'max-content max-content',
+      tokenDensity: max760 ? 'compact' : 'default',
+    };
+  }
+
+  function inputCapabilitySnapshot(): Record<string, unknown> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return {};
+
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const anyCoarsePointer = window.matchMedia('(any-pointer: coarse)').matches;
+    const hoverPrimary = window.matchMedia('(hover: hover)').matches;
+    const anyHover = window.matchMedia('(any-hover: hover)').matches;
+    const touchPoints = navigator.maxTouchPoints ?? 0;
+    const touchEventSupport = 'ontouchstart' in window;
+    const draggableNoteCount = document.querySelectorAll('[draggable="true"]').length;
+    const dropCellCount = document.querySelectorAll('.macrobeat-cell').length;
+
+    return {
+      maxTouchPoints: touchPoints,
+      touchEventSupport,
+      coarsePointer,
+      anyCoarsePointer,
+      hoverPrimary,
+      anyHover,
+      draggableNoteCount,
+      dropCellCount,
+      usesHtml5DragModel: true,
+      hasTouchTapPlacementFallback: true,
+      tempoDragUsesMouseOnly: false,
+    };
+  }
+
+  function queueMobileLayoutSnapshot(reason: string): void {
+    if (!MOBILE_LAYOUT_DEBUG) return;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    requestAnimationFrame(() => {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const visualViewport = window.visualViewport
+        ? {
+            width: roundTo2(window.visualViewport.width),
+            height: roundTo2(window.visualViewport.height),
+            scale: roundTo2(window.visualViewport.scale),
+            offsetTop: roundTo2(window.visualViewport.offsetTop),
+            offsetLeft: roundTo2(window.visualViewport.offsetLeft),
+          }
+        : null;
+
+      const breakpoints = {
+        max1200: window.matchMedia('(max-width: 1200px)').matches,
+        max760: window.matchMedia('(max-width: 760px)').matches,
+      };
+
+      const targetSizes = {
+        transportButton: firstHitTargetSize('.transport-btn'),
+        pickupButton: firstHitTargetSize('.pickup-controls button'),
+        tokenHitbox: firstHitTargetSize('.token-hitbox.single'),
+      };
+
+      const snapshot = {
+        reason,
+        viewport: {
+          innerWidth: viewportWidth,
+          innerHeight: viewportHeight,
+          devicePixelRatio: roundTo2(window.devicePixelRatio || 1),
+          visualViewport,
+          orientation: viewportWidth >= viewportHeight ? 'landscape' : 'portrait',
+        },
+        viewportFitMode,
+        adaptiveLayout,
+        breakpoints,
+        estimatesForCurrentWidth: responsiveCssEstimateForWidth(viewportWidth),
+        ipadProfileEstimates: IPAD_VIEWPORT_PROFILES.map((profile) => ({
+          profile,
+          estimate: responsiveCssEstimateForWidth(profile.width),
+        })),
+        inputCapabilities: inputCapabilitySnapshot(),
+        touchTargetSizes: targetSizes,
+        layout: {
+          app: elementLayoutSnapshot('#simple-notation-app'),
+          controlsPanel: elementLayoutSnapshot('.controls-panel'),
+          notebankPanel: elementLayoutSnapshot('.notebank-panel'),
+          canvasPanel: elementLayoutSnapshot('.canvas-panel'),
+          rowsGrid: elementLayoutSnapshot('.rows-grid'),
+          firstTrackRow: elementLayoutSnapshot('.track-row'),
+          firstMainGrid: elementLayoutSnapshot('.track-grid.main-grid'),
+        },
+      };
+
+      const controlsRect = document.querySelector<HTMLElement>('.controls-panel')?.getBoundingClientRect() ?? null;
+      const notebankRect = document.querySelector<HTMLElement>('.notebank-panel')?.getBoundingClientRect() ?? null;
+      const firstTrackRowRect = document.querySelector<HTMLElement>('.track-row')?.getBoundingClientRect() ?? null;
+      const appGapPx =
+        Number.parseFloat(window.getComputedStyle(document.querySelector<HTMLElement>('#simple-notation-app') ?? document.body).rowGap || '0') || 0;
+      const fitViewportHeight = visualViewport?.height ?? viewportHeight;
+      const estimatedHeightForTwoRows =
+        (controlsRect?.height ?? 0) +
+        (notebankRect?.height ?? 0) +
+        (firstTrackRowRect?.height ?? 0) * 2 +
+        appGapPx * 2;
+      const fitHeuristic = {
+        fitViewportHeight: roundTo2(fitViewportHeight),
+        estimatedHeightForTwoRows: roundTo2(estimatedHeightForTwoRows),
+        estimatedCanFitTwoRows: estimatedHeightForTwoRows <= fitViewportHeight,
+      };
+      (snapshot as Record<string, unknown>).fitHeuristic = fitHeuristic;
+
+      const logKey = JSON.stringify({
+        reason,
+        width: viewportWidth,
+        height: viewportHeight,
+        adaptiveProfile: adaptiveLayout.profile,
+        adaptiveControlsColumns: adaptiveLayout.controlsColumns,
+        adaptiveRowsColumns: adaptiveLayout.rowsColumns,
+        pickupBeats,
+        rows: gridRows.length,
+        showAccidentals,
+        isPlaying,
+        viewportFitMode,
+        settingsOpen,
+        shareModalOpen,
+      });
+
+      if (logKey === mobileLayoutLogKey) return;
+      mobileLayoutLogKey = logKey;
+      debugMobileLayout('Responsive layout snapshot.', snapshot);
+    });
+  }
+
   function getTrackRowRect(rowIndex: number): DOMRect | null {
     return trackRowElements[rowIndex]?.getBoundingClientRect() ?? null;
   }
@@ -1289,8 +2477,9 @@
     const leftCell = cells[startCellIndex] ?? null;
     const rightCell = cells[startCellIndex + 1] ?? null;
 
-    if (!leftCell || !rightCell) return false;
+    if (!leftCell) return false;
     if (leftCell.shape !== 'circle' || leftCell.role !== 'start') return false;
+    if (!rightCell) return true;
     if (rightCell.shape !== 'circle' || rightCell.role !== 'continuation') return false;
 
     return rightCell.startCellIndex === startCellIndex;
@@ -1303,7 +2492,7 @@
   }
 
   function shouldUseMacrobeatMidpoint(cells: Array<GridCellContent | null>, maxCells: number, cellIndex: number): boolean {
-    const macrobeatStart = cellIndex - (cellIndex % MICROBEATS_PER_BEAT);
+    const macrobeatStart = macrobeatStartCellIndex(cellIndex);
     if (macrobeatStart < 0 || macrobeatStart + 1 >= maxCells) return false;
 
     return isCircleMacrobeatPair(cells, macrobeatStart) || isEmptyMacrobeatPair(cells, macrobeatStart);
@@ -1600,6 +2789,21 @@
     return Math.max(220, Math.min(760, Math.round(playbackIntervalMs() * 1.15)));
   }
 
+  function rootInlineStyle(): string {
+    return [
+      `--playback-pulse-duration:${playbackPulseDurationMs()}ms`,
+      `--adaptive-controls-columns:${adaptiveLayout.controlsColumns}`,
+      `--adaptive-controls-scale:${adaptiveLayout.controlsScale}`,
+      `--adaptive-controls-gap-px:${adaptiveLayout.controlsGapPx}`,
+      `--adaptive-controls-panel-padding-px:${adaptiveLayout.controlsPanelPaddingPx}`,
+      `--adaptive-group-min-width-px:${adaptiveLayout.groupMinWidthPx}`,
+      `--adaptive-bank-scale:${adaptiveLayout.bankScale}`,
+      `--adaptive-cell-height-ratio:${adaptiveLayout.cellHeightRatio}`,
+      `--adaptive-rows-columns:${adaptiveLayout.rowsColumns}`,
+      `--adaptive-rows-gap-px:${adaptiveLayout.rowsGapPx}`,
+    ].join(';');
+  }
+
   function totalPlaybackCells(): number {
     return pickupMicrobeatCount() + gridRows.length * GRID_COLUMNS;
   }
@@ -1740,12 +2944,24 @@
     if (playbackIndex >= totalCells) {
       clearPlaybackTimer();
 
-      if (hasSecondSixteenth) {
-        queuePlaybackTimeout(() => {
-          stopPlayback();
-        }, Math.max(24, Math.floor(playbackIntervalMs() / 2) + 8));
+      if (isLooping) {
+        if (hasSecondSixteenth) {
+          queuePlaybackTimeout(() => {
+            playbackIndex = 0;
+            restartPlaybackTimer();
+          }, Math.max(24, Math.floor(playbackIntervalMs() / 2) + 8));
+        } else {
+          playbackIndex = 0;
+          restartPlaybackTimer();
+        }
       } else {
-        stopPlayback();
+        if (hasSecondSixteenth) {
+          queuePlaybackTimeout(() => {
+            stopPlayback();
+          }, Math.max(24, Math.floor(playbackIntervalMs() / 2) + 8));
+        } else {
+          stopPlayback();
+        }
       }
     }
   }
@@ -1831,6 +3047,10 @@
     startPlayback();
   }
 
+  function toggleLoop(): void {
+    isLooping = !isLooping;
+  }
+
   function isPlaybackCell(cursor: GridCellRef | null, rowIndex: number, cellIndex: number): boolean {
     return cursor?.zone === 'main' && cursor?.rowIndex === rowIndex && cursor?.cellIndex === cellIndex;
   }
@@ -1892,32 +3112,140 @@
     return playbackHighlightMatches(highlight, zone, rowIndex, cellIndex) && highlight?.pulseClass === pulseClass;
   }
 
-  function isDropTarget(rowIndex: number, cellIndex: number): boolean {
-    return dragOverCell?.zone === 'main' && dragOverCell?.rowIndex === rowIndex && dragOverCell?.cellIndex === cellIndex;
+  function isDropTarget(target: GridDropTarget | null, rowIndex: number, cellIndex: number): boolean {
+    return target?.zone === 'main' && target?.rowIndex === rowIndex && target?.cellIndex === cellIndex;
   }
 
-  function isPickupDropTarget(cellIndex: number): boolean {
-    return dragOverCell?.zone === 'pickup' && dragOverCell?.cellIndex === cellIndex;
+  function isPickupDropTarget(target: GridDropTarget | null, cellIndex: number): boolean {
+    return target?.zone === 'pickup' && target?.cellIndex === cellIndex;
   }
 
-  function isSixteenthSlotDropTarget(zone: GridZone, rowIndex: number, cellIndex: number, slotIndex: number): boolean {
-    if (!dragPayload || dragPayload.note.shape !== 'diamond') return false;
+  function isSixteenthSlotDropTarget(
+    payload: DragPayload | null,
+    target: GridDropTarget | null,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    slotIndex: number,
+  ): boolean {
+    if (!payload || payload.note.shape !== 'diamond') return false;
     if (slotIndex !== 0 && slotIndex !== 1) return false;
 
     return (
-      dragOverCell?.zone === zone &&
-      dragOverCell?.rowIndex === rowIndex &&
-      dragOverCell?.cellIndex === cellIndex &&
-      dragOverCell?.sixteenthSlot === slotIndex
+      target?.zone === zone &&
+      target?.rowIndex === rowIndex &&
+      target?.cellIndex === cellIndex &&
+      target?.sixteenthSlot === slotIndex
     );
   }
 
+  function isDragPreviewTarget(
+    payload: DragPayload | null,
+    target: GridDropTarget | null,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): boolean {
+    return (
+      Boolean(payload) &&
+      target?.zone === zone &&
+      target?.rowIndex === rowIndex &&
+      target?.cellIndex === cellIndex
+    );
+  }
+
+  function dragPreviewNote(
+    payload: DragPayload | null,
+    target: GridDropTarget | null,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): PlacedNote | null {
+    const previewNote = payload?.note ?? null;
+    if (!previewNote) return null;
+
+    if (previewNote.shape === 'circle') {
+      if (target?.zone !== zone || target?.rowIndex !== rowIndex) return null;
+      const hoveredCellIndex = target.cellIndex;
+      if (macrobeatStartCellIndex(hoveredCellIndex) !== cellIndex) return null;
+    } else if (!isDragPreviewTarget(payload, target, zone, rowIndex, cellIndex)) {
+      return null;
+    }
+
+    if (zone === 'pickup') {
+      const nextKey = `${rowIndex}:${cellIndex}:${target?.cellIndex ?? 'n'}:${previewNote.shape}:${previewNote.noteId}`;
+      if (pickupPreviewLogKey !== nextKey) {
+        debugPickupRender('Pickup preview note resolved for render.', {
+          rowIndex,
+          renderCellIndex: cellIndex,
+          hoverCellIndex: target?.cellIndex ?? null,
+          shape: previewNote.shape,
+          noteId: previewNote.noteId,
+        });
+        pickupPreviewLogKey = nextKey;
+      }
+    }
+
+    return previewNote;
+  }
+
+  function isDragPreviewSixteenthSlot(
+    payload: DragPayload | null,
+    target: GridDropTarget | null,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    slotIndex: SixteenthSlot,
+  ): boolean {
+    if (!payload || payload.note.shape !== 'diamond') return false;
+    return isDragPreviewTarget(payload, target, zone, rowIndex, cellIndex) && target?.sixteenthSlot === slotIndex;
+  }
+
+  function isCircleDragPreviewOnSecondMicrobeat(
+    payload: DragPayload | null,
+    target: GridDropTarget | null,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): boolean {
+    if (!payload || payload.note.shape !== 'circle') return false;
+    return isDragPreviewTarget(payload, target, zone, rowIndex, cellIndex) && !isMacrobeatStartCell(cellIndex);
+  }
+
+  function isCircleDragPreviewSpanStart(
+    payload: DragPayload | null,
+    target: GridDropTarget | null,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): boolean {
+    if (!payload || payload.note.shape !== 'circle') return false;
+    if (target?.zone !== zone || target?.rowIndex !== rowIndex) return false;
+    const hoveredCellIndex = target?.cellIndex;
+    if (hoveredCellIndex === undefined) return false;
+    const spanStartCellIndex = macrobeatStartCellIndex(hoveredCellIndex);
+    const isSpanStart = spanStartCellIndex === cellIndex;
+
+    if (zone === 'pickup' && isSpanStart) {
+      debugPickupRender('Pickup span-start cell resolved for circle preview.', {
+        rowIndex,
+        hoveredCellIndex,
+        spanStartCellIndex,
+        evaluatedCellIndex: cellIndex,
+      });
+    }
+
+    return isSpanStart;
+  }
+
   function cellHasNote(rowIndex: number, cellIndex: number): boolean {
-    return cellHasAnyNotes(gridRows[rowIndex]?.cells[cellIndex] ?? null);
+    const rowCells = gridRows[rowIndex]?.cells ?? null;
+    if (!rowCells) return false;
+    return cellHasAnyNotes(rowCells[cellIndex] ?? null) || isCircleSpanContinuationCell(rowCells, cellIndex);
   }
 
   function pickupCellHasNote(cellIndex: number): boolean {
-    return cellHasAnyNotes(pickupRow.cells[cellIndex]);
+    return cellHasAnyNotes(pickupRow.cells[cellIndex]) || isCircleSpanContinuationCell(pickupRow.cells, cellIndex);
   }
 
   function isEditableTarget(target: EventTarget | null): boolean {
@@ -1930,11 +3258,32 @@
   }
 
   function handleGlobalKeyDown(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && (event.code === KEY_CODES.KEY_Z || event.code === KEY_CODES.KEY_Y)) {
+    const isUndoRedoShortcut =
+      (event.ctrlKey || event.metaKey) && (event.code === KEY_CODES.KEY_Z || event.code === KEY_CODES.KEY_Y);
+    if (isUndoRedoShortcut) {
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+
+      if (event.code === KEY_CODES.KEY_Y || (event.code === KEY_CODES.KEY_Z && event.shiftKey)) {
+        redoCanvas();
+      } else {
+        undoCanvas();
+      }
+      return;
+    }
+
+    if (event.key === 'Escape' && volumePopupOpen) {
+      volumePopupOpen = false;
       return;
     }
 
     if (isEditableTarget(event.target)) return;
+
+    if (event.code === 'KeyE') {
+      event.preventDefault();
+      toggleEraserMode();
+      return;
+    }
 
     if (event.code === KEY_CODES.KEY_P) {
       event.preventDefault();
@@ -1968,9 +3317,21 @@
     keyboardHighlightedNoteId = null;
   }
 
+  $: if (settingsDialog) {
+    if (settingsOpen) settingsDialog.showModal();
+    else if (settingsDialog.open) settingsDialog.close();
+  }
+
 </script>
 
-<main class="simple-notation" id="simple-notation-app" class:chromanotes-palette={colorPaletteMode === 'chromanotes'} style={`--playback-pulse-duration:${playbackPulseDurationMs()}ms;`}>
+<main
+  class="simple-notation"
+  id="simple-notation-app"
+  class:chromanotes-palette={colorPaletteMode === 'chromanotes'}
+  class:viewport-fit={viewportFitMode}
+  style={rootInlineStyle()}
+  on:dragover={handleCursorGhostDragOver}
+>
   <section class="panel controls-panel">
     <div class="controls-group tempo-group">
       <TempoControls
@@ -1980,128 +3341,166 @@
         step={1}
         sliderOrientation="vertical"
         onchange={handleQuarterTempoChange}
+        showEighth={!isStudentView || !activeStudentView.hideEighthTempo}
+        showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
+        showDottedQuarter={!isStudentView || !activeStudentView.hideDottedQuarterTempo}
+        showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
       />
     </div>
 
     <div class="controls-group transport-group">
-      <button type="button" class="transport-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
-        {#if isPlaying}
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <rect x="5" y="4" width="4" height="16" rx="1" />
-            <rect x="15" y="4" width="4" height="16" rx="1" />
+      <div class="transport-row">
+        {#if !isStudentView || !activeStudentView.hideCanvasActions}
+        <button
+          type="button"
+          class="transport-btn clear-canvas-btn"
+          on:click={clearGrid}
+          title="Clear canvas"
+          aria-label="Clear canvas"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 372" fill="none" aria-hidden="true">
+            <path fill="currentColor" fill-rule="evenodd" d="M 167.00 326.50 L 156.00 324.50 L 45.50 215.00 L 42.50 210.00 L 43.50 199.00 L 49.00 192.50 L 128.00 151.50 L 147.00 132.50 L 151.00 130.50 L 163.00 129.50 L 169.00 131.50 L 189.00 149.50 L 291.00 46.50 L 298.00 43.50 L 307.00 43.50 L 312.00 45.50 L 321.50 54.00 L 326.50 63.00 L 327.50 70.00 L 323.50 81.00 L 221.50 184.00 L 238.50 202.00 L 240.50 207.00 L 239.50 219.00 L 222.50 236.00 L 179.50 316.00 L 172.00 324.50 L 167.00 326.50 Z M 210.50 172.00 L 309.50 73.00 L 310.50 68.00 L 304.00 60.50 L 300.00 60.50 L 198.50 161.00 L 209.00 172.50 L 210.50 172.00 Z M 215.50 221.00 L 224.50 212.00 L 224.50 209.00 L 160.00 145.50 L 158.00 145.50 L 148.50 155.00 L 148.50 157.00 L 212.00 219.50 L 215.50 221.00 Z M 164.50 308.00 L 204.50 235.00 L 137.00 167.50 L 134.00 165.50 L 59.50 206.00 L 88.00 234.50 L 116.00 215.50 L 120.00 213.50 L 127.00 214.50 L 129.50 218.00 L 129.50 224.00 L 100.50 247.00 L 124.00 270.50 L 145.00 248.50 L 153.00 248.50 L 157.50 254.00 L 156.50 259.00 L 136.50 281.00 L 136.50 283.00 L 162.00 308.50 L 164.50 308.00 Z M 252.00 295.50 L 245.00 295.50 L 238.50 289.00 L 239.50 280.00 L 248.00 274.50 L 253.00 275.50 L 258.50 281.00 L 259.50 285.00 L 257.50 291.00 L 252.00 295.50 Z M 218.00 326.50 L 211.00 325.50 L 205.50 318.00 L 206.50 312.00 L 212.00 306.50 L 220.00 306.50 L 225.50 312.00 L 225.50 321.00 L 218.00 326.50 Z"/>
           </svg>
-        {:else}
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" aria-hidden="true">
-            <path fill="currentColor" d="M 152 104 L 144 106 L 143 108 L 141 108 L 133 114 L 130 120 L 128 130 L 128 382 L 132 396 L 140 404 L 147 406 L 149 408 L 164 408 L 165 406 L 168 406 L 178 401 L 180 398 L 184 397 L 207 381 L 224 372 L 229 367 L 240 362 L 242 359 L 249 356 L 254 351 L 267 345 L 269 342 L 286 333 L 293 327 L 304 322 L 306 319 L 316 314 L 322 309 L 326 308 L 331 303 L 335 302 L 344 295 L 354 290 L 356 287 L 367 282 L 378 271 L 381 265 L 382 250 L 377 239 L 367 230 L 363 229 L 343 215 L 325 205 L 318 199 L 309 195 L 308 193 L 301 190 L 287 180 L 283 179 L 281 176 L 274 173 L 268 168 L 259 164 L 257 161 L 246 156 L 244 153 L 237 150 L 232 145 L 221 140 L 217 136 L 210 133 L 201 126 L 197 125 L 195 122 L 183 116 L 177 111 L 164 105 Z"/>
-          </svg>
+        </button>
         {/if}
-      </button>
-      <button type="button" class="transport-btn" on:click={stopPlayback} title="Stop" aria-label="Stop">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <rect x="5" y="5" width="14" height="14" rx="3" ry="3" />
+        <button
+          type="button"
+          class="transport-btn"
+          on:click={redoCanvas}
+          disabled={!canCanvasRedo()}
+          title="Redo (Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z)"
+          aria-label="Redo"
+        >
+          <img src={redoIconUrl} alt="Redo" class="transport-icon" />
+        </button>
+        <button
+          type="button"
+          class="transport-btn"
+          on:click={undoCanvas}
+          disabled={!canCanvasUndo()}
+          title="Undo (Ctrl/Cmd+Z)"
+          aria-label="Undo"
+        >
+          <img src={undoIconUrl} alt="Undo" class="transport-icon" />
+        </button>
+        <button
+          type="button"
+          class="transport-btn eraser-btn"
+          class:active={eraserMode}
+          on:click={toggleEraserMode}
+          title={eraserMode ? 'Disable eraser (E)' : 'Enable eraser (E)'}
+          aria-label={eraserMode ? 'Disable eraser' : 'Enable eraser'}
+          aria-pressed={eraserMode}
+        >
+          <img src={eraserIconUrl} alt="Eraser" class="transport-icon" />
+        </button>
+      </div>
+
+      <div class="transport-row">
+        <button type="button" class="transport-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
+          {#if isPlaying}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="5" y="4" width="4" height="16" rx="1" />
+              <rect x="15" y="4" width="4" height="16" rx="1" />
+            </svg>
+          {:else}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" aria-hidden="true">
+              <path fill="currentColor" d="M 152 104 L 144 106 L 143 108 L 141 108 L 133 114 L 130 120 L 128 130 L 128 382 L 132 396 L 140 404 L 147 406 L 149 408 L 164 408 L 165 406 L 168 406 L 178 401 L 180 398 L 184 397 L 207 381 L 224 372 L 229 367 L 240 362 L 242 359 L 249 356 L 254 351 L 267 345 L 269 342 L 286 333 L 293 327 L 304 322 L 306 319 L 316 314 L 322 309 L 326 308 L 331 303 L 335 302 L 344 295 L 354 290 L 356 287 L 367 282 L 378 271 L 381 265 L 382 250 L 377 239 L 367 230 L 363 229 L 343 215 L 325 205 L 318 199 L 309 195 L 308 193 L 301 190 L 287 180 L 283 179 L 281 176 L 274 173 L 268 168 L 259 164 L 257 161 L 246 156 L 244 153 L 237 150 L 232 145 L 221 140 L 217 136 L 210 133 L 201 126 L 197 125 L 195 122 L 183 116 L 177 111 L 164 105 Z"/>
+            </svg>
+          {/if}
+        </button>
+        <button type="button" class="transport-btn" on:click={stopPlayback} title="Stop" aria-label="Stop">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="3" ry="3" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="transport-btn"
+          class:active={isLooping}
+          on:click={toggleLoop}
+          title={isLooping ? 'Disable Loop' : 'Enable Loop'}
+          aria-label={isLooping ? 'Disable Loop' : 'Enable Loop'}
+        >
+          <img src={loopIconUrl} alt="Loop" class="transport-icon" />
+        </button>
+        {#if !isStudentView || !activeStudentView.hideVolumeSlider}
+        <div class="volume-control-wrapper" bind:this={volumeControlWrapper}>
+          <button
+            type="button"
+            class="transport-btn volume-icon-button"
+            class:active={volumePopupOpen}
+            on:click={handleVolumeIconClick}
+            title="Volume"
+            aria-label="Volume"
+            aria-expanded={volumePopupOpen}
+            aria-controls="main-volume-popup"
+          >
+            <img src={volumeIconUrl} alt="Volume" class="transport-icon" />
+          </button>
+          <div id="main-volume-popup" class="volume-popup" class:visible={volumePopupOpen}>
+            <input
+              id="main-volume"
+              class="volume-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={state.mainVolume * 100}
+              on:input={setMainVolume}
+              title="Main volume"
+              aria-label="Main volume"
+            />
+          </div>
+        </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="controls-group settings-group">
+      <button type="button" class="transport-btn share-btn" on:click={handleShare} title="Share composition" aria-label="Share composition">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="5" r="3"/>
+          <circle cx="6" cy="12" r="3"/>
+          <circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
         </svg>
       </button>
+      {#if !isStudentView || !activeStudentView.hidePickupBeats || !activeStudentView.hideCanvasActions}
+      <button
+        type="button"
+        class="transport-btn pickup-modal-trigger"
+        class:active={pickupBeatsModalOpen}
+        on:click={() => (pickupBeatsModalOpen = true)}
+        title="Pickup beats & canvas rows"
+        aria-label="Pickup beats and canvas rows"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <ellipse cx="12.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
+          <ellipse cx="37.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
+        </svg>
+      </button>
+      {/if}
+      {#if !isStudentView || !activeStudentView.hideGearSettings}
+      <button type="button" class="transport-btn settings-gear-btn" class:settings-open={settingsOpen} on:click={() => (settingsOpen = true)} title="Settings" aria-label="Open settings">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+        </svg>
+      </button>
+      {/if}
     </div>
 
-    <div class="controls-group playback-group">
-      <div class="playback-select-control">
-        <label for="root-tonic-select">Tonic Pitch</label>
-        <select id="root-tonic-select" value={state.rootNoteTonic} on:change={handleRootTonicChange}>
-          {#each TONIC_OPTIONS as tonic}
-            <option value={tonic.value}>{tonic.label}</option>
-          {/each}
-        </select>
-      </div>
-      <div class="playback-select-control">
-        <label for="color-palette-select">Palette</label>
-        <select id="color-palette-select" value={colorPaletteMode} on:change={handleColorPaletteModeChange}>
-          <option value="oklch">OKLCH</option>
-          <option value="chromanotes">ChromaNotes</option>
-        </select>
-      </div>
-      <div class="playback-select-control">
-        <label>
-          <input type="checkbox" bind:checked={showAccidentals} />
-          Accidentals
-        </label>
-      </div>
-    </div>
-
-    <div class="controls-group voice-karaoke-group">
-      <div class="voice-select-control">
-        <label for="main-voice">Main Voice</label>
-        <select id="main-voice" value={state.mainPlaybackVoice} on:change={setMainVoice}>
-          {#each voiceOptions as voice}
-            <option value={voice}>{voice}</option>
-          {/each}
-        </select>
-      </div>
-
-      <div class="toolbar-slider-control">
-        <label for="main-volume">Volume</label>
-        <input
-          id="main-volume"
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={state.mainVolume * 100}
-          on:input={setMainVolume}
-          title="Main volume"
-        />
-        <output class="value-readout" for="main-volume">{Math.round(state.mainVolume * 100)}%</output>
-      </div>
-
-      <div class="toolbar-slider-control">
-        <label for="karaoke-arc-height">Arc</label>
-        <input
-          id="karaoke-arc-height"
-          type="range"
-          min={KARAOKE_ARC_HEIGHT_MIN}
-          max={KARAOKE_ARC_HEIGHT_MAX}
-          step="1"
-          value={karaokeArcHeightPx}
-          on:input={handleKaraokeArcHeightInput}
-          title="Karaoke arc height"
-        />
-        <output class="value-readout" for="karaoke-arc-height">{karaokeArcHeightPx}px</output>
-      </div>
-
-      <div class="toolbar-slider-control">
-        <label for="karaoke-ball-size">Ball</label>
-        <input
-          id="karaoke-ball-size"
-          type="range"
-          min={KARAOKE_BALL_SIZE_MIN}
-          max={KARAOKE_BALL_SIZE_MAX}
-          step="1"
-          value={karaokeBallSizePx}
-          on:input={handleKaraokeBallSizeInput}
-          title="Karaoke ball size"
-        />
-        <output class="value-readout" for="karaoke-ball-size">{karaokeBallSizePx}px</output>
-      </div>
-    </div>
-
-    <div class="controls-group pickup-karaoke-group">
-      <div class="pickup-controls" role="group" aria-label="Anacrusis pickup beats">
-        <span>Pickup Beats</span>
-        {#each [0, 1, 2, 3] as beatCount}
-          <button type="button" class:active={pickupBeats === beatCount} on:click={() => setPickupBeats(beatCount)}>
-            {beatCount}
-          </button>
-        {/each}
-      </div>
-
-      <div class="canvas-actions toolbar-canvas-actions">
-        <button type="button" on:click={addRow}>Add Row</button>
-        <button type="button" on:click={removeRow} disabled={gridRows.length <= 1}>Remove Row</button>
-        <button type="button" on:click={clearGrid}>Clear Canvas</button>
-      </div>
-    </div>
   </section>
 
   <section class="panel notebank-panel" class:playback-content-hidden={isPlaying}>
+    {#if tapPlacementPayload && showTapPlacementHint}
+      <p class="tap-placement-hint">
+        Touch placement armed: {displayLabelFromText(tapPlacementPayload.note.label)} {noteShapeLabel(tapPlacementPayload.note.shape)}.
+        Tap a canvas cell to place.
+      </p>
+    {/if}
     <div class="bank-row-wrap">
       <span class="bank-row-corner-label">Quarters</span>
       <div class="bank-lattice circle-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_CIRCLE};`}>
@@ -2123,6 +3522,8 @@
                 title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                 aria-label={`Add ${token.label} quarter sharp`}
                 on:click={() => previewBankNote(token.noteId)}
+                on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
+                on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
                 on:dragend={handleAnyDragEnd}
               >
@@ -2150,6 +3551,8 @@
                 title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                 aria-label={`Add ${token.label} quarter`}
                 on:click={() => previewBankNote(token.noteId)}
+                on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
+                on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
                 on:dragend={handleAnyDragEnd}
               >
@@ -2177,6 +3580,8 @@
                 title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                 aria-label={`Add ${token.label} quarter flat`}
                 on:click={() => previewBankNote(token.noteId)}
+                on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
+                on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
                 on:dragend={handleAnyDragEnd}
               >
@@ -2189,7 +3594,9 @@
       </div>
     </div>
 
+    {#if ((!isStudentView || !activeStudentView.hideEighthBank) && showEighthsBank) || ((!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank)}
     <div class="bank-row-pair">
+      {#if (!isStudentView || !activeStudentView.hideEighthBank) && showEighthsBank}
       <div class="bank-row-wrap">
         <span class="bank-row-corner-label">Eighths</span>
         <div class="bank-lattice oval-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_OVAL};`}>
@@ -2211,6 +3618,8 @@
                   title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                   aria-label={`Add ${token.label} oval sharp`}
                   on:click={() => previewBankNote(token.noteId)}
+                  on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
+                  on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                   on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
                   on:dragend={handleAnyDragEnd}
                 >
@@ -2238,6 +3647,8 @@
                   title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                   aria-label={`Add ${token.label} oval`}
                   on:click={() => previewBankNote(token.noteId)}
+                  on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
+                  on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                   on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
                   on:dragend={handleAnyDragEnd}
                 >
@@ -2265,6 +3676,8 @@
                   title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                   aria-label={`Add ${token.label} oval flat`}
                   on:click={() => previewBankNote(token.noteId)}
+                  on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
+                  on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                   on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
                   on:dragend={handleAnyDragEnd}
                 >
@@ -2276,7 +3689,9 @@
           {/if}
         </div>
       </div>
+      {/if}
 
+      {#if (!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank}
       <div class="bank-row-wrap">
         <span class="bank-row-corner-label">Sixteenths</span>
         <div class="bank-lattice diamond-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_DIAMOND};`}>
@@ -2298,6 +3713,8 @@
                   title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                   aria-label={`Add ${token.label} sixteenth sharp`}
                   on:click={() => previewBankNote(token.noteId)}
+                  on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
+                  on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                   on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
                   on:dragend={handleAnyDragEnd}
                 >
@@ -2325,6 +3742,8 @@
                   title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                   aria-label={`Add ${token.label} sixteenth`}
                   on:click={() => previewBankNote(token.noteId)}
+                  on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
+                  on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                   on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
                   on:dragend={handleAnyDragEnd}
                 >
@@ -2352,6 +3771,8 @@
                   title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                   aria-label={`Add ${token.label} sixteenth flat`}
                   on:click={() => previewBankNote(token.noteId)}
+                  on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
+                  on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                   on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
                   on:dragend={handleAnyDragEnd}
                 >
@@ -2363,13 +3784,15 @@
           {/if}
         </div>
       </div>
+      {/if}
     </div>
+    {/if}
   </section>
 
-  <section class="panel canvas-panel">
+  <section class="panel canvas-panel" on:dragenter={handleCanvasDragEnter} on:dragleave={handleCanvasDragLeave}>
     <div class="rows-grid" class:has-active-pickup={pickupBeats > 0} style={`--pickup-columns:${pickupMicrobeatCount()};`}>
       {#each gridRows as row, rowIndex (row.id)}
-        <article class="track-row" bind:this={trackRowElements[rowIndex]}>
+        <article class="track-row" class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0} bind:this={trackRowElements[rowIndex]}>
           {#if karaokeBallRowIndex === rowIndex}
             <div
               class="karaoke-ball"
@@ -2381,14 +3804,21 @@
             class="track-row-grids"
             class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0}
           >
-            {#if rowIndex === 0 && pickupBeats > 0}
-              <div class="track-grid pickup-grid inline-pickup-grid" role="group" aria-label="Pickup before first measure">
+            <div
+              class="track-grid main-grid"
+              class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0}
+              style={rowIndex === 0 && pickupBeats > 0 ? `--inline-row-columns:${pickupMicrobeatCount() + GRID_COLUMNS};` : undefined}
+              role="group"
+              aria-label={`Row ${rowIndex + 1}`}
+            >
+              {#if rowIndex === 0 && pickupBeats > 0}
                 {#each pickupRow.cells.slice(0, pickupMicrobeatCount()) as cell, cellIndex}
+                  {@const pickupPreviewNote = dragPreviewNote(dragPayload, dragOverCell, 'pickup', -1, cellIndex)}
                   <div
                     class="macrobeat-cell"
                     class:has-note={pickupCellHasNote(cellIndex)}
-                    class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start'}
-                    class:drop-target={isPickupDropTarget(cellIndex)}
+                    class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, 'pickup', -1, cellIndex)}
+                    class:drop-target={isPickupDropTarget(dragOverCell, cellIndex)}
                     class:playback-target={isPlaybackPickupCell(playbackCursor, cellIndex)}
                     class:playback-illuminated={isPlaybackPickupHighlightCell(playbackHighlight, cellIndex)}
                     class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'pickup', -1, cellIndex, 'playback-pulse-a')}
@@ -2401,6 +3831,7 @@
                     aria-label={`Pickup macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
                     on:dragover={(event) => handleCellDragOver(event, 'pickup', -1, cellIndex)}
                     on:drop={(event) => handleCellDrop(event, 'pickup', -1, cellIndex)}
+                    on:pointerdown={(event) => handleCellPointerDown(event, 'pickup', -1, cellIndex)}
                   >
                     {#if cell}
                       {#if cell.shape === 'oval' && cell.notes[0]}
@@ -2456,7 +3887,7 @@
                       {:else if cell.shape === 'diamond'}
                         <div class="placed-sixteenth-pair">
                           {#each cell.notes as diamondNote, slotIndex}
-                            <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget('pickup', -1, cellIndex, slotIndex)}>
+                            <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, 'pickup', -1, cellIndex, slotIndex)}>
                               {#if diamondNote}
                                 <button
                                   type="button"
@@ -2508,18 +3939,71 @@
                         <ellipse cx="50" cy="80" rx="50" ry="80" />
                       </svg>
                     {/if}
+                    {#if pickupPreviewNote}
+                      {#if pickupPreviewNote.shape === 'diamond'}
+                        <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
+                          {#each SIXTEENTH_SLOTS as previewSlot}
+                            <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'pickup', -1, cellIndex, previewSlot)}>
+                              {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'pickup', -1, cellIndex, previewSlot)}
+                                <div
+                                  class="drag-preview-note placed-note diamond sixteenth single"
+                                  style={`--token-color:${pickupPreviewNote.color};`}
+                                >
+                                  <svg
+                                    class="token-glyph diamond"
+                                    viewBox={PLACED_SIXTEENTH_HEX_VIEWBOX}
+                                    preserveAspectRatio="none"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                  >
+                                    <path d={PLACED_SIXTEENTH_HEX_PATH} />
+                                  </svg>
+                                  <span class="glyph-label">
+                                    <span class={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)}>{displayLabelFromText(pickupPreviewNote.label)}</span>
+                                  </span>
+                                </div>
+                              {/if}
+                            </div>
+                          {/each}
+                        </div>
+                      {:else if pickupPreviewNote.shape === 'oval'}
+                        <div class="drag-preview-layer" aria-hidden="true">
+                          <div class="drag-preview-note placed-note oval" style={`--token-color:${pickupPreviewNote.color};`}>
+                            <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
+                              <ellipse cx="50" cy="80" rx="50" ry="80" />
+                            </svg>
+                            <span class="glyph-label">
+                              <span class={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)}>{displayLabelFromText(pickupPreviewNote.label)}</span>
+                            </span>
+                          </div>
+                        </div>
+                      {:else}
+                        <div class="drag-preview-layer" aria-hidden="true">
+                          <div
+                            class="drag-preview-note placed-note circle"
+                            class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, 'pickup', -1, cellIndex)}
+                            style={`--token-color:${pickupPreviewNote.color};`}
+                          >
+                            <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+                              <ellipse cx="50" cy="50" rx="50" ry="50" />
+                            </svg>
+                            <span class="glyph-label">
+                              <span class={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)}>{displayLabelFromText(pickupPreviewNote.label)}</span>
+                            </span>
+                          </div>
+                        </div>
+                      {/if}
+                    {/if}
                   </div>
                 {/each}
-              </div>
-            {/if}
-
-            <div class="track-grid main-grid" class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0} role="group" aria-label={`Row ${rowIndex + 1}`}>
+              {/if}
             {#each row.cells as cell, cellIndex}
+              {@const mainPreviewNote = dragPreviewNote(dragPayload, dragOverCell, 'main', rowIndex, cellIndex)}
               <div
                 class="macrobeat-cell"
                 class:has-note={cellHasNote(rowIndex, cellIndex)}
-                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start'}
-                class:drop-target={isDropTarget(rowIndex, cellIndex)}
+                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, 'main', rowIndex, cellIndex)}
+                class:drop-target={isDropTarget(dragOverCell, rowIndex, cellIndex)}
                 class:playback-target={isPlaybackCell(playbackCursor, rowIndex, cellIndex)}
                 class:playback-illuminated={isPlaybackHighlightCell(playbackHighlight, rowIndex, cellIndex)}
                 class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-a')}
@@ -2532,6 +4016,7 @@
                 aria-label={`Row ${rowIndex + 1}, macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
                 on:dragover={(event) => handleCellDragOver(event, 'main', rowIndex, cellIndex)}
                 on:drop={(event) => handleCellDrop(event, 'main', rowIndex, cellIndex)}
+                on:pointerdown={(event) => handleCellPointerDown(event, 'main', rowIndex, cellIndex)}
               >
                 {#if cell}
                   {#if cell.shape === 'oval' && cell.notes[0]}
@@ -2587,7 +4072,7 @@
                   {:else if cell.shape === 'diamond'}
                     <div class="placed-sixteenth-pair">
                       {#each cell.notes as diamondNote, slotIndex}
-                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget('main', rowIndex, cellIndex, slotIndex)}>
+                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, 'main', rowIndex, cellIndex, slotIndex)}>
                           {#if diamondNote}
                             <button
                               type="button"
@@ -2639,6 +4124,61 @@
                     <ellipse cx="50" cy="80" rx="50" ry="80" />
                   </svg>
                 {/if}
+                {#if mainPreviewNote}
+                  {#if mainPreviewNote.shape === 'diamond'}
+                    <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
+                      {#each SIXTEENTH_SLOTS as previewSlot}
+                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'main', rowIndex, cellIndex, previewSlot)}>
+                          {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'main', rowIndex, cellIndex, previewSlot)}
+                            <div
+                              class="drag-preview-note placed-note diamond sixteenth single"
+                              style={`--token-color:${mainPreviewNote.color};`}
+                            >
+                              <svg
+                                class="token-glyph diamond"
+                                viewBox={PLACED_SIXTEENTH_HEX_VIEWBOX}
+                                preserveAspectRatio="none"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path d={PLACED_SIXTEENTH_HEX_PATH} />
+                              </svg>
+                              <span class="glyph-label">
+                                <span class={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)}>{displayLabelFromText(mainPreviewNote.label)}</span>
+                              </span>
+                            </div>
+                          {/if}
+                        </div>
+                      {/each}
+                    </div>
+                  {:else if mainPreviewNote.shape === 'oval'}
+                    <div class="drag-preview-layer" aria-hidden="true">
+                      <div class="drag-preview-note placed-note oval" style={`--token-color:${mainPreviewNote.color};`}>
+                        <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
+                          <ellipse cx="50" cy="80" rx="50" ry="80" />
+                        </svg>
+                        <span class="glyph-label">
+                          <span class={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)}>{displayLabelFromText(mainPreviewNote.label)}</span>
+                        </span>
+                      </div>
+                    </div>
+                  {:else}
+                    <div class="drag-preview-layer" aria-hidden="true">
+                      <div
+                        class="drag-preview-note placed-note circle"
+                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, 'main', rowIndex, cellIndex)}
+                        style={`--token-color:${mainPreviewNote.color};`}
+                      >
+                        <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+                          <ellipse cx="50" cy="50" rx="50" ry="50" />
+                        </svg>
+                        <span class="glyph-label">
+                          <span class={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)}>{displayLabelFromText(mainPreviewNote.label)}</span>
+                        </span>
+                      </div>
+                    </div>
+                  {/if}
+                {/if}
               </div>
             {/each}
             </div>
@@ -2648,4 +4188,383 @@
     </div>
 
   </section>
+
+  {#if cursorPreview && !cursorOverCanvas}
+    <div
+      class="cursor-ghost-wrapper"
+      style={`left:${cursorPreview.x}px; top:${cursorPreview.y}px; --token-color:${cursorPreview.note.color};`}
+      aria-hidden="true"
+    >
+      {#if cursorPreview.note.shape === 'oval'}
+        <div class="drag-preview-note placed-note oval">
+          <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
+            <ellipse cx="50" cy="80" rx="50" ry="80" />
+          </svg>
+          <span class="glyph-label">{displayLabelFromText(cursorPreview.note.label)}</span>
+        </div>
+      {:else if cursorPreview.note.shape === 'circle'}
+        <div class="drag-preview-note placed-note circle">
+          <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+            <ellipse cx="50" cy="50" rx="50" ry="50" />
+          </svg>
+          <span class="glyph-label">{displayLabelFromText(cursorPreview.note.label)}</span>
+        </div>
+      {:else}
+        <div class="drag-preview-note placed-note diamond sixteenth single">
+          <svg class="token-glyph diamond" viewBox={PLACED_SIXTEENTH_HEX_VIEWBOX} preserveAspectRatio="none" focusable="false">
+            <path d={PLACED_SIXTEENTH_HEX_PATH} />
+          </svg>
+          <span class="glyph-label">{displayLabelFromText(cursorPreview.note.label)}</span>
+        </div>
+      {/if}
+    </div>
+  {/if}
 </main>
+
+<dialog
+  bind:this={settingsDialog}
+  class="settings-dialog"
+  on:close={() => (settingsOpen = false)}
+>
+  <div class="settings-dialog-header">
+    <h2>Settings</h2>
+    <button type="button" class="settings-close-btn" on:click={() => (settingsOpen = false)} aria-label="Close settings">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+      </svg>
+    </button>
+  </div>
+  <div class="settings-dialog-body">
+    <div class="settings-section">
+      <h3 class="settings-section-label">Display</h3>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label for="settings-root-tonic-select">Tonic Pitch</label>
+          <select id="settings-root-tonic-select" value={state.rootNoteTonic} on:change={handleRootTonicChange}>
+            {#each TONIC_OPTIONS as tonic}
+              <option value={tonic.value}>{tonic.label}</option>
+            {/each}
+          </select>
+        </div>
+        {#if !isStudentView || !activeStudentView.hideMainVoice}
+        <div class="settings-field">
+          <label for="settings-main-voice-select">Main Voice</label>
+          <select id="settings-main-voice-select" value={state.mainPlaybackVoice} on:change={setMainVoice}>
+            {#each voiceOptions as voice}
+              <option value={voice}>{voice}</option>
+            {/each}
+          </select>
+        </div>
+        {/if}
+        <div class="settings-field">
+          <label for="settings-color-palette-select">Palette</label>
+          <select id="settings-color-palette-select" value={colorPaletteMode} on:change={handleColorPaletteModeChange}>
+            <option value="oklch">OKLCH</option>
+            <option value="chromanotes">ChromaNotes</option>
+          </select>
+        </div>
+        <div class="settings-field settings-checkbox-field">
+          <label>
+            <input type="checkbox" bind:checked={showAccidentals} />
+            Accidentals
+          </label>
+        </div>
+        <div class="settings-field settings-checkbox-field">
+          <label>
+            <input type="checkbox" bind:checked={showEighthsBank} />
+            Eighths bank
+          </label>
+        </div>
+        <div class="settings-field settings-checkbox-field">
+          <label>
+            <input type="checkbox" bind:checked={showSixteenthsBank} />
+            Sixteenths bank
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-label">Karaoke Ball</h3>
+      <div class="settings-row">
+        <div class="settings-field settings-slider-field">
+          <label for="settings-karaoke-arc-height">Arc height</label>
+          <input
+            id="settings-karaoke-arc-height"
+            type="range"
+            min={KARAOKE_ARC_HEIGHT_MIN}
+            max={KARAOKE_ARC_HEIGHT_MAX}
+            step="1"
+            value={karaokeArcHeightPx}
+            on:input={handleKaraokeArcHeightInput}
+            title="Karaoke arc height"
+          />
+          <output class="value-readout" for="settings-karaoke-arc-height">{karaokeArcHeightPx}px</output>
+        </div>
+        <div class="settings-slider-field">
+          <label for="settings-karaoke-ball-size">Ball size</label>
+          <input
+            id="settings-karaoke-ball-size"
+            type="range"
+            min={KARAOKE_BALL_SIZE_MIN}
+            max={KARAOKE_BALL_SIZE_MAX}
+            step="1"
+            value={karaokeBallSizePx}
+            on:input={handleKaraokeBallSizeInput}
+            title="Karaoke ball size"
+          />
+          <output class="value-readout" for="settings-karaoke-ball-size">{karaokeBallSizePx}px</output>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+{#if shareDecodeError}
+  <div class="share-version-banner" role="alert">
+    {shareDecodeError}
+    <button type="button" class="share-version-dismiss" on:click={() => (shareDecodeError = null)} aria-label="Dismiss">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+      </svg>
+    </button>
+  </div>
+{/if}
+
+{#if shareModalOpen}
+  <div class="share-modal-backdrop" on:click={() => (shareModalOpen = false)} role="presentation"></div>
+  <div class="share-modal" role="dialog" aria-modal="true" aria-label="Share composition">
+    <div class="share-modal-header">
+      <h2>Share Composition</h2>
+      <button type="button" class="share-modal-close" on:click={() => (shareModalOpen = false)} aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    </div>
+    {#if shareFailed}
+      <p class="share-error">Share link could not be generated. Please try again.</p>
+    {:else}
+      {#if shareUrl.length > SHARE_URL_SEVERE_LENGTH}
+        <div class="share-warning share-warning--severe" role="status">
+          This link is too long for most email clients. Use <strong>Copy Code</strong> for safer sharing.
+        </div>
+      {:else if shareUrl.length > SHARE_URL_WARN_LENGTH}
+        <div class="share-warning" role="status">
+          This link may break in some email clients. Use <strong>Copy Code</strong> for safer sharing.
+        </div>
+      {/if}
+      <p class="share-instructions">Share via browser link:</p>
+      <div class="share-url-row">
+        <span class="share-url-display" title={shareUrl}>{shareUrl}</span>
+        <button
+          type="button"
+          class="share-copy-btn"
+          class:copied={shareCopied}
+          disabled={shareUrl.length > SHARE_URL_SEVERE_LENGTH}
+          on:click={copyShareUrl}
+        >
+          {#if shareCopied}Copied!{:else}Copy Link{/if}
+        </button>
+      </div>
+      <div class="share-code-section">
+        <p class="share-instructions">Share via code (email-safe):</p>
+        <div class="share-url-row">
+          <span class="share-url-display" title={shareCode}>{shareCode}</span>
+          <button type="button" class="share-copy-btn share-copy-btn--code" class:copied={shareCodeCopied} on:click={copyShareCode}>
+            {#if shareCodeCopied}Copied!{:else}Copy Code{/if}
+          </button>
+          <button type="button" class="gmail-btn" on:click={openGmailShare} title="Open Gmail compose with this code" aria-label="Share via Gmail">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
+              <path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75L35 40h7c1.657 0 3-1.343 3-3z"/>
+              <path fill="#1e88e5" d="M3 16.2l3.614 1.71L13 23.7V40H6c-1.657 0-3-1.343-3-3z"/>
+              <polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.45 35,23.7 36,17"/>
+              <path fill="#c62828" d="M3 12.298V16.2l10 7.5V11.2L9.876 8.859C9.132 8.301 8.228 8 7.298 8 4.924 8 3 9.924 3 12.298z"/>
+              <path fill="#fbc02d" d="M45 12.298V16.2l-10 7.5V11.2l3.124-2.341C38.868 8.301 39.772 8 40.702 8 43.076 8 45 9.924 45 12.298z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    {/if}
+    {#if !isStudentView}
+    <div class="sv-launch-section">
+      <button type="button" class="sv-launch-btn" on:click={() => { shareModalOpen = false; studentViewModalOpen = true; }}>
+        Share Student View…
+      </button>
+      <p class="sv-launch-description">Customize which controls students can see.</p>
+    </div>
+    {/if}
+    <div class="share-load-section">
+      <p class="share-instructions">Load from code:</p>
+      <div class="load-code-row">
+        <input
+          type="text"
+          class="load-code-input"
+          bind:value={loadCodeValue}
+          placeholder="Paste a composition code…"
+          aria-label="Composition code"
+          on:keydown={(e) => { if (e.key === 'Enter') void handleLoadFromCode(); }}
+        />
+        <button type="button" class="load-code-btn" on:click={() => void handleLoadFromCode()}>Load</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if studentViewModalOpen}
+  <div class="share-modal-backdrop" on:click={() => (studentViewModalOpen = false)} role="presentation"></div>
+  <div class="share-modal sv-modal" role="dialog" aria-modal="true" aria-label="Share Student View">
+    <div class="share-modal-header">
+      <h2>Share Student View</h2>
+      <button type="button" class="share-modal-close" on:click={() => (studentViewModalOpen = false)} aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    </div>
+
+    <p class="sv-intro">Check items to hide them from students in the shared link.</p>
+
+    <div class="sv-section">
+      <h3 class="sv-section-title">Controls</h3>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideMainVoice} />
+        <span class="sv-toggle-label">Main Voice</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideMainVoice}>Voice waveform selector in Settings (sine, triangle, sawtooth, square)</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideVolumeSlider} />
+        <span class="sv-toggle-label">Volume Slider</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideVolumeSlider}>Main playback volume control</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideGearSettings} />
+        <span class="sv-toggle-label">Settings (gear icon)</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideGearSettings}>Opens the settings panel (color palette, accidentals, drone)</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hidePickupBeats} />
+        <span class="sv-toggle-label">Pickup Beats</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hidePickupBeats}>Anacrusis buttons (0–3 pickup beats)</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideCanvasActions} />
+        <span class="sv-toggle-label">Canvas Actions</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideCanvasActions}>Add Row, Remove Row, and Clear Canvas buttons</span>
+      </label>
+    </div>
+
+    <div class="sv-section">
+      <h3 class="sv-section-title">Note Banks</h3>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideEighthBank} />
+        <span class="sv-toggle-label">Eighth Note Bank</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideEighthBank}>Oval note tokens for eighth notes</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideSixteenthBank} />
+        <span class="sv-toggle-label">Sixteenth Note Bank</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideSixteenthBank}>Diamond note tokens for sixteenth notes</span>
+      </label>
+    </div>
+
+    <div class="sv-section">
+      <h3 class="sv-section-title">Tempo Display</h3>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideEighthTempo} />
+        <span class="sv-toggle-label">Eighth Note BPM row</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideEighthTempo}>Eighth note tempo number and stepper</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideQuarterTempo} />
+        <span class="sv-toggle-label">Quarter Note BPM row</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideQuarterTempo}>Quarter note tempo number and stepper</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideDottedQuarterTempo} />
+        <span class="sv-toggle-label">Dotted Quarter BPM row</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideDottedQuarterTempo}>Dotted quarter note tempo number and stepper</span>
+      </label>
+      <label class="sv-toggle-row">
+        <input type="checkbox" bind:checked={studentViewSettings.hideTempoSlider} />
+        <span class="sv-toggle-label">Tempo Slider</span>
+        <span class="sv-toggle-desc" class:sv-faded={studentViewSettings.hideTempoSlider}>The vertical drag slider alongside the BPM rows</span>
+      </label>
+    </div>
+
+    <div class="sv-generate-section">
+      <button type="button" class="sv-generate-btn" on:click={() => void handleShareStudentView()}>
+        Generate Student Link
+      </button>
+    </div>
+
+    {#if shareStudentViewUrl}
+      {#if shareStudentViewUrl.length > SHARE_URL_WARN_LENGTH}
+        <div class="share-warning" role="status">
+          This link may break in some email clients. Use <strong>Copy Code</strong> for safer sharing.
+        </div>
+      {/if}
+      <p class="share-instructions">Share via browser link:</p>
+      <div class="share-url-row">
+        <span class="share-url-display" title={shareStudentViewUrl}>{shareStudentViewUrl}</span>
+        <button type="button" class="share-copy-btn" class:copied={shareStudentViewCopied} on:click={copyStudentViewUrl}>
+          {#if shareStudentViewCopied}Copied!{:else}Copy Link{/if}
+        </button>
+      </div>
+      <div class="share-code-section">
+        <p class="share-instructions">Share via code (email-safe):</p>
+        <div class="share-url-row">
+          <span class="share-url-display" title={shareStudentViewCode}>{shareStudentViewCode}</span>
+          <button type="button" class="share-copy-btn share-copy-btn--code" class:copied={shareStudentViewCodeCopied} on:click={copyStudentViewCode}>
+            {#if shareStudentViewCodeCopied}Copied!{:else}Copy Code{/if}
+          </button>
+          <button type="button" class="gmail-btn" on:click={openGmailShareStudentView} title="Open Gmail compose with this code" aria-label="Share via Gmail">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true">
+              <path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75L35 40h7c1.657 0 3-1.343 3-3z"/>
+              <path fill="#1e88e5" d="M3 16.2l3.614 1.71L13 23.7V40H6c-1.657 0-3-1.343-3-3z"/>
+              <polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.45 35,23.7 36,17"/>
+              <path fill="#c62828" d="M3 12.298V16.2l10 7.5V11.2L9.876 8.859C9.132 8.301 8.228 8 7.298 8 4.924 8 3 9.924 3 12.298z"/>
+              <path fill="#fbc02d" d="M45 12.298V16.2l-10 7.5V11.2l3.124-2.341C38.868 8.301 39.772 8 40.702 8 43.076 8 45 9.924 45 12.298z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    {/if}
+  </div>
+{/if}
+
+{#if pickupBeatsModalOpen}
+  <div class="share-modal-backdrop" on:click={() => (pickupBeatsModalOpen = false)} role="presentation"></div>
+  <div class="pickup-modal" role="dialog" aria-modal="true" aria-label="Pickup beats and canvas rows">
+    <div class="share-modal-header">
+      <h2>Canvas</h2>
+      <button type="button" class="share-modal-close" on:click={() => (pickupBeatsModalOpen = false)} aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="pickup-modal-body">
+      {#if !isStudentView || !activeStudentView.hidePickupBeats}
+      <div class="pickup-modal-section">
+        <h3 class="pickup-modal-section-label">Pickup Beats</h3>
+        <div class="pickup-controls" role="group" aria-label="Anacrusis pickup beats">
+          {#each [0, 1, 2, 3] as beatCount}
+            <button type="button" class:active={pickupBeats === beatCount} on:click={() => setPickupBeats(beatCount)}>
+              {beatCount}
+            </button>
+          {/each}
+        </div>
+      </div>
+      {/if}
+      {#if !isStudentView || !activeStudentView.hideCanvasActions}
+      <div class="pickup-modal-section">
+        <h3 class="pickup-modal-section-label">Canvas Rows</h3>
+        <div class="canvas-actions">
+          <button type="button" on:click={addRow}>Add Row</button>
+          <button type="button" on:click={removeRow} disabled={gridRows.length <= 1}>Remove Row</button>
+        </div>
+      </div>
+      {/if}
+    </div>
+  </div>
+{/if}
