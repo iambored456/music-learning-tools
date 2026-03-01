@@ -103,10 +103,38 @@ let volumeSlider: HTMLInputElement | null = null;
 const volumeIconState: VolumeIconState = 'normal';
 let lastDrumPlaybackTime = 0;
 const DRUM_PLAYBACK_THROTTLE_MS = 500;
+let drumVolumeControlInitCount = 0;
+let drumVolumeButtonClickCount = 0;
+let drumVolumeDocumentClickCount = 0;
+let drumVolumeSliderInputCount = 0;
 let activeDrumModalTrack: DrumTrack = 'M';
 let activeDrumSampleCategory: DrumSamplePickerCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY.M;
 let pendingDrumLayerSamples: Record<DrumTrack, string> | null = null;
 let activeSamplePreviewAudio: HTMLAudioElement | null = null;
+
+function logDrumVolumeDebug(message: string, payload?: Record<string, unknown>): void {
+  if (payload) {
+    console.log(`[DrumVolumeDebug] ${message}`, payload);
+    return;
+  }
+  console.log(`[DrumVolumeDebug] ${message}`);
+}
+
+function describeEventTarget(target: EventTarget | null): Record<string, unknown> {
+  if (!(target instanceof Element)) {
+    return { isElement: false };
+  }
+
+  return {
+    isElement: true,
+    tagName: target.tagName,
+    id: target.id || null,
+    className: target.getAttribute('class'),
+    ariaLabel: target.getAttribute('aria-label'),
+    insideVolumeButton: Boolean(target.closest('.drum-volume-button')),
+    insideVolumeSliderWrap: Boolean(target.closest('.drum-volume-slider-wrap'))
+  };
+}
 
 function resolveSamplePickerCategory(
   suggestedLayer: DrumTrack,
@@ -178,9 +206,291 @@ const drumSampleChoicesByCategory = new Map<
   DrumSamplePickerCategory,
   Map<string, DrumSampleChoice[]>
 >();
+type DrumSampleLevelMetrics = {
+  peakDbfs: number;
+  rmsDbfs: number;
+  crestDb: number;
+  durationSeconds: number;
+  sampleRate: number;
+  channelCount: number;
+  frameCount: number;
+};
+const drumSampleLevelMetricsByUrl = new Map<string, DrumSampleLevelMetrics>();
+const drumSampleLevelAnalysisInFlight = new Map<string, Promise<DrumSampleLevelMetrics | null>>();
+let drumSampleAnalysisContext: AudioContext | null = null;
 
 for (const category of DRUM_SAMPLE_PICKER_CATEGORY_ORDER) {
   drumSampleChoicesByCategory.set(category, new Map());
+}
+
+function toDbfs(amplitude: number): number {
+  if (amplitude <= 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  return 20 * Math.log10(amplitude);
+}
+
+function getDrumSampleAnalysisContext(): AudioContext | null {
+  type WindowWithWebkitAudioContext = Window & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+  const AudioContextCtor = window.AudioContext || (window as WindowWithWebkitAudioContext).webkitAudioContext;
+  if (!AudioContextCtor) {
+    return null;
+  }
+  if (!drumSampleAnalysisContext) {
+    drumSampleAnalysisContext = new AudioContextCtor();
+  }
+  return drumSampleAnalysisContext;
+}
+
+async function analyzeDrumSampleLevel(choice: DrumSampleChoice): Promise<DrumSampleLevelMetrics | null> {
+  const cached = drumSampleLevelMetricsByUrl.get(choice.url);
+  if (cached) {
+    return cached;
+  }
+
+  const inFlight = drumSampleLevelAnalysisInFlight.get(choice.url);
+  if (inFlight) {
+    return await inFlight;
+  }
+
+  const analysisPromise = (async () => {
+    const context = getDrumSampleAnalysisContext();
+    if (!context) {
+      console.warn('[DrumSampleLevel] WebAudio unavailable; cannot decode sample for level analysis.');
+      return null;
+    }
+
+    try {
+      const response = await fetch(choice.url);
+      const sourceBuffer = await response.arrayBuffer();
+      const decoded = await context.decodeAudioData(sourceBuffer.slice(0));
+
+      let peak = 0;
+      let sumSquares = 0;
+      let sampleCount = 0;
+
+      for (let channelIndex = 0; channelIndex < decoded.numberOfChannels; channelIndex += 1) {
+        const data = decoded.getChannelData(channelIndex);
+        sampleCount += data.length;
+
+        for (let i = 0; i < data.length; i += 1) {
+          const sample = data[i] ?? 0;
+          const absSample = Math.abs(sample);
+          if (absSample > peak) {
+            peak = absSample;
+          }
+          sumSquares += sample * sample;
+        }
+      }
+
+      const rms = sampleCount > 0 ? Math.sqrt(sumSquares / sampleCount) : 0;
+      const peakDbfs = toDbfs(peak);
+      const rmsDbfs = toDbfs(rms);
+      const crestDb = peak > 0 && rms > 0 ? 20 * Math.log10(peak / rms) : 0;
+
+      const metrics: DrumSampleLevelMetrics = {
+        peakDbfs,
+        rmsDbfs,
+        crestDb,
+        durationSeconds: decoded.duration,
+        sampleRate: decoded.sampleRate,
+        channelCount: decoded.numberOfChannels,
+        frameCount: decoded.length
+      };
+
+      drumSampleLevelMetricsByUrl.set(choice.url, metrics);
+      return metrics;
+    } catch (error) {
+      console.warn('[DrumSampleLevel] Failed to analyze sample', {
+        sampleLabel: choice.label,
+        sampleUrl: choice.url,
+        error
+      });
+      return null;
+    } finally {
+      drumSampleLevelAnalysisInFlight.delete(choice.url);
+    }
+  })();
+
+  drumSampleLevelAnalysisInFlight.set(choice.url, analysisPromise);
+  return await analysisPromise;
+}
+
+function formatDbForLog(value: number): number | string {
+  if (!Number.isFinite(value)) {
+    return '-Infinity';
+  }
+  return Number(value.toFixed(2));
+}
+
+async function logPreviewSampleLevel(choice: DrumSampleChoice): Promise<void> {
+  const metrics = await analyzeDrumSampleLevel(choice);
+  if (!metrics) {return;}
+
+  const cachedMetrics = Array.from(drumSampleLevelMetricsByUrl.values())
+    .map((item) => item.rmsDbfs)
+    .filter(Number.isFinite);
+  const loudestRmsDbfs = cachedMetrics.length ? Math.max(...cachedMetrics) : metrics.rmsDbfs;
+  const deltaToLoudestDb = metrics.rmsDbfs - loudestRmsDbfs;
+
+  console.log('[DrumSampleLevel] Preview sample metrics', {
+    sampleLabel: choice.label,
+    machineLabel: getMachineLabel(choice.machineId, choice.machineLabel),
+    sampleUrl: choice.url,
+    peakDbfs: formatDbForLog(metrics.peakDbfs),
+    rmsDbfs: formatDbForLog(metrics.rmsDbfs),
+    crestDb: formatDbForLog(metrics.crestDb),
+    durationSeconds: Number(metrics.durationSeconds.toFixed(3)),
+    deltaToLoudestAnalyzedRmsDb: formatDbForLog(deltaToLoudestDb)
+  });
+}
+
+async function logAllDrumSampleLevels(): Promise<void> {
+  const choices = drumSampleChoiceByUrl.size
+    ? Array.from(drumSampleChoiceByUrl.values())
+    : [...remoteSampleChoices];
+  if (!choices.length) {
+    console.warn('[DrumSampleLevel] No drum samples available to analyze yet.');
+    return;
+  }
+
+  console.log('[DrumSampleLevel] Starting full sample analysis', { sampleCount: choices.length });
+
+  const rows: Array<{
+    sampleLabel: string;
+    machineLabel: string;
+    pickerCategory: DrumSamplePickerCategory;
+    suggestedLayer: DrumTrack;
+    peakDbfs: number | string;
+    rmsDbfs: number | string;
+    crestDb: number | string;
+    durationSeconds: number;
+    deltaToLoudestRmsDb: number | string;
+  }> = [];
+
+  let loudestRmsDbfs = Number.NEGATIVE_INFINITY;
+  const metricsByChoice = new Map<DrumSampleChoice, DrumSampleLevelMetrics>();
+
+  for (const choice of choices) {
+    const metrics = await analyzeDrumSampleLevel(choice);
+    if (!metrics) {
+      continue;
+    }
+    metricsByChoice.set(choice, metrics);
+    if (metrics.rmsDbfs > loudestRmsDbfs) {
+      loudestRmsDbfs = metrics.rmsDbfs;
+    }
+  }
+
+  for (const choice of choices) {
+    const metrics = metricsByChoice.get(choice);
+    if (!metrics) {
+      continue;
+    }
+    const deltaToLoudestRmsDb = metrics.rmsDbfs - loudestRmsDbfs;
+    rows.push({
+      sampleLabel: choice.label,
+      machineLabel: getMachineLabel(choice.machineId, choice.machineLabel),
+      pickerCategory: choice.pickerCategory,
+      suggestedLayer: choice.suggestedLayer,
+      peakDbfs: formatDbForLog(metrics.peakDbfs),
+      rmsDbfs: formatDbForLog(metrics.rmsDbfs),
+      crestDb: formatDbForLog(metrics.crestDb),
+      durationSeconds: Number(metrics.durationSeconds.toFixed(3)),
+      deltaToLoudestRmsDb: formatDbForLog(deltaToLoudestRmsDb)
+    });
+  }
+
+  rows.sort((a, b) => {
+    const aValue = typeof a.rmsDbfs === 'number' ? a.rmsDbfs : Number.NEGATIVE_INFINITY;
+    const bValue = typeof b.rmsDbfs === 'number' ? b.rmsDbfs : Number.NEGATIVE_INFINITY;
+    return bValue - aValue;
+  });
+
+  console.table(rows);
+
+  const numericRmsValues = rows
+    .map((row) => row.rmsDbfs)
+    .filter((value): value is number => typeof value === 'number');
+
+  if (!numericRmsValues.length) {
+    console.log('[DrumSampleLevel] Analysis completed without numeric RMS values.');
+    return;
+  }
+
+  const quietestRmsDbfs = Math.min(...numericRmsValues);
+  const spreadDb = loudestRmsDbfs - quietestRmsDbfs;
+
+  console.log('[DrumSampleLevel] Analysis summary', {
+    analyzedSampleCount: numericRmsValues.length,
+    loudestRmsDbfs: formatDbForLog(loudestRmsDbfs),
+    quietestRmsDbfs: formatDbForLog(quietestRmsDbfs),
+    rmsSpreadDb: formatDbForLog(spreadDb)
+  });
+}
+
+(window as any).debugDrumSampleLevels = logAllDrumSampleLevels;
+
+function formatSampleLabelFromUrl(sampleUrl: string): string {
+  const filename = sampleUrl.split('/').pop() ?? sampleUrl;
+  let decoded = filename;
+  try {
+    decoded = decodeURIComponent(filename);
+  } catch {
+    // Keep the raw filename when URL decoding fails.
+  }
+
+  const withoutExtension = decoded.replace(/\.[a-z0-9]+$/i, '');
+  const normalized = withoutExtension.replace(/[_-]+/g, ' ').trim();
+  return normalized || 'Custom sample';
+}
+
+function getDrumTrackSampleLabel(
+  track: DrumTrack,
+  assignedSamples: Record<DrumTrack, string>
+): { sampleLabel: string; machineLabel: string | null } {
+  const sampleUrl = assignedSamples[track];
+  if (!sampleUrl) {
+    return { sampleLabel: 'Custom sample', machineLabel: null };
+  }
+
+  const knownSample = drumSampleChoiceByUrl.get(sampleUrl);
+  if (!knownSample) {
+    return {
+      sampleLabel: formatSampleLabelFromUrl(sampleUrl),
+      machineLabel: null
+    };
+  }
+
+  return {
+    sampleLabel: knownSample.label,
+    machineLabel: getMachineLabel(knownSample.machineId, knownSample.machineLabel)
+  };
+}
+
+function updateDrumTrackSettingButtons(
+  assignedSamples: Record<DrumTrack, string> = getCurrentDrumLayerSamples()
+): void {
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.drum-track-settings-button[data-track]');
+  buttons.forEach((button) => {
+    const track = button.dataset.track as DrumTrack | undefined;
+    if (!track || !DRUM_TRACKS.includes(track)) {return;}
+
+    const sampleLabelEl = button.querySelector<HTMLElement>('[data-role="track-sample-label"]');
+    const { sampleLabel, machineLabel } = getDrumTrackSampleLabel(track, assignedSamples);
+    const summary = machineLabel ? `${sampleLabel} - ${machineLabel}` : sampleLabel;
+
+    if (sampleLabelEl) {
+      sampleLabelEl.textContent = sampleLabel;
+    } else {
+      button.textContent = `${track} ${sampleLabel}`;
+    }
+
+    button.title = summary;
+    button.setAttribute('aria-label', `${DRUM_TRACK_LABELS[track]} sample: ${summary}. Open sample browser.`);
+  });
 }
 
 export async function initLocalDrumSampleChoices(): Promise<void> {
@@ -217,6 +527,7 @@ export async function initLocalDrumSampleChoices(): Promise<void> {
         categoryGroup.set(machineLabel, [choice]);
       }
     }
+    updateDrumTrackSettingButtons();
   } catch (error) {
     console.error('[drumGridInteractor] Failed to load local drum samples', error);
   }
@@ -467,6 +778,8 @@ function closeDrumLayerSampleModal(): void {
 }
 
 function playDrumSamplePreview(choice: DrumSampleChoice): void {
+  void logPreviewSampleLevel(choice);
+
   const play = () => {
     if (activeSamplePreviewAudio) {
       activeSamplePreviewAudio.pause();
@@ -477,6 +790,13 @@ function playDrumSamplePreview(choice: DrumSampleChoice): void {
     const previewAudio = new Audio(choice.url);
     previewAudio.preload = 'auto';
     previewAudio.volume = 0.9;
+    const drumVolumeNode = (window as any).drumVolumeNode;
+    console.log('[DrumSampleLevel] Preview playback settings', {
+      sampleLabel: choice.label,
+      sampleUrl: choice.url,
+      previewElementVolume: previewAudio.volume,
+      drumVolumeNodeDb: drumVolumeNode?.volume?.value ?? null
+    });
     previewAudio.addEventListener('ended', () => {
       if (activeSamplePreviewAudio === previewAudio) {
         activeSamplePreviewAudio = null;
@@ -812,6 +1132,7 @@ function ensureDrumLayerSampleModal(): HTMLElement {
 
     try {
       await setDrumLayerSamples(selectedSamples);
+      updateDrumTrackSettingButtons(selectedSamples);
       setDrumLayerSampleModalStatus(modal, 'Samples updated.');
       triggerDrumHit(activeDrumModalTrack, 0.05);
       closeDrumLayerSampleModal();
@@ -925,12 +1246,23 @@ function openDrumLayerSampleModal(trackToFocus: DrumTrack): void {
 }
 
 function createVolumeSlider(): void {
+  drumVolumeControlInitCount += 1;
+  const initCall = drumVolumeControlInitCount;
   const drumWrapper = document.getElementById(DRUM_GRID_WRAPPER_ID);
   const leftCell = drumWrapper?.querySelector('.drum-grid-left-cell') as HTMLElement | null;
 
-  if (!drumWrapper || !leftCell) {return;}
+  logDrumVolumeDebug('createVolumeSlider called', {
+    initCall,
+    hasDrumWrapper: Boolean(drumWrapper),
+    hasLeftCell: Boolean(leftCell)
+  });
 
-  // Build left-cell content (volume button + gear icons + row labels) if missing
+  if (!drumWrapper || !leftCell) {
+    logDrumVolumeDebug('createVolumeSlider exited early - required elements missing', { initCall });
+    return;
+  }
+
+  // Build left-cell content (volume button + per-row sample buttons) if missing
   let leftContent = leftCell.querySelector('.drum-left-content') as HTMLElement | null;
   if (!leftContent) {
     leftContent = document.createElement('div');
@@ -960,49 +1292,58 @@ function createVolumeSlider(): void {
     volumeButton.style.gridColumn = '1';
     leftContentEl.appendChild(volumeButton);
 
-    // Column 2: Gear icon buttons (one per row) opening the layer sample modal.
-    const gearSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg>`;
+    // Column 2: Row buttons with track labels and active sample names.
+    DRUM_TRACKS.forEach((track, index) => {
+      const trackButton = document.createElement('button');
+      trackButton.className = 'drum-track-settings-button';
+      trackButton.type = 'button';
+      trackButton.dataset.track = track;
+      trackButton.style.gridColumn = '2';
+      trackButton.style.gridRow = `${index + 1}`;
 
-    (['H', 'M', 'L'] as const).forEach((track, index) => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'drum-gear-wrapper';
-      wrapper.style.gridColumn = '2';
-      wrapper.style.gridRow = `${index + 1}`;
+      const trackLabel = document.createElement('span');
+      trackLabel.className = 'drum-track-settings-button__track';
+      trackLabel.textContent = track;
+      trackLabel.setAttribute('aria-hidden', 'true');
 
-      const gearBtn = document.createElement('button');
-      gearBtn.className = 'drum-gear-button';
-      gearBtn.type = 'button';
-      gearBtn.setAttribute('aria-label', `${track} drum settings`);
-      gearBtn.innerHTML = gearSvg;
+      const sampleLabel = document.createElement('span');
+      sampleLabel.className = 'drum-track-settings-button__sample';
+      sampleLabel.dataset.role = 'track-sample-label';
+      sampleLabel.textContent = 'Loading...';
 
-      gearBtn.addEventListener('click', (event) => {
+      trackButton.appendChild(trackLabel);
+      trackButton.appendChild(sampleLabel);
+
+      trackButton.addEventListener('click', (event) => {
         event.stopPropagation();
         openDrumLayerSampleModal(track);
       });
 
-      wrapper.appendChild(gearBtn);
-      leftContentEl.appendChild(wrapper);
-    });
-
-    // Column 3: H/M/L labels
-    ['H', 'M', 'L'].forEach((label, index) => {
-      const item = document.createElement('span');
-      item.className = 'drum-track-label';
-      item.textContent = label;
-      item.style.gridColumn = '3';
-      item.style.gridRow = `${index + 1}`;
-      leftContentEl.appendChild(item);
+      leftContentEl.appendChild(trackButton);
     });
 
     leftCell.appendChild(leftContentEl);
+    updateDrumTrackSettingButtons();
+    logDrumVolumeDebug('created drum-left-content with volume and track buttons', { initCall });
   }
 
   // Volume button <-> inline slider swap
   const volumeButton = leftCell.querySelector('.drum-volume-button') as HTMLElement | null;
+  updateDrumTrackSettingButtons();
+  logDrumVolumeDebug('resolved drum volume button', {
+    initCall,
+    hasVolumeButton: Boolean(volumeButton)
+  });
 
   let sliderWrap: HTMLElement | null = null;
 
   const showSlider = () => {
+    logDrumVolumeDebug('showSlider requested', {
+      initCall,
+      hasVolumeButton: Boolean(volumeButton),
+      sliderAlreadyPresent: Boolean(sliderWrap),
+      currentDrumVolume: drumVolume
+    });
     if (!volumeButton) {return;}
 
     sliderWrap = document.createElement('div');
@@ -1019,11 +1360,13 @@ function createVolumeSlider(): void {
 
     volumeSlider.addEventListener('input', (event) => {
       const target = event.currentTarget as HTMLInputElement;
+      const previousDrumVolume = drumVolume;
       drumVolume = Number(target.value) / 100;
 
       const drumVolumeNode = (window as any).drumVolumeNode;
+      const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
+      drumVolumeSliderInputCount += 1;
       if (drumVolumeNode?.volume) {
-        const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
         drumVolumeNode.volume.value = volumeDb;
 
         const now = Date.now();
@@ -1032,40 +1375,127 @@ function createVolumeSlider(): void {
           lastDrumPlaybackTime = now;
         }
       }
+
+      logDrumVolumeDebug('slider input', {
+        initCall,
+        inputCount: drumVolumeSliderInputCount,
+        sliderValue: target.value,
+        previousDrumVolume,
+        nextDrumVolume: drumVolume,
+        volumeDb,
+        hasDrumVolumeNode: Boolean(drumVolumeNode?.volume),
+        appliedDrumVolumeDb: drumVolumeNode?.volume?.value ?? null
+      });
     });
 
     sliderWrap.appendChild(volumeSlider);
     volumeButton.replaceWith(sliderWrap);
-
-    // Size the slider track to match the wrapper's actual height
-    requestAnimationFrame(() => {
-      if (sliderWrap && volumeSlider) {
-        volumeSlider.style.width = `${sliderWrap.offsetHeight}px`;
-      }
+    logDrumVolumeDebug('replaced volume button with inline slider', {
+      initCall,
+      sliderValue: volumeSlider.value
     });
+
+    // Size the slider track to match the wrapper's actual height.
+    // Retry for a few frames because layout can settle after the click task.
+    const applySliderWidthFromHeight = (attempt: number) => {
+      if (!sliderWrap || !volumeSlider) {
+        return;
+      }
+
+      const wrapperOffsetHeight = sliderWrap.offsetHeight;
+      const wrapperOffsetWidth = sliderWrap.offsetWidth;
+      const leftCellOffsetHeight = leftCell.offsetHeight;
+      const fallbackHeight = Math.max(wrapperOffsetHeight, leftCellOffsetHeight);
+
+      if (fallbackHeight > 0) {
+        volumeSlider.style.width = `${fallbackHeight}px`;
+        if (wrapperOffsetWidth > 0) {
+          volumeSlider.style.height = `${wrapperOffsetWidth}px`;
+        }
+        logDrumVolumeDebug('applied slider width from measured height', {
+          initCall,
+          attempt,
+          wrapperOffsetHeight,
+          wrapperOffsetWidth,
+          leftCellOffsetHeight,
+          sliderWidth: volumeSlider.style.width,
+          sliderHeight: volumeSlider.style.height
+        });
+        return;
+      }
+
+      if (attempt < 3) {
+        logDrumVolumeDebug('slider width measurement was zero, retrying', {
+          initCall,
+          attempt,
+          wrapperOffsetHeight,
+          wrapperOffsetWidth,
+          leftCellOffsetHeight
+        });
+        requestAnimationFrame(() => applySliderWidthFromHeight(attempt + 1));
+        return;
+      }
+
+      logDrumVolumeDebug('slider width measurement remained zero after retries', {
+        initCall,
+        attempt,
+        wrapperOffsetHeight,
+        wrapperOffsetWidth,
+        leftCellOffsetHeight
+      });
+    };
+
+    requestAnimationFrame(() => applySliderWidthFromHeight(1));
   };
 
   const hideSlider = () => {
-    if (!sliderWrap || !volumeButton) {return;}
+    if (!sliderWrap || !volumeButton) {
+      logDrumVolumeDebug('hideSlider skipped', {
+        initCall,
+        hasSliderWrap: Boolean(sliderWrap),
+        hasVolumeButton: Boolean(volumeButton)
+      });
+      return;
+    }
     sliderWrap.replaceWith(volumeButton);
     volumeSlider = null;
     sliderWrap = null;
+    logDrumVolumeDebug('restored volume button and cleared slider', { initCall });
   };
 
   if (volumeButton) {
     volumeButton.addEventListener('click', (event) => {
+      drumVolumeButtonClickCount += 1;
+      logDrumVolumeDebug('volume icon button clicked', {
+        initCall,
+        clickCount: drumVolumeButtonClickCount,
+        sliderVisibleBeforeClick: Boolean(sliderWrap),
+        currentTarget: describeEventTarget(event.currentTarget),
+        target: describeEventTarget(event.target)
+      });
       event.stopPropagation();
       showSlider();
     });
+    logDrumVolumeDebug('bound click listener to drum volume button', { initCall });
   }
 
   document.addEventListener('click', (event) => {
+    drumVolumeDocumentClickCount += 1;
     const target = event.target as HTMLElement | null;
+    if (sliderWrap) {
+      logDrumVolumeDebug('document click while slider is visible', {
+        initCall,
+        documentClickCount: drumVolumeDocumentClickCount,
+        target: describeEventTarget(event.target),
+        clickedInsideSliderWrap: Boolean(target?.closest('.drum-volume-slider-wrap'))
+      });
+    }
     // Collapse slider back to button on outside click
     if (sliderWrap && !target?.closest('.drum-volume-slider-wrap')) {
       hideSlider();
     }
   });
+  logDrumVolumeDebug('bound document click listener for slider dismissal', { initCall });
 }
 
 export function getDrumVolume(): number {
@@ -1082,6 +1512,11 @@ export function initDrumGridInteraction(): void {
   const drumCanvas = document.getElementById(DRUM_CANVAS_ID) as HTMLCanvasElement | null;
   const hoverCanvas = document.getElementById(DRUM_HOVER_CANVAS_ID) as HTMLCanvasElement | null;
 
+  logDrumVolumeDebug('initDrumGridInteraction invoked', {
+    hasDrumCanvas: Boolean(drumCanvas),
+    hasHoverCanvas: Boolean(hoverCanvas)
+  });
+
   if (!drumCanvas || !hoverCanvas) {
     return;
   }
@@ -1097,4 +1532,3 @@ export function initDrumGridInteraction(): void {
 
   createVolumeSlider();
 }
-

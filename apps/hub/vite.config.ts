@@ -29,6 +29,7 @@ export default defineConfig({
       '@mlt/simple-notation-core',
       '@mlt/tempo-controls-ui',
       '@mlt/diatonic-compass-ui',
+      '@mlt/amateur-music-theory-ui',
       '@mlt/visual-metronome-ui',
       '@mlt/pitch-utils',
       '@mlt/pitch-data',
@@ -38,6 +39,7 @@ export default defineConfig({
       '@mlt/rhythm-core',
       '@mlt/types',
       '@mlt/handoff',
+      '@mlt/grand-frequency-staff-ui',
     ],
   },
   resolve: {
@@ -62,7 +64,9 @@ export default defineConfig({
         'simple-notation': resolve(root, 'simple-notation/index.html'),
         'singing-trainer': resolve(root, 'singing-trainer/index.html'),
         'diatonic-compass': resolve(root, 'diatonic-compass/index.html'),
+        'amateur-music-theory': resolve(root, 'amateur-music-theory/index.html'),
         'visual-metronome': resolve(root, 'visual-metronome/index.html'),
+        'grand-frequency-staff': resolve(root, 'grand-frequency-staff/index.html'),
       },
       output: {
         manualChunks(id) {

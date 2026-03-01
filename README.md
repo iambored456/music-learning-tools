@@ -23,6 +23,7 @@ pnpm -w capture:previews -- --theme dark
 Output files are written to `apps/hub/public/previews/<app>.png`.
 
 `pnpm -w build:hub` is wired to rebuild the Hub preview screenshot automatically (`--only hub`) after a Hub build.
+`pnpm -w build:pages` now refreshes all Hub preview screenshots before assembling the Pages output.
 
 ## Simple Notation (Refactor)
 

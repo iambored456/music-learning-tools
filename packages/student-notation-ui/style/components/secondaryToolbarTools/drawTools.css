@@ -274,6 +274,67 @@
     flex-wrap: wrap;
 }
 
+.draw-option-group.draw-toolbar-row.draw-stack-column {
+    flex-direction: column;
+    flex-wrap: nowrap;
+}
+
+.draw-stack-column > .draw-popup-trigger,
+.draw-stack-column > .draw-toolbar-button {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.text-tool-layout {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+}
+
+.text-popup-column {
+    flex: 0 0 clamp(1.9rem, 4.4dvh, 2.9rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+.text-popup-column > .draw-popup-trigger {
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.text-popup-column > .draw-popup-trigger > .draw-toolbar-button {
+    height: 100%;
+}
+
+/* Keep arrow-option icon buttons closer to square */
+#arrow-tool-options .draw-toolbar-row {
+    justify-content: center;
+    align-items: center;
+}
+
+#arrow-tool-options .draw-toolbar-row > .draw-popup-trigger,
+#arrow-tool-options .draw-toolbar-row > .draw-toolbar-button {
+    flex: 0 1 auto;
+}
+
+#arrow-tool-options .draw-popup-trigger {
+    width: clamp(2rem, 4.5dvh, 3rem);
+}
+
+#arrow-tool-options .draw-toolbar-button {
+    width: clamp(2rem, 4.5dvh, 3rem);
+    height: auto;
+    aspect-ratio: 1 / 1;
+}
+
 .draw-option-label {
     font-size: clamp(0.45rem, 0.8dvh, 0.7rem);
     font-weight: 600;
@@ -316,17 +377,25 @@
     display: flex;
     flex-direction: column;
     gap: clamp(var(--space-005), 0.5dvh, var(--space-010));
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
 }
 
 .text-style-rows .draw-button-group {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(clamp(1.55rem, 3.1dvh, 2.3rem), 1fr));
     gap: clamp(var(--space-010), 0.8dvh, var(--space-015));
+    flex: 1 1 0;
+    min-height: 0;
     align-items: stretch;
-    justify-content: stretch;
 }
 
 .text-style-rows .draw-option-button {
-    width: clamp(1.4rem, 3dvh, 2.2rem);
+    width: 100%;
+    height: auto;
+    min-width: clamp(1.55rem, 3.1dvh, 2.3rem);
+    min-height: clamp(1.55rem, 3.1dvh, 2.3rem);
     aspect-ratio: 1;
     padding: 0;
     display: flex;

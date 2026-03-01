@@ -67,13 +67,13 @@ const resolveBaseUrl = () => {
   return normalizeBase(repoName);
 };
 
-const baseUrl = resolveBaseUrl();
-console.log(`Using BASE_URL=${baseUrl}`);
+const pagesBaseUrl = resolveBaseUrl();
+console.log(`Using BASE_URL=${pagesBaseUrl}`);
 
 const spawnOptions = {
   cwd: rootDir,
   stdio: 'inherit',
-  env: { ...process.env, BASE_URL: baseUrl },
+  env: { ...process.env, BASE_URL: pagesBaseUrl },
 };
 
 const runPnpm = (args, options) => {
@@ -83,18 +83,33 @@ const runPnpm = (args, options) => {
   return spawnSync('pnpm', args, options);
 };
 
-const buildResult = runPnpm(['--filter', 'hub', 'run', 'build'], {
-  ...spawnOptions,
-  env: { ...spawnOptions.env, PAGES_BUILD: 'true' },
+const runPnpmStep = (label, args, env = {}) => {
+  console.log(label);
+  const result = runPnpm(args, {
+    ...spawnOptions,
+    env: { ...spawnOptions.env, ...env },
+  });
+
+  if (result.error) {
+    console.error(`Failed to run pnpm: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+};
+
+// Build once with root base so capture-previews can resolve routes from hub/dist.
+runPnpmStep('Building hub for preview capture (BASE_URL=/)...', ['--filter', 'hub', 'run', 'build'], {
+  BASE_URL: '/',
 });
 
-if (buildResult.error) {
-  console.error(`Failed to run pnpm: ${buildResult.error.message}`);
-}
+runPnpmStep('Refreshing hub preview screenshots...', ['-w', 'capture:previews']);
 
-if (buildResult.status !== 0) {
-  process.exit(buildResult.status ?? 1);
-}
+runPnpmStep(`Building hub for Pages output (BASE_URL=${pagesBaseUrl})...`, ['--filter', 'hub', 'run', 'build'], {
+  BASE_URL: pagesBaseUrl,
+  PAGES_BUILD: 'true',
+});
 
 const assembleResult = spawnSync(process.execPath, ['scripts/assemble-pages.js', '--out', 'docs'], {
   cwd: rootDir,

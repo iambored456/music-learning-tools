@@ -15,6 +15,28 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
+  apps/amateur-music-theory:
+    dependencies:
+      '@mlt/amateur-music-theory-ui':
+        specifier: workspace:*
+        version: link:../../packages/amateur-music-theory-ui
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^5.0.3
+        version: 5.1.1(svelte@5.46.1)(vite@6.4.1(@types/node@22.19.3)(tsx@4.21.0))
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.1.1
+        version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
+
   apps/diatonic-compass:
     dependencies:
       '@mlt/diatonic-compass-ui':
@@ -28,11 +50,39 @@ importers:
         specifier: ^6.3.5
         version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
+  apps/grand-frequency-staff:
+    dependencies:
+      '@mlt/grand-frequency-staff-ui':
+        specifier: workspace:*
+        version: link:../../packages/grand-frequency-staff-ui
+      svelte:
+        specifier: ^5.43.8
+        version: 5.46.1
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^5.0.3
+        version: 5.1.1(svelte@5.46.1)(vite@6.4.1(@types/node@22.19.3)(tsx@4.21.0))
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.1.1
+        version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
+
   apps/hub:
     dependencies:
+      '@mlt/amateur-music-theory-ui':
+        specifier: workspace:*
+        version: link:../../packages/amateur-music-theory-ui
       '@mlt/diatonic-compass-ui':
         specifier: workspace:*
         version: link:../../packages/diatonic-compass-ui
+      '@mlt/grand-frequency-staff-ui':
+        specifier: workspace:*
+        version: link:../../packages/grand-frequency-staff-ui
       '@mlt/pitch-utils':
         specifier: workspace:*
         version: link:../../packages/pitch-utils
@@ -159,6 +209,18 @@ importers:
         specifier: ^6.3.5
         version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
+  packages/amateur-music-theory-ui:
+    devDependencies:
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/audio-samples:
     devDependencies:
       typescript:
@@ -182,6 +244,25 @@ importers:
         version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
   packages/font-atkinson: {}
+
+  packages/grand-frequency-staff-ui:
+    dependencies:
+      '@mlt/pitch-data':
+        specifier: workspace:*
+        version: link:../pitch-data
+      '@mlt/pitch-utils':
+        specifier: workspace:*
+        version: link:../pitch-utils
+    devDependencies:
+      svelte:
+        specifier: ^5.43.8
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/handoff:
     dependencies:

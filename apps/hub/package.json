@@ -20,6 +20,8 @@
     "vite-tsconfig-paths": "^6.0.3"
   },
   "dependencies": {
+    "@mlt/amateur-music-theory-ui": "workspace:*",
+    "@mlt/grand-frequency-staff-ui": "workspace:*",
     "@mlt/diatonic-compass-ui": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
     "@mlt/simple-notation-ui": "workspace:*",

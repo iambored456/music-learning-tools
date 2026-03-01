@@ -5,6 +5,7 @@ The Hub is the primary app entry point for this monorepo.
 It serves:
 - `/` (launcher/home)
 - `/student-notation/`
+- `/amateur-music-theory/`
 - `/singing-trainer/`
 - `/diatonic-compass/`
 - `/visual-metronome/`

@@ -77,6 +77,13 @@ const TARGETS: CaptureTarget[] = [
 `,
   },
   {
+    id: 'amateur-music-theory',
+    distDir: 'apps/hub/dist',
+    route: '/amateur-music-theory/',
+    waitFor: '#amateur-music-theory-app',
+    delayMs: 400,
+  },
+  {
     id: 'simple-notation',
     distDir: 'apps/hub/dist',
     route: '/simple-notation/',

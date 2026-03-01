@@ -31,6 +31,15 @@ export const appCards: AppCard[] = [
     accent: '#bb9b3b',
   },
   {
+    id: 'amateur-music-theory',
+    name: 'Amateur Music Theory',
+    description: 'Lesson-first launchpad for guided theory modules built from notation tooling.',
+    href: withBase('amateur-music-theory/'),
+    preview: withBase('previews/amateur-music-theory.png'),
+    tags: ['Lessons', 'Theory', 'Practice'],
+    accent: '#e38b4a',
+  },
+  {
     id: 'simple-notation',
     name: 'Simple Notation',
     description: 'Diatonic oval notation with block rhythms, drone, and keyboard-first practice.',
@@ -56,5 +65,14 @@ export const appCards: AppCard[] = [
     preview: withBase('previews/visual-metronome.png'),
     tags: ['Rhythm', 'Subdivision', 'Practice'],
     accent: '#829ae9',
+  },
+  {
+    id: 'grand-frequency-staff',
+    name: 'Grand Frequency Staff',
+    description: 'Interactive pitch-to-instrument reference: click any pitch to hear it and see which instruments can play it.',
+    href: withBase('grand-frequency-staff/'),
+    preview: withBase('previews/grand-frequency-staff.png'),
+    tags: ['Frequencies', 'Instruments', 'Ranges'],
+    accent: '#8fa9ff',
   },
 ];

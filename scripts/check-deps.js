@@ -43,6 +43,7 @@ function findPackageJsonFiles(dir, results = []) {
 
 // App names that should NOT appear in any package.json dependencies
 const APP_PACKAGE_NAMES = [
+  '@mlt/amateur-music-theory',
   '@mlt/singing-trainer',
   '@mlt/student-notation',
   '@mlt/diatonic-compass',
@@ -51,6 +52,7 @@ const APP_PACKAGE_NAMES = [
 
 // Simple app names (allowed in apps/ but nowhere else)
 const SIMPLE_APP_NAMES = [
+  'amateur-music-theory',
   'singing-trainer',
   'student-notation',
   'simple-notation',

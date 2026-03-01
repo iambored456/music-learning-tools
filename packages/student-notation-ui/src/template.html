@@ -557,37 +557,39 @@
                                             </button>
                                         </div>
                                         <div class="draw-tool-options" id="text-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row">
-                                                <!-- Size popup -->
-                                                <div class="draw-popup-trigger">
-                                                    <button class="draw-toolbar-button" title="Text size">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M4 18h16"/>
-                                                            <path d="M8 18l4-12 4 12"/>
-                                                            <path d="M10 12h4"/>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="draw-popup-menu">
-                                                        <div class="draw-option-label">Size (px)</div>
-                                                        <input type="number" id="text-size-input" min="8" max="72" value="16" aria-label="Text size (px)">
+                                            <div class="draw-option-group draw-toolbar-row text-tool-layout">
+                                                <div class="draw-stack-column text-popup-column">
+                                                    <!-- Size popup -->
+                                                    <div class="draw-popup-trigger">
+                                                        <button class="draw-toolbar-button" title="Text size">
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M4 18h16"/>
+                                                                <path d="M8 18l4-12 4 12"/>
+                                                                <path d="M10 12h4"/>
+                                                            </svg>
+                                                        </button>
+                                                        <div class="draw-popup-menu">
+                                                            <div class="draw-option-label">Size (px)</div>
+                                                            <input type="number" id="text-size-input" min="8" max="72" value="16" aria-label="Text size (px)">
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <!-- Colour popup -->
-                                                <div class="draw-popup-trigger">
-                                                    <button class="draw-toolbar-button" title="Text colour">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M12 3l6 16"/>
-                                                            <path d="M6 19l6-16"/>
-                                                            <path d="M10 12h4"/>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="draw-popup-menu">
-                                                        <div class="draw-option-label">Colour</div>
-                                                        <div class="draw-color-picker">
-                                                            <button class="draw-color-button active" data-color="#000000" style="background-color: #000000;" aria-label="Black text"></button>
-                                                            <button class="draw-color-button" data-color="#4a90e2" style="background-color: #4a90e2;" aria-label="Blue text"></button>
-                                                            <button class="draw-color-button" data-color="#d66573" style="background-color: #d66573;" aria-label="Red text"></button>
-                                                            <button class="draw-color-button" data-color="#68a03f" style="background-color: #68a03f;" aria-label="Green text"></button>
+                                                    <!-- Colour popup -->
+                                                    <div class="draw-popup-trigger">
+                                                        <button class="draw-toolbar-button" title="Text colour">
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M12 3l6 16"/>
+                                                                <path d="M6 19l6-16"/>
+                                                                <path d="M10 12h4"/>
+                                                            </svg>
+                                                        </button>
+                                                        <div class="draw-popup-menu">
+                                                            <div class="draw-option-label">Colour</div>
+                                                            <div class="draw-color-picker">
+                                                                <button class="draw-color-button active" data-color="#000000" style="background-color: #000000;" aria-label="Black text"></button>
+                                                                <button class="draw-color-button" data-color="#4a90e2" style="background-color: #4a90e2;" aria-label="Blue text"></button>
+                                                                <button class="draw-color-button" data-color="#d66573" style="background-color: #d66573;" aria-label="Red text"></button>
+                                                                <button class="draw-color-button" data-color="#68a03f" style="background-color: #68a03f;" aria-label="Green text"></button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -615,7 +617,7 @@
                                             </button>
                                         </div>
                                         <div class="draw-tool-options" id="marker-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row">
+                                            <div class="draw-option-group draw-toolbar-row draw-stack-column">
                                                 <!-- Size popup -->
                                                 <div class="draw-popup-trigger">
                                                     <button class="draw-toolbar-button" title="Marker size">
@@ -663,7 +665,7 @@
                                             </button>
                                         </div>
                                         <div class="draw-tool-options" id="highlighter-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row">
+                                            <div class="draw-option-group draw-toolbar-row draw-stack-column">
                                                 <!-- Size popup -->
                                                 <div class="draw-popup-trigger">
                                                     <button class="draw-toolbar-button" title="Highlighter size">
