@@ -62,7 +62,7 @@ body {
 .top-toolbar {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  align-items: stretch;
+  align-items: start;
   gap: 6px;
 }
 
@@ -291,7 +291,7 @@ body {
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr;
-  align-self: stretch;
+  align-self: start;
   align-content: start;
   gap: 4px;
   padding: 6px;

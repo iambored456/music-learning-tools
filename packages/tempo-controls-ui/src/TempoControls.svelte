@@ -8,6 +8,7 @@
     maxQuarter?: number;
     step?: number;
     sliderOrientation?: 'horizontal' | 'vertical';
+    fillVerticalAvailableHeight?: boolean;
     onchange?: (quarterTempo: number) => void;
     showEighth?: boolean;
     showQuarter?: boolean;
@@ -21,6 +22,7 @@
     maxQuarter = 180,
     step = 1,
     sliderOrientation = 'horizontal',
+    fillVerticalAvailableHeight = false,
     onchange,
     showEighth = true,
     showQuarter = true,
@@ -88,6 +90,7 @@
   class="tempo-controls"
   class:vertical={sliderOrientation === 'vertical'}
   class:with-slider={showSlider}
+  class:fill-available-height={fillVerticalAvailableHeight && sliderOrientation === 'vertical' && showSlider}
   style={`--tempo-row-count:${visibleTempoRowCount};`}
 >
   <div class="tempo-rows">
@@ -215,8 +218,11 @@
 
   .tempo-controls.vertical.with-slider {
     grid-template-columns: max-content var(--tempo-controls-slider-shell-width);
-    grid-template-rows: minmax(0, 1fr);
     column-gap: var(--tempo-controls-space-020);
+  }
+
+  .tempo-controls.vertical.with-slider.fill-available-height {
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .tempo-controls.vertical:not(.with-slider) {

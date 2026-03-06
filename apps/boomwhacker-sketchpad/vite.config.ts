@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -10,10 +11,16 @@ const normalizeBase = (value?: string) => {
 };
 
 const base = process.env.BASE_URL ? `${normalizeBase(process.env.BASE_URL)}boomwhacker-sketchpad/` : '/';
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const packagesRoot = fileURLToPath(new URL('../../packages', import.meta.url));
+const tempoControlsUiSrc = fileURLToPath(new URL('../../packages/tempo-controls-ui/src/index.ts', import.meta.url));
 
 export default defineConfig({
   base,
   plugins: [svelte()],
+  resolve: {
+    alias: [{ find: '@mlt/tempo-controls-ui', replacement: tempoControlsUiSrc }],
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,
@@ -27,6 +34,11 @@ export default defineConfig({
           return undefined;
         },
       },
+    },
+  },
+  server: {
+    fs: {
+      allow: [packagesRoot, repoRoot],
     },
   },
 });

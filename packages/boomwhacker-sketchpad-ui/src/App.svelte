@@ -243,6 +243,7 @@
   const PLAYED_NOTE_MUTING_DEBUG = false;
   const PICKUP_RENDER_DEBUG = false;
   const MOBILE_LAYOUT_DEBUG = true;
+  const TEMPO_SLIDER_LAYOUT_DEBUG = true;
   const VIEWPORT_FIT_HEIGHT_MAX = 1100;
   const VIEWPORT_FIT_WIDTH_MIN = 700;
   const ADAPTIVE_LAYOUT_DEFAULT: AdaptiveLayoutConfig = {
@@ -340,12 +341,15 @@
   let isStudentView = false;
   let activeStudentView: StudentViewSettings = {};
   let volumePopupOpen = false;
+  let controlsPanelElement: HTMLElement | null = null;
+  let toolbarNotebankPanelElement: HTMLElement | null = null;
   let volumeControlWrapper: HTMLDivElement | null = null;
   let showTapPlacementHint = true;
   let eraserMode = false;
   let canvasHistory: CanvasHistorySnapshot[] = [];
   let canvasHistoryPointer = -1;
   let suppressCanvasHistoryTracking = false;
+  let syncedToolbarPanelHeightPx: number | null = null;
 
   let pickupBeats = 0;
   let pickupRow: GridRow = createEmptyRow('pickup');
@@ -390,6 +394,18 @@
     queueMobileLayoutSnapshot('UI state changed.');
   }
 
+  $: if (canvasPersistenceReady && TEMPO_SLIDER_LAYOUT_DEBUG && typeof window !== 'undefined') {
+    viewportFitMode;
+    adaptiveLayout;
+    syncedToolbarPanelHeightPx;
+    settingsOpen;
+    shareModalOpen;
+    isStudentView;
+    activeStudentView.hideTempoSlider;
+    activeStudentView.hideQuarterTempo;
+    queueTempoSliderLayoutSnapshot('UI state changed.');
+  }
+
   $: if ((isStudentView && activeStudentView.hideVolumeSlider) || shareModalOpen || studentViewModalOpen || settingsOpen) {
     volumePopupOpen = false;
   }
@@ -416,12 +432,16 @@
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
       updateAdaptiveLayout();
+      updateSyncedToolbarPanelHeight();
+      queueTempoSliderLayoutSnapshot('Viewport changed.');
       queueMobileLayoutSnapshot('Viewport changed.');
     };
     const handleVisualViewportDiagnostics = () => {
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
       updateAdaptiveLayout();
+      updateSyncedToolbarPanelHeight();
+      queueTempoSliderLayoutSnapshot('Visual viewport changed.');
       queueMobileLayoutSnapshot('Visual viewport changed.');
     };
     updateViewportFitMode();
@@ -430,6 +450,17 @@
     window.addEventListener('resize', handleViewportDiagnostics);
     window.addEventListener('orientationchange', handleViewportDiagnostics);
     window.visualViewport?.addEventListener('resize', handleVisualViewportDiagnostics);
+    const toolbarPanelResizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            updateSyncedToolbarPanelHeight();
+          })
+        : null;
+    if (toolbarNotebankPanelElement) {
+      toolbarPanelResizeObserver?.observe(toolbarNotebankPanelElement);
+    }
+    updateSyncedToolbarPanelHeight();
+    queueTempoSliderLayoutSnapshot('Mounted.');
     queueMobileLayoutSnapshot('Mounted.');
     return () => {
       stopPlayback();
@@ -439,6 +470,7 @@
       window.removeEventListener('resize', handleViewportDiagnostics);
       window.removeEventListener('orientationchange', handleViewportDiagnostics);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportDiagnostics);
+      toolbarPanelResizeObserver?.disconnect();
       unsubscribeModel?.();
       audio.dispose();
     };
@@ -2109,6 +2141,11 @@
     console.log(`[BoomwhackerSketchpad][MobileLayout] ${message}`, details ?? {});
   }
 
+  function debugTempoSliderLayout(message: string, details?: Record<string, unknown>): void {
+    if (!TEMPO_SLIDER_LAYOUT_DEBUG) return;
+    console.log(`[BoomwhackerSketchpad][TempoSlider] ${message}`, details ?? {});
+  }
+
   function shouldUseViewportFitMode(): boolean {
     if (typeof window === 'undefined') return false;
     const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
@@ -2129,6 +2166,29 @@
     }
 
     showTapPlacementHint = !window.matchMedia('(any-pointer: coarse)').matches;
+  }
+
+  function shouldSyncToolbarPanelHeight(): boolean {
+    if (typeof window === 'undefined') return false;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    return !viewportFitMode && viewportWidth > 920;
+  }
+
+  function updateSyncedToolbarPanelHeight(): void {
+    const previousHeight = syncedToolbarPanelHeightPx;
+    if (!shouldSyncToolbarPanelHeight() || !toolbarNotebankPanelElement) {
+      syncedToolbarPanelHeightPx = null;
+      if (previousHeight !== null) {
+        queueTempoSliderLayoutSnapshot('Synced toolbar panel height cleared.');
+      }
+      return;
+    }
+
+    const nextHeight = roundTo2(toolbarNotebankPanelElement.getBoundingClientRect().height);
+    syncedToolbarPanelHeightPx = nextHeight > 0 ? nextHeight : null;
+    if (syncedToolbarPanelHeightPx !== previousHeight) {
+      queueTempoSliderLayoutSnapshot('Synced toolbar panel height updated.');
+    }
   }
 
   function clamp(value: number, min: number, max: number): number {
@@ -2256,6 +2316,43 @@
     return Number(value.toFixed(2));
   }
 
+  function tempoSliderElementSnapshot(selector: string): Record<string, unknown> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return { selector, exists: false };
+    }
+
+    const element = document.querySelector<HTMLElement>(selector);
+    if (!element) {
+      return { selector, exists: false };
+    }
+
+    const rect = element.getBoundingClientRect();
+    const computed = window.getComputedStyle(element);
+    return {
+      selector,
+      exists: true,
+      className: element.className,
+      inlineHeight: element.style.height || null,
+      width: roundTo2(rect.width),
+      height: roundTo2(rect.height),
+      clientWidth: element.clientWidth,
+      clientHeight: element.clientHeight,
+      scrollWidth: element.scrollWidth,
+      scrollHeight: element.scrollHeight,
+      overflowY: computed.overflowY,
+      display: computed.display,
+      position: computed.position,
+      alignSelf: computed.alignSelf,
+      justifySelf: computed.justifySelf,
+      gridTemplateRows: computed.gridTemplateRows,
+      gridTemplateColumns: computed.gridTemplateColumns,
+      minHeight: computed.minHeight,
+      maxHeight: computed.maxHeight,
+      writingMode: computed.writingMode,
+      direction: computed.direction,
+    };
+  }
+
   function elementLayoutSnapshot(selector: string): Record<string, unknown> {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
       return { selector, exists: false };
@@ -2348,6 +2445,50 @@
       hasTouchTapPlacementFallback: true,
       tempoDragUsesMouseOnly: false,
     };
+  }
+
+  function queueTempoSliderLayoutSnapshot(reason: string): void {
+    if (!TEMPO_SLIDER_LAYOUT_DEBUG) return;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    requestAnimationFrame(() => {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const visualViewport = window.visualViewport
+        ? {
+            width: roundTo2(window.visualViewport.width),
+            height: roundTo2(window.visualViewport.height),
+            scale: roundTo2(window.visualViewport.scale),
+            offsetTop: roundTo2(window.visualViewport.offsetTop),
+            offsetLeft: roundTo2(window.visualViewport.offsetLeft),
+          }
+        : null;
+
+      const snapshot = {
+        reason,
+        viewport: {
+          innerWidth: viewportWidth,
+          innerHeight: viewportHeight,
+          devicePixelRatio: roundTo2(window.devicePixelRatio || 1),
+          visualViewport,
+        },
+        viewportFitMode,
+        shouldSyncToolbarPanelHeight: shouldSyncToolbarPanelHeight(),
+        syncedToolbarPanelHeightPx,
+        adaptiveLayout,
+        tempo: {
+          controlsPanel: tempoSliderElementSnapshot('.controls-panel'),
+          toolbarNotebankPanel: tempoSliderElementSnapshot('.toolbar-notebank-panel'),
+          tempoGroup: tempoSliderElementSnapshot('.tempo-group'),
+          tempoControls: tempoSliderElementSnapshot('.tempo-controls'),
+          tempoRows: tempoSliderElementSnapshot('.tempo-rows'),
+          tempoSliderContainer: tempoSliderElementSnapshot('.tempo-slider-container'),
+          tempoSlider: tempoSliderElementSnapshot('.tempo-slider'),
+        },
+      };
+
+      debugTempoSliderLayout('Tempo slider layout snapshot.', snapshot);
+    });
   }
 
   function queueMobileLayoutSnapshot(reason: string): void {
@@ -3340,7 +3481,11 @@
   on:dragover={handleCursorGhostDragOver}
 >
   <div class="top-toolbar">
-  <section class="panel controls-panel">
+  <section
+    class="panel controls-panel"
+    bind:this={controlsPanelElement}
+    style:height={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null ? `${syncedToolbarPanelHeightPx}px` : undefined}
+  >
     <div class="controls-group tempo-group">
       <TempoControls
         quarterTempo={state.microbeatTempo / 2}
@@ -3348,6 +3493,7 @@
         maxQuarter={MICROBEAT_TEMPO_MAX / 2}
         step={1}
         sliderOrientation="vertical"
+        fillVerticalAvailableHeight={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null}
         onchange={handleQuarterTempoChange}
         showEighth={false}
         showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
@@ -3501,7 +3647,7 @@
     </div>
   </section>
 
-  <section class="panel notebank-panel toolbar-notebank-panel" class:playback-content-hidden={isPlaying}>
+  <section class="panel notebank-panel toolbar-notebank-panel" bind:this={toolbarNotebankPanelElement} class:playback-content-hidden={isPlaying}>
       {#if tapPlacementPayload && showTapPlacementHint}
         <p class="tap-placement-hint toolbar-bank-hint">
           Touch placement armed: {displayLabelFromText(tapPlacementPayload.note.label)} {noteShapeLabel(tapPlacementPayload.note.shape)}.

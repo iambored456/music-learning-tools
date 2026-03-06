@@ -14,6 +14,7 @@ const base =
 // Resolve path aliases for student-notation-ui package
 const studentNotationUiPkg = fileURLToPath(new URL('../../packages/student-notation-ui', import.meta.url))
 const studentNotationUiSrc = resolve(studentNotationUiPkg, 'src')
+const tempoControlsUiSrc = fileURLToPath(new URL('../../packages/tempo-controls-ui/src/index.ts', import.meta.url))
 const tonePkg = dirname(require.resolve('tone/package.json'))
 
 // https://vite.dev/config/
@@ -53,6 +54,7 @@ export default defineConfig({
         find: /^tone\/build\/esm\/instrument\/Monophonic(?:\.js)?$/,
         replacement: resolve(tonePkg, 'build/esm/instrument/Monophonic.js'),
       },
+      { find: '@mlt/tempo-controls-ui', replacement: tempoControlsUiSrc },
       // Aliases for @mlt/student-notation-ui internal imports
       { find: '@state', replacement: resolve(studentNotationUiSrc, 'state') },
       { find: '@services', replacement: resolve(studentNotationUiSrc, 'services') },
