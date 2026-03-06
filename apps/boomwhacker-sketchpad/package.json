@@ -1,0 +1,23 @@
+{
+  "name": "boomwhacker-sketchpad",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Boomwhacker Sketchpad - standalone app shell",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "echo \"App typecheck delegated to @mlt/boomwhacker-sketchpad-ui package\"",
+    "check": "echo \"App check delegated to @mlt/boomwhacker-sketchpad-ui package\""
+  },
+  "dependencies": {
+    "@mlt/boomwhacker-sketchpad-ui": "workspace:*",
+    "svelte": "^5.46.1"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.3",
+    "vite": "^6.1.1"
+  }
+}

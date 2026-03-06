@@ -17,6 +17,7 @@ import {
 export type VisualizationMode = 'stationary' | 'highway';
 export type LyricLabelMode = 'auto' | 'fixed';
 export type NoteColorMode = 'green' | 'pitchColor';
+export type NoteType = 'stadium' | 'gradient';
 export type BeatLineMode = 'none' | 'beat' | 'bar';
 export type MicTrailColorMode = 'voice' | 'rainbow';
 export type TonicNote =
@@ -78,6 +79,7 @@ export interface AppState {
   lyricLabelScale: number;
   lyricLabelFixedPx: number;
   noteColorMode: NoteColorMode;
+  noteType: NoteType;
   beatLineMode: BeatLineMode;
   showBeatGridLines: boolean;
   showMeasureGridLines: boolean;
@@ -113,6 +115,7 @@ const DEFAULT_STATE: AppState = {
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
   noteColorMode: 'green',
+  noteType: 'stadium',
   beatLineMode: 'bar',
   showBeatGridLines: false,
   showMeasureGridLines: true,
@@ -206,6 +209,10 @@ function createAppState() {
 
     setNoteColorMode(mode: NoteColorMode) {
       state.noteColorMode = mode;
+    },
+
+    setNoteType(noteType: NoteType) {
+      state.noteType = noteType;
     },
 
     setBeatLineMode(mode: BeatLineMode) {

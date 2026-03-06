@@ -153,6 +153,7 @@ export type PitchRowHighlightConfig = PitchRowHighlightEntry | PitchRowHighlight
  * A target note to display on the note highway.
  */
 export type TargetNoteKind = 'fixedPitch' | 'windowAnyPitch' | 'windowBand' | 'slideWindow';
+export type TargetNoteStyle = 'stadium' | 'gradient';
 
 export type SlideDirection = 'up' | 'down';
 
@@ -375,6 +376,8 @@ export interface PitchGridBaseProps {
    * 0 preserves legacy C-referenced pattern; other values rotate the full pattern.
    */
   horizontalGridReferencePitchClass?: number | null;
+  /** Visual style for singing/highway target notes. */
+  targetNoteStyle?: TargetNoteStyle;
 }
 
 /**

@@ -15,6 +15,8 @@ export interface ExtendedPitch {
   frequency: number;
   /** Flat-preferred note name, e.g. "Bb4", "C-5", "E10" */
   noteName: string;
+  /** Two-column pitch parity used by Student Notation legends. */
+  column: 'A' | 'B';
   pitchClass: number;   // 0–11 (C = 0)
   isAccidental: boolean;
   octave: number;
@@ -58,6 +60,11 @@ function regionFor(frequency: number): Region {
 
 const ACCIDENTAL_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
 
+function getOffsetColumn(midi: number): 'A' | 'B' {
+  const parity = ((midi % 2) + 2) % 2;
+  return parity === 0 ? 'A' : 'B';
+}
+
 /** 185 pitches from E10 (MIDI 136) down to C-5 (MIDI -48), sorted high→low. */
 export const extendedPitches: ExtendedPitch[] = (() => {
   const result: ExtendedPitch[] = [];
@@ -73,6 +80,7 @@ export const extendedPitches: ExtendedPitch[] = (() => {
       midi,
       frequency,
       noteName,
+      column: getOffsetColumn(midi),
       pitchClass,
       isAccidental,
       octave,

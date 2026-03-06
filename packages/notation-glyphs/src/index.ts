@@ -22,7 +22,7 @@ export function createSixteenthHexBase(width: number, totalHeight: number, cente
     { x: 0, y: yLower },
     { x: width / 2, y: yBottom },
     { x: width, y: yLower },
-    { x: width, y: yUpper }
+    { x: width, y: yUpper },
   ];
 }
 
@@ -33,7 +33,7 @@ export function createSixteenthHexPath(cx: number, cy: number, width: number, to
   const triHeight = width * SIXTEENTH_HEX_EDGE_SLOPE;
   const bodyHeight = Math.max(1, totalHeight - (2 * triHeight));
 
-  const yTop = cy - (bodyHeight / 2 + triHeight);
+  const yTop = cy - ((bodyHeight / 2) + triHeight);
   const yUpper = yTop + triHeight;
   const yLower = yUpper + bodyHeight;
   const yBottom = yLower + triHeight;

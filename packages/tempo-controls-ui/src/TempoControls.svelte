@@ -32,6 +32,9 @@
 
   const eighthTempo = $derived(Math.round(currentQuarter * 2));
   const dottedQuarterTempo = $derived(Math.round(currentQuarter / 1.5));
+  const visibleTempoRowCount = $derived(
+    Math.max(1, (showEighth ? 1 : 0) + (showQuarter ? 1 : 0) + (showDottedQuarter ? 1 : 0)),
+  );
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -81,66 +84,73 @@
   });
 </script>
 
-<div class="tempo-controls" class:vertical={sliderOrientation === 'vertical'}>
-  {#if showEighth}
-  <div class="tempo-row">
-    <span class="tempo-label" aria-label="Eighth note tempo">{@html EIGHTH_NOTE_SVG}</span>
-    <div class="tempo-stepper">
-      <button type="button" class="tempo-step-btn" aria-label="Increase eighth note tempo" onclick={() => nudgeTempo('eighth', 1)}>^</button>
-      <DraggableNumber
-        value={eighthTempo}
-        min={minQuarter * 2}
-        max={maxQuarter * 2}
-        step={1}
-        decimalPlaces={0}
-        size={[52, 24]}
-        useAppStyling={true}
-        onchange={(value) => commitQuarterTempo(value / 2)}
-      />
-      <button type="button" class="tempo-step-btn" aria-label="Decrease eighth note tempo" onclick={() => nudgeTempo('eighth', -1)}>v</button>
+<div
+  class="tempo-controls"
+  class:vertical={sliderOrientation === 'vertical'}
+  class:with-slider={showSlider}
+  style={`--tempo-row-count:${visibleTempoRowCount};`}
+>
+  <div class="tempo-rows">
+    {#if showEighth}
+    <div class="tempo-row">
+      <span class="tempo-label" aria-label="Eighth note tempo">{@html EIGHTH_NOTE_SVG}</span>
+      <div class="tempo-stepper">
+        <button type="button" class="tempo-step-btn" aria-label="Increase eighth note tempo" onclick={() => nudgeTempo('eighth', 1)}>^</button>
+        <DraggableNumber
+          value={eighthTempo}
+          min={minQuarter * 2}
+          max={maxQuarter * 2}
+          step={1}
+          decimalPlaces={0}
+          size={[52, 24]}
+          useAppStyling={true}
+          onchange={(value) => commitQuarterTempo(value / 2)}
+        />
+        <button type="button" class="tempo-step-btn" aria-label="Decrease eighth note tempo" onclick={() => nudgeTempo('eighth', -1)}>v</button>
+      </div>
     </div>
-  </div>
-  {/if}
+    {/if}
 
-  {#if showQuarter}
-  <div class="tempo-row">
-    <span class="tempo-label" aria-label="Quarter note tempo">{@html QUARTER_NOTE_SVG}</span>
-    <div class="tempo-stepper">
-      <button type="button" class="tempo-step-btn" aria-label="Increase quarter note tempo" onclick={() => nudgeTempo('quarter', 1)}>^</button>
-      <DraggableNumber
-        value={currentQuarter}
-        min={minQuarter}
-        max={maxQuarter}
-        step={1}
-        decimalPlaces={0}
-        size={[52, 24]}
-        useAppStyling={true}
-        onchange={(value) => commitQuarterTempo(value)}
-      />
-      <button type="button" class="tempo-step-btn" aria-label="Decrease quarter note tempo" onclick={() => nudgeTempo('quarter', -1)}>v</button>
+    {#if showQuarter}
+    <div class="tempo-row">
+      <span class="tempo-label" aria-label="Quarter note tempo">{@html QUARTER_NOTE_SVG}</span>
+      <div class="tempo-stepper">
+        <button type="button" class="tempo-step-btn" aria-label="Increase quarter note tempo" onclick={() => nudgeTempo('quarter', 1)}>^</button>
+        <DraggableNumber
+          value={currentQuarter}
+          min={minQuarter}
+          max={maxQuarter}
+          step={1}
+          decimalPlaces={0}
+          size={[52, 24]}
+          useAppStyling={true}
+          onchange={(value) => commitQuarterTempo(value)}
+        />
+        <button type="button" class="tempo-step-btn" aria-label="Decrease quarter note tempo" onclick={() => nudgeTempo('quarter', -1)}>v</button>
+      </div>
     </div>
-  </div>
-  {/if}
+    {/if}
 
-  {#if showDottedQuarter}
-  <div class="tempo-row">
-    <span class="tempo-label" aria-label="Dotted quarter note tempo">{@html DOTTED_QUARTER_NOTE_SVG}</span>
-    <div class="tempo-stepper">
-      <button type="button" class="tempo-step-btn" aria-label="Increase dotted quarter note tempo" onclick={() => nudgeTempo('dotted', 1)}>^</button>
-      <DraggableNumber
-        value={dottedQuarterTempo}
-        min={Math.round(minQuarter / 1.5)}
-        max={Math.round(maxQuarter / 1.5)}
-        step={1}
-        decimalPlaces={0}
-        size={[52, 24]}
-        useAppStyling={true}
-        onchange={(value) => commitQuarterTempo(value * 1.5)}
-      />
-      <button type="button" class="tempo-step-btn" aria-label="Decrease dotted quarter note tempo" onclick={() => nudgeTempo('dotted', -1)}>v</button>
+    {#if showDottedQuarter}
+    <div class="tempo-row">
+      <span class="tempo-label" aria-label="Dotted quarter note tempo">{@html DOTTED_QUARTER_NOTE_SVG}</span>
+      <div class="tempo-stepper">
+        <button type="button" class="tempo-step-btn" aria-label="Increase dotted quarter note tempo" onclick={() => nudgeTempo('dotted', 1)}>^</button>
+        <DraggableNumber
+          value={dottedQuarterTempo}
+          min={Math.round(minQuarter / 1.5)}
+          max={Math.round(maxQuarter / 1.5)}
+          step={1}
+          decimalPlaces={0}
+          size={[52, 24]}
+          useAppStyling={true}
+          onchange={(value) => commitQuarterTempo(value * 1.5)}
+        />
+        <button type="button" class="tempo-step-btn" aria-label="Decrease dotted quarter note tempo" onclick={() => nudgeTempo('dotted', -1)}>v</button>
+      </div>
     </div>
+    {/if}
   </div>
-  {/if}
 
   {#if showSlider}
   <div class="tempo-slider-container">
@@ -160,51 +170,81 @@
 
 <style>
   .tempo-controls {
-    --c-surface: #f8f8f8;
-    --c-surface-muted: #f3f3f3;
-    --c-border: #a9a9a9;
-    --c-gridline: #d0d0d0;
-    --c-text: #1e1e1e;
-    --c-text-muted: #505050;
-    --c-accent: #2f7fd4;
-    --c-accent-light: #d6e7fa;
-    --border-radius-sm: 5px;
-    --space-015: 6px;
-    --space-020: 8px;
+    --tempo-controls-surface: var(--c-surface, #f8f8f8);
+    --tempo-controls-surface-muted: var(--c-surface-muted, #f3f3f3);
+    --tempo-controls-border: var(--c-border, #a9a9a9);
+    --tempo-controls-gridline: var(--c-gridline, #d0d0d0);
+    --tempo-controls-text: var(--c-text, #1e1e1e);
+    --tempo-controls-text-muted: var(--c-text-muted, #505050);
+    --tempo-controls-accent: var(--c-accent, #2f7fd4);
+    --tempo-controls-accent-light: var(--c-accent-light, #d6e7fa);
+    --tempo-controls-radius-sm: var(--border-radius-sm, 5px);
+    --tempo-controls-space-015: var(--space-015, 6px);
+    --tempo-controls-space-020: var(--space-020, 8px);
+    --tempo-controls-row-height: var(--tempo-row-height, 34px);
+    --tempo-controls-slider-shell-width: var(--tempo-slider-shell-width, 18px);
+    --tempo-controls-slider-shell-padding: var(--tempo-slider-shell-padding, 4px);
+    --tempo-controls-slider-track-thickness: var(--tempo-slider-track-thickness, 6px);
+    --tempo-controls-slider-thumb-size: var(--tempo-slider-thumb-size, 16px);
 
     display: grid;
-    grid-template-rows: repeat(3, 34px) 14px;
-    gap: var(--space-020);
+    gap: var(--tempo-controls-space-020);
     width: 100%;
   }
 
-  .tempo-controls.vertical {
-    grid-template-columns: max-content 18px;
-    grid-template-rows: repeat(3, 34px);
-    width: max-content;
-    max-width: 100%;
+  .tempo-rows {
+    display: grid;
+    grid-template-rows: repeat(var(--tempo-row-count), var(--tempo-controls-row-height));
+    gap: var(--tempo-controls-space-020);
+    align-content: start;
+    min-width: 0;
+    min-height: 0;
   }
 
-  .tempo-controls.vertical .tempo-row {
+  .tempo-controls.with-slider:not(.vertical) {
+    grid-template-rows: auto var(--tempo-controls-slider-shell-width);
+  }
+
+  .tempo-controls.vertical {
+    width: max-content;
+    max-width: 100%;
+    align-items: stretch;
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  .tempo-controls.vertical.with-slider {
+    grid-template-columns: max-content var(--tempo-controls-slider-shell-width);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: var(--tempo-controls-space-020);
+  }
+
+  .tempo-controls.vertical:not(.with-slider) {
+    grid-template-columns: max-content;
+  }
+
+  .tempo-controls.vertical .tempo-rows {
     grid-column: 1;
+    grid-row: 1;
+    align-self: start;
   }
 
   .tempo-row {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: var(--space-015);
+    gap: var(--tempo-controls-space-015);
     width: max-content;
     max-width: 100%;
-    height: 34px;
+    height: var(--tempo-controls-row-height);
     padding: 4px 6px;
-    border: 1px solid var(--c-border);
-    border-radius: var(--border-radius-sm);
-    background: var(--c-surface-muted);
+    border: 1px solid var(--tempo-controls-border);
+    border-radius: var(--tempo-controls-radius-sm);
+    background: var(--tempo-controls-surface-muted);
   }
 
   .tempo-label {
-    color: var(--c-text-muted);
+    color: var(--tempo-controls-text-muted);
     display: flex;
     align-items: center;
     min-width: 1.6rem;
@@ -229,10 +269,10 @@
     width: 14px;
     height: 24px;
     padding: 0;
-    border: 1px solid var(--c-border);
+    border: 1px solid var(--tempo-controls-border);
     border-radius: 4px;
-    background: var(--c-surface);
-    color: var(--c-text-muted);
+    background: var(--tempo-controls-surface);
+    color: var(--tempo-controls-text-muted);
     font-size: 9px;
     line-height: 1;
     cursor: pointer;
@@ -240,71 +280,122 @@
   }
 
   .tempo-step-btn:hover {
-    background: var(--c-accent-light);
-    color: var(--c-accent);
+    background: var(--tempo-controls-accent-light);
+    color: var(--tempo-controls-accent);
   }
 
   .tempo-step-btn:active {
-    background: var(--c-accent);
+    background: var(--tempo-controls-accent);
     color: #fff;
   }
 
   .tempo-slider-container {
     display: flex;
-    align-items: stretch;
-    justify-content: stretch;
+    align-items: center;
+    justify-content: center;
     min-width: 0;
+    min-height: 0;
     width: 100%;
+    height: var(--tempo-controls-slider-shell-width);
+    padding: 0 var(--tempo-controls-slider-shell-padding);
+    border: 1px solid var(--tempo-controls-border);
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
+      var(--tempo-controls-surface-muted);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .tempo-controls.vertical .tempo-slider-container {
     grid-column: 2;
-    grid-row: 1 / span 3;
-    width: 18px;
-    height: 100%;
+    grid-row: 1;
+    align-self: stretch;
+    width: var(--tempo-controls-slider-shell-width);
+    height: auto;
+    max-height: 100%;
     min-height: 0;
-    align-items: center;
-    justify-content: center;
+    padding: var(--tempo-controls-slider-shell-padding) 0;
+    overflow: hidden;
   }
 
   .tempo-slider {
     width: 100%;
     min-width: 0;
-    height: 14px;
-    min-height: 14px;
+    height: var(--tempo-controls-slider-track-thickness);
+    min-height: var(--tempo-controls-slider-track-thickness);
     margin: 0;
-    border-radius: 10px;
-    background: var(--c-gridline);
+    border-radius: 999px;
+    background: transparent;
     -webkit-appearance: none;
     appearance: none;
     outline: none;
+    accent-color: var(--tempo-controls-accent);
   }
 
   .tempo-controls.vertical .tempo-slider {
-    width: 14px;
+    width: var(--tempo-controls-slider-track-thickness);
     height: 100%;
+    max-height: 100%;
     min-height: 0;
     writing-mode: vertical-lr;
     direction: rtl;
+    flex: 1 1 auto;
+  }
+
+  .tempo-slider:focus-visible {
+    outline: 2px solid var(--tempo-controls-accent);
+    outline-offset: 4px;
+  }
+
+  .tempo-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: var(--tempo-controls-slider-track-thickness);
+    border: none;
+    border-radius: 999px;
+    background: var(--tempo-controls-gridline);
+  }
+
+  .tempo-controls.vertical .tempo-slider::-webkit-slider-runnable-track {
+    width: var(--tempo-controls-slider-track-thickness);
   }
 
   .tempo-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #2c2c2c;
+    width: var(--tempo-controls-slider-thumb-size);
+    height: var(--tempo-controls-slider-thumb-size);
+    margin-top: calc((var(--tempo-controls-slider-track-thickness) - var(--tempo-controls-slider-thumb-size)) / 2);
     border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--tempo-controls-accent);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.28);
     cursor: pointer;
   }
 
+  .tempo-controls.vertical .tempo-slider::-webkit-slider-thumb {
+    margin-top: 0;
+  }
+
+  .tempo-slider::-moz-range-track {
+    height: var(--tempo-controls-slider-track-thickness);
+    border: none;
+    border-radius: 999px;
+    background: var(--tempo-controls-gridline);
+  }
+
+  .tempo-slider::-moz-range-progress {
+    height: var(--tempo-controls-slider-track-thickness);
+    border-radius: 999px;
+    background: var(--tempo-controls-accent);
+  }
+
   .tempo-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #2c2c2c;
+    width: var(--tempo-controls-slider-thumb-size);
+    height: var(--tempo-controls-slider-thumb-size);
     border: 2px solid #fff;
+    border-radius: 50%;
+    background: var(--tempo-controls-accent);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.28);
     cursor: pointer;
   }
 </style>

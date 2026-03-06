@@ -1271,6 +1271,7 @@
     legendLabelOverrides={modeLabelOverrides}
     {showHorizontalGridLines}
     horizontalGridReferencePitchClass={getTonicPitchClass(appState.state.tonic)}
+    targetNoteStyle={appState.state.noteType}
     beatIntervalMs={gridBeatIntervalMs}
     measureIntervalMs={gridMeasureIntervalMs}
     {beatTimeOffsetMs}

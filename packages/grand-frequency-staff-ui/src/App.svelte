@@ -77,6 +77,16 @@
     if (hz >= 1)     return `${hz.toFixed(2)}`;
     return `${hz.toFixed(3)}`;
   }
+
+  const PIANO_MIN_MIDI = 21;  // A0
+  const PIANO_MAX_MIDI = 108; // C8
+
+  function getPianoKeyNumber(midi: number): number | null {
+    if (midi < PIANO_MIN_MIDI || midi > PIANO_MAX_MIDI) {
+      return null;
+    }
+    return midi - PIANO_MIN_MIDI + 1;
+  }
 </script>
 
 <div class="app">
@@ -99,8 +109,22 @@
       <!-- Sticky column headers -->
       <div class="header-row">
         <div class="strip-spacer"></div>
-        <div class="pitch-header">Pitch</div>
-        <div class="hz-header">Hz</div>
+        <div class="pitch-header-group">
+          <div class="offset-header-cell">Pitch A</div>
+          <div class="offset-header-cell">Pitch B</div>
+        </div>
+        <div class="hz-header-group">
+          <div class="offset-header-cell">Hz A</div>
+          <div class="offset-header-cell">Hz B</div>
+        </div>
+        <div class="midi-header-group">
+          <div class="offset-header-cell">MIDI A</div>
+          <div class="offset-header-cell">MIDI B</div>
+        </div>
+        <div class="piano-header-group">
+          <div class="offset-header-cell">Key A</div>
+          <div class="offset-header-cell">Key B</div>
+        </div>
         {#each visibleInstruments as inst}
           <div
             class="inst-header"
@@ -120,11 +144,17 @@
 
         {@const isSelected = pitch.midi === selectedMidi}
         {@const isOctaveC = pitch.pitchClass === 0}
+        {@const isColumnA = pitch.column === 'A'}
+        {@const shortHz = formatHzShort(pitch.frequency)}
+        {@const pianoKey = getPianoKeyNumber(pitch.midi)}
+        {@const isMidiInRange = pitch.midi >= 0 && pitch.midi <= 127}
+        {@const isMidiUpperBoundary = pitch.midi === 127}
+        {@const isMidiLowerBoundary = pitch.midi === 0}
         <div
           class="pitch-row"
           class:selected={isSelected}
           class:octave-c={isOctaveC}
-          style="background: {pitch.color}18; --row-accent: {pitch.color}"
+          style="--row-fill: {pitch.color}1f; --row-accent: {pitch.color}"
           onclick={() => handleRowClick(pitch)}
           onkeydown={(e) => handleRowKey(e, pitch)}
           role="button"
@@ -133,10 +163,46 @@
           aria-label="{pitch.noteName}, {formatHz(pitch.frequency)}"
         >
           <div class="region-strip" style="background: rgb({pitch.stripRgb})"></div>
-          <div class="pitch-cell">
-            <span class="pitch-name" style="color: {pitch.color}">{pitch.noteName}</span>
+          <div class="offset-cells pitch-offset-cells">
+            <div class="offset-cell" class:active={isColumnA}>
+              {#if isColumnA}
+                <span class="cell-text pitch-name" style="color: {pitch.color}">{pitch.noteName}</span>
+              {/if}
+            </div>
+            <div class="offset-cell" class:active={!isColumnA}>
+              {#if !isColumnA}
+                <span class="cell-text pitch-name" style="color: {pitch.color}">{pitch.noteName}</span>
+              {/if}
+            </div>
           </div>
-          <div class="hz-cell">{formatHzShort(pitch.frequency)}</div>
+          <div class="offset-cells hz-offset-cells">
+            <div class="offset-cell hz-offset-cell" class:active={isColumnA}>
+              {#if isColumnA}<span class="cell-text">{shortHz}</span>{/if}
+            </div>
+            <div class="offset-cell hz-offset-cell" class:active={!isColumnA}>
+              {#if !isColumnA}<span class="cell-text">{shortHz}</span>{/if}
+            </div>
+          </div>
+          <div
+            class="offset-cells midi-offset-cells"
+            class:midi-upper-boundary={isMidiUpperBoundary}
+            class:midi-lower-boundary={isMidiLowerBoundary}
+          >
+            <div class="offset-cell midi-offset-cell" class:active={isColumnA}>
+              {#if isColumnA && isMidiInRange}<span class="cell-text">{pitch.midi}</span>{/if}
+            </div>
+            <div class="offset-cell midi-offset-cell" class:active={!isColumnA}>
+              {#if !isColumnA && isMidiInRange}<span class="cell-text">{pitch.midi}</span>{/if}
+            </div>
+          </div>
+          <div class="offset-cells piano-offset-cells">
+            <div class="offset-cell piano-offset-cell" class:active={isColumnA}>
+              {#if isColumnA && pianoKey !== null}<span class="cell-text">{pianoKey}</span>{/if}
+            </div>
+            <div class="offset-cell piano-offset-cell" class:active={!isColumnA}>
+              {#if !isColumnA && pianoKey !== null}<span class="cell-text">{pianoKey}</span>{/if}
+            </div>
+          </div>
           {#each visibleInstruments as inst}
             {@const inRange = inst.pitched && inst.minMidi <= pitch.midi && inst.maxMidi >= pitch.midi}
             <div
@@ -250,6 +316,8 @@
   }
 
   .scroll-area {
+    --row-step: 11px;
+    --row-cell-height: calc(var(--row-step) * 2);
     flex: 1;
     overflow: auto;
     min-width: 0;
@@ -270,20 +338,55 @@
     flex-shrink: 0;
   }
 
-  .pitch-header,
-  .hz-header {
+  .pitch-header-group,
+  .hz-header-group,
+  .midi-header-group,
+  .piano-header-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     flex-shrink: 0;
-    font-size: 0.6rem;
-    color: #4b5563;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: flex;
-    align-items: flex-end;
-    padding: 4px 6px;
   }
 
-  .pitch-header { width: 66px; }
-  .hz-header    { width: 64px; border-right: 1px solid #1e293b; }
+  .pitch-header-group {
+    width: 96px;
+    border-right: 1px solid #1e293b20;
+  }
+
+  .hz-header-group {
+    width: 88px;
+    border-right: 1px solid #1e293b20;
+  }
+
+  .midi-header-group {
+    width: 72px;
+    border-right: 1px solid #1e293b20;
+  }
+
+  .piano-header-group {
+    width: 84px;
+    border-right: 1px solid #1e293b;
+  }
+
+  .offset-header-cell {
+    font-size: 0.56rem;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    height: 80px;
+    padding: 4px 2px;
+    border-right: 1px solid #1e293b30;
+    user-select: none;
+  }
+
+  .pitch-header-group .offset-header-cell:last-child,
+  .hz-header-group .offset-header-cell:last-child,
+  .midi-header-group .offset-header-cell:last-child,
+  .piano-header-group .offset-header-cell:last-child {
+    border-right: none;
+  }
 
   .inst-header {
     width: 36px;
@@ -340,38 +443,31 @@
   .region-strip {
     width: 6px;
     flex-shrink: 0;
-    height: 100%;
+    height: var(--row-cell-height);
+    align-self: center;
   }
 
   .pitch-row {
     display: flex;
     align-items: center;
-    height: 22px;
+    height: var(--row-step);
+    position: relative;
+    overflow: visible;
     cursor: pointer;
-    border-bottom: 1px solid #1e293b20;
+    border-bottom: 1px solid #1e293b30;
     transition: background 0.1s;
   }
 
   .pitch-row:hover {
-    background: #1e293b !important;
+    background: #1e293b55;
   }
 
   .pitch-row.selected {
-    outline: 2px solid var(--row-accent);
-    outline-offset: -2px;
-    background: #1e293b88 !important;
+    background: #1e293b66;
   }
 
   .pitch-row.octave-c {
     border-bottom-color: #1e293b70;
-  }
-
-  .pitch-cell {
-    width: 66px;
-    flex-shrink: 0;
-    padding: 0 4px 0 6px;
-    display: flex;
-    align-items: center;
   }
 
   .pitch-name {
@@ -379,21 +475,106 @@
     font-weight: 500;
   }
 
-  .hz-cell {
-    width: 64px;
+  .offset-cells {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     flex-shrink: 0;
-    padding: 0 6px;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .pitch-offset-cells {
+    width: 96px;
+    border-right: 1px solid #1e293b20;
+  }
+
+  .hz-offset-cells {
+    width: 88px;
+    border-right: 1px solid #1e293b20;
+  }
+
+  .midi-offset-cells {
+    width: 72px;
+    border-right: 1px solid #1e293b20;
+  }
+
+  .piano-offset-cells {
+    width: 84px;
+    border-right: 1px solid #1e293b;
+  }
+
+  .offset-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    height: var(--row-cell-height);
+    border-right: 1px solid #1e293b20;
+    padding: 0 4px;
+    min-width: 0;
+    position: relative;
+  }
+
+  .offset-cells .offset-cell:last-child {
+    border-right: none;
+  }
+
+  .pitch-offset-cells .offset-cell {
+    justify-content: flex-start;
+    padding-left: 6px;
+  }
+
+  .offset-cell.active {
+    background: var(--row-fill);
+  }
+
+  .hz-offset-cell {
     font-size: 0.6rem;
     color: #6b7280;
-    border-right: 1px solid #1e293b;
     font-variant-numeric: tabular-nums;
+  }
+
+  .hz-offset-cell.active {
+    color: #9ca3af;
+  }
+
+  .midi-offset-cell,
+  .piano-offset-cell {
+    font-size: 0.6rem;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .midi-offset-cell.active,
+  .piano-offset-cell.active {
+    color: #cbd5e1;
+  }
+
+  .midi-offset-cells.midi-upper-boundary .offset-cell {
+    border-top: 1px solid #f59e0b;
+  }
+
+  .midi-offset-cells.midi-lower-boundary .offset-cell {
+    border-bottom: 1px solid #f59e0b;
   }
 
   .inst-cell {
     width: 36px;
     flex-shrink: 0;
-    height: 100%;
+    height: var(--row-cell-height);
+    align-self: center;
     border-right: 1px solid #1e293b20;
+  }
+
+  .cell-text {
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
+  }
+
+  .pitch-row.selected .offset-cell.active,
+  .pitch-row.selected .inst-cell {
+    box-shadow: inset 0 0 0 1px var(--row-accent);
   }
 
   /* Detail sidebar */

@@ -1,6 +1,11 @@
 <script lang="ts">
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
-  import type { NoteColorMode } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import type { NoteColorMode, NoteType } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+
+  function handleNoteTypeChange(e: Event) {
+    const value = (e.target as HTMLSelectElement).value as NoteType;
+    appState.setNoteType(value);
+  }
 
   function handleNoteColorChange(e: Event) {
     const value = (e.target as HTMLSelectElement).value as NoteColorMode;
@@ -19,6 +24,14 @@
 </script>
 
 <div class="theme-settings">
+  <div class="theme-setting">
+    <span class="setting-label">Note Type</span>
+    <select class="setting-select" value={appState.state.noteType} onchange={handleNoteTypeChange}>
+      <option value="stadium">Stadium</option>
+      <option value="gradient">Gradient</option>
+    </select>
+  </div>
+
   <div class="theme-setting">
     <span class="setting-label">Note Colors</span>
     <select class="setting-select" value={appState.state.noteColorMode} onchange={handleNoteColorChange}>

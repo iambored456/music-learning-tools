@@ -112,12 +112,20 @@ let activeDrumSampleCategory: DrumSamplePickerCategory = DRUM_TRACK_TO_SAMPLE_CA
 let pendingDrumLayerSamples: Record<DrumTrack, string> | null = null;
 let activeSamplePreviewAudio: HTMLAudioElement | null = null;
 
+function shouldLogDrumVolumeDebug(): boolean {
+  return typeof window !== 'undefined'
+    && (window as Window & { __drumVolumeDebug?: boolean }).__drumVolumeDebug === true;
+}
+
 function logDrumVolumeDebug(message: string, payload?: Record<string, unknown>): void {
-  if (payload) {
-    console.log(`[DrumVolumeDebug] ${message}`, payload);
+  if (!shouldLogDrumVolumeDebug()) {
     return;
   }
-  console.log(`[DrumVolumeDebug] ${message}`);
+  if (payload) {
+    console.debug(`[DrumVolumeDebug] ${message}`, payload);
+    return;
+  }
+  console.debug(`[DrumVolumeDebug] ${message}`);
 }
 
 function describeEventTarget(target: EventTarget | null): Record<string, unknown> {

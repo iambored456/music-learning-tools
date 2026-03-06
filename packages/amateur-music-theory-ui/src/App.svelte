@@ -1,114 +1,70 @@
 <script lang="ts">
-  type LessonStatus = 'in-progress' | 'planned';
-
-  type Lesson = {
-    id: string;
-    title: string;
-    summary: string;
-    level: string;
-    duration: string;
-    status: LessonStatus;
-    focus: string[];
-  };
-
-  const lessons: Lesson[] = [
-    {
-      id: 'interval-echoes',
-      title: 'Interval Echoes',
-      summary: 'Hear and identify directional interval motion before reading it in notation.',
-      level: 'Beginner',
-      duration: '8 min',
-      status: 'in-progress',
-      focus: ['Ear Training', 'Interval Shape', 'Call and Response'],
-    },
-    {
-      id: 'rhythm-tiles',
-      title: 'Rhythm Tiles',
-      summary: 'Build and clap microbeat patterns, then map them into student notation blocks.',
-      level: 'Beginner',
-      duration: '10 min',
-      status: 'planned',
-      focus: ['Subdivision', 'Pulse', 'Pattern Memory'],
-    },
-    {
-      id: 'tonic-compass',
-      title: 'Tonic Compass',
-      summary: 'Navigate tonic shifts and modal color by ear, then verify with visual guides.',
-      level: 'Intermediate',
-      duration: '12 min',
-      status: 'planned',
-      focus: ['Modes', 'Tonicization', 'Aural Center'],
-    },
-  ];
-
-  let selectedLessonId: string | null = null;
-  let selectedLesson: Lesson | null = null;
-
-  $: selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
+  import OutlineRow from './OutlineRow.svelte';
+  import { lessonOutline, rowTypeGroups } from './outline';
 
   const hubHref = '../';
-
-  function openLesson(lessonId: string): void {
-    selectedLessonId = lessonId;
-  }
-
-  function backToMenu(): void {
-    selectedLessonId = null;
-  }
 </script>
 
 <div id="amateur-music-theory-app" class="amt-app">
   <header class="hero">
     <p class="eyebrow">Amateur Music Theory</p>
-    <h1>Lesson Select</h1>
+    <h1>Lesson Builder Shell</h1>
     <p class="subtitle">
-      Choose a lesson path. This app is prepared for student-notation-powered learning modules.
+      Draft lesson architecture with nested row types before wiring any student-notation or
+      playback logic.
     </p>
     <a class="hub-link" href={hubHref}>Back to Hub</a>
   </header>
 
-  {#if selectedLesson}
-    <section class="workspace" aria-live="polite">
-      <p class="workspace-kicker">{selectedLesson.level} - {selectedLesson.duration}</p>
-      <h2>{selectedLesson.title}</h2>
-      <p>{selectedLesson.summary}</p>
+  <section class="planner-shell" aria-labelledby="lesson-builder-title">
+    <div class="planner-header">
+      <p class="workspace-kicker">Placeholder lesson planner</p>
+      <h2 id="lesson-builder-title">Lesson Title</h2>
+      <p class="planner-subtitle">
+        Lesson Summary
+      </p>
+    </div>
 
-      <div class="focus-list">
-        {#each selectedLesson.focus as focusArea}
-          <span>{focusArea}</span>
-        {/each}
-      </div>
-
-      <div class="notice">
-        <h3>Lesson workspace staging</h3>
-        <p>
-          The lesson shell is ready. Next step is wiring the interactive notation and exercise
-          package flow for this lesson.
-        </p>
-      </div>
-
-      <button class="back-button" onclick={backToMenu}>Back to Lesson Select</button>
-    </section>
-  {:else}
-    <section class="lesson-grid" aria-label="Available lessons">
-      {#each lessons as lesson}
-        <article class="lesson-card">
-          <p class="status {lesson.status}">
-            {lesson.status === 'in-progress' ? 'In progress' : 'Planned'}
+    <div class="planner-layout">
+      <aside class="palette-panel" aria-label="Nested row type organization">
+        <div class="palette-intro">
+          <h3>Row Type Organization</h3>
+          <p>
+            Structure rows define the lesson frame. Teaching rows live inside those containers as
+            nested prompts, exercises, and notes.
           </p>
-          <h2>{lesson.title}</h2>
-          <p>{lesson.summary}</p>
-          <div class="meta">{lesson.level} - {lesson.duration}</div>
-          <div class="focus-list">
-            {#each lesson.focus as focusArea}
-              <span>{focusArea}</span>
-            {/each}
-          </div>
-          <button onclick={() => openLesson(lesson.id)}>
-            {lesson.status === 'in-progress' ? 'Open lesson shell' : 'View roadmap'}
-          </button>
-        </article>
-      {/each}
-    </section>
-  {/if}
+        </div>
+
+        <div class="palette-groups">
+          {#each rowTypeGroups as group}
+            <section class="palette-group">
+              <h4>{group.label}</h4>
+              <div class="palette-items">
+                {#each group.items as item}
+                  <article class={`palette-item row-type-${item.type}`}>
+                    <div class="palette-item-topline">
+                      <span class="palette-pill">{item.label}</span>
+                    </div>
+                    <p>{item.description}</p>
+                  </article>
+                {/each}
+              </div>
+            </section>
+          {/each}
+        </div>
+      </aside>
+
+      <section class="outline-panel" aria-label="Lesson outline">
+        <div class="outline-panel-header">
+          <p class="outline-kicker">Nested lesson rows</p>
+          <p class="outline-copy">
+            Placeholder-only scaffolding. Replace these rows later with real lesson content and
+            interactive modules.
+          </p>
+        </div>
+
+        <OutlineRow row={lessonOutline} />
+      </section>
+    </div>
+  </section>
 </div>

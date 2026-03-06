@@ -4,11 +4,13 @@
   --amt-bg-cream: #f4eee1;
   --amt-bg-ink: #1e2932;
   --amt-bg-card: rgba(255, 255, 255, 0.82);
+  --amt-bg-soft: rgba(255, 250, 241, 0.72);
   --amt-text: #1f241f;
   --amt-muted: #5e645f;
   --amt-accent-amber: #c57b2f;
   --amt-accent-teal: #2f8d83;
   --amt-accent-coral: #cc5b44;
+  --amt-accent-olive: #9a8c33;
   --amt-shadow: 0 24px 56px rgba(37, 27, 18, 0.16);
 }
 
@@ -39,21 +41,27 @@ body {
 }
 
 .amt-app {
-  width: min(1100px, 100%);
+  width: min(1220px, 100%);
   margin: 0 auto;
-  padding: 2.2rem 1.1rem 2.8rem;
+  padding: 2rem 1.1rem 2.8rem;
   display: grid;
-  gap: 1.4rem;
+  gap: 1.2rem;
+}
+
+.hero,
+.planner-shell,
+.palette-panel,
+.outline-panel {
+  border: 1px solid rgba(102, 75, 40, 0.18);
+  border-radius: 22px;
+  box-shadow: var(--amt-shadow);
 }
 
 .hero {
   display: grid;
   gap: 0.7rem;
   padding: 1.2rem 1.25rem;
-  border-radius: 20px;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(250, 243, 231, 0.85));
-  border: 1px solid rgba(102, 75, 40, 0.2);
-  box-shadow: var(--amt-shadow);
 }
 
 .eyebrow {
@@ -64,16 +72,23 @@ body {
   font-size: 0.74rem;
 }
 
-h1 {
+h1,
+.planner-header h2 {
   margin: 0;
   font-family: 'Fraunces', serif;
-  font-size: clamp(2rem, 5.4vw, 3.2rem);
   line-height: 1.05;
 }
 
-.subtitle {
+h1 {
+  font-size: clamp(2rem, 5.4vw, 3.2rem);
+}
+
+.subtitle,
+.planner-subtitle,
+.palette-intro p,
+.outline-copy,
+.palette-item p {
   margin: 0;
-  max-width: 64ch;
   color: #3f4641;
 }
 
@@ -90,125 +105,187 @@ h1 {
   border-bottom-color: #0f4e4a;
 }
 
-.lesson-grid {
+.planner-shell {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  padding: 1.05rem;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.68), rgba(246, 239, 227, 0.84));
 }
 
-.lesson-card,
-.workspace {
-  background: var(--amt-bg-card);
-  border: 1px solid rgba(84, 65, 39, 0.18);
-  border-radius: 18px;
-  padding: 1rem 1.05rem 1.1rem;
-  box-shadow: var(--amt-shadow);
-}
-
-.lesson-card {
+.planner-header {
   display: grid;
-  align-content: start;
-  gap: 0.66rem;
+  gap: 0.42rem;
+  padding: 0.2rem 0.2rem 0;
 }
 
-.lesson-card h2,
-.workspace h2 {
+.workspace-kicker,
+.outline-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amt-muted);
+}
+
+.planner-header h2 {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+}
+
+.planner-layout {
+  display: grid;
+  grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.palette-panel,
+.outline-panel {
+  background: var(--amt-bg-soft);
+  padding: 1rem;
+}
+
+.palette-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.palette-intro {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.palette-intro h3,
+.palette-group h4 {
   margin: 0;
   font-family: 'Fraunces', serif;
-  font-size: 1.35rem;
 }
 
-.lesson-card p,
-.workspace p {
-  margin: 0;
-  color: #3f4641;
-}
-
-.meta,
-.workspace-kicker {
-  font-size: 0.85rem;
-  color: #5a5f5a;
-}
-
-.status {
-  justify-self: start;
-  margin: 0;
-  padding: 0.22rem 0.58rem;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 0.75rem;
-  letter-spacing: 0.03em;
-}
-
-.status.in-progress {
-  background: rgba(47, 141, 131, 0.16);
-  color: #145952;
-}
-
-.status.planned {
-  background: rgba(197, 123, 47, 0.2);
-  color: #7d4b17;
-}
-
-.focus-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.46rem;
-}
-
-.focus-list span {
-  background: rgba(30, 41, 50, 0.08);
-  border: 1px solid rgba(30, 41, 50, 0.14);
-  border-radius: 999px;
-  padding: 0.24rem 0.58rem;
-  font-size: 0.75rem;
-}
-
-button {
-  border: 1px solid rgba(30, 41, 50, 0.18);
-  border-radius: 12px;
-  background: linear-gradient(130deg, #fefaf1, #f5efde);
-  color: var(--amt-bg-ink);
-  padding: 0.58rem 0.8rem;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease;
-}
-
-button:hover,
-button:focus-visible {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(36, 29, 18, 0.16);
-}
-
-.workspace {
+.palette-groups {
   display: grid;
-  gap: 0.82rem;
+  gap: 0.9rem;
 }
 
-.notice {
-  border-left: 4px solid var(--amt-accent-teal);
-  background: rgba(47, 141, 131, 0.08);
-  border-radius: 10px;
+.palette-group {
+  display: grid;
+  gap: 0.58rem;
+}
+
+.palette-group h4 {
+  font-size: 1rem;
+  color: #28322b;
+}
+
+.palette-items {
+  display: grid;
+  gap: 0.52rem;
+}
+
+.palette-item {
+  display: grid;
+  gap: 0.35rem;
   padding: 0.78rem 0.82rem;
+  border-radius: 16px;
+  border: 1px solid rgba(84, 65, 39, 0.14);
+  background: rgba(255, 255, 255, 0.78);
 }
 
-.notice h3 {
-  margin: 0 0 0.3rem;
-  font-size: 0.95rem;
+.palette-item-topline {
+  display: flex;
+  align-items: center;
 }
 
-.back-button {
-  justify-self: start;
+.palette-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #17322d;
+  background: rgba(47, 141, 131, 0.16);
+  border: 1px solid rgba(47, 141, 131, 0.24);
+}
+
+.palette-item.row-type-lesson .palette-pill {
+  color: #7d4b17;
+  background: rgba(197, 123, 47, 0.16);
+  border-color: rgba(197, 123, 47, 0.26);
+}
+
+.palette-item.row-type-unit .palette-pill,
+.palette-item.row-type-section .palette-pill {
+  color: #145952;
+  background: rgba(47, 141, 131, 0.15);
+  border-color: rgba(47, 141, 131, 0.24);
+}
+
+.palette-item.row-type-concept .palette-pill {
+  color: #12475a;
+  background: rgba(55, 123, 165, 0.15);
+  border-color: rgba(55, 123, 165, 0.22);
+}
+
+.palette-item.row-type-exercise .palette-pill {
+  color: #7a3f18;
+  background: rgba(204, 91, 68, 0.14);
+  border-color: rgba(204, 91, 68, 0.24);
+}
+
+.palette-item.row-type-note .palette-pill {
+  color: #5e5517;
+  background: rgba(154, 140, 51, 0.14);
+  border-color: rgba(154, 140, 51, 0.22);
+}
+
+.outline-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.outline-panel-header {
+  display: grid;
+  gap: 0.36rem;
+}
+
+.outline-copy {
+  max-width: 62ch;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid rgba(15, 78, 74, 0.48);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .planner-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
   .amt-app {
-    padding: 1.1rem 0.8rem 1.8rem;
+    padding: 1rem 0.75rem 1.8rem;
   }
 
-  .hero {
-    padding: 1rem;
+  .hero,
+  .planner-shell,
+  .palette-panel,
+  .outline-panel {
+    border-radius: 18px;
+  }
+
+  .hero,
+  .palette-panel,
+  .outline-panel {
+    padding: 0.95rem;
+  }
+
+  .planner-shell {
+    padding: 0.85rem;
   }
 }

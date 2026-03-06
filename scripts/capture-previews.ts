@@ -84,10 +84,10 @@ const TARGETS: CaptureTarget[] = [
     delayMs: 400,
   },
   {
-    id: 'simple-notation',
+    id: 'boomwhacker-sketchpad',
     distDir: 'apps/hub/dist',
-    route: '/simple-notation/',
-    waitFor: '#simple-notation-app',
+    route: '/boomwhacker-sketchpad/',
+    waitFor: '#boomwhacker-sketchpad-app',
     delayMs: 600,
     injectCss: `
 .audio-gate {
@@ -203,8 +203,15 @@ const TARGETS: CaptureTarget[] = [
   const title = document.getElementById('visual-mode-title');
   return title?.textContent?.includes('Orbit Pulse') ?? false;
 })()
-`,
+    `,
     delayMs: 300,
+  },
+  {
+    id: 'grand-frequency-staff',
+    distDir: 'apps/hub/dist',
+    route: '/grand-frequency-staff/',
+    waitFor: '.app',
+    delayMs: 450,
   },
 ];
 

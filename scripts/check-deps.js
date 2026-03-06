@@ -55,7 +55,7 @@ const SIMPLE_APP_NAMES = [
   'amateur-music-theory',
   'singing-trainer',
   'student-notation',
-  'simple-notation',
+  'boomwhacker-sketchpad',
   'diatonic-compass',
   'visual-metronome',
   'hub',

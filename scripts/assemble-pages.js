@@ -6,7 +6,7 @@
  *   - index.html                 (hub)
  *   - assets/                    (shared assets)
  *   - student-notation/          (from hub multi-page build)
- *   - simple-notation/           (from hub multi-page build)
+ *   - boomwhacker-sketchpad/           (from hub multi-page build)
  *   - singing-trainer/           (from hub multi-page build)
  *   - diatonic-compass/          (from hub multi-page build)
  *   - visual-metronome/          (from hub multi-page build)

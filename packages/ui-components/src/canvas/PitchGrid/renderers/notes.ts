@@ -10,6 +10,7 @@ import type {
   CoordinateUtils,
   PitchHistoryPoint,
   TargetNote,
+  TargetNoteStyle,
   TargetNoteLabelConfig,
   PitchTrailConfig,
 } from '../types.js';
@@ -458,6 +459,8 @@ export interface UserPitchRenderConfig {
   trailConfig?: PitchTrailConfig;
   /** Optional label sizing configuration for target notes */
   labelConfig?: TargetNoteLabelConfig;
+  /** Visual style for singing/highway target notes */
+  targetNoteStyle?: TargetNoteStyle;
 }
 
 // ============================================================================
@@ -882,6 +885,168 @@ export function drawUserPitchTrace(
 
 // TargetNote is imported from types.js
 
+function colorToRgbaString(color: string, alpha: number): string {
+  const normalizedAlpha = Math.max(0, Math.min(1, alpha));
+  const shortHexMatch = color.match(/^#([0-9a-fA-F]{3})$/);
+  if (shortHexMatch) {
+    const [r, g, b] = shortHexMatch[1].split('').map((char) => Number.parseInt(char + char, 16));
+    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+  }
+
+  const longHexMatch = color.match(/^#([0-9a-fA-F]{6})$/);
+  if (longHexMatch) {
+    const hex = longHexMatch[1];
+    const r = Number.parseInt(hex.slice(0, 2), 16);
+    const g = Number.parseInt(hex.slice(2, 4), 16);
+    const b = Number.parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+  }
+
+  const rgbMatch = color.match(/^rgba?\(([^)]+)\)$/);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(',').map((value) => Number.parseFloat(value.trim()));
+    const r = Math.max(0, Math.min(255, parts[0] ?? 255));
+    const g = Math.max(0, Math.min(255, parts[1] ?? 255));
+    const b = Math.max(0, Math.min(255, parts[2] ?? 255));
+    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+  }
+
+  return `rgba(255, 255, 255, ${normalizedAlpha})`;
+}
+
+function createTargetNotePath(
+  startX: number,
+  endX: number,
+  centerY: number,
+  radiusY: number,
+): Path2D | null {
+  const noteWidth = endX - startX;
+  if (!hasRenderableDimensions(noteWidth, radiusY)) return null;
+
+  const path = new Path2D();
+  if (noteWidth >= 2 * radiusY) {
+    const leftCapCenterX = startX + radiusY;
+    const rightCapCenterX = endX - radiusY;
+    path.arc(leftCapCenterX, centerY, radiusY, Math.PI / 2, -Math.PI / 2, false);
+    path.lineTo(rightCapCenterX, centerY - radiusY);
+    path.arc(rightCapCenterX, centerY, radiusY, -Math.PI / 2, Math.PI / 2, false);
+    path.lineTo(leftCapCenterX, centerY + radiusY);
+  } else {
+    const centerX = (startX + endX) / 2;
+    const radiusX = noteWidth / 2;
+    if (!hasRenderableDimensions(radiusX, radiusY)) return null;
+    path.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+  }
+  path.closePath();
+  return path;
+}
+
+function drawStadiumTargetNote(
+  ctx: CanvasRenderingContext2D,
+  notePath: Path2D,
+  baseColor: string,
+  isBeingHit: boolean,
+  isGolden: boolean,
+): void {
+  ctx.save();
+
+  if (isBeingHit) {
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 5;
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 20;
+    ctx.stroke(notePath);
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+    ctx.fill(notePath);
+    ctx.restore();
+    return;
+  }
+
+  if (isGolden) {
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 15;
+    ctx.stroke(notePath);
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+    ctx.fill(notePath);
+    ctx.restore();
+    return;
+  }
+
+  ctx.strokeStyle = baseColor;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = baseColor;
+  ctx.shadowBlur = 8;
+  ctx.stroke(notePath);
+  ctx.restore();
+}
+
+function drawGradientTargetNote(
+  ctx: CanvasRenderingContext2D,
+  notePath: Path2D,
+  startX: number,
+  endX: number,
+  centerY: number,
+  radiusY: number,
+  baseColor: string,
+  isBeingHit: boolean,
+  isGolden: boolean,
+): void {
+  const noteWidth = endX - startX;
+  if (!hasRenderableDimensions(noteWidth, radiusY)) return;
+
+  const glowColor = isBeingHit ? '#FFD700' : baseColor;
+  const outlineColor = isBeingHit ? '#FFE082' : baseColor;
+  const outerGradient = ctx.createLinearGradient(0, centerY - radiusY, 0, centerY + radiusY);
+  outerGradient.addColorStop(0, colorToRgbaString(glowColor, 0));
+  outerGradient.addColorStop(0.22, colorToRgbaString(glowColor, isBeingHit ? 0.24 : 0.14));
+  outerGradient.addColorStop(0.5, colorToRgbaString(glowColor, isBeingHit ? 0.52 : (isGolden ? 0.44 : 0.34)));
+  outerGradient.addColorStop(0.78, colorToRgbaString(glowColor, isBeingHit ? 0.24 : 0.14));
+  outerGradient.addColorStop(1, colorToRgbaString(glowColor, 0));
+
+  ctx.save();
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = isBeingHit ? 22 : (isGolden ? 18 : 14);
+  ctx.fillStyle = outerGradient;
+  ctx.fill(notePath);
+  ctx.restore();
+
+  const coreHalfHeight = Math.max(2, radiusY * 0.36);
+  const coreGradient = ctx.createLinearGradient(0, centerY - coreHalfHeight * 2, 0, centerY + coreHalfHeight * 2);
+  coreGradient.addColorStop(0, colorToRgbaString(glowColor, 0));
+  coreGradient.addColorStop(0.24, colorToRgbaString(glowColor, isBeingHit ? 0.72 : (isGolden ? 0.62 : 0.54)));
+  coreGradient.addColorStop(0.5, colorToRgbaString(glowColor, isBeingHit ? 0.98 : (isGolden ? 0.9 : 0.82)));
+  coreGradient.addColorStop(0.76, colorToRgbaString(glowColor, isBeingHit ? 0.72 : (isGolden ? 0.62 : 0.54)));
+  coreGradient.addColorStop(1, colorToRgbaString(glowColor, 0));
+
+  ctx.save();
+  ctx.clip(notePath);
+  ctx.fillStyle = coreGradient;
+  ctx.fillRect(startX, centerY - radiusY - 16, noteWidth, (radiusY * 2) + 32);
+  ctx.restore();
+
+  const bandHalfHeight = Math.max(1.5, radiusY * 0.2);
+  const bandGradient = ctx.createLinearGradient(0, centerY - bandHalfHeight, 0, centerY + bandHalfHeight);
+  bandGradient.addColorStop(0, colorToRgbaString('#FFFFFF', isBeingHit ? 0.24 : 0.14));
+  bandGradient.addColorStop(0.5, colorToRgbaString('#FFFFFF', isBeingHit ? 0.45 : 0.28));
+  bandGradient.addColorStop(1, colorToRgbaString('#FFFFFF', isBeingHit ? 0.24 : 0.14));
+
+  ctx.save();
+  ctx.clip(notePath);
+  ctx.fillStyle = bandGradient;
+  ctx.fillRect(startX, centerY - bandHalfHeight, noteWidth, bandHalfHeight * 2);
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = colorToRgbaString(outlineColor, isBeingHit ? 0.95 : 0.72);
+  ctx.lineWidth = isBeingHit ? 2.6 : (isGolden ? 2.2 : 1.8);
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = isBeingHit ? 14 : 8;
+  ctx.stroke(notePath);
+  ctx.restore();
+}
+
 /**
  * Draw target notes on the highway (Guitar Hero style).
  */
@@ -897,6 +1062,7 @@ export function drawTargetNotes(
 ): void {
   const { cellHeight, nowLineX = 100, pixelsPerSecond } = config;
   const pitchToleranceSemitones = 0.5; // Half semitone tolerance for hit detection
+  const targetNoteStyle = config.targetNoteStyle ?? 'stadium';
 
   for (const note of targetNotes) {
     // Calculate X position based on time
@@ -1018,65 +1184,19 @@ export function drawTargetNotes(
                          (userClarity ?? 0) > 0.5 &&
                          Math.abs(userMidi - note.midi) <= pitchToleranceSemitones;
     const isBeingHit = isAtJudgmentLine && pitchMatches;
-
-    // Draw stadium shape
-    ctx.save();
-    ctx.beginPath();
-
-    // Check if note is long enough for stadium shape
     const noteWidth = endX - startX;
-    if (noteWidth >= 2 * ry) {
-      // Shift arc centers inward so caps fit within startX to endX boundaries
-      const leftCapCenterX = startX + ry;
-      const rightCapCenterX = endX - ry;
+    const notePath = createTargetNotePath(startX, endX, y, ry);
+    if (!notePath) continue;
 
-      ctx.arc(leftCapCenterX, y, ry, Math.PI / 2, -Math.PI / 2, false);
-      ctx.lineTo(rightCapCenterX, y - ry);
-      ctx.arc(rightCapCenterX, y, ry, -Math.PI / 2, Math.PI / 2, false);
-      ctx.lineTo(leftCapCenterX, y + ry);
+    if (targetNoteStyle === 'gradient') {
+      drawGradientTargetNote(ctx, notePath, startX, endX, y, ry, baseColor, isBeingHit, isGolden);
     } else {
-      // Note too short for stadium - draw ellipse instead
-      const centerX = (startX + endX) / 2;
-      const rx = noteWidth / 2;
-      ctx.ellipse(centerX, y, rx, ry, 0, 0, 2 * Math.PI);
+      drawStadiumTargetNote(ctx, notePath, baseColor, isBeingHit, isGolden);
     }
-    ctx.closePath();
 
     if (isBeingHit) {
-      // Enhanced glow effect when hitting the note
-      ctx.strokeStyle = '#FFD700'; // Gold color for hit
-      ctx.lineWidth = 5;
-      ctx.shadowColor = '#FFD700';
-      ctx.shadowBlur = 20;
-      ctx.stroke();
-
-      // Add inner fill for extra visibility
-      ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-      ctx.fill();
-
-      // Draw particle burst effect
       drawHitParticles(ctx, nowLineX, y, ry);
-    } else if (isGolden) {
-      // Golden notes have extra glow and thicker border
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 4;
-      ctx.shadowColor = '#FFD700';
-      ctx.shadowBlur = 15;
-      ctx.stroke();
-
-      // Add subtle gold fill
-      ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
-      ctx.fill();
-    } else {
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 3;
-      ctx.shadowColor = baseColor;
-      ctx.shadowBlur = 8;
-      ctx.stroke();
     }
-
-    ctx.shadowBlur = 0;
-    ctx.restore();
 
     // Draw golden note star indicator
     if (isGolden && !isBeingHit) {

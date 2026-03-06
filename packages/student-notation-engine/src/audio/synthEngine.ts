@@ -318,18 +318,16 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
         const normalizedCoeffs = normalizeCoefficients(filteredCoeffs);
         const presetGain = timbre.gain || 1.0;
 
-        const synth = new Tone.PolySynth({
-          maxPolyphony: Infinity,
-          voice: FilteredVoice as any,
-          options: {
-            oscillator: { type: 'custom', partials: normalizedCoeffs },
-            envelope: timbre.adsr,
-            filter: timbre.filter,
-            vibrato: timbre.vibrato,
-            tremelo: timbre.tremelo,
-            gain: presetGain
-          } as any
-        }).connect(masterGain) as any;
+        const synth = new Tone.PolySynth(FilteredVoice as any, {
+          oscillator: { type: 'custom', partials: normalizedCoeffs },
+          envelope: timbre.adsr,
+          filter: timbre.filter,
+          vibrato: timbre.vibrato,
+          tremelo: timbre.tremelo,
+          gain: presetGain
+        } as any).connect(masterGain) as any;
+
+        synth.maxPolyphony = Infinity;
 
         // Suppress Tone.js PolySynth debug logging (triggerAttack/triggerRelease)
         synth.debug = false;

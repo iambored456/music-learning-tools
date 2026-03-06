@@ -45,10 +45,12 @@
  * Framework-agnostic - no DOM dependencies.
  */
 import * as Tone from 'tone';
-// Monophonic is not in Tone.js public API — import from internal module
+// Monophonic is not in Tone.js public API — import the concrete ESM file that
+// Tone.PolySynth also resolves against so its runtime `instanceof Monophonic`
+// check recognizes FilteredVoice instances.
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore internal Tone.js import
-import { Monophonic } from 'tone/build/esm/instrument/Monophonic';
+import { Monophonic } from 'tone/build/esm/instrument/Monophonic.js';
 
 export interface FilteredVoiceOptions {
   oscillator?: { type?: string; partials?: number[] };

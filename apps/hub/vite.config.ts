@@ -1,10 +1,12 @@
 import { fileURLToPath, URL } from 'node:url'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1]
+const require = createRequire(import.meta.url)
 const base =
   process.env.BASE_URL ??
   (process.env.GITHUB_ACTIONS && repoName ? `/${repoName}/` : '/')
@@ -12,6 +14,7 @@ const base =
 // Resolve path aliases for student-notation-ui package
 const studentNotationUiPkg = fileURLToPath(new URL('../../packages/student-notation-ui', import.meta.url))
 const studentNotationUiSrc = resolve(studentNotationUiPkg, 'src')
+const tonePkg = dirname(require.resolve('tone/package.json'))
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -25,8 +28,8 @@ export default defineConfig({
       '@mlt/student-notation-ui',
       '@mlt/singing-trainer-core',
       '@mlt/singing-trainer-ui',
-      '@mlt/simple-notation-ui',
-      '@mlt/simple-notation-core',
+      '@mlt/boomwhacker-sketchpad-ui',
+      '@mlt/boomwhacker-sketchpad-core',
       '@mlt/tempo-controls-ui',
       '@mlt/diatonic-compass-ui',
       '@mlt/amateur-music-theory-ui',
@@ -43,16 +46,22 @@ export default defineConfig({
     ],
   },
   resolve: {
-    alias: {
+    dedupe: ['tone', 'standardized-audio-context'],
+    alias: [
+      { find: /^tone$/, replacement: resolve(tonePkg, 'build/esm/index.js') },
+      {
+        find: /^tone\/build\/esm\/instrument\/Monophonic(?:\.js)?$/,
+        replacement: resolve(tonePkg, 'build/esm/instrument/Monophonic.js'),
+      },
       // Aliases for @mlt/student-notation-ui internal imports
-      '@state': resolve(studentNotationUiSrc, 'state'),
-      '@services': resolve(studentNotationUiSrc, 'services'),
-      '@components': resolve(studentNotationUiSrc, 'components'),
-      '@utils': resolve(studentNotationUiSrc, 'utils'),
-      '@data': resolve(studentNotationUiSrc, 'data'),
-      '@': studentNotationUiSrc,
-      '@app-types': resolve(studentNotationUiPkg, 'types'),
-    },
+      { find: '@state', replacement: resolve(studentNotationUiSrc, 'state') },
+      { find: '@services', replacement: resolve(studentNotationUiSrc, 'services') },
+      { find: '@components', replacement: resolve(studentNotationUiSrc, 'components') },
+      { find: '@utils', replacement: resolve(studentNotationUiSrc, 'utils') },
+      { find: '@data', replacement: resolve(studentNotationUiSrc, 'data') },
+      { find: '@', replacement: studentNotationUiSrc },
+      { find: '@app-types', replacement: resolve(studentNotationUiPkg, 'types') },
+    ],
   },
   build: {
     // Keep chunking simple to avoid cross-chunk initialization order issues.
@@ -61,7 +70,7 @@ export default defineConfig({
       input: {
         main: resolve(root, 'index.html'),
         'student-notation': resolve(root, 'student-notation/index.html'),
-        'simple-notation': resolve(root, 'simple-notation/index.html'),
+        'boomwhacker-sketchpad': resolve(root, 'boomwhacker-sketchpad/index.html'),
         'singing-trainer': resolve(root, 'singing-trainer/index.html'),
         'diatonic-compass': resolve(root, 'diatonic-compass/index.html'),
         'amateur-music-theory': resolve(root, 'amateur-music-theory/index.html'),

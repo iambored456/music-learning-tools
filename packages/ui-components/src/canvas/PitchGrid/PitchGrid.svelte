@@ -22,6 +22,7 @@
     HighwayModeConfig,
     PitchHistoryPoint,
     TargetNote,
+    TargetNoteStyle,
   } from './types.js';
   import type {
     PitchRowData,
@@ -88,6 +89,7 @@
     focusedPitchClasses?: Set<number> | null;
     focusColorsEnabled?: boolean;
     legendLabelOverrides?: Map<number, string>;
+    targetNoteStyle?: TargetNoteStyle;
 
     // Notation/Playback mode props
     placedNotes?: PlacedNote[];
@@ -129,6 +131,7 @@
     focusedPitchClasses = null,
     focusColorsEnabled = false,
     legendLabelOverrides,
+    targetNoteStyle = 'stadium',
     placedNotes = [],
     placedTonicSigns = [],
     columnWidths = [],
@@ -446,6 +449,7 @@
       colorMode,
       trailConfig: singingConfig.trailConfig,
       labelConfig: singingConfig.labelConfig,
+      targetNoteStyle,
     };
 
     // Draw user pitch trace
@@ -500,6 +504,7 @@
       colorMode,
       trailConfig: highwayConfig.trailConfig,
       labelConfig: highwayConfig.labelConfig,
+      targetNoteStyle,
     };
 
     // Check if we have scrolling grid data (Student Notation mode)
