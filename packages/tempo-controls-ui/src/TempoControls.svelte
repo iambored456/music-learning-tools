@@ -189,6 +189,7 @@
     --tempo-controls-slider-shell-padding: var(--tempo-slider-shell-padding, 4px);
     --tempo-controls-slider-track-thickness: var(--tempo-slider-track-thickness, 6px);
     --tempo-controls-slider-thumb-size: var(--tempo-slider-thumb-size, 16px);
+    --tempo-controls-vertical-slider-length: var(--tempo-vertical-slider-length, 184px);
 
     display: grid;
     gap: var(--tempo-controls-space-020);
@@ -221,8 +222,27 @@
     column-gap: var(--tempo-controls-space-020);
   }
 
+  .tempo-controls.vertical.with-slider:not(.fill-available-height) {
+    align-self: start;
+    height: max(
+      var(--tempo-controls-vertical-slider-length),
+      calc(
+        (var(--tempo-row-count) * var(--tempo-controls-row-height))
+        + ((var(--tempo-row-count) - 1) * var(--tempo-controls-space-020))
+      )
+    );
+  }
+
+  .tempo-controls.vertical.with-slider:not(.fill-available-height) .tempo-rows {
+    align-self: center;
+  }
+
   .tempo-controls.vertical.with-slider.fill-available-height {
     grid-template-rows: minmax(0, 1fr);
+  }
+
+  .tempo-controls.vertical.with-slider.fill-available-height .tempo-rows {
+    align-self: center;
   }
 
   .tempo-controls.vertical:not(.with-slider) {
@@ -315,13 +335,18 @@
   .tempo-controls.vertical .tempo-slider-container {
     grid-column: 2;
     grid-row: 1;
-    align-self: stretch;
+    align-self: center;
     width: var(--tempo-controls-slider-shell-width);
-    height: auto;
+    height: min(var(--tempo-controls-vertical-slider-length), 100%);
     max-height: 100%;
     min-height: 0;
     padding: var(--tempo-controls-slider-shell-padding) 0;
     overflow: hidden;
+  }
+
+  .tempo-controls.vertical.with-slider.fill-available-height .tempo-slider-container {
+    align-self: stretch;
+    height: auto;
   }
 
   .tempo-slider {
@@ -379,6 +404,7 @@
   }
 
   .tempo-controls.vertical .tempo-slider::-webkit-slider-thumb {
+    margin-left: calc((var(--tempo-controls-slider-track-thickness) - var(--tempo-controls-slider-thumb-size)) / 2);
     margin-top: 0;
   }
 

@@ -94,10 +94,14 @@ body {
 
 .tempo-group {
   display: grid;
-  align-self: stretch;
+  align-self: start;
   align-items: stretch;
   min-height: 0;
   padding: 6px;
+}
+
+.tempo-group.sync-height {
+  align-self: stretch;
 }
 
 .tempo-group .tempo-controls {

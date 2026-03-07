@@ -243,7 +243,7 @@
   const PLAYED_NOTE_MUTING_DEBUG = false;
   const PICKUP_RENDER_DEBUG = false;
   const MOBILE_LAYOUT_DEBUG = true;
-  const TEMPO_SLIDER_LAYOUT_DEBUG = true;
+  const TEMPO_SLIDER_LAYOUT_DEBUG = false;
   const VIEWPORT_FIT_HEIGHT_MAX = 1100;
   const VIEWPORT_FIT_WIDTH_MIN = 700;
   const ADAPTIVE_LAYOUT_DEFAULT: AdaptiveLayoutConfig = {
@@ -341,7 +341,9 @@
   let isStudentView = false;
   let activeStudentView: StudentViewSettings = {};
   let volumePopupOpen = false;
+  let topToolbarElement: HTMLDivElement | null = null;
   let controlsPanelElement: HTMLElement | null = null;
+  let tempoGroupElement: HTMLDivElement | null = null;
   let toolbarNotebankPanelElement: HTMLElement | null = null;
   let volumeControlWrapper: HTMLDivElement | null = null;
   let showTapPlacementHint = true;
@@ -456,8 +458,33 @@
             updateSyncedToolbarPanelHeight();
           })
         : null;
+    const tempoLayoutResizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver((entries) => {
+            if (!TEMPO_SLIDER_LAYOUT_DEBUG) return;
+            const targets = entries
+              .map((entry) => {
+                const element = entry.target as HTMLElement;
+                return element.className || element.tagName;
+              })
+              .join(', ');
+            queueTempoSliderLayoutSnapshot(`Observed tempo layout resize (${targets}).`);
+          })
+        : null;
     if (toolbarNotebankPanelElement) {
       toolbarPanelResizeObserver?.observe(toolbarNotebankPanelElement);
+    }
+    if (topToolbarElement) {
+      tempoLayoutResizeObserver?.observe(topToolbarElement);
+    }
+    if (controlsPanelElement) {
+      tempoLayoutResizeObserver?.observe(controlsPanelElement);
+    }
+    if (tempoGroupElement) {
+      tempoLayoutResizeObserver?.observe(tempoGroupElement);
+    }
+    if (toolbarNotebankPanelElement) {
+      tempoLayoutResizeObserver?.observe(toolbarNotebankPanelElement);
     }
     updateSyncedToolbarPanelHeight();
     queueTempoSliderLayoutSnapshot('Mounted.');
@@ -471,6 +498,7 @@
       window.removeEventListener('orientationchange', handleViewportDiagnostics);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportDiagnostics);
       toolbarPanelResizeObserver?.disconnect();
+      tempoLayoutResizeObserver?.disconnect();
       unsubscribeModel?.();
       audio.dispose();
     };
@@ -2170,8 +2198,7 @@
 
   function shouldSyncToolbarPanelHeight(): boolean {
     if (typeof window === 'undefined') return false;
-    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-    return !viewportFitMode && viewportWidth > 920;
+    return !viewportFitMode && window.matchMedia('(min-width: 1201px)').matches;
   }
 
   function updateSyncedToolbarPanelHeight(): void {
@@ -2339,10 +2366,15 @@
       clientHeight: element.clientHeight,
       scrollWidth: element.scrollWidth,
       scrollHeight: element.scrollHeight,
+      hasHorizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+      hasVerticalOverflow: element.scrollHeight > element.clientHeight + 1,
       overflowY: computed.overflowY,
       display: computed.display,
       position: computed.position,
       alignSelf: computed.alignSelf,
+      alignItems: computed.alignItems,
+      alignContent: computed.alignContent,
+      justifyContent: computed.justifyContent,
       justifySelf: computed.justifySelf,
       gridTemplateRows: computed.gridTemplateRows,
       gridTemplateColumns: computed.gridTemplateColumns,
@@ -2350,6 +2382,47 @@
       maxHeight: computed.maxHeight,
       writingMode: computed.writingMode,
       direction: computed.direction,
+    };
+  }
+
+  function tempoSliderRelationSnapshot(childSelector: string, parentSelector: string): Record<string, unknown> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return { childSelector, parentSelector, exists: false };
+    }
+
+    const child = document.querySelector<HTMLElement>(childSelector);
+    const parent = document.querySelector<HTMLElement>(parentSelector);
+    if (!child || !parent) {
+      return {
+        childSelector,
+        parentSelector,
+        exists: false,
+        hasChild: Boolean(child),
+        hasParent: Boolean(parent),
+      };
+    }
+
+    const childRect = child.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    const overflowTopPx = Math.max(0, parentRect.top - childRect.top);
+    const overflowBottomPx = Math.max(0, childRect.bottom - parentRect.bottom);
+
+    return {
+      childSelector,
+      parentSelector,
+      exists: true,
+      childClassName: child.className,
+      parentClassName: parent.className,
+      childHeightPx: roundTo2(childRect.height),
+      parentHeightPx: roundTo2(parentRect.height),
+      childTopWithinParentPx: roundTo2(childRect.top - parentRect.top),
+      childBottomWithinParentPx: roundTo2(childRect.bottom - parentRect.top),
+      remainingParentSpacePx: roundTo2(parentRect.bottom - childRect.bottom),
+      overflowTopPx: roundTo2(overflowTopPx),
+      overflowBottomPx: roundTo2(overflowBottomPx),
+      exceedsParentTop: overflowTopPx > 1,
+      exceedsParentBottom: overflowBottomPx > 1,
+      childHeightPercentOfParent: parentRect.height > 0 ? roundTo2((childRect.height / parentRect.height) * 100) : null,
     };
   }
 
@@ -2473,10 +2546,17 @@
           visualViewport,
         },
         viewportFitMode,
+        breakpoints: {
+          max1200: window.matchMedia('(max-width: 1200px)').matches,
+          max920: window.matchMedia('(max-width: 920px)').matches,
+          max760: window.matchMedia('(max-width: 760px)').matches,
+        },
         shouldSyncToolbarPanelHeight: shouldSyncToolbarPanelHeight(),
         syncedToolbarPanelHeightPx,
         adaptiveLayout,
+        syncHeightClassApplied: tempoGroupElement?.classList.contains('sync-height') ?? false,
         tempo: {
+          topToolbar: tempoSliderElementSnapshot('.top-toolbar'),
           controlsPanel: tempoSliderElementSnapshot('.controls-panel'),
           toolbarNotebankPanel: tempoSliderElementSnapshot('.toolbar-notebank-panel'),
           tempoGroup: tempoSliderElementSnapshot('.tempo-group'),
@@ -2484,6 +2564,15 @@
           tempoRows: tempoSliderElementSnapshot('.tempo-rows'),
           tempoSliderContainer: tempoSliderElementSnapshot('.tempo-slider-container'),
           tempoSlider: tempoSliderElementSnapshot('.tempo-slider'),
+        },
+        relations: {
+          controlsPanelWithinTopToolbar: tempoSliderRelationSnapshot('.controls-panel', '.top-toolbar'),
+          toolbarNotebankPanelWithinTopToolbar: tempoSliderRelationSnapshot('.toolbar-notebank-panel', '.top-toolbar'),
+          tempoGroupWithinControlsPanel: tempoSliderRelationSnapshot('.tempo-group', '.controls-panel'),
+          tempoControlsWithinTempoGroup: tempoSliderRelationSnapshot('.tempo-controls', '.tempo-group'),
+          tempoRowsWithinTempoControls: tempoSliderRelationSnapshot('.tempo-rows', '.tempo-controls'),
+          tempoSliderContainerWithinTempoControls: tempoSliderRelationSnapshot('.tempo-slider-container', '.tempo-controls'),
+          tempoSliderWithinTempoSliderContainer: tempoSliderRelationSnapshot('.tempo-slider', '.tempo-slider-container'),
         },
       };
 
@@ -3480,13 +3569,17 @@
   style={rootInlineStyle()}
   on:dragover={handleCursorGhostDragOver}
 >
-  <div class="top-toolbar">
+  <div class="top-toolbar" bind:this={topToolbarElement}>
   <section
     class="panel controls-panel"
     bind:this={controlsPanelElement}
     style:height={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null ? `${syncedToolbarPanelHeightPx}px` : undefined}
   >
-    <div class="controls-group tempo-group">
+    <div
+      class="controls-group tempo-group"
+      bind:this={tempoGroupElement}
+      class:sync-height={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null}
+    >
       <TempoControls
         quarterTempo={state.microbeatTempo / 2}
         minQuarter={MICROBEAT_TEMPO_MIN / 2}
