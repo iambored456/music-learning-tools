@@ -24,8 +24,13 @@
   const selectedExerciseId = $derived(overdubExerciseChooserState.state.selectedExerciseId);
   const localSettings = $derived(overdubExerciseChooserState.state.localSettings);
 
-  // Get all overdub exercises from the registry
-  const exercises = $derived(getRegistryEntriesByCategory('workshop'));
+  const exercises = $derived.by<RegistryEntry[]>(() => {
+    if (!isVisible) {
+      return [];
+    }
+
+    return getRegistryEntriesByCategory('workshop');
+  });
 
   function handleBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {

@@ -22,7 +22,14 @@
   const isVisible = $derived(exerciseChooserState.state.isVisible);
   const selectedExerciseId = $derived(exerciseChooserState.state.selectedExerciseId);
   const localSettings = $derived(exerciseChooserState.state.localSettings);
-  const exercises = $derived(getRegistryEntriesByCategory('exercises'));
+
+  const exercises = $derived.by<RegistryEntry[]>(() => {
+    if (!isVisible) {
+      return [];
+    }
+
+    return getRegistryEntriesByCategory('exercises');
+  });
 
   function handleBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) {

@@ -24,6 +24,7 @@
   import { onDestroy } from 'svelte';
   import type { SpeakingPitchUsage, AnyLessonTemplate } from '@mlt/lesson-templates';
   import { getTemplate } from '@mlt/lesson-templates';
+  import { ensureLessonTemplatesRegistered } from '../../lessonTemplates.js';
   import {
     mountAndShowLessonAvatar,
     disposeLessonAvatar,
@@ -750,6 +751,7 @@
    * Open the lesson chooser modal
    */
   function handleOpenLessonChooser() {
+    ensureLessonTemplatesRegistered();
     chooserState.show();
   }
 
@@ -757,6 +759,7 @@
    * Open the standalone exercise chooser modal
    */
   function handleOpenExerciseChooser() {
+    ensureLessonTemplatesRegistered();
     exerciseChooserState.show();
   }
 
@@ -764,6 +767,7 @@
    * Open the workshop chooser modal
    */
   function handleOpenWorkshopChooser() {
+    ensureLessonTemplatesRegistered();
     overdubExerciseChooserState.show();
   }
 
@@ -774,6 +778,8 @@
     lessonId: string,
     settings: Record<string, number | boolean>
   ) {
+    ensureLessonTemplatesRegistered();
+
     // Store the active lesson ID
     activeLessonId = lessonId;
 
@@ -865,6 +871,7 @@
     exerciseId: string,
     settings: Record<string, number | boolean>
   ) {
+    ensureLessonTemplatesRegistered();
     const template = getTemplate(exerciseId);
     if (!template || template.type !== 'overdub' || template.category !== 'exercises') {
       console.error('[Exercise] Exercise template not found or invalid:', exerciseId);

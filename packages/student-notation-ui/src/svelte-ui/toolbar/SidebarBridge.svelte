@@ -7,8 +7,10 @@
    * This replaces: src/components/toolbar/initializers/sidebarInitializer.ts
    */
   import { onMount, onDestroy } from 'svelte';
+  import { initLocalDrumSampleChoices } from '@components/canvas/drumGrid/drumGridInteractor.ts';
   import store from '@state/initStore.ts';
   import LayoutService from '@services/layoutService.ts';
+  import { preloadDrumSamples } from '@services/transport/drumManager.ts';
   import {
     convertToSnapshot,
     validateForExport,
@@ -205,6 +207,10 @@
     isDrumGridVisible = !isDrumGridVisible;
     if (drumGridWrapper) {
       drumGridWrapper.style.display = isDrumGridVisible ? 'flex' : 'none';
+    }
+    if (isDrumGridVisible) {
+      void preloadDrumSamples();
+      void initLocalDrumSampleChoices();
     }
     const textElement = drumGridToggleBtn?.querySelector('.sidebar-button-text');
     if (textElement) {

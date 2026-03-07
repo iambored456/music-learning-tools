@@ -1,7 +1,6 @@
 // js/services/printService.ts
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import html2canvas from 'html2canvas';
 import type { PrintOptions } from '@app-types/state.js';
 
 type SnapshotKey = `${boolean}-${boolean}`;
@@ -12,6 +11,7 @@ const IDLE_TIMEOUT_MS = 600;
 const PRINT_MARGIN_IN = 0.25;
 const PRINT_STYLE_RULES_ID = 'print-style-rules';
 const PRINT_STAGING_AREA_ID = 'print-staging-area';
+let html2canvasLoader: Promise<typeof import('html2canvas')> | null = null;
 
 const PAPER_SIZES_IN: Record<PrintOptions['pageSize'], { width: number; height: number }> = {
   letter: { width: 8.5, height: 11 },
@@ -55,6 +55,12 @@ function ensurePrintStyleTag(): HTMLStyleElement | null {
   return styleTag;
 }
 
+async function loadHtml2Canvas(): Promise<typeof import('html2canvas')['default']> {
+  html2canvasLoader ??= import('html2canvas');
+  const mod = await html2canvasLoader;
+  return mod.default;
+}
+
 /**
  * Captures the button grid visual state by converting DOM to canvas
  */
@@ -69,6 +75,7 @@ async function captureButtonGrid(includeLeftLegend: boolean, includeRightLegend:
   const rightCell = buttonGrid.querySelector('.button-grid-right-cell') as HTMLElement | null;
 
   try {
+    const html2canvas = await loadHtml2Canvas();
     const buttonGridRect = buttonGrid.getBoundingClientRect();
     const leftCellWidthCss = leftCell?.getBoundingClientRect().width ?? 0;
     const rightCellWidthCss = rightCell?.getBoundingClientRect().width ?? 0;

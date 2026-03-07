@@ -17,6 +17,7 @@ import {
   getCurrentDrumLayerSamples,
   getDrumPlayers,
   initDrumPlayers,
+  preloadDrumSamples,
   setDrumLayerSamples,
   triggerDrum
 } from '@services/transport/drumManager.ts';
@@ -111,6 +112,8 @@ let activeDrumModalTrack: DrumTrack = 'M';
 let activeDrumSampleCategory: DrumSamplePickerCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY.M;
 let pendingDrumLayerSamples: Record<DrumTrack, string> | null = null;
 let activeSamplePreviewAudio: HTMLAudioElement | null = null;
+let localDrumSampleChoicesPromise: Promise<void> | null = null;
+let localDrumSampleChoicesLoaded = false;
 
 function shouldLogDrumVolumeDebug(): boolean {
   return typeof window !== 'undefined'
@@ -502,43 +505,54 @@ function updateDrumTrackSettingButtons(
 }
 
 export async function initLocalDrumSampleChoices(): Promise<void> {
-  try {
-    const mod = await import('@mlt/audio-samples/local-samples');
-    const localChoices: DrumSampleChoice[] = mod.LOCAL_DRUM_SAMPLE_ENTRIES.map(
-      (entry: LocalDrumSampleEntry) => ({
-        id: entry.id,
-        machineId: entry.machineId,
-        machineLabel: entry.machineLabel,
-        label: entry.label,
-        suggestedLayer: entry.suggestedLayer as DrumTrack,
-        url: entry.url,
-        voiceCategory: entry.voiceMetadata?.category,
-        voiceDescription: entry.voiceMetadata?.description,
-        pickerCategory: resolveSamplePickerCategory(
-          entry.suggestedLayer as DrumTrack,
-          entry.voiceMetadata?.category
-        )
-      })
-    );
-    const allChoices = [...remoteSampleChoices, ...localChoices].sort(compareDrumSampleChoices);
-    for (const choice of allChoices) {
-      if (!drumSampleChoiceByUrl.has(choice.url)) {
-        drumSampleChoiceByUrl.set(choice.url, choice);
-      }
-      const categoryGroup = drumSampleChoicesByCategory.get(choice.pickerCategory);
-      if (!categoryGroup) { continue; }
-      const machineLabel = getMachineLabel(choice.machineId, choice.machineLabel);
-      const existing = categoryGroup.get(machineLabel);
-      if (existing) {
-        existing.push(choice);
-      } else {
-        categoryGroup.set(machineLabel, [choice]);
-      }
-    }
+  if (localDrumSampleChoicesLoaded) {
     updateDrumTrackSettingButtons();
-  } catch (error) {
-    console.error('[drumGridInteractor] Failed to load local drum samples', error);
+    return;
   }
+
+  localDrumSampleChoicesPromise ??= (async () => {
+    try {
+      const mod = await import('@mlt/audio-samples/local-samples');
+      const localChoices: DrumSampleChoice[] = mod.LOCAL_DRUM_SAMPLE_ENTRIES.map(
+        (entry: LocalDrumSampleEntry) => ({
+          id: entry.id,
+          machineId: entry.machineId,
+          machineLabel: entry.machineLabel,
+          label: entry.label,
+          suggestedLayer: entry.suggestedLayer as DrumTrack,
+          url: entry.url,
+          voiceCategory: entry.voiceMetadata?.category,
+          voiceDescription: entry.voiceMetadata?.description,
+          pickerCategory: resolveSamplePickerCategory(
+            entry.suggestedLayer as DrumTrack,
+            entry.voiceMetadata?.category
+          )
+        })
+      );
+      const allChoices = [...remoteSampleChoices, ...localChoices].sort(compareDrumSampleChoices);
+      for (const choice of allChoices) {
+        if (!drumSampleChoiceByUrl.has(choice.url)) {
+          drumSampleChoiceByUrl.set(choice.url, choice);
+        }
+        const categoryGroup = drumSampleChoicesByCategory.get(choice.pickerCategory);
+        if (!categoryGroup) { continue; }
+        const machineLabel = getMachineLabel(choice.machineId, choice.machineLabel);
+        const existing = categoryGroup.get(machineLabel);
+        if (existing) {
+          existing.push(choice);
+        } else {
+          categoryGroup.set(machineLabel, [choice]);
+        }
+      }
+      localDrumSampleChoicesLoaded = true;
+      updateDrumTrackSettingButtons();
+    } catch (error) {
+      localDrumSampleChoicesPromise = null;
+      console.error('[drumGridInteractor] Failed to load local drum samples', error);
+    }
+  })();
+
+  await localDrumSampleChoicesPromise;
 }
 
 const ensureDrumPlayersReady = (): boolean => {
@@ -1233,7 +1247,9 @@ function ensureDrumLayerSampleModal(): HTMLElement {
   return modal;
 }
 
-function openDrumLayerSampleModal(trackToFocus: DrumTrack): void {
+async function openDrumLayerSampleModal(trackToFocus: DrumTrack): Promise<void> {
+  void preloadDrumSamples();
+  await initLocalDrumSampleChoices();
   activeDrumModalTrack = trackToFocus;
   activeDrumSampleCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY[trackToFocus];
   pendingDrumLayerSamples = getCurrentDrumLayerSamples();
@@ -1324,7 +1340,7 @@ function createVolumeSlider(): void {
 
       trackButton.addEventListener('click', (event) => {
         event.stopPropagation();
-        openDrumLayerSampleModal(track);
+        void openDrumLayerSampleModal(track);
       });
 
       leftContentEl.appendChild(trackButton);

@@ -24,7 +24,6 @@ import { configureAudioContext } from '@mlt/student-notation-engine';
 import store, { fullRowData, registerColumnMapCallbacks } from '@state/initStore.ts';
 import LayoutService from '@services/layoutService.ts';
 import PitchGridController from '@components/canvas/PitchGrid/pitchGrid.ts';
-import PrintService from '@services/printService.ts';
 import SynthEngine from '@services/initAudio.ts';
 import TransportService from '@services/initTransport.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
@@ -40,7 +39,6 @@ import { enableStateMutationDetection, snapshotState, checkForMutations } from '
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
 import columnMapService, { registerStoreHooks as registerColumnMapHooks } from '@services/columnMapService.ts';
 import { registerStoreHooks as registerPixelMapHooks } from '@services/pixelMapService.ts';
-import { preloadDrumSamples } from '@services/transport/drumManager.ts';
 
 
 
@@ -55,7 +53,6 @@ import { initDrawSystem } from '@/bootstrap/draw/initDrawSystem.ts';
 import { initInputAndDiagnostics } from '@/bootstrap/input/initInputAndDiagnostics.ts';
 import toolbar from '@components/toolbar/toolbar.ts';
 import { mountSvelteComponents, unmountSvelteComponents } from '@/svelte-ui/index.ts';
-import { initLocalDrumSampleChoices } from '@components/canvas/drumGrid/drumGridInteractor.ts';
 import rhythmUI from '@components/canvas/macrobeatTools/rhythmUI.js';
 import sixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
 import tripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.js';
@@ -307,7 +304,6 @@ async function startStudentNotation(): Promise<void> {
     ['detect-device',         1],
     ['configure-audio-ctx',   1],
     ['dom-cache',             1],
-    ['drum-samples',          3],  // network fetch
     // Core state
     ['voice-presets',         1],
     ['pitch-range',           1],
@@ -403,12 +399,6 @@ async function startStudentNotation(): Promise<void> {
     await loadingManager.nextFrame();
 
     // Network fetch — can block
-    initDebug('phase:drum-samples START');
-    loadingManager.updateStatus('Loading drum samples...');
-    await preloadDrumSamples();
-    loadingManager.completeTask('drum-samples');
-    initDebug('phase:drum-samples DONE');
-    await loadingManager.nextFrame();
 
     // Setup user gesture handlers for audio initialization
     const setupAudioGesture = () => {
@@ -661,7 +651,6 @@ async function startStudentNotation(): Promise<void> {
     renderAll();
     PitchGridController.renderMacrobeatTools();
     loadingManager.completeTask('initial-render');
-    void PrintService.prefetchButtonGridSnapshot();
     initDebug('phase:initial-render DONE');
     await loadingManager.nextFrame();
 
@@ -692,7 +681,6 @@ async function startStudentNotation(): Promise<void> {
     initDebug('loading screen removed — app ready');
     // Kick off local drum sample loading AFTER the loading screen is gone.
     // Calling this earlier (at module-eval time) triggers a Vite dev-server full-reload.
-    void initLocalDrumSampleChoices();
 
     // Initialize modulation testing (keep for advanced debugging)
     window.ModulationTest = ModulationTest;

@@ -28,8 +28,13 @@
   const selectedLessonId = $derived(chooserState.state.selectedLessonId);
   const localSettings = $derived(chooserState.state.localSettings);
 
-  // Get lessons for selected category
-  const categoryLessons = $derived(getRegistryEntriesByCategory(selectedCategory));
+  const categoryLessons = $derived.by<RegistryEntry[]>(() => {
+    if (!isVisible) {
+      return [];
+    }
+
+    return getRegistryEntriesByCategory(selectedCategory);
+  });
 
   /**
    * Handle backdrop click

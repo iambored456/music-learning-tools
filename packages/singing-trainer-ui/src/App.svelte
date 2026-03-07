@@ -39,7 +39,7 @@
   import { exerciseState } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
   import { overdubState } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
   import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
-  import { registerTemplates, ALL_LESSONS } from '@mlt/lesson-templates';
+  import { ensureLessonTemplatesRegistered } from './lib/lessonTemplates.js';
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
@@ -135,13 +135,6 @@
 
   // Check for handoff on mount
   onMount(async () => {
-    // Register lesson templates
-    try {
-      registerTemplates(ALL_LESSONS);
-    } catch {
-      // Templates might already be registered.
-    }
-
     const wasHandoff = await handoffState.checkAndConsumeHandoff();
 
     if (wasHandoff) {
@@ -203,6 +196,7 @@
    * Handle starting a workshop template from the workshop chooser modal
    */
   function handleWorkshopStart(exerciseId: string, settings: Record<string, number | boolean>) {
+    ensureLessonTemplatesRegistered();
     overdubExerciseState.loadExercise(exerciseId, settings);
   }
 </script>
