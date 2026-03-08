@@ -3,14 +3,8 @@
 
 interface ImportMetaEnv {
   readonly BASE_URL: string;
-  readonly VITE_APP_TITLE?: string;
 }
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
-}
-
-declare module '*.svg?url' {
-  const src: string;
-  export default src;
 }

@@ -106,31 +106,20 @@ body {
   overflow: hidden;
 }
 
-.vm-home-orbit {
-  position: absolute;
-  border-radius: 999px;
-  border: 1px solid rgba(219, 237, 255, 0.24);
-}
-
-.vm-home-orbit--outer {
-  width: 2.2rem;
-  height: 2.2rem;
-  transform: rotate(28deg);
-}
-
-.vm-home-orbit--inner {
-  width: 1.42rem;
-  height: 2.35rem;
-  border-color: rgba(99, 227, 191, 0.42);
-  transform: rotate(-28deg);
-}
-
-.vm-home-core {
-  width: 0.62rem;
-  height: 0.62rem;
-  border-radius: 50%;
+.vm-home-glyph {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: block;
   background: linear-gradient(135deg, var(--accent-coral), var(--accent-mint));
-  box-shadow: 0 0 18px rgba(99, 227, 191, 0.45);
+  box-shadow: 0 0 18px rgba(99, 227, 191, 0.28);
+  -webkit-mask-image: url('./assets/home-icon.svg');
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-image: url('./assets/home-icon.svg');
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
 }
 
 .vm-home-copy {

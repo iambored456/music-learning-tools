@@ -62,7 +62,6 @@
 
   async function handleDroneToggle() {
     await toggleDrone();
-    appState.toggleDrone();
   }
 
   function handleDroneOctaveChange(event: Event) {

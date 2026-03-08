@@ -195,6 +195,28 @@ body {
   filter: brightness(0) invert(1);
 }
 
+.transport-icon-mask {
+  width: 20px;
+  height: 20px;
+  display: block;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+.home-btn {
+  text-decoration: none;
+}
+
+.home-btn-icon {
+  -webkit-mask-image: url('./assets/home-icon.svg');
+  mask-image: url('./assets/home-icon.svg');
+}
+
 
 .controls-group label {
   font-size: 0.8rem;
@@ -1487,6 +1509,10 @@ body {
 
   .pickup-controls button {
     min-width: 44px;
+  }
+
+  .notebank-panel .token-hitbox {
+    touch-action: pan-y;
   }
 
   .macrobeat-cell {

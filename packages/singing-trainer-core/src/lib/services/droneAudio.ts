@@ -269,11 +269,13 @@ export async function startDrone(): Promise<void> {
       setTanpuraPitch(note);
       activeEngine = 'tanpura';
       isPlaying = true;
+      appState.setDronePlaying(true);
       return;
     }
   }
 
   startSynth(note);
+  appState.setDronePlaying(true);
 }
 
 /**
@@ -288,6 +290,7 @@ export function stopDrone(): void {
   currentFineTuneCents = null;
   activeEngine = null;
   isPlaying = false;
+  appState.setDronePlaying(false);
 }
 
 /**

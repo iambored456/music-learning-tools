@@ -20,6 +20,7 @@
     type TonicValue,
   } from '@mlt/boomwhacker-sketchpad-core';
 
+  const hubHref = new URL('..', `https://music-learning-tools.local${import.meta.env.BASE_URL}`).pathname;
 
   type NoteShape = 'oval' | 'diamond' | 'circle';
 
@@ -91,6 +92,14 @@
     rowIndex?: number;
     cellIndex?: number;
     noteIndex?: number;
+  };
+
+  type PendingBankTouchActivation = {
+    pointerId: number;
+    noteId: string;
+    shape: NoteShape;
+    startX: number;
+    startY: number;
   };
 
   type GridCellRef = {
@@ -244,6 +253,7 @@
   const PICKUP_RENDER_DEBUG = false;
   const MOBILE_LAYOUT_DEBUG = true;
   const TEMPO_SLIDER_LAYOUT_DEBUG = false;
+  const BANK_TOUCH_TAP_MAX_MOVEMENT_PX = 12;
   const VIEWPORT_FIT_HEIGHT_MAX = 1100;
   const VIEWPORT_FIT_WIDTH_MIN = 700;
   const ADAPTIVE_LAYOUT_DEFAULT: AdaptiveLayoutConfig = {
@@ -310,6 +320,8 @@
   let tapPlacementPayload: DragPayload | null = null;
   let cursorPreview: { note: PlacedNote; x: number; y: number } | null = null;
   let cursorOverCanvas = false;
+  let pendingBankTouchActivation: PendingBankTouchActivation | null = null;
+  let suppressNextBankClick = false;
   let pickupPreviewLogKey: string | null = null;
   let mobileLayoutLogKey: string | null = null;
   let adaptiveLayoutLogKey: string | null = null;
@@ -352,6 +364,7 @@
   let canvasHistoryPointer = -1;
   let suppressCanvasHistoryTracking = false;
   let syncedToolbarPanelHeightPx: number | null = null;
+  let bankNativeDragEnabled = true;
 
   let pickupBeats = 0;
   let pickupRow: GridRow = createEmptyRow('pickup');
@@ -430,6 +443,9 @@
     window.addEventListener('keydown', handleGlobalKeyDown);
     window.addEventListener('keyup', handleGlobalKeyUp);
     window.addEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
+    window.addEventListener('pointermove', handleWindowPointerMoveForBankActivation);
+    window.addEventListener('pointerup', handleWindowPointerUpForBankActivation);
+    window.addEventListener('pointercancel', handleWindowPointerCancelForBankActivation);
     const handleViewportDiagnostics = () => {
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
@@ -494,6 +510,9 @@
       window.removeEventListener('keydown', handleGlobalKeyDown);
       window.removeEventListener('keyup', handleGlobalKeyUp);
       window.removeEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
+      window.removeEventListener('pointermove', handleWindowPointerMoveForBankActivation);
+      window.removeEventListener('pointerup', handleWindowPointerUpForBankActivation);
+      window.removeEventListener('pointercancel', handleWindowPointerCancelForBankActivation);
       window.removeEventListener('resize', handleViewportDiagnostics);
       window.removeEventListener('orientationchange', handleViewportDiagnostics);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportDiagnostics);
@@ -1611,16 +1630,20 @@
   function handleBankTokenPointerDown(event: PointerEvent, noteId: string, shape: NoteShape): void {
     if (eraserMode) return;
     if (!isTouchLikePointerEvent(event)) return;
+    if (bankNativeDragEnabled) return;
 
-    event.preventDefault();
-    const armed = armTapPlacementSelection(noteId, shape);
-    if (armed) {
-      void previewBankNote(noteId);
-    }
+    pendingBankTouchActivation = {
+      pointerId: event.pointerId,
+      noteId,
+      shape,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
   }
 
   function handleBankTokenMouseDown(event: MouseEvent, noteId: string, shape: NoteShape): void {
     if (eraserMode) return;
+    if (!bankNativeDragEnabled) return;
     if (event.button !== 0) return;
 
     const note = createPlacedNote(noteId, shape);
@@ -1638,6 +1661,47 @@
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+  }
+
+  function handleBankTokenClick(event: MouseEvent, noteId: string): void {
+    if (suppressNextBankClick) {
+      suppressNextBankClick = false;
+      event.preventDefault();
+      return;
+    }
+
+    void previewBankNote(noteId);
+  }
+
+  function handleWindowPointerMoveForBankActivation(event: PointerEvent): void {
+    if (!pendingBankTouchActivation) return;
+    if (event.pointerId !== pendingBankTouchActivation.pointerId) return;
+
+    const deltaX = event.clientX - pendingBankTouchActivation.startX;
+    const deltaY = event.clientY - pendingBankTouchActivation.startY;
+    if (Math.hypot(deltaX, deltaY) >= BANK_TOUCH_TAP_MAX_MOVEMENT_PX) {
+      pendingBankTouchActivation = null;
+    }
+  }
+
+  function handleWindowPointerUpForBankActivation(event: PointerEvent): void {
+    if (!pendingBankTouchActivation) return;
+    if (event.pointerId !== pendingBankTouchActivation.pointerId) return;
+
+    const { noteId, shape } = pendingBankTouchActivation;
+    pendingBankTouchActivation = null;
+    suppressNextBankClick = true;
+
+    const armed = armTapPlacementSelection(noteId, shape);
+    if (armed) {
+      void previewBankNote(noteId);
+    }
+  }
+
+  function handleWindowPointerCancelForBankActivation(event: PointerEvent): void {
+    if (!pendingBankTouchActivation) return;
+    if (event.pointerId !== pendingBankTouchActivation.pointerId) return;
+    pendingBankTouchActivation = null;
   }
 
   function handleCursorGhostDragOver(event: DragEvent): void {
@@ -1868,6 +1932,10 @@
       event.preventDefault();
       return;
     }
+    if (!bankNativeDragEnabled) {
+      event.preventDefault();
+      return;
+    }
 
     const note = createPlacedNote(noteId, shape);
     if (!note) return;
@@ -1924,6 +1992,7 @@
     dragOverCell = null;
     cursorPreview = null;
     cursorOverCanvas = false;
+    pendingBankTouchActivation = null;
     pickupPreviewLogKey = null;
     debugPickupRender('Drag ended; pickup preview state cleared.');
   }
@@ -2190,10 +2259,17 @@
   function updateTapPlacementHintVisibility(): void {
     if (typeof window === 'undefined') {
       showTapPlacementHint = true;
+      bankNativeDragEnabled = true;
       return;
     }
 
-    showTapPlacementHint = !window.matchMedia('(any-pointer: coarse)').matches;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    showTapPlacementHint = coarsePointer;
+    bankNativeDragEnabled = !coarsePointer;
+    if (bankNativeDragEnabled) {
+      pendingBankTouchActivation = null;
+      suppressNextBankClick = false;
+    }
   }
 
   function shouldSyncToolbarPanelHeight(): boolean {
@@ -3705,6 +3781,14 @@
     </div>
 
     <div class="controls-group settings-group">
+      <a
+        class="transport-btn home-btn"
+        href={hubHref}
+        title="Back to home"
+        aria-label="Back to home"
+      >
+        <span class="transport-icon-mask home-btn-icon" aria-hidden="true"></span>
+      </a>
       <button type="button" class="transport-btn share-btn" on:click={handleShare} title="Share composition" aria-label="Share composition">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="18" cy="5" r="3"/>
@@ -3767,10 +3851,10 @@
                     <button
                       type="button"
                       class="token-hitbox single sharp"
-                      draggable="true"
+                      draggable={bankNativeDragEnabled}
                       title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                       aria-label={`Add ${token.label} quarter sharp`}
-                      on:click={() => previewBankNote(token.noteId)}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
@@ -3796,10 +3880,10 @@
                     <button
                       type="button"
                       class="token-hitbox single natural"
-                      draggable="true"
+                      draggable={bankNativeDragEnabled}
                       title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                       aria-label={`Add ${token.label} quarter`}
-                      on:click={() => previewBankNote(token.noteId)}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
@@ -3825,10 +3909,10 @@
                     <button
                       type="button"
                       class="token-hitbox single flat"
-                      draggable="true"
+                      draggable={bankNativeDragEnabled}
                       title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                       aria-label={`Add ${token.label} quarter flat`}
-                      on:click={() => previewBankNote(token.noteId)}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
@@ -3863,10 +3947,10 @@
                     <button
                       type="button"
                       class="token-hitbox single sharp"
-                      draggable="true"
+                      draggable={bankNativeDragEnabled}
                       title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                       aria-label={`Add ${token.label} oval sharp`}
-                      on:click={() => previewBankNote(token.noteId)}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
@@ -3892,10 +3976,10 @@
                     <button
                       type="button"
                       class="token-hitbox single natural"
-                      draggable="true"
+                      draggable={bankNativeDragEnabled}
                       title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                       aria-label={`Add ${token.label} oval`}
-                      on:click={() => previewBankNote(token.noteId)}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
@@ -3921,10 +4005,10 @@
                     <button
                       type="button"
                       class="token-hitbox single flat"
-                      draggable="true"
+                      draggable={bankNativeDragEnabled}
                       title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                       aria-label={`Add ${token.label} oval flat`}
-                      on:click={() => previewBankNote(token.noteId)}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
@@ -3963,10 +4047,10 @@
               <button
                 type="button"
                 class="token-hitbox single sharp"
-                draggable="true"
+                draggable={bankNativeDragEnabled}
                 title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                 aria-label={`Add ${token.label} sixteenth sharp`}
-                on:click={() => previewBankNote(token.noteId)}
+                on:click={(event) => handleBankTokenClick(event, token.noteId)}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
                 on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
@@ -3992,10 +4076,10 @@
               <button
                 type="button"
                 class="token-hitbox single natural"
-                draggable="true"
+                draggable={bankNativeDragEnabled}
                 title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                 aria-label={`Add ${token.label} sixteenth`}
-                on:click={() => previewBankNote(token.noteId)}
+                on:click={(event) => handleBankTokenClick(event, token.noteId)}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
                 on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
@@ -4021,10 +4105,10 @@
               <button
                 type="button"
                 class="token-hitbox single flat"
-                draggable="true"
+                draggable={bankNativeDragEnabled}
                 title={`${token.label} (${notePitchTooltip(token.noteId)})`}
                 aria-label={`Add ${token.label} sixteenth flat`}
-                on:click={() => previewBankNote(token.noteId)}
+                on:click={(event) => handleBankTokenClick(event, token.noteId)}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
                 on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}

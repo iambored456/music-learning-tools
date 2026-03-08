@@ -24,7 +24,6 @@
 
   async function handleToggle() {
     await toggleDrone();
-    appState.toggleDrone();
   }
 
   function handleTonicChange(event: Event) {

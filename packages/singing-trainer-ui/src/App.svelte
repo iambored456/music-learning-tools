@@ -40,6 +40,9 @@
   import { overdubState } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
   import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
   import { ensureLessonTemplatesRegistered } from './lib/lessonTemplates.js';
+  import homeIconUrl from './lib/assets/home-icon.svg?url';
+
+  const hubHref = import.meta.env.BASE_URL;
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
@@ -211,7 +214,12 @@
   <main class="main">
     <aside class="sidebar sidebar--left">
       <div class="sidebar-header">
-        <h1 class="sidebar-title">Singing Trainer</h1>
+        <div class="sidebar-title-row">
+          <a class="home-link" href={hubHref} aria-label="Back to home" title="Back to home">
+            <span class="home-link-icon" aria-hidden="true" style={`--home-icon-url: url("${homeIconUrl}")`}></span>
+          </a>
+          <h1 class="sidebar-title">Singing Trainer</h1>
+        </div>
         {#if hasImportedSnapshot}
           <div class="handoff-controls">
             <div class="transposition-control">
@@ -369,12 +377,54 @@
     gap: var(--spacing-sm);
   }
 
+  .sidebar-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    min-width: 0;
+  }
+
   .sidebar-title {
     margin: 0;
     font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--color-text);
     line-height: 1.1;
+  }
+
+  .home-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    color: var(--color-text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .home-link:hover {
+    color: #fff;
+    border-color: rgba(95, 149, 255, 0.65);
+    background: rgba(95, 149, 255, 0.18);
+  }
+
+  .home-link-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    display: block;
+    background-color: currentColor;
+    -webkit-mask-image: var(--home-icon-url);
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+    mask-image: var(--home-icon-url);
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
   }
 
   .control-group {

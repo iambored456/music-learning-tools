@@ -294,6 +294,10 @@ function createAppState() {
       state.drone = { ...state.drone, isPlaying: !state.drone.isPlaying };
     },
 
+    setDronePlaying(isPlaying: boolean) {
+      state.drone = { ...state.drone, isPlaying };
+    },
+
     setDroneOctave(octave: number) {
       state.drone = { ...state.drone, octave };
     },

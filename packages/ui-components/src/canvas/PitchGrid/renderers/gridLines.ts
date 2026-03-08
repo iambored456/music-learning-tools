@@ -83,11 +83,12 @@ const EMPHASIZED_DASHED_INTERVAL = 4; // Legacy E line
 const FILLED_INTERVAL = 7; // Legacy G row
 
 const BASE_C_LINE_WIDTH = 3.33;
-const EMPHASIZED_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.5;
-const LINE_STYLE_EMPHASIZED_SOLID = { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [] as number[], color: '#adb5bd' };
-const LINE_STYLE_EMPHASIZED_DASHED = { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [5, 5], color: '#adb5bd' };
+const TONIC_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.9;
+const EMPHASIZED_DASHED_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.5;
+const LINE_STYLE_EMPHASIZED_SOLID = { lineWidth: TONIC_LINE_WIDTH, dash: [] as number[], color: '#adb5bd' };
+const LINE_STYLE_EMPHASIZED_DASHED = { lineWidth: EMPHASIZED_DASHED_LINE_WIDTH, dash: [5, 5], color: '#adb5bd' };
 const LINE_STYLE_DEFAULT = { lineWidth: 1, dash: [] as number[], color: '#ced4da' };
-const LINE_STYLE_FILLED = { lineWidth: 1, dash: [] as number[], color: 'rgba(222, 226, 230, 0.42)' };
+const LINE_STYLE_FILLED = { lineWidth: 1, dash: [] as number[], color: 'rgba(222, 226, 230, 0.24)' };
 
 function normalizePitchClass(value: number): number {
   const rounded = Math.round(value);

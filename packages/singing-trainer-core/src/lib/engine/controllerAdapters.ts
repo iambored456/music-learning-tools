@@ -109,9 +109,10 @@ let currentTempo = 108;
 export function createAudioControllerAdapter(): AudioController {
   return {
     setDroneOn(on: boolean): void {
-      if (on && !appState.state.drone.isPlaying) {
-        droneAudio.startDrone();
-      } else if (!on && appState.state.drone.isPlaying) {
+      const dronePlaying = droneAudio.isDronePlaying();
+      if (on && !dronePlaying) {
+        void droneAudio.startDrone();
+      } else if (!on && dronePlaying) {
         droneAudio.stopDrone();
       }
     },
@@ -119,7 +120,7 @@ export function createAudioControllerAdapter(): AudioController {
     setDronePitch(tonic: string, octave: number): void {
       appState.setTonic(tonic as TonicNote);
       appState.setDroneOctave(octave);
-      if (appState.state.drone.isPlaying) {
+      if (droneAudio.isDronePlaying()) {
         droneAudio.updateDrone();
       }
     },
@@ -162,7 +163,7 @@ export function createAudioControllerAdapter(): AudioController {
     },
     stopAll(): void {
       referenceAudio.stop();
-      if (appState.state.drone.isPlaying) {
+      if (droneAudio.isDronePlaying()) {
         droneAudio.stopDrone();
       }
     },

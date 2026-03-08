@@ -998,44 +998,58 @@ function drawGradientTargetNote(
 
   const glowColor = isBeingHit ? '#FFD700' : baseColor;
   const outlineColor = isBeingHit ? '#FFE082' : baseColor;
-  const outerGradient = ctx.createLinearGradient(0, centerY - radiusY, 0, centerY + radiusY);
-  outerGradient.addColorStop(0, colorToRgbaString(glowColor, 0));
-  outerGradient.addColorStop(0.22, colorToRgbaString(glowColor, isBeingHit ? 0.24 : 0.14));
-  outerGradient.addColorStop(0.5, colorToRgbaString(glowColor, isBeingHit ? 0.52 : (isGolden ? 0.44 : 0.34)));
-  outerGradient.addColorStop(0.78, colorToRgbaString(glowColor, isBeingHit ? 0.24 : 0.14));
-  outerGradient.addColorStop(1, colorToRgbaString(glowColor, 0));
+
+  // Build the note from layered center-out gradients, then restore the visible
+  // outline stroke around the pill.
+  const fillGradient = ctx.createLinearGradient(0, centerY - radiusY, 0, centerY + radiusY);
+  fillGradient.addColorStop(0, colorToRgbaString(glowColor, 0));
+  fillGradient.addColorStop(0.12, colorToRgbaString(glowColor, isBeingHit ? 0.18 : (isGolden ? 0.14 : 0.12)));
+  fillGradient.addColorStop(0.3, colorToRgbaString(glowColor, isBeingHit ? 0.6 : (isGolden ? 0.5 : 0.42)));
+  fillGradient.addColorStop(0.5, colorToRgbaString(glowColor, isBeingHit ? 1 : (isGolden ? 0.94 : 0.88)));
+  fillGradient.addColorStop(0.7, colorToRgbaString(glowColor, isBeingHit ? 0.6 : (isGolden ? 0.5 : 0.42)));
+  fillGradient.addColorStop(0.88, colorToRgbaString(glowColor, isBeingHit ? 0.18 : (isGolden ? 0.14 : 0.12)));
+  fillGradient.addColorStop(1, colorToRgbaString(glowColor, 0));
 
   ctx.save();
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = isBeingHit ? 22 : (isGolden ? 18 : 14);
-  ctx.fillStyle = outerGradient;
-  ctx.fill(notePath);
+  ctx.clip(notePath);
+  ctx.fillStyle = fillGradient;
+  ctx.fillRect(startX, centerY - radiusY - 1, noteWidth, (radiusY * 2) + 2);
   ctx.restore();
 
-  const coreHalfHeight = Math.max(2, radiusY * 0.36);
-  const coreGradient = ctx.createLinearGradient(0, centerY - coreHalfHeight * 2, 0, centerY + coreHalfHeight * 2);
+  const coreHalfHeight = Math.max(2, radiusY * 0.22);
+  const coreGradient = ctx.createLinearGradient(
+    0,
+    centerY - coreHalfHeight,
+    0,
+    centerY + coreHalfHeight,
+  );
   coreGradient.addColorStop(0, colorToRgbaString(glowColor, 0));
-  coreGradient.addColorStop(0.24, colorToRgbaString(glowColor, isBeingHit ? 0.72 : (isGolden ? 0.62 : 0.54)));
-  coreGradient.addColorStop(0.5, colorToRgbaString(glowColor, isBeingHit ? 0.98 : (isGolden ? 0.9 : 0.82)));
-  coreGradient.addColorStop(0.76, colorToRgbaString(glowColor, isBeingHit ? 0.72 : (isGolden ? 0.62 : 0.54)));
+  coreGradient.addColorStop(0.18, colorToRgbaString(glowColor, isBeingHit ? 0.36 : (isGolden ? 0.28 : 0.24)));
+  coreGradient.addColorStop(0.5, colorToRgbaString(glowColor, isBeingHit ? 1 : (isGolden ? 0.98 : 0.94)));
+  coreGradient.addColorStop(0.82, colorToRgbaString(glowColor, isBeingHit ? 0.36 : (isGolden ? 0.28 : 0.24)));
   coreGradient.addColorStop(1, colorToRgbaString(glowColor, 0));
 
   ctx.save();
   ctx.clip(notePath);
   ctx.fillStyle = coreGradient;
-  ctx.fillRect(startX, centerY - radiusY - 16, noteWidth, (radiusY * 2) + 32);
+  ctx.fillRect(startX, centerY - coreHalfHeight - 1, noteWidth, (coreHalfHeight * 2) + 2);
   ctx.restore();
 
-  const bandHalfHeight = Math.max(1.5, radiusY * 0.2);
-  const bandGradient = ctx.createLinearGradient(0, centerY - bandHalfHeight, 0, centerY + bandHalfHeight);
-  bandGradient.addColorStop(0, colorToRgbaString('#FFFFFF', isBeingHit ? 0.24 : 0.14));
-  bandGradient.addColorStop(0.5, colorToRgbaString('#FFFFFF', isBeingHit ? 0.45 : 0.28));
-  bandGradient.addColorStop(1, colorToRgbaString('#FFFFFF', isBeingHit ? 0.24 : 0.14));
+  const highlightHalfHeight = Math.max(1, radiusY * 0.08);
+  const highlightGradient = ctx.createLinearGradient(
+    0,
+    centerY - highlightHalfHeight,
+    0,
+    centerY + highlightHalfHeight,
+  );
+  highlightGradient.addColorStop(0, colorToRgbaString('#FFFFFF', 0));
+  highlightGradient.addColorStop(0.5, colorToRgbaString('#FFFFFF', isBeingHit ? 0.34 : 0.22));
+  highlightGradient.addColorStop(1, colorToRgbaString('#FFFFFF', 0));
 
   ctx.save();
   ctx.clip(notePath);
-  ctx.fillStyle = bandGradient;
-  ctx.fillRect(startX, centerY - bandHalfHeight, noteWidth, bandHalfHeight * 2);
+  ctx.fillStyle = highlightGradient;
+  ctx.fillRect(startX, centerY - highlightHalfHeight - 1, noteWidth, (highlightHalfHeight * 2) + 2);
   ctx.restore();
 
   ctx.save();

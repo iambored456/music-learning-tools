@@ -91,7 +91,12 @@
 
 <div class="app">
   <header class="app-header">
-    <h1>Grand Frequency Staff</h1>
+    <div class="title-row">
+      <a class="home-link" href="../" aria-label="Back to home" title="Back to home">
+        <span class="home-link-icon" aria-hidden="true"></span>
+      </a>
+      <h1>Grand Frequency Staff</h1>
+    </div>
     <div class="family-filters">
       {#each FAMILIES as family}
         <button
@@ -276,12 +281,55 @@
     flex-wrap: wrap;
   }
 
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
   h1 {
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
     color: #8fa9ff;
     white-space: nowrap;
+  }
+
+  .home-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    color: #c9dbff;
+    text-decoration: none;
+    border: 1px solid rgba(143, 169, 255, 0.18);
+    background: rgba(143, 169, 255, 0.08);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .home-link:hover {
+    color: #ffffff;
+    border-color: rgba(143, 169, 255, 0.42);
+    background: rgba(143, 169, 255, 0.18);
+  }
+
+  .home-link-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    display: block;
+    background-color: currentColor;
+    -webkit-mask-image: url('./assets/home-icon.svg');
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+    mask-image: url('./assets/home-icon.svg');
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
   }
 
   .family-filters {

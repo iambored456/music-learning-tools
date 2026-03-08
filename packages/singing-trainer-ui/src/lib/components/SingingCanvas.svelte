@@ -537,6 +537,118 @@
       ?? parseHexColorToRgb(trail.color);
   }
 
+  function getClosestRowIndexForMidi(midi: number): number | null {
+    if (!Number.isFinite(midi)) return null;
+    let closestIndex: number | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < fullRowData.length; index++) {
+      const rowMidi = fullRowData[index]?.midi;
+      if (typeof rowMidi !== 'number' || !Number.isFinite(rowMidi)) continue;
+      const distance = Math.abs(rowMidi - midi);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    }
+
+    return closestIndex;
+  }
+
+  function getWaitgateArrowTargetY(note: SharedTargetNote, coords: CoordinateUtils): number | null {
+    if (typeof note.midi === 'number' && Number.isFinite(note.midi)) {
+      const rowIndex = getClosestRowIndexForMidi(note.midi);
+      return rowIndex === null ? null : coords.getRowY(rowIndex);
+    }
+
+    if (typeof note.minMidi === 'number' && typeof note.maxMidi === 'number') {
+      const centerMidi = (note.minMidi + note.maxMidi) / 2;
+      const rowIndex = getClosestRowIndexForMidi(centerMidi);
+      return rowIndex === null ? null : coords.getRowY(rowIndex);
+    }
+
+    if (typeof note.minMidi === 'number' && Number.isFinite(note.minMidi)) {
+      const rowIndex = getClosestRowIndexForMidi(note.minMidi);
+      return rowIndex === null ? null : coords.getRowY(rowIndex);
+    }
+
+    if (typeof note.maxMidi === 'number' && Number.isFinite(note.maxMidi)) {
+      const rowIndex = getClosestRowIndexForMidi(note.maxMidi);
+      return rowIndex === null ? null : coords.getRowY(rowIndex);
+    }
+
+    return containerHeight / 2;
+  }
+
+  function drawWaitgateGuideArrow(
+    ctx: CanvasRenderingContext2D,
+    coords: CoordinateUtils,
+    config: HighwayModeConfig,
+    currentTime: number,
+  ): void {
+    if (!highwayState.state.isWaitingForInput) return;
+    const waitingNoteId = highwayState.state.waitingNoteId;
+    if (!waitingNoteId) return;
+
+    const targetNotes = config.targetNotes ?? [];
+    const waitingNote = targetNotes.find((note) => note.id === waitingNoteId);
+    if (!waitingNote) return;
+
+    const targetY = getWaitgateArrowTargetY(waitingNote, coords);
+    if (targetY === null || !Number.isFinite(targetY)) return;
+    if (targetY < -viewportWindow.cellHeight || targetY > containerHeight + viewportWindow.cellHeight) return;
+
+    const noteHeightPx = viewportWindow.cellHeight;
+    const pixelsPerSecond = Math.max(1, config.pixelsPerSecond ?? 200);
+    const noteWidthPx = Math.max(
+      noteHeightPx * 0.8,
+      (Math.max(0, waitingNote.durationMs) / 1000) * pixelsPerSecond,
+    );
+    const arrowScalePx = clampNumber(
+      Math.min(noteWidthPx, noteHeightPx * 2.4),
+      noteHeightPx * 0.8,
+      noteHeightPx * 2.4,
+    );
+    const pulse = 0.78 + (((Math.sin(currentTime / 180) + 1) / 2) * 0.22);
+    const lineWidth = clampNumber(arrowScalePx * 0.18, 2.5, 7.5);
+    const arrowHeadLength = clampNumber(arrowScalePx * 0.9, 12, 32);
+    const tipX = clampNumber(Math.round(config.nowLineX) - 2, arrowHeadLength + 8, Math.max(arrowHeadLength + 8, gridWidth - 2));
+    const bodyEndX = Math.max(0, tipX - arrowHeadLength);
+    const arrowHalfHeight = clampNumber(arrowScalePx * 0.36, 6, 18);
+    const anchorRadius = clampNumber(arrowScalePx * 0.14, 1.8, 6);
+
+    ctx.save();
+    ctx.shadowColor = `rgba(255, 191, 71, ${0.45 * pulse})`;
+    ctx.shadowBlur = clampNumber(arrowScalePx * 0.45, 8, 16);
+
+    const lineGradient = ctx.createLinearGradient(0, 0, tipX, 0);
+    lineGradient.addColorStop(0, `rgba(255, 234, 181, ${0.46 * pulse})`);
+    lineGradient.addColorStop(0.72, `rgba(255, 205, 96, ${0.9 * pulse})`);
+    lineGradient.addColorStop(1, `rgba(255, 163, 71, ${0.98 * pulse})`);
+
+    ctx.strokeStyle = lineGradient;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, targetY);
+    ctx.lineTo(bodyEndX, targetY);
+    ctx.stroke();
+
+    ctx.fillStyle = `rgba(255, 196, 82, ${0.96 * pulse})`;
+    ctx.beginPath();
+    ctx.moveTo(tipX, targetY);
+    ctx.lineTo(bodyEndX, targetY - arrowHalfHeight);
+    ctx.lineTo(bodyEndX, targetY + arrowHalfHeight);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(255, 243, 214, ${0.88 * pulse})`;
+    ctx.beginPath();
+    ctx.arc(anchorRadius, targetY, anchorRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function normalizeWheelDelta(delta: number, deltaMode: number): number {
     if (deltaMode === WheelEvent.DOM_DELTA_LINE) return delta * 16;
     if (deltaMode === WheelEvent.DOM_DELTA_PAGE) return delta * Math.max(1, containerHeight);
@@ -811,8 +923,6 @@
       drawPersistentOverdubTrailsInTimeline(trailCtx, highwayConfig, syncedTrailConfig);
     }
 
-    if (trailHistoryForRender.length === 0) return;
-
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight: viewportWindow.cellHeight,
       viewportWidth: gridWidth,
@@ -823,14 +933,20 @@
       trailConfig: syncedTrailConfig,
     };
 
-    drawUserPitchTrace(
-      trailCtx,
-      coords,
-      trailHistoryForRender,
-      trailCurrentTime,
-      userPitchConfig,
-      fullRowData
-    );
+    if (trailHistoryForRender.length > 0) {
+      drawUserPitchTrace(
+        trailCtx,
+        coords,
+        trailHistoryForRender,
+        trailCurrentTime,
+        userPitchConfig,
+        fullRowData
+      );
+    }
+
+    if (mode === 'highway' && highwayConfig) {
+      drawWaitgateGuideArrow(trailCtx, coords, highwayConfig, currentTime);
+    }
   }
 
   function drawPersistentOverdubTrailsInTimeline(
