@@ -83,7 +83,8 @@ export function createNoteHighwayService(
 
   // Track which notes have entered/exited judgment window
   const notesInWindow = new Set<string>();
-  const waitSatisfiedNotes = new Set<string>();
+  const waitSatisfiedCheckpoints = new Set<string>();
+  let activeWaitCheckpointKey: string | null = null;
   let waitStartedAtPerf: number | null = null;
 
   // ============================================================================
@@ -179,40 +180,100 @@ export function createNoteHighwayService(
     return true;
   }
 
-  function getWaitCandidateNote(): HighwayTargetNote | null {
+  function getWaitCheckpointKey(noteId: string, checkpointIndex: number): string {
+    return `${noteId}::${checkpointIndex}`;
+  }
+
+  function getWaitCheckpointOffsets(note: HighwayTargetNote): number[] {
+    const offsets: number[] = [];
+
+    if (note.waitForInput) {
+      offsets.push(0);
+    }
+
+    if (Array.isArray(note.extraWaitForInputOffsetsMs)) {
+      for (const offset of note.extraWaitForInputOffsetsMs) {
+        if (!Number.isFinite(offset)) continue;
+        const roundedOffset = Math.round(offset);
+        if (roundedOffset <= 0) continue;
+        if (roundedOffset >= note.durationMs) continue;
+        offsets.push(roundedOffset);
+      }
+    }
+
+    return [...new Set(offsets)].sort((a, b) => a - b);
+  }
+
+  function getWaitCandidateNote(): {
+    note: HighwayTargetNote;
+    checkpointKey: string;
+    checkpointTimeMs: number;
+  } | null {
     if (!finalConfig.waitForInput || !state.onrampComplete) {
       return null;
     }
 
     const tolerance = finalConfig.feedbackConfig.onsetToleranceMs;
     for (const note of state.targetNotes) {
-      if (!note.waitForInput || waitSatisfiedNotes.has(note.id)) {
+      const checkpointOffsets = getWaitCheckpointOffsets(note);
+      if (checkpointOffsets.length === 0) {
         continue;
       }
       const noteEndMs = note.startTimeMs + note.durationMs + tolerance;
-      if (state.currentTimeMs >= note.startTimeMs && state.currentTimeMs <= noteEndMs) {
-        return note;
+
+      if (state.currentTimeMs > noteEndMs) {
+        continue;
+      }
+
+      for (let checkpointIndex = 0; checkpointIndex < checkpointOffsets.length; checkpointIndex++) {
+        const checkpointOffsetMs = checkpointOffsets[checkpointIndex];
+        const checkpointKey = getWaitCheckpointKey(note.id, checkpointIndex);
+        if (waitSatisfiedCheckpoints.has(checkpointKey)) {
+          continue;
+        }
+
+        const checkpointTimeMs = note.startTimeMs + checkpointOffsetMs;
+        if (state.currentTimeMs < checkpointTimeMs) {
+          break;
+        }
+
+        return {
+          note,
+          checkpointKey,
+          checkpointTimeMs,
+        };
       }
     }
     return null;
   }
 
-  function beginWait(note: HighwayTargetNote): void {
+  function beginWait(
+    note: HighwayTargetNote,
+    checkpointTimeMs: number,
+    checkpointKey: string,
+  ): void {
     if (state.isWaitingForInput) return;
-    state.currentTimeMs = note.startTimeMs;
+    state.currentTimeMs = checkpointTimeMs;
     state.scrollOffset = calculateScrollOffset(state.currentTimeMs);
     state.isWaitingForInput = true;
     state.waitingNoteId = note.id;
+    activeWaitCheckpointKey = checkpointKey;
     waitStartedAtPerf = performance.now();
-    eventCallbacks.emit('waitStarted', { noteId: note.id, note });
+    eventCallbacks.emit('waitStarted', { noteId: note.id, note, checkpointTimeMs });
     logger?.info('NoteHighway', `Wait started for note: ${note.id}`, {
       noteId: note.id,
+      checkpointKey,
+      checkpointTimeMs,
       targetKind: note.targetKind,
     });
   }
 
-  function endWait(noteId: string, note: HighwayTargetNote): void {
-    if (!state.isWaitingForInput || state.waitingNoteId !== noteId) {
+  function endWait(noteId: string, checkpointKey: string, note: HighwayTargetNote): void {
+    if (
+      !state.isWaitingForInput ||
+      state.waitingNoteId !== noteId ||
+      activeWaitCheckpointKey !== checkpointKey
+    ) {
       return;
     }
     if (state.startTime !== null && waitStartedAtPerf !== null) {
@@ -221,11 +282,13 @@ export function createNoteHighwayService(
     }
     state.isWaitingForInput = false;
     state.waitingNoteId = null;
+    activeWaitCheckpointKey = null;
     waitStartedAtPerf = null;
-    waitSatisfiedNotes.add(noteId);
+    waitSatisfiedCheckpoints.add(checkpointKey);
     eventCallbacks.emit('waitEnded', { noteId, note });
     logger?.info('NoteHighway', `Wait ended for note: ${noteId}`, {
       noteId,
+      checkpointKey,
       targetKind: note.targetKind,
     });
   }
@@ -371,7 +434,7 @@ export function createNoteHighwayService(
     if (!state.isWaitingForInput) {
       const waitNote = getWaitCandidateNote();
       if (waitNote) {
-        beginWait(waitNote);
+        beginWait(waitNote.note, waitNote.checkpointTimeMs, waitNote.checkpointKey);
       }
     }
 
@@ -419,10 +482,11 @@ export function createNoteHighwayService(
       state.startTime = performance.now();
       state.isWaitingForInput = false;
       state.waitingNoteId = null;
+      activeWaitCheckpointKey = null;
       waitStartedAtPerf = null;
 
       notesInWindow.clear();
-      waitSatisfiedNotes.clear();
+      waitSatisfiedCheckpoints.clear();
       feedbackCollector.reset();
 
       startAnimation();
@@ -464,10 +528,11 @@ export function createNoteHighwayService(
       state.startTime = null;
       state.isWaitingForInput = false;
       state.waitingNoteId = null;
+      activeWaitCheckpointKey = null;
       waitStartedAtPerf = null;
 
       notesInWindow.clear();
-      waitSatisfiedNotes.clear();
+      waitSatisfiedCheckpoints.clear();
       stopAnimation();
       visualCallbacks?.clearCanvas?.();
       visualCallbacks?.clearOnrampCountdown?.();
@@ -487,6 +552,7 @@ export function createNoteHighwayService(
       state.scrollOffset = calculateScrollOffset(timeMs);
       state.isWaitingForInput = false;
       state.waitingNoteId = null;
+      activeWaitCheckpointKey = null;
       waitStartedAtPerf = null;
 
       if (state.isPlaying) {
@@ -512,8 +578,12 @@ export function createNoteHighwayService(
 
       if (state.isWaitingForInput && state.waitingNoteId) {
         const waitingNote = state.targetNotes.find(n => n.id === state.waitingNoteId);
-        if (waitingNote && isSampleValidForWait(waitingNote, sample)) {
-          endWait(waitingNote.id, waitingNote);
+        if (
+          waitingNote &&
+          activeWaitCheckpointKey &&
+          isSampleValidForWait(waitingNote, sample)
+        ) {
+          endWait(waitingNote.id, activeWaitCheckpointKey, waitingNote);
           feedbackCollector.recordPitchSample(sample);
           return;
         }
@@ -556,8 +626,9 @@ export function createNoteHighwayService(
       state.activeNotes.clear();
       state.isWaitingForInput = false;
       state.waitingNoteId = null;
+      activeWaitCheckpointKey = null;
       notesInWindow.clear();
-      waitSatisfiedNotes.clear();
+      waitSatisfiedCheckpoints.clear();
       waitStartedAtPerf = null;
       logger?.info('NoteHighway', 'Service disposed', null);
     },

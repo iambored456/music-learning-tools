@@ -10,18 +10,15 @@
     DroneControls,
     StartButton,
     MicInputSelector,
-    PitchHighlightToggle,
-    ThemeSettings,
-    LyricLabelControls,
     PitchReadout,
     RangeControl,
+    LyricLabelControls,
     ExerciseControls,
-    UltrastarControls,
     SpeakingPitchPanel,
-    DifficultySettings,
     OverdubBuilderToolbar,
     ExerciseBuilderToolbar,
     InputDecibelMeter,
+    ConstructionZoneModal,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
   import {
@@ -41,11 +38,13 @@
   import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
   import { ensureLessonTemplatesRegistered } from './lib/lessonTemplates.js';
   import homeIconUrl from './lib/assets/home-icon.svg?url';
+  import constructionIconUrl from './lib/assets/construction-icon.svg?url';
 
   const hubHref = import.meta.env.BASE_URL;
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
+  let showConstructionZone = $state(false);
 
   // Accordion state: only one sidebar section open at a time
   let openSection: number | null = $state(null);
@@ -79,7 +78,6 @@
   }
 
   // Reactive state for Ultrastar
-  const isUltrastarActive = $derived(ultrastarState.state.isActive);
   const showOverdubBuilderToolbar = $derived(
     overdubExerciseState.state.isActive
       && overdubExerciseState.state.template?.category === 'workshop'
@@ -215,9 +213,27 @@
     <aside class="sidebar sidebar--left">
       <div class="sidebar-header">
         <div class="sidebar-title-row">
-          <a class="home-link" href={hubHref} aria-label="Back to home" title="Back to home">
-            <span class="home-link-icon" aria-hidden="true" style={`--home-icon-url: url("${homeIconUrl}")`}></span>
-          </a>
+          <div class="sidebar-nav-actions">
+            <a class="header-icon-control" href={hubHref} aria-label="Back to home" title="Back to home">
+              <span class="header-icon" aria-hidden="true" style={`--header-icon-url: url("${homeIconUrl}")`}></span>
+            </a>
+            <button
+              class="header-icon-control"
+              type="button"
+              aria-label="Open construction zone"
+              aria-haspopup="dialog"
+              aria-expanded={showConstructionZone}
+              aria-controls="construction-zone"
+              title="Open construction zone"
+              onclick={() => (showConstructionZone = true)}
+            >
+              <span
+                class="header-icon header-icon--construction"
+                aria-hidden="true"
+                style={`--header-icon-url: url("${constructionIconUrl}")`}
+              ></span>
+            </button>
+          </div>
           <h1 class="sidebar-title">Singing Trainer</h1>
         </div>
         {#if hasImportedSnapshot}
@@ -238,56 +254,40 @@
 
       <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
         <summary class="settings-summary">Mic Settings</summary>
-        <div class="settings-content">
-          <StartButton />
+        <div class="settings-content settings-content--mic">
+          <div class="mic-primary-row">
+            <div class="mic-primary-cell">
+              <StartButton compact={true} />
+            </div>
+            <div class="mic-primary-cell">
+              <PitchReadout compact={true} showHint={false} />
+            </div>
+          </div>
           <MicInputSelector />
           <InputDecibelMeter />
-          <PitchReadout />
         </div>
       </details>
 
       <details class="settings-details" open={openSection === 1} ontoggle={handleToggle(1)}>
-        <summary class="settings-summary">Theme Settings</summary>
-        <div class="settings-content">
-          <ThemeSettings />
-          <PitchHighlightToggle />
-        </div>
-      </details>
-
-      <details class="settings-details" open={openSection === 2} ontoggle={handleToggle(2)}>
         <summary class="settings-summary">User Settings</summary>
         <div class="settings-content">
           <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
           <RangeControl />
+          <LyricLabelControls />
         </div>
       </details>
 
-      <details class="settings-details" open={openSection === 3} ontoggle={handleToggle(3)}>
+      <details class="settings-details" open={openSection === 2} ontoggle={handleToggle(2)}>
         <summary class="settings-summary">Drone Controls</summary>
         <div class="settings-content">
           <DroneControls />
         </div>
       </details>
 
-      <details class="settings-details" open={openSection === 4} ontoggle={handleToggle(4)}>
-        <summary class="settings-summary">Difficulty Settings</summary>
-        <div class="settings-content">
-          <DifficultySettings />
-        </div>
-      </details>
-
-      <details class="settings-details" open={openSection === 5} ontoggle={handleToggle(5)}>
+      <details class="settings-details" open={openSection === 3} ontoggle={handleToggle(3)}>
         <summary class="settings-summary">Lessons, Exercises, Workshop</summary>
         <div class="settings-content">
           <ExerciseControls bind:this={exerciseControlsRef} />
-        </div>
-      </details>
-
-      <details class="settings-details" open={openSection === 6} ontoggle={handleToggle(6)}>
-        <summary class="settings-summary">UltraStar Karaoke</summary>
-        <div class="settings-content">
-          <UltrastarControls />
-          <LyricLabelControls />
         </div>
       </details>
 
@@ -343,6 +343,11 @@
       onCancel={handleCalibrationCancel}
     />
   {/if}
+
+  <ConstructionZoneModal
+    open={showConstructionZone}
+    onClose={() => (showConstructionZone = false)}
+  />
 </div>
 
 <style>
@@ -384,6 +389,13 @@
     min-width: 0;
   }
 
+  .sidebar-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 0 0 auto;
+  }
+
   .sidebar-title {
     margin: 0;
     font-size: var(--font-size-xl);
@@ -392,39 +404,49 @@
     line-height: 1.1;
   }
 
-  .home-link {
+  .header-icon-control {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 2.1rem;
     height: 2.1rem;
     flex: 0 0 auto;
+    padding: 0;
     border-radius: 999px;
     color: var(--color-text);
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    appearance: none;
+    text-decoration: none;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
-  .home-link:hover {
+  .header-icon-control:hover,
+  .header-icon-control[aria-expanded='true'] {
     color: #fff;
     border-color: rgba(95, 149, 255, 0.65);
     background: rgba(95, 149, 255, 0.18);
   }
 
-  .home-link-icon {
+  .header-icon {
     width: 1.1rem;
     height: 1.1rem;
     display: block;
     background-color: currentColor;
-    -webkit-mask-image: var(--home-icon-url);
+    -webkit-mask-image: var(--header-icon-url);
     -webkit-mask-repeat: no-repeat;
     -webkit-mask-position: center;
     -webkit-mask-size: contain;
-    mask-image: var(--home-icon-url);
+    mask-image: var(--header-icon-url);
     mask-repeat: no-repeat;
     mask-position: center;
     mask-size: contain;
+  }
+
+  .header-icon--construction {
+    width: 1.18rem;
+    height: 1.18rem;
   }
 
   .control-group {
@@ -596,6 +618,21 @@
     padding: var(--spacing-sm);
     padding-top: var(--spacing-md);
     width: 100%;
+  }
+
+  .settings-content--mic {
+    gap: var(--spacing-sm);
+  }
+
+  .mic-primary-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+    width: 100%;
+  }
+
+  .mic-primary-cell {
+    min-width: 0;
   }
 
   @media (max-width: 900px) {

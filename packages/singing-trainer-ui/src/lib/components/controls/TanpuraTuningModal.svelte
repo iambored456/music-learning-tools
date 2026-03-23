@@ -372,7 +372,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.012);
   }
 
   .approx-title {
@@ -429,7 +429,7 @@
   .string-card {
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--radius-sm, 8px);
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.008);
     overflow: hidden;
   }
 
@@ -447,7 +447,7 @@
   }
 
   .string-header--enabled {
-    background: rgba(95, 149, 255, 0.08);
+    background: rgba(95, 149, 255, 0.028);
   }
 
   .string-title {
@@ -499,7 +499,7 @@
     min-width: 6.8rem;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
     color: var(--color-text);
     padding: 0.25rem 0.45rem;
   }

@@ -89,6 +89,13 @@ export interface AppState {
   micTrailCircleRadiusPx: number;
 }
 
+const MIN_LYRIC_LABEL_SCALE = 0.5;
+const MAX_LYRIC_LABEL_SCALE = 2.5;
+const LYRIC_LABEL_SCALE_STEP = 0.1;
+const MIN_LYRIC_LABEL_FIXED_PX = 8;
+const MAX_LYRIC_LABEL_FIXED_PX = 48;
+const LYRIC_LABEL_FIXED_PX_STEP = 2;
+
 const DEFAULT_STATE: AppState = {
   isDetecting: false,
   visualizationMode: 'highway',
@@ -111,11 +118,11 @@ const DEFAULT_STATE: AppState = {
     focusLegend: false,
     showDegrees: false,
   },
-  lyricLabelMode: 'auto',
+  lyricLabelMode: 'fixed',
   lyricLabelScale: 1,
   lyricLabelFixedPx: 16,
-  noteColorMode: 'green',
-  noteType: 'stadium',
+  noteColorMode: 'pitchColor',
+  noteType: 'gradient',
   beatLineMode: 'bar',
   showBeatGridLines: false,
   showMeasureGridLines: true,
@@ -199,12 +206,46 @@ function createAppState() {
 
     setLyricLabelScale(scale: number) {
       if (!Number.isFinite(scale)) return;
-      state.lyricLabelScale = Math.max(0.5, Math.min(2.5, scale));
+      state.lyricLabelScale = Math.max(MIN_LYRIC_LABEL_SCALE, Math.min(MAX_LYRIC_LABEL_SCALE, scale));
     },
 
     setLyricLabelFixedPx(px: number) {
       if (!Number.isFinite(px)) return;
-      state.lyricLabelFixedPx = Math.max(8, Math.min(48, Math.round(px)));
+      state.lyricLabelMode = 'fixed';
+      state.lyricLabelFixedPx = Math.max(
+        MIN_LYRIC_LABEL_FIXED_PX,
+        Math.min(MAX_LYRIC_LABEL_FIXED_PX, Math.round(px))
+      );
+    },
+
+    increaseLyricTextSize() {
+      if (state.lyricLabelMode === 'fixed') {
+        state.lyricLabelFixedPx = Math.max(
+          MIN_LYRIC_LABEL_FIXED_PX,
+          Math.min(MAX_LYRIC_LABEL_FIXED_PX, state.lyricLabelFixedPx + LYRIC_LABEL_FIXED_PX_STEP)
+        );
+        return;
+      }
+
+      state.lyricLabelScale = Math.max(
+        MIN_LYRIC_LABEL_SCALE,
+        Math.min(MAX_LYRIC_LABEL_SCALE, state.lyricLabelScale + LYRIC_LABEL_SCALE_STEP)
+      );
+    },
+
+    decreaseLyricTextSize() {
+      if (state.lyricLabelMode === 'fixed') {
+        state.lyricLabelFixedPx = Math.max(
+          MIN_LYRIC_LABEL_FIXED_PX,
+          Math.min(MAX_LYRIC_LABEL_FIXED_PX, state.lyricLabelFixedPx - LYRIC_LABEL_FIXED_PX_STEP)
+        );
+        return;
+      }
+
+      state.lyricLabelScale = Math.max(
+        MIN_LYRIC_LABEL_SCALE,
+        Math.min(MAX_LYRIC_LABEL_SCALE, state.lyricLabelScale - LYRIC_LABEL_SCALE_STEP)
+      );
     },
 
     setNoteColorMode(mode: NoteColorMode) {

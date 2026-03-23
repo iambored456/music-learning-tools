@@ -60,6 +60,8 @@ export interface HighwayTargetNote {
   slideDirection?: SlideDirection;
   /** If true, scrolling can pause at note start until valid input is detected */
   waitForInput?: boolean;
+  /** Optional additional wait checkpoints, in milliseconds from note start */
+  extraWaitForInputOffsetsMs?: number[];
   /** Start time in milliseconds from playback start */
   startTimeMs: number;
   /** Duration in milliseconds */

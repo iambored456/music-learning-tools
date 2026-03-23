@@ -31,6 +31,7 @@ export interface TargetNote {
   segmentId?: string;
   segmentName?: string;
   waitForInput?: boolean;
+  extraWaitForInputOffsetsMs?: number[];
   color?: string;
 }
 
@@ -57,12 +58,35 @@ export interface HighwayState {
   timelinePaddingAfterMs: number;
 }
 
+const DEFAULT_VIEWPORT_WIDTH_PX = 800;
+const DEFAULT_JUDGMENT_LINE_RATIO = 0.25;
+const MIN_NOW_LINE_MARGIN_PX = 40;
+const AUTO_FIT_RIGHT_PADDING_MIN_PX = 20;
+const AUTO_FIT_RIGHT_PADDING_MAX_PX = 96;
+const AUTO_FIT_RIGHT_PADDING_RATIO = 0.04;
+const AUTO_FIT_NOW_LINE_BUFFER_PX = 80;
+
+function clampToRange(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getDefaultNowLineX(width: number, rightPaddingPx: number = MIN_NOW_LINE_MARGIN_PX): number {
+  const safeWidth = Math.max(MIN_NOW_LINE_MARGIN_PX * 2, Math.round(width));
+  const clampedRightPaddingPx = Math.max(0, Math.round(rightPaddingPx));
+  const maxNowLineX = Math.max(
+    MIN_NOW_LINE_MARGIN_PX,
+    safeWidth - clampedRightPaddingPx - AUTO_FIT_NOW_LINE_BUFFER_PX,
+  );
+  const preferredNowLineX = Math.round(safeWidth * DEFAULT_JUDGMENT_LINE_RATIO);
+  return clampToRange(preferredNowLineX, MIN_NOW_LINE_MARGIN_PX, maxNowLineX);
+}
+
 const DEFAULT_STATE: HighwayState = {
   isPlaying: false,
   startTime: null,
   currentTimeMs: 0,
   targetNotes: [],
-  nowLineX: 100, // Position of the "now" line from left edge
+  nowLineX: getDefaultNowLineX(DEFAULT_VIEWPORT_WIDTH_PX), // Position of the "now" line from left edge
   pixelsPerSecond: 200,
   timeWindowMs: 4000,
   tempoBpm: 120,
@@ -100,8 +124,9 @@ function createHighwayState() {
   let engineService: NoteHighwayServiceInstance | null = null;
   let animationFrameId: number | null = null;
   let performanceCompleteCallback: ((results: Map<string, NotePerformance>) => void) | null = null;
-  let viewportWidth = 800;
+  let viewportWidth = DEFAULT_VIEWPORT_WIDTH_PX;
   let pendingTimelineFitDurationMs: number | null = null;
+  let hasManualNowLineOverride = false;
   let noteHitCount = 0;
   let noteMissCount = 0;
 
@@ -200,15 +225,18 @@ function createHighwayState() {
     if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return;
 
     const width = Math.max(1, viewportWidth);
-    const leftPaddingPx = clamp(width * 0.08, 40, 120);
-    const rightPaddingPx = clamp(width * 0.04, 20, 96);
-    const nowLineMax = Math.max(40, width - rightPaddingPx - 80);
-    const nowLineX = clamp(leftPaddingPx, 40, nowLineMax);
+    const rightPaddingPx = clamp(
+      width * AUTO_FIT_RIGHT_PADDING_RATIO,
+      AUTO_FIT_RIGHT_PADDING_MIN_PX,
+      AUTO_FIT_RIGHT_PADDING_MAX_PX,
+    );
+    const nowLineX = getDefaultNowLineX(width, rightPaddingPx);
     const usableWidthPx = Math.max(100, width - nowLineX - rightPaddingPx);
     const fittedPixelsPerSecond = clamp((usableWidthPx / durationMs) * 1000, 20, 520);
     const lookAheadMs = Math.round(((width - nowLineX) / fittedPixelsPerSecond) * 1000);
 
     state.nowLineX = nowLineX;
+    hasManualNowLineOverride = false;
     state.pixelsPerSecond = fittedPixelsPerSecond;
     state.timeWindowMs = Math.max(1000, Math.max(Math.round(durationMs), lookAheadMs));
   }
@@ -224,6 +252,7 @@ function createHighwayState() {
       label: note.label,
       slideDirection: note.slideDirection,
       waitForInput: note.waitForInput,
+      extraWaitForInputOffsetsMs: note.extraWaitForInputOffsetsMs,
       startTimeMs: note.startTimeMs,
       durationMs: note.durationMs,
       startColumn: 0, // Not used in target notes mode
@@ -418,10 +447,14 @@ function createHighwayState() {
     setNowLineX(x: number) {
       state.nowLineX = x;
       pendingTimelineFitDurationMs = null;
+      hasManualNowLineOverride = true;
     },
 
     setViewportWidth(width: number) {
       viewportWidth = width;
+      if (pendingTimelineFitDurationMs === null && !hasManualNowLineOverride && Number.isFinite(width) && width > 0) {
+        state.nowLineX = getDefaultNowLineX(width);
+      }
       if (pendingTimelineFitDurationMs !== null && Number.isFinite(width) && width > 0) {
         applyTimelineFit(pendingTimelineFitDurationMs);
         pendingTimelineFitDurationMs = null;
@@ -632,6 +665,7 @@ function createHighwayState() {
         engineService = null;
       }
       pendingTimelineFitDurationMs = null;
+      hasManualNowLineOverride = false;
       state = { ...DEFAULT_STATE };
     },
   };

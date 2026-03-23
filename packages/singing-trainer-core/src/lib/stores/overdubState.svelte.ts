@@ -1012,7 +1012,12 @@ function createOverdubState() {
       1,
       Math.round(totalMacrobeats / macrobeatsPerBeat)
     );
-    const timeSignatureNumerator = inferTimeSignatureNumerator(totalBeats);
+    const explicitBeatsPerMeasure = template.config.beatsPerMeasure;
+    const timeSignatureNumerator = (
+      Number.isFinite(explicitBeatsPerMeasure)
+        ? clamp(Math.round(explicitBeatsPerMeasure as number), 1, 12)
+        : inferTimeSignatureNumerator(totalBeats)
+    );
     const measures = Math.max(1, Math.ceil(totalBeats / timeSignatureNumerator));
 
     return {

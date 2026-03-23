@@ -1,8 +1,17 @@
 import * as Tone from 'tone';
+import { getLocalDrumSampleById } from '../../audio-samples/dist/localDrumSamples.js';
 
-import { BLOCK_MICROBEAT_CAPACITIES } from './constants.js';
+import { BLOCK_MICROBEAT_CAPACITIES, MAIN_PLAYBACK_SYNTH_PROFILE } from './constants.js';
 import type { BoomwhackerSketchpadModel } from './model.js';
 import type { NoteData, PlaybackTick } from './types.js';
+
+const COUNT_IN_SAMPLE_IDS = [
+  'alesis-hr16a-alesis-hr16a-18',
+  'kr-33-kr-33-cow',
+] as const;
+
+const COUNT_IN_SAMPLE_URL =
+  COUNT_IN_SAMPLE_IDS.map((sampleId) => getLocalDrumSampleById(sampleId)?.url ?? null).find(Boolean) ?? null;
 
 export type AudioCallbacks = {
   onPlaybackTick?: (tick: PlaybackTick) => void;
@@ -18,6 +27,8 @@ export class BoomwhackerSketchpadAudioEngine {
   private mainSynth: Tone.Synth | null = null;
 
   private mainVolumeNode: Tone.Volume | null = null;
+
+  private countInPlayers: Tone.Players | null = null;
 
   private droneVolumeNode: Tone.Volume | null = null;
 
@@ -60,14 +71,21 @@ export class BoomwhackerSketchpadAudioEngine {
 
       this.mainVolumeNode = new Tone.Volume(Tone.gainToDb(state.mainVolume)).toDestination();
       this.mainSynth = new Tone.Synth({
-        oscillator: { type: state.mainPlaybackVoice },
-        envelope: {
-          attack: 0.005,
-          decay: 0.1,
-          sustain: 0.2,
-          release: 0.3,
-        },
+        oscillator: { type: MAIN_PLAYBACK_SYNTH_PROFILE.oscillatorType },
+        envelope: MAIN_PLAYBACK_SYNTH_PROFILE.envelope,
       }).connect(this.mainVolumeNode);
+
+      if (COUNT_IN_SAMPLE_URL) {
+        try {
+          this.countInPlayers = new Tone.Players({
+            cue: COUNT_IN_SAMPLE_URL,
+          }).connect(this.mainVolumeNode);
+          await this.countInPlayers.loaded;
+        } catch {
+          this.countInPlayers?.dispose();
+          this.countInPlayers = null;
+        }
+      }
 
       this.droneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).toDestination();
       this.momentaryDroneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).toDestination();
@@ -100,11 +118,13 @@ export class BoomwhackerSketchpadAudioEngine {
 
     this.mainSynth?.dispose();
     this.mainVolumeNode?.dispose();
+    this.countInPlayers?.dispose();
     this.droneVolumeNode?.dispose();
     this.momentaryDroneVolumeNode?.dispose();
 
     this.mainSynth = null;
     this.mainVolumeNode = null;
+    this.countInPlayers = null;
     this.droneVolumeNode = null;
     this.momentaryDroneVolumeNode = null;
 
@@ -220,6 +240,17 @@ export class BoomwhackerSketchpadAudioEngine {
       this.mainSynth.triggerAttackRelease(pitchString, duration, Tone.now());
     } catch {
       // Ignore invalid note playback requests.
+    }
+  }
+
+  playCountInCueNow(): boolean {
+    if (!this.isReady() || !this.countInPlayers?.loaded) return false;
+
+    try {
+      this.countInPlayers.player('cue')?.start(Tone.now());
+      return true;
+    } catch {
+      return false;
     }
   }
 

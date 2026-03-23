@@ -96,6 +96,13 @@ const TARGETS: CaptureTarget[] = [
 `,
   },
   {
+    id: 'boomwhacker-video-builder',
+    distDir: 'apps/hub/dist',
+    route: '/boomwhacker-video-builder/',
+    waitFor: '.builder-shell',
+    delayMs: 500,
+  },
+  {
     id: 'diatonic-compass',
     distDir: 'apps/hub/dist',
     route: '/diatonic-compass/',

@@ -10,6 +10,7 @@
   import { toggleDrone, updateDrone } from '@mlt/singing-trainer-core/services/droneAudio.js';
   import { MODE_NAMES, MODE_KEYS } from '@mlt/singing-trainer-core/constants/modes.js';
   import TanpuraTuningModal from './TanpuraTuningModal.svelte';
+  import tanpuraTuningIconUrl from '../../assets/tanpura-tuning-icon.svg?url';
 
   const TONIC_OPTIONS: TonicNote[] = [
     'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'
@@ -72,12 +73,9 @@
     appState.setDroneSelectedMode(target.value);
   }
 
-  function handleFocusToggle() {
-    appState.setDroneFocusLegend(!appState.state.drone.focusLegend);
-  }
-
-  function handleDegreesToggle() {
-    appState.setDroneShowDegrees(!appState.state.drone.showDegrees);
+  function handleDegreesToggle(event: Event) {
+    const target = event.target as HTMLInputElement;
+    appState.setDroneShowDegrees(target.checked);
   }
 
   function midiToTonicAndOctave(midi: number): { tonic: TonicNote; octave: number } {
@@ -116,8 +114,18 @@
     {appState.state.drone.isPlaying ? 'Drone On' : 'Drone Off'}
   </button>
 
+  <label class="control-row">
+    <span class="control-label">Volume:</span>
+    <input
+      type="range"
+      min="-40"
+      max="0"
+      value={appState.state.drone.volume}
+      oninput={handleVolumeChange}
+    />
+  </label>
+
   <div class="engine-row">
-    <span class="control-label">Engine:</span>
     <div class="engine-toggle-wrap">
       <span class="engine-label">Synth</span>
       <label class="switch" aria-label="Toggle drone engine">
@@ -131,21 +139,26 @@
       <span class="engine-label">Tanpura</span>
     </div>
     <button
-      class="tuning-button"
+      class="tuning-button tuning-button--icon"
+      type="button"
       onclick={openTuningModal}
       disabled={appState.state.drone.engine !== 'tanpura'}
+      aria-label="Open Tanpura tuning popup"
       title={appState.state.drone.engine === 'tanpura'
-        ? 'Open tanpura tuning controls'
+        ? 'Open Tanpura tuning popup'
         : 'Switch to Tanpura engine to tune behavior'}
     >
-      Tuning...
+      <span
+        class="tuning-icon"
+        aria-hidden="true"
+        style={`--tuning-icon-url: url("${tanpuraTuningIconUrl}")`}
+      ></span>
     </button>
   </div>
 
-  <div class="pitch-octave-grid">
-    <label class="grid-label" for="drone-tonic-select">Pitch:</label>
-    <label class="grid-label" for="drone-octave-select">Octave:</label>
-    <div class="grid-control">
+  <div class="pitch-settings-row">
+    <div class="stacked-control">
+      <label class="grid-label" for="drone-tonic-select">Pitch</label>
       <select
         id="drone-tonic-select"
         value={appState.state.tonic}
@@ -157,7 +170,8 @@
         {/each}
       </select>
     </div>
-    <div class="grid-control">
+    <div class="stacked-control">
+      <label class="grid-label" for="drone-octave-select">Octave</label>
       <select
         id="drone-octave-select"
         value={appState.state.drone.octave}
@@ -169,10 +183,12 @@
         {/each}
       </select>
     </div>
-    <div class="speaking-pitch-row">
+    <div class="stacked-control stacked-control--action">
+      <span class="grid-label grid-label--placeholder" aria-hidden="true">Speaking</span>
       <button
-        class="speaking-pitch-toggle"
+        class="speaking-pitch-toggle speaking-pitch-toggle--inline"
         class:active={useSpeakingPitch}
+        type="button"
         onclick={handleSpeakingPitchToggle}
         disabled={!speakingPitchAvailable}
         aria-pressed={useSpeakingPitch}
@@ -184,17 +200,6 @@
       </button>
     </div>
   </div>
-
-  <label class="control-row">
-    <span class="control-label">Volume:</span>
-    <input
-      type="range"
-      min="-40"
-      max="0"
-      value={appState.state.drone.volume}
-      oninput={handleVolumeChange}
-    />
-  </label>
 
   <div class="mode-row">
     <button
@@ -219,26 +224,19 @@
   </div>
 
   <div class="mode-options-row">
-    <button
-      class="mode-option-toggle"
-      class:active={appState.state.drone.focusLegend}
-      onclick={handleFocusToggle}
-      disabled={!appState.state.drone.modeEnabled}
-      aria-pressed={appState.state.drone.focusLegend}
-      title="Dim legend pitches outside the selected mode"
-    >
-      Focus
-    </button>
-    <button
-      class="mode-option-toggle"
-      class:active={appState.state.drone.showDegrees}
-      onclick={handleDegreesToggle}
-      disabled={!appState.state.drone.modeEnabled}
-      aria-pressed={appState.state.drone.showDegrees}
-      title="Show scale degree numbers instead of pitch names"
-    >
-      Degrees
-    </button>
+    <div class="mode-toggle-wrap">
+      <span class="mode-toggle-label">Letters</span>
+      <label class="switch" aria-label="Toggle legend labels between letters and degrees">
+        <input
+          type="checkbox"
+          checked={appState.state.drone.showDegrees}
+          onchange={handleDegreesToggle}
+          disabled={!appState.state.drone.modeEnabled}
+        />
+        <span class="slider"></span>
+      </label>
+      <span class="mode-toggle-label">Degrees</span>
+    </div>
   </div>
 </div>
 
@@ -355,7 +353,6 @@
   }
 
   .tuning-button {
-    padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--color-text);
@@ -375,23 +372,57 @@
     cursor: not-allowed;
   }
 
-  .pitch-octave-grid {
+  .tuning-button--icon {
+    width: 2.2rem;
+    height: 2.2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tuning-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+    display: block;
+    background-color: currentColor;
+    -webkit-mask-image: var(--tuning-icon-url);
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+    mask-image: var(--tuning-icon-url);
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+  }
+
+  .pitch-settings-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: var(--spacing-sm);
-    row-gap: var(--spacing-xs);
-    align-items: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+    align-items: end;
+  }
+
+  .stacked-control {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    min-width: 0;
+  }
+
+  .stacked-control--action {
+    justify-content: flex-end;
   }
 
   .grid-label {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
+    white-space: nowrap;
+    line-height: 1.1;
   }
 
-  .grid-control {
-    display: flex;
-    align-items: center;
-    min-width: 0;
+  .grid-label--placeholder {
+    visibility: hidden;
   }
 
   select {
@@ -404,16 +435,9 @@
     cursor: pointer;
   }
 
-  .grid-control select {
+  .stacked-control select {
     width: 100%;
     min-width: 0;
-  }
-
-  .speaking-pitch-row {
-    grid-column: 1 / -1;
-    display: flex;
-    justify-content: flex-start;
-    margin-top: var(--spacing-xs);
   }
 
   select:disabled {
@@ -422,15 +446,25 @@
   }
 
   .speaking-pitch-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 400;
     color: var(--color-text);
     background-color: transparent;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.2s ease;
+  }
+
+  .speaking-pitch-toggle--inline {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+    line-height: 1.15;
   }
 
   .speaking-pitch-toggle:hover:not(:disabled) {
@@ -491,33 +525,19 @@
   .mode-options-row {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
   }
 
-  .mode-option-toggle {
-    padding: var(--spacing-xs) var(--spacing-sm);
+  .mode-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .mode-toggle-label {
     font-size: var(--font-size-xs);
-    font-weight: 600;
-    color: var(--color-text);
-    background-color: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .mode-option-toggle:hover:not(:disabled) {
-    border-color: var(--color-secondary);
-  }
-
-  .mode-option-toggle.active {
-    background-color: var(--color-secondary);
-    color: var(--color-bg);
-    border-color: var(--color-secondary);
-  }
-
-  .mode-option-toggle:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    color: var(--color-text-muted);
+    min-width: 3.25rem;
+    text-align: center;
   }
 </style>

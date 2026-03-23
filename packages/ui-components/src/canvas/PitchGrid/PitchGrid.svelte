@@ -110,6 +110,7 @@
     beatIntervalMs?: number;
     measureIntervalMs?: number;
     beatTimeOffsetMs?: number;
+    measureTimeOffsetMs?: number;
   }
 
   let {
@@ -145,6 +146,7 @@
     beatIntervalMs = 500,
     measureIntervalMs = beatIntervalMs * 4,
     beatTimeOffsetMs = 0,
+    measureTimeOffsetMs = beatTimeOffsetMs,
   }: Props = $props();
 
   // ============================================================================
@@ -336,8 +338,12 @@
       const rowOpacity = clamp(baseOpacity + pulse * 0.05, 0, 1);
       const glowOpacity = clamp((0.14 + pulse * 0.08) * glowStrength, 0, 1);
       const scale = clamp(highlight.heightScale ?? 1, 0.1, 1);
+      const fadeExtendTop = Math.max(0, highlight.fadeExtendTopScale ?? 0) * cellHeight;
+      const fadeExtendBottom = Math.max(0, highlight.fadeExtendBottomScale ?? 0) * cellHeight;
       const halfHeight = (cellHeight / 2) * scale;
       const fillHeight = halfHeight * 2;
+      const fillTop = y - halfHeight;
+      const fillBottom = y + halfHeight;
 
       const glowTop = y - cellHeight * scale;
       const glowHeight = cellHeight * 2 * scale;
@@ -351,7 +357,23 @@
       renderCtx.fillRect(0, glowTop, gridWidth, glowHeight);
 
       renderCtx.fillStyle = toRgba(color, rowOpacity);
-      renderCtx.fillRect(0, y - halfHeight, gridWidth, fillHeight);
+      renderCtx.fillRect(0, fillTop, gridWidth, fillHeight);
+
+      if (fadeExtendTop > 0) {
+        const topFadeGradient = renderCtx.createLinearGradient(0, fillTop - fadeExtendTop, 0, fillTop);
+        topFadeGradient.addColorStop(0, toRgba(color, 0));
+        topFadeGradient.addColorStop(1, toRgba(color, rowOpacity));
+        renderCtx.fillStyle = topFadeGradient;
+        renderCtx.fillRect(0, fillTop - fadeExtendTop, gridWidth, fadeExtendTop);
+      }
+
+      if (fadeExtendBottom > 0) {
+        const bottomFadeGradient = renderCtx.createLinearGradient(0, fillBottom, 0, fillBottom + fadeExtendBottom);
+        bottomFadeGradient.addColorStop(0, toRgba(color, rowOpacity));
+        bottomFadeGradient.addColorStop(1, toRgba(color, 0));
+        renderCtx.fillStyle = bottomFadeGradient;
+        renderCtx.fillRect(0, fillBottom, gridWidth, fadeExtendBottom);
+      }
 
       const shimmerX = ((now * 0.18) % (gridWidth + shimmerWidth * 2)) - shimmerWidth;
       const shimmerGradient = renderCtx.createLinearGradient(
@@ -364,16 +386,8 @@
       shimmerGradient.addColorStop(0.5, toRgba('#ffffff', 0.16 + pulse * 0.04));
       shimmerGradient.addColorStop(1, toRgba('#ffffff', 0));
       renderCtx.fillStyle = shimmerGradient;
-      renderCtx.fillRect(0, y - halfHeight, gridWidth, fillHeight);
+      renderCtx.fillRect(0, fillTop, gridWidth, fillHeight);
 
-      renderCtx.strokeStyle = toRgba(color, Math.min(1, rowOpacity + 0.45));
-      renderCtx.lineWidth = 1.6;
-      renderCtx.beginPath();
-      renderCtx.moveTo(0, y - halfHeight + 0.5);
-      renderCtx.lineTo(gridWidth, y - halfHeight + 0.5);
-      renderCtx.moveTo(0, y + halfHeight - 0.5);
-      renderCtx.lineTo(gridWidth, y + halfHeight - 0.5);
-      renderCtx.stroke();
     }
     renderCtx.restore();
   }
@@ -534,6 +548,7 @@
           measureIntervalMs,
           visibleTimeRange,
           beatTimeOffsetMs,
+          measureTimeOffsetMs,
         };
         drawTimeBasedVerticalLines(renderCtx, verticalConfig, coords);
       }
@@ -881,11 +896,4 @@
     flex-shrink: 0;
   }
 
-  .pitch-grid-legend--left {
-    border-right: 1px solid #dee2e6;
-  }
-
-  .pitch-grid-legend--right {
-    border-left: 1px solid #dee2e6;
-  }
 </style>

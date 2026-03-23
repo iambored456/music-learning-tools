@@ -13,6 +13,7 @@
     showEighth?: boolean;
     showQuarter?: boolean;
     showDottedQuarter?: boolean;
+    showRows?: boolean;
     showSlider?: boolean;
   }
 
@@ -27,6 +28,7 @@
     showEighth = true,
     showQuarter = true,
     showDottedQuarter = true,
+    showRows = true,
     showSlider = true,
   }: Props = $props();
 
@@ -35,7 +37,9 @@
   const eighthTempo = $derived(Math.round(currentQuarter * 2));
   const dottedQuarterTempo = $derived(Math.round(currentQuarter / 1.5));
   const visibleTempoRowCount = $derived(
-    Math.max(1, (showEighth ? 1 : 0) + (showQuarter ? 1 : 0) + (showDottedQuarter ? 1 : 0)),
+    showRows
+      ? Math.max(1, (showEighth ? 1 : 0) + (showQuarter ? 1 : 0) + (showDottedQuarter ? 1 : 0))
+      : 0,
   );
 
   function clamp(value: number, min: number, max: number): number {
@@ -89,10 +93,12 @@
 <div
   class="tempo-controls"
   class:vertical={sliderOrientation === 'vertical'}
+  class:with-rows={showRows}
   class:with-slider={showSlider}
   class:fill-available-height={fillVerticalAvailableHeight && sliderOrientation === 'vertical' && showSlider}
   style={`--tempo-row-count:${visibleTempoRowCount};`}
 >
+  {#if showRows}
   <div class="tempo-rows">
     {#if showEighth}
     <div class="tempo-row">
@@ -154,6 +160,7 @@
     </div>
     {/if}
   </div>
+  {/if}
 
   {#if showSlider}
   <div class="tempo-slider-container">
@@ -205,8 +212,12 @@
     min-height: 0;
   }
 
-  .tempo-controls.with-slider:not(.vertical) {
+  .tempo-controls.with-slider:not(.vertical).with-rows {
     grid-template-rows: auto var(--tempo-controls-slider-shell-width);
+  }
+
+  .tempo-controls.with-slider:not(.vertical):not(.with-rows) {
+    grid-template-rows: var(--tempo-controls-slider-shell-width);
   }
 
   .tempo-controls.vertical {
@@ -217,12 +228,16 @@
     min-height: 0;
   }
 
-  .tempo-controls.vertical.with-slider {
+  .tempo-controls.vertical.with-slider.with-rows {
     grid-template-columns: max-content var(--tempo-controls-slider-shell-width);
     column-gap: var(--tempo-controls-space-020);
   }
 
-  .tempo-controls.vertical.with-slider:not(.fill-available-height) {
+  .tempo-controls.vertical.with-slider:not(.with-rows) {
+    grid-template-columns: var(--tempo-controls-slider-shell-width);
+  }
+
+  .tempo-controls.vertical.with-slider:not(.fill-available-height).with-rows {
     align-self: start;
     height: max(
       var(--tempo-controls-vertical-slider-length),
@@ -233,7 +248,12 @@
     );
   }
 
-  .tempo-controls.vertical.with-slider:not(.fill-available-height) .tempo-rows {
+  .tempo-controls.vertical.with-slider:not(.fill-available-height):not(.with-rows) {
+    align-self: start;
+    height: var(--tempo-controls-vertical-slider-length);
+  }
+
+  .tempo-controls.vertical.with-slider:not(.fill-available-height).with-rows .tempo-rows {
     align-self: center;
   }
 

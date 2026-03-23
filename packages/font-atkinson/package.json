@@ -1,0 +1,17 @@
+{
+  "name": "@mlt/font-atkinson",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Atkinson Hyperlegible Next font-face stylesheet",
+  "style": "./index.css",
+  "exports": {
+    ".": "./index.css",
+    "./index.css": "./index.css",
+    "./fonts/*": "./fonts/*"
+  },
+  "files": [
+    "index.css",
+    "fonts"
+  ]
+}

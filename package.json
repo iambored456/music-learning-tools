@@ -33,7 +33,7 @@
   ],
   "author": "Quinn Fleming",
   "license": "MIT",
-  "packageManager": "pnpm@10.26.2",
+  "packageManager": "pnpm@10.32.1",
   "engines": {
     "node": ">=18"
   },

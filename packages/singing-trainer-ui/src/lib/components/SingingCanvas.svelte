@@ -74,8 +74,14 @@
   let hasSeenYAxisRange = false;
   let lastYAxisMinMidi = 0;
   let lastYAxisMaxMidi = 0;
+  let lastTimingGridDebugKey: string | null = null;
 
   type RgbTuple = [number, number, number];
+  type TimingGridDebugWindow = Window & {
+    __MLT_DEBUG_TIMING_GRID__?: boolean;
+    __MLT_LOG_TIMING_GRID_SNAPSHOT__?: (() => void) | undefined;
+  };
+  const MODE_ROW_FADE_SCALE = 0.25;
 
   const cellWidth = 20;
   const showOctaveLabels = true;
@@ -123,13 +129,31 @@
   const isOverdubExerciseActive = $derived(
     overdubExerciseState.state.isActive || overdubExerciseState.state.isPlaying
   );
+  const overdubExerciseTemplate = $derived(overdubExerciseState.state.template);
 
   const overdubPhrase = $derived(overdubState.state.engine.project.phrase);
   const overdubBeatIntervalMs = $derived<number>(
-    (60 / Math.max(20, overdubPhrase.tempoBpm)) * 1000 * (4 / Math.max(1, overdubPhrase.timeSignatureDenominator))
+    (60 / Math.max(20, overdubExerciseState.state.tempo || overdubPhrase.tempoBpm)) * 1000
   );
+  const overdubBeatsPerMeasure = $derived<number>((() => {
+    const explicitBeatsPerMeasure = overdubExerciseTemplate?.config.beatsPerMeasure;
+    if (typeof explicitBeatsPerMeasure === 'number' && Number.isFinite(explicitBeatsPerMeasure)) {
+      return Math.max(1, Math.round(explicitBeatsPerMeasure));
+    }
+    return Math.max(1, overdubPhrase.timeSignatureNumerator);
+  })());
+  const overdubPickupBeats = $derived<number>((() => {
+    const pickupBeats = overdubExerciseTemplate?.config.pickupBeats;
+    if (typeof pickupBeats !== 'number' || !Number.isFinite(pickupBeats)) {
+      return 0;
+    }
+    return Math.max(0, Math.round(pickupBeats));
+  })());
   const overdubMeasureIntervalMs = $derived<number>(
-    overdubBeatIntervalMs * Math.max(1, overdubPhrase.timeSignatureNumerator)
+    overdubBeatIntervalMs * overdubBeatsPerMeasure
+  );
+  const overdubMeasureTimeOffsetMs = $derived<number>(
+    overdubPickupBeats * overdubBeatIntervalMs
   );
 
   // Base exercise timing (non-overdub lessons)
@@ -146,6 +170,9 @@
   );
   const beatTimeOffsetMs = $derived<number>(
     isOverdubExerciseActive ? 0 : (exerciseState.state.config.leadInMs ?? 0)
+  );
+  const measureTimeOffsetMs = $derived<number>(
+    isOverdubExerciseActive ? overdubMeasureTimeOffsetMs : (exerciseState.state.config.leadInMs ?? 0)
   );
 
   const legendHighlight = $derived<LegendHighlightConfig | undefined>((() => {
@@ -166,6 +193,39 @@
     }));
   })());
 
+  function getModeDegreeFadeScales(degreeIndex: number): Pick<
+    PitchRowHighlightEntry,
+    'fadeExtendTopScale' | 'fadeExtendBottomScale'
+  > {
+    switch (degreeIndex) {
+      case 0:
+        return { fadeExtendTopScale: MODE_ROW_FADE_SCALE };
+      case 1:
+        return {
+          fadeExtendTopScale: MODE_ROW_FADE_SCALE,
+          fadeExtendBottomScale: MODE_ROW_FADE_SCALE,
+        };
+      case 2:
+        return { fadeExtendBottomScale: MODE_ROW_FADE_SCALE };
+      case 3:
+        return { fadeExtendTopScale: MODE_ROW_FADE_SCALE };
+      case 4:
+        return {
+          fadeExtendTopScale: MODE_ROW_FADE_SCALE,
+          fadeExtendBottomScale: MODE_ROW_FADE_SCALE,
+        };
+      case 5:
+        return {
+          fadeExtendTopScale: MODE_ROW_FADE_SCALE,
+          fadeExtendBottomScale: MODE_ROW_FADE_SCALE,
+        };
+      case 6:
+        return { fadeExtendBottomScale: MODE_ROW_FADE_SCALE };
+      default:
+        return {};
+    }
+  }
+
   const droneHighlightEntry = $derived<PitchRowHighlightEntry | null>((() => {
     if (!appState.state.drone.isPlaying) return null;
 
@@ -180,6 +240,7 @@
       glow: 1,
       pulse: true,
       heightScale: 0.5,
+      ...getModeDegreeFadeScales(0),
     };
   })());
 
@@ -201,12 +262,19 @@
       if (row.midi === droneMidi) continue;
       if (!modePitchClasses.has(row.pitchClass)) continue;
 
+      const intervalFromTonic = (row.pitchClass - tonicPc + 12) % 12;
+      const degreeIndex = offsets.indexOf(intervalFromTonic);
+      const fadeScales = degreeIndex >= 0
+        ? getModeDegreeFadeScales(degreeIndex)
+        : {};
+
       highlights.push({
         midi: row.midi,
         opacity: 0.2,
         glow: 0,
         pulse: false,
         heightScale: 0.5,
+        ...fadeScales,
       });
     }
 
@@ -396,11 +464,22 @@
       && !ultrastarState.state.isActive
       && (highwayState.state.isPlaying || hasHighwayTargets || isOverdubExerciseActive)
   );
+  const freeplayTimelineEnabled = $derived(
+    mode === 'highway'
+      && !useLoopTimeline
+      && !isUltrastarActive
+      && !hasHighwayTargets
+      && !isExerciseActive
+      && !isOverdubExerciseActive
+  );
   const timelineViewportEnabled = $derived(
     mode === 'highway'
       && !useLoopTimeline
       && !isUltrastarActive
-      && (hasHighwayTargets || isOverdubExerciseActive)
+      && (hasHighwayTargets || isOverdubExerciseActive || freeplayTimelineEnabled)
+  );
+  const timelinePanEnabled = $derived(
+    timelineViewportEnabled && !freeplayTimelineEnabled
   );
   const timelineViewportProjection = $derived.by<{
     nowLineX: number;
@@ -507,6 +586,133 @@
 
   function clampNumber(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function roundDebugValue(value: number, digits = 1): number {
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+
+  function getTimingGridDebugWindow(): TimingGridDebugWindow | null {
+    if (typeof window === 'undefined') return null;
+    return window as TimingGridDebugWindow;
+  }
+
+  function buildVisibleTimingLineSnapshot(
+    intervalMs: number,
+    offsetMs: number,
+    visibleStartMs: number,
+    visibleEndMs: number,
+    currentTimeMs: number,
+    nowLineX: number,
+    pixelsPerSecond: number,
+  ): Array<{ index: number; timeMs: number; x: number }> {
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) return [];
+
+    const firstIndex = Math.floor((visibleStartMs - offsetMs) / intervalMs);
+    const lastIndex = Math.ceil((visibleEndMs - offsetMs) / intervalMs);
+    const lines: Array<{ index: number; timeMs: number; x: number }> = [];
+
+    for (let index = firstIndex; index <= lastIndex; index += 1) {
+      const timeMs = offsetMs + (index * intervalMs);
+      const x = nowLineX + (((timeMs - currentTimeMs) / 1000) * pixelsPerSecond);
+      if (x < -1 || x > gridWidth + 1) continue;
+      lines.push({
+        index,
+        timeMs: roundDebugValue(timeMs),
+        x: roundDebugValue(x),
+      });
+    }
+
+    return lines;
+  }
+
+  function buildTimingGridDebugSnapshot() {
+    if (mode !== 'highway' || !highwayConfig || gridWidth <= 0) return null;
+
+    const pixelsPerSecond = Math.max(1, highwayConfig.pixelsPerSecond ?? 200);
+    const nowLineX = roundDebugValue(highwayConfig.nowLineX ?? 100);
+    const currentTimeMs = roundDebugValue(highwayConfig.currentTimeMs ?? 0);
+    const visibleStartMs = currentTimeMs + (((0 - nowLineX) / pixelsPerSecond) * 1000);
+    const visibleEndMs = currentTimeMs + (((gridWidth - nowLineX) / pixelsPerSecond) * 1000);
+    const targetNotes = highwayConfig.targetNotes ?? [];
+
+    const beatLines = buildVisibleTimingLineSnapshot(
+      beatIntervalMs,
+      beatTimeOffsetMs,
+      visibleStartMs,
+      visibleEndMs,
+      currentTimeMs,
+      nowLineX,
+      pixelsPerSecond,
+    );
+    const measureLines = buildVisibleTimingLineSnapshot(
+      measureIntervalMs,
+      measureTimeOffsetMs,
+      visibleStartMs,
+      visibleEndMs,
+      currentTimeMs,
+      nowLineX,
+      pixelsPerSecond,
+    );
+
+    const visibleNotes = targetNotes
+      .map((note, index) => {
+        const startX = nowLineX + (((note.startTimeMs - currentTimeMs) / 1000) * pixelsPerSecond);
+        const endX = startX + ((note.durationMs / 1000) * pixelsPerSecond);
+        return {
+          index,
+          label: note.label ?? null,
+          midi: note.midi ?? null,
+          startTimeMs: roundDebugValue(note.startTimeMs),
+          endTimeMs: roundDebugValue(note.startTimeMs + note.durationMs),
+          durationMs: roundDebugValue(note.durationMs),
+          startX: roundDebugValue(startX),
+          endX: roundDebugValue(endX),
+          beatPhase: beatIntervalMs > 0
+            ? roundDebugValue((note.startTimeMs - beatTimeOffsetMs) / beatIntervalMs, 3)
+            : null,
+          measurePhase: measureIntervalMs > 0
+            ? roundDebugValue((note.startTimeMs - measureTimeOffsetMs) / measureIntervalMs, 3)
+            : null,
+        };
+      })
+      .filter((note) => note.endX >= 0 && note.startX <= gridWidth)
+      .slice(0, 18);
+
+    return {
+      exerciseId: overdubExerciseState.state.exerciseId,
+      exerciseName: overdubExerciseTemplate?.name ?? null,
+      mode,
+      currentTimeMs,
+      nowLineX,
+      gridWidth,
+      pixelsPerSecond: roundDebugValue(pixelsPerSecond, 3),
+      beatIntervalMs: roundDebugValue(beatIntervalMs),
+      measureIntervalMs: roundDebugValue(measureIntervalMs),
+      beatTimeOffsetMs: roundDebugValue(beatTimeOffsetMs),
+      measureTimeOffsetMs: roundDebugValue(measureTimeOffsetMs),
+      visibleTimeRange: {
+        startMs: roundDebugValue(visibleStartMs),
+        endMs: roundDebugValue(visibleEndMs),
+      },
+      beatLines,
+      measureLines,
+      visibleNotes,
+    };
+  }
+
+  function logTimingGridSnapshot(reason: 'manual' | 'auto'): void {
+    const snapshot = buildTimingGridDebugSnapshot();
+    if (!snapshot) {
+      console.warn('[SingingCanvas][TimingGrid]', { reason, available: false });
+      return;
+    }
+
+    console.log('[SingingCanvas][TimingGrid]', {
+      reason,
+      ...snapshot,
+    });
   }
 
   function parseHexColorToRgb(color: string | null | undefined): RgbTuple | null {
@@ -737,7 +943,7 @@
   }
 
   function handleTimelinePanPointerDown(event: PointerEvent): void {
-    if (!timelineViewportEnabled || event.button !== 2) return;
+    if (!timelinePanEnabled || event.button !== 2) return;
     if (!isPointerInsideGrid(event.clientX)) return;
     const targetElement = event.target instanceof HTMLElement ? event.target : null;
     if (targetElement?.closest('[data-judgement-drag-handle="true"]')) return;
@@ -782,7 +988,7 @@
   }
 
   function handleTimelineContextMenu(event: MouseEvent): void {
-    if (!timelineViewportEnabled) return;
+    if (!timelinePanEnabled) return;
     if (!isPointerInsideGrid(event.clientX)) return;
     event.preventDefault();
   }
@@ -1326,6 +1532,50 @@
   });
 
   $effect(() => {
+    const debugWindow = getTimingGridDebugWindow();
+    if (!debugWindow) return;
+
+    const logSnapshot = () => {
+      logTimingGridSnapshot('manual');
+    };
+
+    debugWindow.__MLT_LOG_TIMING_GRID_SNAPSHOT__ = logSnapshot;
+
+    const intervalId = window.setInterval(() => {
+      if (!debugWindow.__MLT_DEBUG_TIMING_GRID__) {
+        lastTimingGridDebugKey = null;
+        return;
+      }
+
+      const snapshot = buildTimingGridDebugSnapshot();
+      if (!snapshot) return;
+
+      const currentTimeBucket = Math.round(snapshot.currentTimeMs / 250);
+      const key = JSON.stringify([
+        snapshot.exerciseId,
+        currentTimeBucket,
+        snapshot.beatLines[0]?.timeMs ?? null,
+        snapshot.measureLines[0]?.timeMs ?? null,
+        snapshot.visibleNotes[0]?.startTimeMs ?? null,
+      ]);
+
+      if (key === lastTimingGridDebugKey) return;
+      lastTimingGridDebugKey = key;
+      console.log('[SingingCanvas][TimingGrid]', {
+        reason: 'auto',
+        ...snapshot,
+      });
+    }, 250);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (debugWindow.__MLT_LOG_TIMING_GRID_SNAPSHOT__ === logSnapshot) {
+        delete debugWindow.__MLT_LOG_TIMING_GRID_SNAPSHOT__;
+      }
+    };
+  });
+
+  $effect(() => {
     void mode;
     void trailCtx;
     // Run trail loop for both stationary and highway modes
@@ -1387,11 +1637,12 @@
     legendLabelOverrides={modeLabelOverrides}
     {showHorizontalGridLines}
     horizontalGridReferencePitchClass={getTonicPitchClass(appState.state.tonic)}
-    targetNoteStyle={appState.state.noteType}
-    beatIntervalMs={gridBeatIntervalMs}
-    measureIntervalMs={gridMeasureIntervalMs}
-    {beatTimeOffsetMs}
-  />
+      targetNoteStyle={appState.state.noteType}
+      beatIntervalMs={gridBeatIntervalMs}
+      measureIntervalMs={gridMeasureIntervalMs}
+      {beatTimeOffsetMs}
+      {measureTimeOffsetMs}
+    />
   <canvas
     bind:this={trailCanvas}
     class="pitch-trail-canvas"

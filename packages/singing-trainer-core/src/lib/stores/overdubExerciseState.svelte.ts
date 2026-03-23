@@ -15,6 +15,7 @@ import {
 } from '@mlt/lesson-templates';
 import { convertExerciseVoicesToTargetNotes, calculateExerciseDurationMs } from '../services/exerciseVoiceConverter.js';
 import { midiToScaleDegreeLabel } from '../services/diatonicAnalysis.js';
+import { updateDrone } from '../services/droneAudio.js';
 import { guideVoicePlayer } from '../services/guideVoicePlayer.js';
 import { highwayState, type TargetNote } from './highwayState.svelte.js';
 import { appState, type TonicNote } from './appState.svelte.js';
@@ -266,13 +267,19 @@ function createOverdubExerciseState() {
     const transposedTonicPc = wrapPitchClass(TONIC_TO_PC[tonic] + getTotalTransposeSemitones());
     const effectiveTonic = PC_TO_TONIC_SHARP[transposedTonicPc] ?? 'C';
     state.effectiveTonic = effectiveTonic;
-    appState.setTonic(effectiveTonic);
     const tonicPc = TONIC_TO_PC[effectiveTonic];
     const degreeLabels = state.allTargetNotes.map((note) => {
       if (typeof note.midi !== 'number') return '';
       return midiToScaleDegreeLabel(note.midi, tonicPc);
     });
     appState.setNoteScaleDegrees(degreeLabels);
+  }
+
+  function applyExerciseTonic() {
+    if (!isStandaloneExerciseTemplate()) return;
+    if (!state.effectiveTonic || appState.state.tonic === state.effectiveTonic) return;
+    appState.setTonic(state.effectiveTonic);
+    updateDrone();
   }
 
   function stopPlaybackSession() {
@@ -437,6 +444,7 @@ function createOverdubExerciseState() {
       appState.setUseDegrees(false);
 
       rebuildNotes();
+      applyExerciseTonic();
       appState.setVisualizationMode('highway');
       if (isWorkshopTemplate()) {
         appState.setOverdubMicTrailColorMode('voice');
@@ -485,7 +493,7 @@ function createOverdubExerciseState() {
       return state.exerciseManualShiftSemitones;
     },
 
-    getExerciseLockedTonic(): TonicNote | null {
+    getExerciseTonic(): TonicNote | null {
       if (!isStandaloneExerciseTemplate()) return null;
       return state.effectiveTonic;
     },
@@ -504,6 +512,7 @@ function createOverdubExerciseState() {
       const resumeTimeMs = highwayState.state.currentTimeMs;
       state.exerciseManualShiftSemitones = nextShift;
       rebuildNotes();
+      applyExerciseTonic();
       setHighwayTargetNotes();
       restoreExerciseRangeView();
 

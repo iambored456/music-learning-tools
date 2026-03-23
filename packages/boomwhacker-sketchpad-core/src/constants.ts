@@ -138,6 +138,16 @@ export const DEFAULTS = {
   INITIAL_KEYBOARD_FOCUS_ZONE: KEYBOARD_ZONES.CANVAS,
 } as const;
 
+export const MAIN_PLAYBACK_SYNTH_PROFILE = {
+  oscillatorType: DEFAULTS.MAIN_PLAYBACK_VOICE,
+  envelope: {
+    attack: 0.005,
+    decay: 0.1,
+    sustain: 0.2,
+    release: 0.3,
+  },
+} as const;
+
 export const COLOR_PALETTE = {
   '1': '#f090ae',
   b2_s1: '#f59383',

@@ -43,6 +43,8 @@ export interface TimeBasedVerticalLinesConfig {
   visibleTimeRange: { startMs: number; endMs: number };
   /** Time offset for beat alignment (e.g., lead-in time) */
   beatTimeOffsetMs?: number;
+  /** Optional independent time offset for measure boundaries (e.g., pickup bars) */
+  measureTimeOffsetMs?: number;
 }
 
 // ============================================================================
@@ -81,6 +83,10 @@ const SKIPPED_INTERVALS_FROM_REFERENCE = new Set<number>([1, 3, 5, 9, 11]);
 const EMPHASIZED_SOLID_INTERVAL = 0; // Legacy C line
 const EMPHASIZED_DASHED_INTERVAL = 4; // Legacy E line
 const FILLED_INTERVAL = 7; // Legacy G row
+const FILLED_INTERVAL_BORDER_INTERVALS = new Set<number>([
+  (FILLED_INTERVAL + 11) % 12,
+  (FILLED_INTERVAL + 1) % 12,
+]);
 
 const BASE_C_LINE_WIDTH = 3.33;
 const TONIC_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.9;
@@ -208,6 +214,7 @@ export function drawHorizontalLines(
 
     const intervalFromReference = (pitchClass - referencePitchClass + 12) % 12;
     if (SKIPPED_INTERVALS_FROM_REFERENCE.has(intervalFromReference)) continue;
+    if (FILLED_INTERVAL_BORDER_INTERVALS.has(intervalFromReference)) continue;
 
     const style = getLineStyleFromInterval(intervalFromReference);
 
@@ -317,24 +324,20 @@ export function drawTimeBasedVerticalLines(
   config: TimeBasedVerticalLinesConfig,
   coords: CoordinateUtils
 ): void {
-  const { viewportHeight, beatIntervalMs, measureIntervalMs, visibleTimeRange, beatTimeOffsetMs = 0 } = config;
+  const {
+    viewportHeight,
+    beatIntervalMs,
+    measureIntervalMs,
+    visibleTimeRange,
+    beatTimeOffsetMs = 0,
+    measureTimeOffsetMs = beatTimeOffsetMs,
+  } = config;
 
   const normalizedMeasureIntervalMs = (
     Number.isFinite(measureIntervalMs) && (measureIntervalMs as number) > 0
   )
     ? (measureIntervalMs as number)
     : null;
-  const measureStepBeatsRaw = normalizedMeasureIntervalMs
-    ? normalizedMeasureIntervalMs / beatIntervalMs
-    : null;
-  const measureStepBeatsRounded = measureStepBeatsRaw
-    ? Math.max(1, Math.round(measureStepBeatsRaw))
-    : null;
-  const hasIntegralMeasureStep = (
-    measureStepBeatsRaw !== null
-    && measureStepBeatsRounded !== null
-    && Math.abs(measureStepBeatsRaw - measureStepBeatsRounded) <= 1e-6
-  );
   const measureRemainderEpsilonMs = normalizedMeasureIntervalMs
     ? Math.max(0.5, normalizedMeasureIntervalMs * 1e-6)
     : 0;
@@ -351,17 +354,13 @@ export function drawTimeBasedVerticalLines(
     const x = coords.getTimeX?.(timeMs);
     if (x === undefined) continue;
 
-    // Determine if this is a measure boundary (every 4 beats from the offset)
+    // Measure boundaries may be offset independently from beat lines for pickup bars.
     let isMeasure = false;
     if (normalizedMeasureIntervalMs !== null) {
-      if (hasIntegralMeasureStep && measureStepBeatsRounded !== null) {
-        isMeasure = beatIndex % measureStepBeatsRounded === 0;
-      } else {
-        const elapsedSinceOffsetMs = timeMs - beatTimeOffsetMs;
-        const remainderMs = elapsedSinceOffsetMs % normalizedMeasureIntervalMs;
-        isMeasure = Math.abs(remainderMs) <= measureRemainderEpsilonMs
-          || Math.abs(Math.abs(remainderMs) - normalizedMeasureIntervalMs) <= measureRemainderEpsilonMs;
-      }
+      const elapsedSinceMeasureOffsetMs = timeMs - measureTimeOffsetMs;
+      const remainderMs = elapsedSinceMeasureOffsetMs % normalizedMeasureIntervalMs;
+      isMeasure = Math.abs(remainderMs) <= measureRemainderEpsilonMs
+        || Math.abs(Math.abs(remainderMs) - normalizedMeasureIntervalMs) <= measureRemainderEpsilonMs;
     }
 
     ctx.beginPath();

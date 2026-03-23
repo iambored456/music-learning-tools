@@ -17,6 +17,34 @@
   let startY = 0;
   let startMidi = 0;
 
+  function handleArrowPointerDown(event: PointerEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
+  function adjustRangeWithArrow(zone: 'top' | 'bottom', direction: 'up' | 'down'): void {
+    if (zone === 'top') {
+      if (direction === 'up') {
+        appState.expandYAxisUpper();
+      } else {
+        appState.contractYAxisUpper();
+      }
+      return;
+    }
+
+    if (direction === 'up') {
+      appState.contractYAxisLower();
+    } else {
+      appState.expandYAxisLower();
+    }
+  }
+
+  function handleArrowClick(event: MouseEvent, zone: 'top' | 'bottom', direction: 'up' | 'down'): void {
+    event.stopPropagation();
+    event.preventDefault();
+    adjustRangeWithArrow(zone, direction);
+  }
+
   function handlePointerDown(e: PointerEvent, zone: 'top' | 'bottom') {
     dragging = zone;
     startY = e.clientY;
@@ -80,6 +108,28 @@
     onpointerdown={(e) => handlePointerDown(e, 'top')}
   >
     {#if hoveredZone === 'top' && !dragging}
+      <div class="zone-actions zone-actions--top">
+        <button
+          class="zone-arrow"
+          type="button"
+          aria-label="Raise top pitch"
+          title="Raise top pitch"
+          onpointerdown={handleArrowPointerDown}
+          onclick={(event) => handleArrowClick(event, 'top', 'up')}
+        >
+          &#9650;
+        </button>
+        <button
+          class="zone-arrow"
+          type="button"
+          aria-label="Lower top pitch"
+          title="Lower top pitch"
+          onpointerdown={handleArrowPointerDown}
+          onclick={(event) => handleArrowClick(event, 'top', 'down')}
+        >
+          &#9660;
+        </button>
+      </div>
       <span class="drag-tooltip">Drag to set top pitch</span>
     {/if}
     {#if dragging === 'top'}
@@ -98,6 +148,28 @@
     onpointerdown={(e) => handlePointerDown(e, 'bottom')}
   >
     {#if hoveredZone === 'bottom' && !dragging}
+      <div class="zone-actions zone-actions--bottom">
+        <button
+          class="zone-arrow"
+          type="button"
+          aria-label="Raise bottom pitch"
+          title="Raise bottom pitch"
+          onpointerdown={handleArrowPointerDown}
+          onclick={(event) => handleArrowClick(event, 'bottom', 'up')}
+        >
+          &#9650;
+        </button>
+        <button
+          class="zone-arrow"
+          type="button"
+          aria-label="Lower bottom pitch"
+          title="Lower bottom pitch"
+          onpointerdown={handleArrowPointerDown}
+          onclick={(event) => handleArrowClick(event, 'bottom', 'down')}
+        >
+          &#9660;
+        </button>
+      </div>
       <span class="drag-tooltip">Drag to set bottom pitch</span>
     {/if}
     {#if dragging === 'bottom'}
@@ -151,11 +223,58 @@
     pointer-events: none;
   }
 
+  .zone-actions {
+    position: absolute;
+    left: 50%;
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    transform: translateX(-50%);
+    z-index: 1;
+  }
+
+  .zone-actions--top {
+    top: 8px;
+  }
+
+  .zone-actions--bottom {
+    bottom: 8px;
+  }
+
+  .zone-arrow {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(10, 18, 36, 0.9);
+    color: white;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+    transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .zone-arrow:hover {
+    transform: scale(1.06);
+    background: rgba(66, 123, 255, 0.94);
+    border-color: rgba(150, 190, 255, 0.75);
+  }
+
+  .zone-arrow:focus-visible {
+    outline: 2px solid rgba(150, 190, 255, 0.95);
+    outline-offset: 2px;
+  }
+
   .drag-zone--top .drag-tooltip {
-    bottom: 4px;
+    bottom: 8px;
   }
 
   .drag-zone--bottom .drag-tooltip {
-    top: 4px;
+    top: 8px;
   }
 </style>

@@ -16,7 +16,7 @@
   const isPlaying = $derived(overdubExerciseState.state.isPlaying);
   const waitForInputEnabled = $derived(overdubExerciseState.state.waitForInputEnabled);
   const keyShiftSemitones = $derived(overdubExerciseState.getExerciseKeyShiftSemitones());
-  const lockedTonic = $derived(overdubExerciseState.getExerciseLockedTonic());
+  const exerciseTonic = $derived(overdubExerciseState.getExerciseTonic());
   const canToggleLabelMode = $derived(
     isExerciseActive
       && appState.state.noteScaleDegrees.length === highwayState.state.targetNotes.length
@@ -103,15 +103,6 @@
   function handleHorizontalGridLinesToggle(enabled: boolean) {
     appState.setShowHorizontalGridLines(enabled);
   }
-
-  // Keep tonic locked to the exercise key while exercise mode is active.
-  $effect(() => {
-    if (!isExerciseActive || !lockedTonic) return;
-    if (appState.state.tonic !== lockedTonic) {
-      appState.setTonic(lockedTonic);
-      updateDrone();
-    }
-  });
 </script>
 
 {#if isExerciseActive}
@@ -210,9 +201,9 @@
         </div>
 
         <div class="field">
-          <span>Locked Key</span>
-          <div class="locked-key-value">
-            {lockedTonic ?? appState.state.tonic}
+          <span>Key</span>
+          <div class="key-value">
+            {exerciseTonic ?? appState.state.tonic}
           </div>
         </div>
 
@@ -481,7 +472,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .locked-key-value {
+  .key-value {
     font-size: 13px;
     font-weight: 700;
     color: var(--color-text);

@@ -12,6 +12,8 @@ export { default as SyncControls } from './SyncControls.svelte';
 export { default as SpeakingPitchPanel } from './SpeakingPitchPanel.svelte';
 export { default as ThemeSettings } from './ThemeSettings.svelte';
 export { default as DifficultySettings } from './DifficultySettings.svelte';
+export { default as RelaxedMicGatesToggle } from './RelaxedMicGatesToggle.svelte';
+export { default as ConstructionZoneModal } from './ConstructionZoneModal.svelte';
 export { default as OverdubControls } from './OverdubControls.svelte';
 export { default as OverdubBuilderToolbar } from './OverdubBuilderToolbar.svelte';
 export { default as ExerciseBottomControls } from './ExerciseBottomControls.svelte';

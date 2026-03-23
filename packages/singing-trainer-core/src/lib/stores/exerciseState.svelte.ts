@@ -119,6 +119,8 @@ const DEFAULT_STATE: ExerciseState = {
   pattern: STANDARD_4_PHASE_PATTERN,
 };
 
+const LONG_HOLD_MIDPOINT_WAIT_THRESHOLD_MS = 3000;
+
 /**
  * Generate a random MIDI pitch within range
  */
@@ -341,6 +343,9 @@ function createExerciseState() {
 
         if (role === 'input') {
           note.waitForInput = waitForInputEnabled && (phase.waitForInput ?? true);
+          if (note.waitForInput && durationMs > LONG_HOLD_MIDPOINT_WAIT_THRESHOLD_MS) {
+            note.extraWaitForInputOffsetsMs = [durationMs / 2];
+          }
         }
 
         if (phaseMode === 'fixedPitch') {

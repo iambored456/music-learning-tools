@@ -11,12 +11,28 @@
 
   import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
   import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import type { LyricPhrase } from '@mlt/singing-trainer-core/types/ultrastar.js';
+
+  const DEFAULT_LYRIC_LABEL_FIXED_PX = 16;
+  const BASE_CURRENT_PHRASE_FONT_SIZE_PX = 28;
+  const BASE_NEXT_PHRASE_FONT_SIZE_PX = 18;
 
   // Reactive state from stores
   const currentTimeMs = $derived(highwayState.state.currentTimeMs);
   const isPlaying = $derived(ultrastarState.state.isPlaying);
   const lyricPhrases = $derived(ultrastarState.state.lyricPhrases);
+  const karaokeTextScale = $derived.by(() => (
+    appState.state.lyricLabelMode === 'fixed'
+      ? appState.state.lyricLabelFixedPx / DEFAULT_LYRIC_LABEL_FIXED_PX
+      : appState.state.lyricLabelScale
+  ));
+  const currentPhraseFontSizePx = $derived(
+    Math.max(18, Math.round(BASE_CURRENT_PHRASE_FONT_SIZE_PX * karaokeTextScale))
+  );
+  const nextPhraseFontSizePx = $derived(
+    Math.max(12, Math.round(BASE_NEXT_PHRASE_FONT_SIZE_PX * karaokeTextScale))
+  );
 
   // Find current phrase based on time
   const currentPhrase: LyricPhrase | null = $derived.by(() => {
@@ -67,7 +83,10 @@
 </script>
 
 {#if isPlaying && currentPhrase}
-  <div class="lyrics-display">
+  <div
+    class="lyrics-display"
+    style={`--current-phrase-font-size: ${currentPhraseFontSizePx}px; --next-phrase-font-size: ${nextPhraseFontSizePx}px;`}
+  >
     <!-- Current phrase -->
     <div class="current-phrase">
       {#each currentPhrase.syllables as syllable, i}
@@ -107,7 +126,7 @@
   }
 
   .current-phrase {
-    font-size: 28px;
+    font-size: var(--current-phrase-font-size, 28px);
     font-weight: 600;
     color: white;
     text-shadow:
@@ -162,7 +181,7 @@
   }
 
   .next-phrase {
-    font-size: 18px;
+    font-size: var(--next-phrase-font-size, 18px);
     color: rgba(255, 255, 255, 0.5);
     font-style: italic;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);

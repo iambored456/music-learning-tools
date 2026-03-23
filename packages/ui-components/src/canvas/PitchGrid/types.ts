@@ -142,6 +142,10 @@ export interface PitchRowHighlightEntry {
   pulse?: boolean;
   /** Vertical scale factor for highlight height (0-1). 1 = full cell height, 0.5 = half. Default: 1. */
   heightScale?: number;
+  /** Extra fade distance above the core highlight, expressed as a multiple of cellHeight. */
+  fadeExtendTopScale?: number;
+  /** Extra fade distance below the core highlight, expressed as a multiple of cellHeight. */
+  fadeExtendBottomScale?: number;
 }
 
 /**
@@ -451,6 +455,8 @@ export interface PitchGridHighwayProps extends PitchGridBaseProps {
   beatIntervalMs?: number;
   /** Measure interval for vertical grid lines (ms) */
   measureIntervalMs?: number;
+  /** Optional time offset applied to measure boundaries */
+  measureTimeOffsetMs?: number;
 }
 
 /**

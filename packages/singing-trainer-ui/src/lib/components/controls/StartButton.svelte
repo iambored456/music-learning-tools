@@ -9,6 +9,12 @@
   import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
   import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
 
+  interface Props {
+    compact?: boolean;
+  }
+
+  let { compact = false }: Props = $props();
+
   let isLoading = $state(false);
 
   async function handleClick() {
@@ -37,6 +43,7 @@
   class="start-button"
   class:active={appState.state.isDetecting}
   class:loading={isLoading}
+  class:start-button--compact={compact}
   onclick={handleClick}
   disabled={isLoading}
 >
@@ -58,6 +65,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--spacing-sm);
+    width: 100%;
     padding: var(--spacing-md) var(--spacing-xl);
     font-size: var(--font-size-lg);
     font-weight: 600;
@@ -67,6 +75,13 @@
     box-shadow: var(--shadow-md);
     transition: all 0.2s ease;
     min-width: 140px;
+  }
+
+  .start-button--compact {
+    min-width: 0;
+    min-height: 5.75rem;
+    padding: var(--spacing-md);
+    font-size: var(--font-size-base);
   }
 
   .start-button:hover:not(:disabled) {

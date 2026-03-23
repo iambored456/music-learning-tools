@@ -84,6 +84,43 @@
     return Math.min(max, Math.max(min, value));
   }
 
+  function inferTemplateBeatsPerMeasure(template: {
+    config: {
+      beatsPerMeasure?: number;
+      timeGrid: { microbeatCount: number; microbeatsPerMacrobeat: number };
+    };
+  }): number {
+    const explicitBeatsPerMeasure = template.config.beatsPerMeasure;
+    if (typeof explicitBeatsPerMeasure === 'number' && Number.isFinite(explicitBeatsPerMeasure)) {
+      return clampNumber(Math.round(explicitBeatsPerMeasure), 1, 12);
+    }
+
+    const totalMacrobeats = template.config.timeGrid.microbeatCount / template.config.timeGrid.microbeatsPerMacrobeat;
+    const totalBeats = Math.max(1, Math.round(totalMacrobeats / 2));
+    const preferred = [4, 3, 6, 2, 5, 7, 8, 9, 10, 11, 12];
+    for (const candidate of preferred) {
+      if (totalBeats % candidate === 0) return candidate;
+    }
+    return clampNumber(totalBeats, 1, 12);
+  }
+
+  function getExpectedPhraseSettings(session: typeof overdubExerciseState.state) {
+    const template = session.template;
+    if (!template) return null;
+
+    const beatsPerMeasure = inferTemplateBeatsPerMeasure(template);
+    const totalMacrobeats = template.config.timeGrid.microbeatCount / template.config.timeGrid.microbeatsPerMacrobeat;
+    const totalBeats = Math.max(1, Math.round(totalMacrobeats / 2));
+
+    return {
+      tempoBpm: Math.max(20, Math.round(session.tempo || template.config.tempo)),
+      timeSignatureNumerator: beatsPerMeasure,
+      timeSignatureDenominator: 4,
+      measures: Math.max(1, Math.ceil(totalBeats / beatsPerMeasure)),
+      countInBeats: Math.max(0, Math.round(template.config.countInBeats ?? 4)),
+    };
+  }
+
   function fitTimelineToExerciseDuration() {
     const durationMs = overdubIsActive
       ? (overdubExerciseState.state.durationMs || overdubState.captureDurationMs)
@@ -516,6 +553,19 @@
     return true;
   }
 
+  function doesProjectPhraseMatchSession(session: typeof overdubExerciseState.state): boolean {
+    const expectedPhrase = getExpectedPhraseSettings(session);
+    if (!expectedPhrase) return false;
+
+    return (
+      Math.round(project.phrase.tempoBpm) === expectedPhrase.tempoBpm
+      && Math.round(project.phrase.timeSignatureNumerator) === expectedPhrase.timeSignatureNumerator
+      && Math.round(project.phrase.timeSignatureDenominator) === expectedPhrase.timeSignatureDenominator
+      && Math.round(project.phrase.measures) === expectedPhrase.measures
+      && Math.round(project.phrase.countInBeats) === expectedPhrase.countInBeats
+    );
+  }
+
   $effect(() => {
     if (overdubState.state.initialized) return;
     void handleInitialize();
@@ -526,10 +576,21 @@
     if (!session.isActive || !session.template || !session.exerciseId) {
       return;
     }
-    if (isProjectScaffoldedForTemplate(session.template)) {
+    const hasTemplateScaffold = isProjectScaffoldedForTemplate(session.template);
+    if (hasTemplateScaffold && doesProjectPhraseMatchSession(session)) {
       return;
     }
     if (scaffoldInFlight) {
+      return;
+    }
+
+    if (hasTemplateScaffold) {
+      const expectedPhrase = getExpectedPhraseSettings(session);
+      if (!expectedPhrase) {
+        return;
+      }
+
+      overdubState.setPhraseSettings(expectedPhrase);
       return;
     }
 

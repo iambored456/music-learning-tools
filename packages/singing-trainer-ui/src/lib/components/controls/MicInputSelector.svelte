@@ -3,10 +3,8 @@
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import {
     getPreferredInputDeviceId,
-    getRelaxedMicGatesEnabled,
     listAudioInputDevices,
     setPreferredInputDeviceId,
-    setRelaxedMicGatesEnabled,
     startDetection,
     stopDetection,
     type AudioInputDeviceInfo,
@@ -14,10 +12,17 @@
 
   let devices = $state<AudioInputDeviceInfo[]>([]);
   let selectedValue = $state<string>('default');
-  let relaxedMicGatesEnabled = $state(false);
   let isLoading = $state(false);
   let isApplying = $state(false);
   let loadError = $state<string | null>(null);
+
+  function hasDevices(): boolean {
+    return devices.length > 0;
+  }
+
+  function showEmptyState(): boolean {
+    return !isLoading && !isApplying && devices.length === 0;
+  }
 
   async function refreshDevices(): Promise<void> {
     isLoading = true;
@@ -25,6 +30,10 @@
     try {
       devices = await listAudioInputDevices();
       const preferredId = getPreferredInputDeviceId();
+      if (devices.length === 0) {
+        selectedValue = '';
+        return;
+      }
       selectedValue = preferredId ?? 'default';
       if (preferredId && !devices.some((device) => device.deviceId === preferredId)) {
         selectedValue = 'default';
@@ -64,14 +73,7 @@
     void applySelection(nextValue);
   }
 
-  function handleRelaxedMicGatesToggle(event: Event): void {
-    const checked = (event.currentTarget as HTMLInputElement).checked;
-    relaxedMicGatesEnabled = checked;
-    setRelaxedMicGatesEnabled(checked);
-  }
-
   onMount(() => {
-    relaxedMicGatesEnabled = getRelaxedMicGatesEnabled();
     void refreshDevices();
   });
 </script>
@@ -87,37 +89,27 @@
   <select
     id="mic-input-device"
     class="selector"
-    value={selectedValue}
+    class:selector--empty={showEmptyState()}
+    value={showEmptyState() ? '' : selectedValue}
     onchange={handleChange}
-    disabled={isLoading || isApplying}
+    disabled={isLoading || isApplying || showEmptyState()}
   >
-    <option value="default">System Default</option>
-    {#each devices as device}
-      <option value={device.deviceId}>{device.label}</option>
-    {/each}
+    {#if showEmptyState()}
+      <option value="">No input device found</option>
+    {:else}
+      <option value="default">System Default</option>
+      {#each devices as device}
+        <option value={device.deviceId}>{device.label}</option>
+      {/each}
+    {/if}
   </select>
 
   {#if isApplying}
     <p class="hint">Restarting microphone capture...</p>
   {:else if loadError}
     <p class="error">{loadError}</p>
-  {:else if devices.length === 0}
-    <p class="hint">No input devices found yet. Click Start once, then Refresh.</p>
-  {:else}
+  {:else if hasDevices()}
     <p class="hint">Choose a device if the current input is silent.</p>
-  {/if}
-
-  <label class="testing-toggle">
-    <input
-      id="mic-relaxed-gates"
-      type="checkbox"
-      checked={relaxedMicGatesEnabled}
-      onchange={handleRelaxedMicGatesToggle}
-    />
-    <span>User testing mode: ignore confidence and dB gates</span>
-  </label>
-  {#if relaxedMicGatesEnabled}
-    <p class="hint">Low-confidence and low-level mic input is accepted while this mode is on.</p>
   {/if}
 </div>
 
@@ -167,6 +159,17 @@
     color: var(--color-text);
   }
 
+  .selector--empty {
+    color: var(--color-text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .selector:disabled {
+    cursor: default;
+    opacity: 1;
+  }
+
   .hint,
   .error {
     margin: 0;
@@ -180,20 +183,5 @@
 
   .error {
     color: #ff8f8f;
-  }
-
-  .testing-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-xs);
-    color: var(--color-text);
-    cursor: pointer;
-    user-select: none;
-    margin-top: var(--spacing-xs);
-  }
-
-  .testing-toggle input[type='checkbox'] {
-    cursor: pointer;
   }
 </style>

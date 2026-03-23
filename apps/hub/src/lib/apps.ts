@@ -49,6 +49,15 @@ export const appCards: AppCard[] = [
     accent: '#4d9b7f',
   },
   {
+    id: 'boomwhacker-video-builder',
+    name: 'Boomwhacker Video Builder',
+    description: 'Teacher-focused chart editor for uploaded audio, beat pins, scrolling boomwhacker lanes, and video export.',
+    href: withBase('boomwhacker-video-builder/'),
+    preview: withBase('previews/boomwhacker-video-builder.png'),
+    tags: ['Authoring', 'Beat Map', 'Video Export'],
+    accent: '#5b8ef0',
+  },
+  {
     id: 'diatonic-compass',
     name: 'Diatonic Compass',
     description: 'Interactive compass for keys, modes, and diatonic relationships.',

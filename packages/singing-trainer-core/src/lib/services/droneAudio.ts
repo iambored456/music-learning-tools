@@ -36,7 +36,8 @@ let currentFineTuneCents: number | null = null;
 let activeEngine: DroneEngine | null = null;
 
 const STRING_START_OFFSETS = [0.0, 0.28, 0.58, 0.46, 0.8, 0.12] as const;
-const TANPURA_BASE_STRING_GAIN = 0.15;
+const TANPURA_BASE_STRING_GAIN = 0.22;
+const TANPURA_BASE_VOLUME_BOOST_DB = 6;
 
 /**
  * Initialize synth fallback when the tanpura sample cannot be loaded.
@@ -110,7 +111,8 @@ async function ensureTanpuraPlayer(): Promise<Tone.Player | null> {
 
 function setTanpuraVolume(volumeDb: number): void {
   if (!tanpuraGain) return;
-  tanpuraGain.gain.rampTo(Tone.dbToGain(volumeDb), 0.08);
+  const effectiveVolumeDb = Math.min(volumeDb + TANPURA_BASE_VOLUME_BOOST_DB, 0);
+  tanpuraGain.gain.rampTo(Tone.dbToGain(effectiveVolumeDb), 0.08);
 }
 
 function applyTanpuraTuning(): void {

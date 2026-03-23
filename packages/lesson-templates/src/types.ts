@@ -361,6 +361,15 @@ export interface OverdubExerciseConfig {
   tempo: number;
   /** Time grid defining the rhythmic structure */
   timeGrid: ExerciseTimeGrid;
+  /**
+   * Optional notated beats per measure for the exercise timeline.
+   * Current overdub timing assumes quarter-note beats.
+   */
+  beatsPerMeasure?: number;
+  /**
+   * Optional anacrusis length in beats before the first full measure boundary.
+   */
+  pickupBeats?: number;
   /** Voices in the exercise */
   voices: ExerciseVoice[];
   /** Minimum MIDI pitch for viewport */

@@ -33,10 +33,6 @@
     <span>{METER_MIN_DB} dB</span>
     <span>{METER_MAX_DB} dB</span>
   </div>
-
-  {#if !isDetecting}
-    <p class="meter-hint">Start the microphone to view live input level.</p>
-  {/if}
 </div>
 
 <style>
@@ -94,11 +90,5 @@
     font-size: 0.68rem;
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
-  }
-
-  .meter-hint {
-    margin: 0;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
   }
 </style>

@@ -8,6 +8,13 @@
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
 
+  interface Props {
+    compact?: boolean;
+    showHint?: boolean;
+  }
+
+  let { compact = false, showHint = true }: Props = $props();
+
   const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   const currentNote = $derived(() => {
@@ -30,7 +37,7 @@
   const isDetecting = $derived(appState.state.isDetecting);
 </script>
 
-<div class="pitch-readout">
+<div class="pitch-readout" class:pitch-readout--compact={compact}>
   {#if currentNote()}
     {@const note = currentNote()!}
     <div class="note-display">
@@ -45,11 +52,13 @@
       <span class="clarity">{note.clarity}%</span>
     </div>
   {:else}
-    <div class="no-pitch">
+    <div class="no-pitch" class:no-pitch--compact={compact}>
       <span class="placeholder">---</span>
-      <span class="hint">
-        {isDetecting ? 'Sing or hum into the microphone' : 'Click Start to enable the microphone'}
-      </span>
+      {#if showHint}
+        <span class="hint">
+          {isDetecting ? 'Sing or hum into the microphone' : 'Click Start to enable the microphone'}
+        </span>
+      {/if}
     </div>
   {/if}
 </div>
@@ -65,6 +74,12 @@
     border-radius: 12px;
     min-width: 200px;
     min-height: 100px;
+  }
+
+  .pitch-readout--compact {
+    min-width: 0;
+    min-height: 5.75rem;
+    padding: 12px;
   }
 
   .note-display {
@@ -92,6 +107,15 @@
     color: var(--color-text-muted);
   }
 
+  .pitch-readout--compact .details {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-top: 6px;
+    font-size: var(--font-size-xs);
+    text-align: center;
+  }
+
   .cents {
     font-weight: 500;
   }
@@ -114,6 +138,19 @@
   .placeholder {
     font-size: var(--font-size-2xl);
     color: var(--color-text-muted);
+  }
+
+  .pitch-readout--compact .note-name,
+  .pitch-readout--compact .placeholder {
+    font-size: var(--font-size-xl);
+  }
+
+  .pitch-readout--compact .octave {
+    font-size: var(--font-size-base);
+  }
+
+  .no-pitch--compact {
+    gap: 0;
   }
 
   .hint {

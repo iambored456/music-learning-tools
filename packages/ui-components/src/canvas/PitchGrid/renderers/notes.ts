@@ -30,6 +30,10 @@ const MIN_TAIL_LINE_WIDTH = 1;
 const SHADOW_BLUR_RADIUS = 1.5;
 const WINDOW_FILL_COLOR = 'rgba(76, 175, 80, 0.18)';
 const WINDOW_STROKE_COLOR = 'rgba(76, 175, 80, 0.65)';
+const TARGET_LABEL_TEXT_X_OFFSET = 4;
+const TARGET_LABEL_BG_TEXT_INSET_LEFT = 2;
+const TARGET_LABEL_PADDING = 3;
+const TARGET_LABEL_COLLISION_GAP_PX = 6;
 
 // ============================================================================
 // Types
@@ -701,6 +705,14 @@ interface TrailPoint {
   color: RGB;
 }
 
+interface FixedTargetLabelPlacement {
+  textX: number;
+  bgLeft: number;
+  bgTop: number;
+  bgWidth: number;
+  bgHeight: number;
+}
+
 function findHistoryStartIndex(history: PitchHistoryPoint[], cutoffTime: number): number {
   let low = 0;
   let high = history.length;
@@ -1061,6 +1073,36 @@ function drawGradientTargetNote(
   ctx.restore();
 }
 
+function placeFixedTargetLabel(
+  rowIndex: number,
+  startX: number,
+  y: number,
+  fontSize: number,
+  textWidth: number,
+  occupiedLabelRightByRow: Map<number, number>,
+): FixedTargetLabelPlacement {
+  const textX = startX + TARGET_LABEL_TEXT_X_OFFSET;
+  const bgLeft = textX - TARGET_LABEL_BG_TEXT_INSET_LEFT;
+  const bgWidth = textWidth + (TARGET_LABEL_PADDING * 2);
+  const bgTop = y - (fontSize / 2) - TARGET_LABEL_PADDING;
+  const bgHeight = fontSize + (TARGET_LABEL_PADDING * 2);
+  const occupiedRight = occupiedLabelRightByRow.get(rowIndex);
+  const shiftX = occupiedRight === undefined
+    ? 0
+    : Math.max(0, (occupiedRight + TARGET_LABEL_COLLISION_GAP_PX) - bgLeft);
+  const resolvedBgLeft = bgLeft + shiftX;
+
+  occupiedLabelRightByRow.set(rowIndex, resolvedBgLeft + bgWidth);
+
+  return {
+    textX: textX + shiftX,
+    bgLeft: resolvedBgLeft,
+    bgTop,
+    bgWidth,
+    bgHeight,
+  };
+}
+
 /**
  * Draw target notes on the highway (Guitar Hero style).
  */
@@ -1077,6 +1119,7 @@ export function drawTargetNotes(
   const { cellHeight, nowLineX = 100, pixelsPerSecond } = config;
   const pitchToleranceSemitones = 0.5; // Half semitone tolerance for hit detection
   const targetNoteStyle = config.targetNoteStyle ?? 'stadium';
+  const occupiedLabelRightByRow = new Map<number, number>();
 
   for (const note of targetNotes) {
     // Calculate X position based on time
@@ -1231,16 +1274,26 @@ export function drawTargetNotes(
 
         // Draw text background for better visibility
         const textWidth = ctx.measureText(labelText).width;
-        const padding = 3;
-        const bgX = startX + 4;
-        const bgY = y - fontSize / 2 - padding;
+        const labelPlacement = placeFixedTargetLabel(
+          rowIndex,
+          startX,
+          y,
+          fontSize,
+          textWidth,
+          occupiedLabelRightByRow,
+        );
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(bgX - 2, bgY, textWidth + padding * 2, fontSize + padding * 2);
+        ctx.fillRect(
+          labelPlacement.bgLeft,
+          labelPlacement.bgTop,
+          labelPlacement.bgWidth,
+          labelPlacement.bgHeight,
+        );
 
         // Draw text
         ctx.fillStyle = isBeingHit ? '#FFD700' : (isGolden ? '#FFEB3B' : '#FFFFFF');
-        ctx.fillText(labelText, bgX, y);
+        ctx.fillText(labelText, labelPlacement.textX, y);
 
         ctx.restore();
       }

@@ -28,6 +28,8 @@ export const AMAZING_GRACE: OverdubExerciseTemplate = {
       microbeatsPerMacrobeat: 2,
       macrobeatGroupings: Array.from({ length: 96 }, () => 2 as const),
     },
+    beatsPerMeasure: 3,
+    pickupBeats: 1,
     voices: [
       {
         voiceId: 'melody',

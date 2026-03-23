@@ -36,7 +36,7 @@
     <span class="setting-label">Note Colors</span>
     <select class="setting-select" value={appState.state.noteColorMode} onchange={handleNoteColorChange}>
       <option value="green">Default (Green)</option>
-      <option value="pitchColor">Pitch Colors</option>
+      <option value="pitchColor">Pitch Colours</option>
     </select>
   </div>
 

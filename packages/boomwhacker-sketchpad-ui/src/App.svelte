@@ -242,6 +242,7 @@
   const BANK_LATTICE_COLUMN_COUNT_CIRCLE = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_CIRCLE);
   const BANK_LATTICE_COLUMN_COUNT_OVAL = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_OVAL);
   const BANK_LATTICE_COLUMN_COUNT_DIAMOND = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
+  const countInIconUrl = new URL('./assets/count-in.svg', import.meta.url).href;
   const loopIconUrl = new URL('./assets/loop.svg', import.meta.url).href;
   const volumeIconUrl = new URL('./assets/volume.svg', import.meta.url).href;
   const undoIconUrl = new URL('./assets/undo.svg', import.meta.url).href;
@@ -287,6 +288,7 @@
   const PLACED_SIXTEENTH_HEX_PATH = createSixteenthHexPath(12.5, 50, 21, 96);
   const PLACED_SIXTEENTH_HEX_VIEWBOX = '0 0 25 100';
   const SIXTEENTH_SLOTS: SixteenthSlot[] = [0, 1];
+  const COUNT_IN_NUMBERS = [4, 3, 2, 1] as const;
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
@@ -306,6 +308,8 @@
   let karaokeBallArcOffsetPx = 0;
   let karaokeArcHeightPx = 64;
   let karaokeBallSizePx = 40;
+  let countInEnabled = true;
+  let countInDisplayNumber: number | null = null;
   let karaokeAnchor: KaraokeAnchor | null = null;
   let karaokeAnimationFrame: number | null = null;
   let karaokeAnimationToken = 0;
@@ -3098,6 +3102,10 @@
     return Math.max(70, Math.round(60_000 / state.microbeatTempo));
   }
 
+  function countInBeatIntervalMs(): number {
+    return Math.max(140, Math.round(playbackIntervalMs() * MICROBEATS_PER_BEAT));
+  }
+
   function playbackPulseDurationMs(): number {
     return Math.max(220, Math.min(760, Math.round(playbackIntervalMs() * 1.15)));
   }
@@ -3287,6 +3295,32 @@
     playbackTimer = setInterval(playbackStep, playbackIntervalMs());
   }
 
+  function clearCountInDisplay(): void {
+    countInDisplayNumber = null;
+  }
+
+  function startCountIn(firstAnchor: KaraokeAnchor): number {
+    const beatMs = countInBeatIntervalMs();
+
+    clearKaraokeAnimation();
+    setKaraokeBallToAnchor(firstAnchor);
+    karaokeAnchor = firstAnchor;
+
+    countInDisplayNumber = COUNT_IN_NUMBERS[0];
+    audio.playCountInCueNow();
+
+    for (let index = 1; index < COUNT_IN_NUMBERS.length; index += 1) {
+      const countNumber = COUNT_IN_NUMBERS[index];
+      queuePlaybackTimeout(() => {
+        if (!isPlaying) return;
+        countInDisplayNumber = countNumber;
+        audio.playCountInCueNow();
+      }, beatMs * index);
+    }
+
+    return beatMs * COUNT_IN_NUMBERS.length;
+  }
+
   function startPlayback(): void {
     if (isPlaying) return;
 
@@ -3295,6 +3329,7 @@
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     clearKaraokeAnimation();
+    clearCountInDisplay();
     playbackHighlight = null;
     playbackHighlightAnchor = null;
 
@@ -3306,7 +3341,12 @@
 
     const currentIndex = playbackIndex % totalCells;
     const firstAnchor = karaokeAnchorFromPlaybackIndex(currentIndex);
-    const leadInMs = firstAnchor ? startKaraokeLeadIn(firstAnchor) : 0;
+    const shouldRunCountIn = countInEnabled && playbackIndex === 0;
+    const leadInMs = firstAnchor
+      ? shouldRunCountIn
+        ? startCountIn(firstAnchor)
+        : startKaraokeLeadIn(firstAnchor)
+      : 0;
     if (!firstAnchor) {
       karaokeBallRowIndex = null;
       karaokeBallLeftPercent = 50;
@@ -3314,6 +3354,7 @@
 
     queuePlaybackTimeout(() => {
       if (!isPlaying) return;
+      clearCountInDisplay();
       playbackStep();
 
       if (isPlaying) {
@@ -3328,6 +3369,7 @@
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     clearKaraokeAnimation();
+    clearCountInDisplay();
     playbackHighlight = null;
     playbackHighlightAnchor = null;
   }
@@ -3338,6 +3380,7 @@
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     clearKaraokeAnimation();
+    clearCountInDisplay();
     playbackIndex = 0;
     playbackCursor = null;
     karaokeBallRowIndex = null;
@@ -3358,6 +3401,10 @@
     if (!ready) return;
 
     startPlayback();
+  }
+
+  function toggleCountIn(): void {
+    countInEnabled = !countInEnabled;
   }
 
   function toggleLoop(): void {
@@ -3651,6 +3698,7 @@
     bind:this={controlsPanelElement}
     style:height={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null ? `${syncedToolbarPanelHeightPx}px` : undefined}
   >
+    {#if !isStudentView || !activeStudentView.hideTempoSlider}
     <div
       class="controls-group tempo-group"
       bind:this={tempoGroupElement}
@@ -3667,9 +3715,11 @@
         showEighth={false}
         showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
         showDottedQuarter={false}
+        showRows={false}
         showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
       />
     </div>
+    {/if}
 
     <div class="controls-group transport-group">
       <div class="transport-row">
@@ -3739,6 +3789,17 @@
         </button>
         <button
           type="button"
+          class="transport-btn count-in-btn"
+          class:active={countInEnabled}
+          on:click={toggleCountIn}
+          title={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
+          aria-label={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
+          aria-pressed={countInEnabled}
+        >
+          <img src={countInIconUrl} alt="" class="transport-icon transport-icon--count-in" />
+        </button>
+        <button
+          type="button"
           class="transport-btn"
           class:active={isLooping}
           on:click={toggleLoop}
@@ -3779,6 +3840,23 @@
         {/if}
       </div>
     </div>
+
+    {#if !isStudentView || !activeStudentView.hideQuarterTempo}
+    <div class="controls-group tempo-rows-group">
+      <TempoControls
+        quarterTempo={state.microbeatTempo / 2}
+        minQuarter={MICROBEAT_TEMPO_MIN / 2}
+        maxQuarter={MICROBEAT_TEMPO_MAX / 2}
+        step={1}
+        sliderOrientation="vertical"
+        onchange={handleQuarterTempoChange}
+        showEighth={false}
+        showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
+        showDottedQuarter={false}
+        showSlider={false}
+      />
+    </div>
+    {/if}
 
     <div class="controls-group settings-group">
       <a
@@ -4132,9 +4210,14 @@
           {#if karaokeBallRowIndex === rowIndex}
             <div
               class="karaoke-ball"
+              class:karaoke-ball--count-in={countInDisplayNumber !== null}
               style={`--karaoke-ball-left:${karaokeBallLeftPercent}%; --karaoke-ball-y:${karaokeBallArcOffsetPx}px; --karaoke-ball-size-px:${karaokeBallSizePx}px;`}
               aria-hidden="true"
-            ></div>
+            >
+              {#if countInDisplayNumber !== null}
+                <span class="karaoke-ball-count">{countInDisplayNumber}</span>
+              {/if}
+            </div>
           {/if}
           <div
             class="track-row-grids"
