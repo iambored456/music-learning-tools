@@ -52,6 +52,14 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
+function clampUnitInterval(value: unknown, fallback: number): number {
+  const parsed = asFiniteNumber(value);
+  if (parsed === null) {
+    return fallback;
+  }
+  return Math.min(1, Math.max(0, parsed));
+}
+
 function normalizeMetadata(value: unknown, fallbackTitle: string): ProjectMetadata {
   const source = asRecord(value);
   const base = createBoomwhackerVideoBuilderProject({ title: fallbackTitle }).metadata;
@@ -262,6 +270,8 @@ function normalizePlaybackState(value: unknown): PlaybackState {
     includeSynthPlayback: asBoolean(source?.includeSynthPlayback) ?? base.includeSynthPlayback,
     playAudio,
     playGrid,
+    audioVolume: clampUnitInterval(source?.audioVolume, base.audioVolume),
+    synthVolume: clampUnitInterval(source?.synthVolume, base.synthVolume),
     playbackOffsetSec: asFiniteNumber(source?.playbackOffsetSec) ?? base.playbackOffsetSec,
   };
 }

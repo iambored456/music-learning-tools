@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { createSixteenthHexPath } from '@mlt/notation-glyphs';
   import { TempoControls } from '@mlt/tempo-controls-ui';
+  import NoteGlyph from './NoteGlyph.svelte';
   import {
     COLOR_PALETTE,
     DEFAULTS,
@@ -19,6 +20,12 @@
     type BoomwhackerSketchpadState,
     type TonicValue,
   } from '@mlt/boomwhacker-sketchpad-core';
+  import {
+    deleteSketchpadLibraryEntry,
+    listSketchpadLibraryEntries,
+    saveSketchpadLibraryEntry,
+    type SketchpadLibraryEntry,
+  } from './libraryStore.js';
 
   const hubHref = new URL('..', `https://music-learning-tools.local${import.meta.env.BASE_URL}`).pathname;
 
@@ -32,6 +39,13 @@
     interval: number;
     color: string;
     shape: NoteShape;
+  };
+
+  type NoteIconId = 'clap' | 'stomp';
+
+  type ExtendedNoteDefinition = NoteDefinition & {
+    sampleId?: string;
+    iconId?: NoteIconId;
   };
 
   type OvalCellContent = {
@@ -60,6 +74,14 @@
 
   type GridZone = 'pickup' | 'main';
 
+  type VoiceIndex = 0 | 1;
+
+  type VoiceCountMode = 1 | 2;
+
+  type VoiceLayoutMode = 'intertwined' | 'separate';
+
+  type TrackStyle = 'stacked' | 'horizontal';
+
   type GridRow = {
     id: string;
     cells: Array<GridCellContent | null>;
@@ -77,17 +99,23 @@
     microbeatTempo?: number;
     rows: Array<Array<PersistedCanvasCell | null>>;
     pickupCells: Array<PersistedCanvasCell | null>;
+    voiceCount?: VoiceCountMode;
+    voiceLayoutMode?: VoiceLayoutMode;
+    trackStyle?: TrackStyle;
+    voices?: PersistedVoiceCanvas[];
   };
 
   type CanvasHistorySnapshot = {
     pickupBeats: number;
-    rows: Array<Array<PersistedCanvasCell | null>>;
-    pickupCells: Array<PersistedCanvasCell | null>;
+    voiceCount: VoiceCountMode;
+    voiceLayoutMode: VoiceLayoutMode;
+    voices: [PersistedVoiceCanvas, PersistedVoiceCanvas];
   };
 
   type DragPayload = {
     source: 'bank' | 'cell';
     note: PlacedNote;
+    voiceIndex?: VoiceIndex;
     zone?: GridZone;
     rowIndex?: number;
     cellIndex?: number;
@@ -109,6 +137,7 @@
   };
 
   type GridDropTarget = GridCellRef & {
+    voiceIndex: VoiceIndex;
     sixteenthSlot: SixteenthSlot | null;
   };
 
@@ -136,6 +165,19 @@
     top: BankLatticeToken[];
     middle: BankLatticeToken[];
     bottom: BankLatticeToken[];
+  };
+
+  type PersistedVoiceCanvas = {
+    rows: Array<Array<PersistedCanvasCell | null>>;
+    pickupCells: Array<PersistedCanvasCell | null>;
+  };
+
+  type RenderedTrackRow = {
+    voiceIndex: VoiceIndex;
+    rowIndex: number;
+    key: string;
+    row: GridRow;
+    pickupRow: GridRow;
   };
 
   type ColorPaletteMode = 'oklch' | 'chromanotes';
@@ -169,6 +211,13 @@
     rowCount: number;
   };
 
+  type AudioReadinessResult = {
+    ready: boolean;
+    resumedAudioContext: boolean;
+    stabilizationDelayMs: number;
+    startElapsedMs: number;
+  };
+
   type StudentViewSettings = {
     hideMainVoice?: boolean;
     hideVolumeSlider?: boolean;
@@ -191,12 +240,60 @@
     pickupBeats: number;
     rows: Array<Array<PersistedCanvasCell | null>>;
     pickupCells: Array<PersistedCanvasCell | null>;
+    voiceCount?: VoiceCountMode;
+    voiceLayoutMode?: VoiceLayoutMode;
+    trackStyle?: TrackStyle;
+    voices?: PersistedVoiceCanvas[];
     sv?: StudentViewSettings;
   };
 
   type ShareDecodeResult =
     | { ok: true; doc: ShareDocument }
     | { ok: false; reason: 'checksum' | 'decode' | 'decompress' | 'parse' | 'version-unknown' | 'schema' | 'version-mismatch' };
+
+  type LibrarySketchSettings = {
+    countInEnabled: boolean;
+    macrobeatMetronomeEnabled: boolean;
+    metronomeVolume: number;
+    colorPaletteMode: ColorPaletteMode;
+    showAccidentals: boolean;
+    showEighthsBank: boolean;
+    showSixteenthsBank: boolean;
+    mainPlaybackVoice: OscillatorType;
+    mainVolume: number;
+  };
+
+  type LibrarySketchDocument = {
+    v: 1;
+    composition: ShareDocument;
+    settings: LibrarySketchSettings;
+  };
+
+  const PERCUSSION_NOTE_IDS = ['clap', 'stomp'] as const;
+
+  const SUPPLEMENTAL_NOTE_DEFINITIONS: ExtendedNoteDefinition[] = [
+    {
+      id: 'clap',
+      label: 'Clap',
+      interval: 0,
+      colorId: 'clap',
+      sampleId: 'roland-tr-909-roland-tr-909-handclp2',
+      iconId: 'clap',
+    },
+    {
+      id: 'stomp',
+      label: 'Stomp',
+      interval: 0,
+      colorId: 'stomp',
+      sampleId: 'roland-tr-909-roland-tr-909-st3t0s3',
+      iconId: 'stomp',
+    },
+  ];
+
+  const SUPPLEMENTAL_NOTE_COLORS = {
+    clap: '#f6c85f',
+    stomp: '#c58b66',
+  } as const;
 
   const CHROMANOTES_PALETTE: Record<string, string> = {
     '1': '#e20011',
@@ -211,6 +308,8 @@
     '6': '#262388',
     b7_s6: '#6e2771',
     '7': '#b9017a',
+    clap: SUPPLEMENTAL_NOTE_COLORS.clap,
+    stomp: SUPPLEMENTAL_NOTE_COLORS.stomp,
   };
 
   const model = createBoomwhackerSketchpadModel();
@@ -243,6 +342,7 @@
   const BANK_LATTICE_COLUMN_COUNT_OVAL = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_OVAL);
   const BANK_LATTICE_COLUMN_COUNT_DIAMOND = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
   const countInIconUrl = new URL('./assets/count-in.svg', import.meta.url).href;
+  const metronomeIconUrl = new URL('./assets/metronome.svg', import.meta.url).href;
   const loopIconUrl = new URL('./assets/loop.svg', import.meta.url).href;
   const volumeIconUrl = new URL('./assets/volume.svg', import.meta.url).href;
   const undoIconUrl = new URL('./assets/undo.svg', import.meta.url).href;
@@ -251,9 +351,12 @@
   const CANVAS_HISTORY_MAX_SIZE = 300;
   const PLAYBACK_HIGHLIGHT_DEBUG = false;
   const PLAYED_NOTE_MUTING_DEBUG = false;
+  const PLAYBACK_STARTUP_DEBUG = true;
   const PICKUP_RENDER_DEBUG = false;
   const MOBILE_LAYOUT_DEBUG = true;
   const TEMPO_SLIDER_LAYOUT_DEBUG = false;
+  const AUDIO_RESUME_STABILIZATION_MS = 120;
+  const CANVAS_PANEL_REPOSITION_MS = 240;
   const BANK_TOUCH_TAP_MAX_MOVEMENT_PX = 12;
   const VIEWPORT_FIT_HEIGHT_MAX = 1100;
   const VIEWPORT_FIT_WIDTH_MIN = 700;
@@ -289,35 +392,44 @@
   const PLACED_SIXTEENTH_HEX_VIEWBOX = '0 0 25 100';
   const SIXTEENTH_SLOTS: SixteenthSlot[] = [0, 1];
   const COUNT_IN_NUMBERS = [4, 3, 2, 1] as const;
+  const ACCENTED_COUNT_IN_INDEX = COUNT_IN_NUMBERS.length - 1;
+  const DEFAULT_METRONOME_VOLUME = 0.72;
+  const DEFAULT_VOICE_COUNT: VoiceCountMode = 1;
+  const DEFAULT_VOICE_LAYOUT_MODE: VoiceLayoutMode = 'intertwined';
+  const DEFAULT_TRACK_STYLE: TrackStyle = 'stacked';
+  const VOICE_INDEXES = [0, 1] as const;
+  const HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO = 0.34;
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
   let state: BoomwhackerSketchpadState = model.getState();
 
   let audioReady = false;
-  let audioStartPromise: Promise<boolean> | null = null;
+  let audioStartPromise: Promise<AudioReadinessResult> | null = null;
 
   let isPlaying = false;
   let isLooping = false;
   let playbackIndex = 0;
   let playbackTimer: ReturnType<typeof setInterval> | null = null;
   let pendingPlaybackTimeouts = new Set<ReturnType<typeof setTimeout>>();
-  let playbackCursor: GridCellRef | null = null;
-  let karaokeBallRowIndex: number | null = null;
-  let karaokeBallLeftPercent = 50;
-  let karaokeBallArcOffsetPx = 0;
+  let voicePlaybackCursors: [GridCellRef | null, GridCellRef | null] = [null, null];
+  let voiceKaraokeBallRowIndexes: [number | null, number | null] = [null, null];
+  let voiceKaraokeBallLeftPercents: [number, number] = [50, 50];
+  let voiceKaraokeBallArcOffsetPxs: [number, number] = [0, 0];
   let karaokeArcHeightPx = 64;
   let karaokeBallSizePx = 40;
   let countInEnabled = true;
+  let macrobeatMetronomeEnabled = false;
   let countInDisplayNumber: number | null = null;
-  let karaokeAnchor: KaraokeAnchor | null = null;
-  let karaokeAnimationFrame: number | null = null;
-  let karaokeAnimationToken = 0;
-  let trackRowElements: Array<HTMLElement | null> = [];
-  let playbackHighlight: PlaybackHighlight | null = null;
-  let playbackHighlightAnchor: KaraokeAnchor | null = null;
-  let playbackPulseFlip = false;
-  let playedCellIndexes = new Set<number>();
+  let metronomeVolume = DEFAULT_METRONOME_VOLUME;
+  let voiceKaraokeAnchors: [KaraokeAnchor | null, KaraokeAnchor | null] = [null, null];
+  let voiceKaraokeAnimationFrames: [number | null, number | null] = [null, null];
+  let voiceKaraokeAnimationTokens: [number, number] = [0, 0];
+  let voiceTrackRowElements: [Array<HTMLElement | null>, Array<HTMLElement | null>] = [[], []];
+  let voicePlaybackHighlights: [PlaybackHighlight | null, PlaybackHighlight | null] = [null, null];
+  let voicePlaybackHighlightAnchors: [KaraokeAnchor | null, KaraokeAnchor | null] = [null, null];
+  let voicePlaybackPulseFlips: [boolean, boolean] = [false, false];
+  let voicePlayedCellIndexes: [Set<number>, Set<number>] = [new Set<number>(), new Set<number>()];
 
   let dragPayload: DragPayload | null = null;
   let dragOverCell: GridDropTarget | null = null;
@@ -346,6 +458,16 @@
   let shareFailed = false;
   let shareDecodeError: string | null = null;
   let loadCodeValue = '';
+  let libraryModalOpen = false;
+  let libraryBusy = false;
+  let libraryError: string | null = null;
+  let libraryStatus: string | null = null;
+  let libraryFileName = '';
+  let libraryEntries: Array<SketchpadLibraryEntry<LibrarySketchDocument>> = [];
+  let librarySelectedEntryId: string | null = null;
+  let libraryPendingAction: { type: 'open' | 'delete'; entryId: string } | null = null;
+  let currentLibraryEntryId: string | null = null;
+  let currentLibraryName: string | null = null;
 
   let studentViewModalOpen = false;
   let pickupBeatsModalOpen = false;
@@ -357,25 +479,33 @@
   let isStudentView = false;
   let activeStudentView: StudentViewSettings = {};
   let volumePopupOpen = false;
-  let topToolbarElement: HTMLDivElement | null = null;
-  let controlsPanelElement: HTMLElement | null = null;
-  let tempoGroupElement: HTMLDivElement | null = null;
-  let toolbarNotebankPanelElement: HTMLElement | null = null;
   let volumeControlWrapper: HTMLDivElement | null = null;
+  let canvasPanelElement: HTMLElement | null = null;
   let showTapPlacementHint = true;
   let eraserMode = false;
   let canvasHistory: CanvasHistorySnapshot[] = [];
   let canvasHistoryPointer = -1;
   let suppressCanvasHistoryTracking = false;
-  let syncedToolbarPanelHeightPx: number | null = null;
   let bankNativeDragEnabled = true;
+  let canvasPanelRepositionAnimation: Animation | null = null;
+  let canvasPanelRepositionToken = 0;
 
   let pickupBeats = 0;
-  let pickupRow: GridRow = createEmptyRow('pickup');
-  let gridRows: GridRow[] = Array.from({ length: INITIAL_ROWS }, () => createEmptyRow());
+  let voiceCount: VoiceCountMode = DEFAULT_VOICE_COUNT;
+  let voiceLayoutMode: VoiceLayoutMode = DEFAULT_VOICE_LAYOUT_MODE;
+  let trackStyle: TrackStyle = DEFAULT_TRACK_STYLE;
+  let activeCanvasVoiceIndex: VoiceIndex = 0;
+  let voicePickupRows: [GridRow, GridRow] = [createEmptyRow('pickup_a'), createEmptyRow('pickup_b')];
+  let voiceRows: [GridRow[], GridRow[]] = [
+    Array.from({ length: INITIAL_ROWS }, () => createEmptyRow('row_a')),
+    Array.from({ length: INITIAL_ROWS }, () => createEmptyRow('row_b')),
+  ];
+  let renderedTrackRows: RenderedTrackRow[] = [];
   let canvasPersistenceReady = false;
 
   let unsubscribeModel: (() => void) | null = null;
+
+  audio.setMetronomeVolume(metronomeVolume);
 
   let bankLatticeRowsCircle: BankLatticeRows = buildBankLatticeRows(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_CIRCLE);
   let bankLatticeRowsOval: BankLatticeRows = buildBankLatticeRows(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_OVAL);
@@ -392,11 +522,22 @@
 
   $: showToolbarEighthBank = (!isStudentView || !activeStudentView.hideEighthBank) && showEighthsBank;
   $: showLowerSixteenthBank = (!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank;
+  $: {
+    voiceRows;
+    voicePickupRows;
+    voiceCount;
+    voiceLayoutMode;
+    trackStyle;
+    renderedTrackRows = buildRenderedTrackRows();
+  }
 
   $: if (canvasPersistenceReady) {
-    gridRows;
-    pickupRow;
+    voiceRows;
+    voicePickupRows;
     pickupBeats;
+    voiceCount;
+    voiceLayoutMode;
+    trackStyle;
     state.microbeatTempo;
     persistCanvasState();
     trackCanvasHistorySnapshot();
@@ -404,7 +545,10 @@
 
   $: if (canvasPersistenceReady && MOBILE_LAYOUT_DEBUG && typeof window !== 'undefined') {
     pickupBeats;
-    gridRows.length;
+    sharedRowCount();
+    voiceCount;
+    voiceLayoutMode;
+    trackStyle;
     showAccidentals;
     viewportFitMode;
     updateAdaptiveLayout();
@@ -416,7 +560,6 @@
   $: if (canvasPersistenceReady && TEMPO_SLIDER_LAYOUT_DEBUG && typeof window !== 'undefined') {
     viewportFitMode;
     adaptiveLayout;
-    syncedToolbarPanelHeightPx;
     settingsOpen;
     shareModalOpen;
     isStudentView;
@@ -425,7 +568,13 @@
     queueTempoSliderLayoutSnapshot('UI state changed.');
   }
 
-  $: if ((isStudentView && activeStudentView.hideVolumeSlider) || shareModalOpen || studentViewModalOpen || settingsOpen) {
+  $: if (
+    (isStudentView && activeStudentView.hideVolumeSlider)
+    || shareModalOpen
+    || studentViewModalOpen
+    || settingsOpen
+    || libraryModalOpen
+  ) {
     volumePopupOpen = false;
   }
 
@@ -454,7 +603,6 @@
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
       updateAdaptiveLayout();
-      updateSyncedToolbarPanelHeight();
       queueTempoSliderLayoutSnapshot('Viewport changed.');
       queueMobileLayoutSnapshot('Viewport changed.');
     };
@@ -462,7 +610,6 @@
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
       updateAdaptiveLayout();
-      updateSyncedToolbarPanelHeight();
       queueTempoSliderLayoutSnapshot('Visual viewport changed.');
       queueMobileLayoutSnapshot('Visual viewport changed.');
     };
@@ -472,12 +619,6 @@
     window.addEventListener('resize', handleViewportDiagnostics);
     window.addEventListener('orientationchange', handleViewportDiagnostics);
     window.visualViewport?.addEventListener('resize', handleVisualViewportDiagnostics);
-    const toolbarPanelResizeObserver =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
-            updateSyncedToolbarPanelHeight();
-          })
-        : null;
     const tempoLayoutResizeObserver =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver((entries) => {
@@ -491,26 +632,25 @@
             queueTempoSliderLayoutSnapshot(`Observed tempo layout resize (${targets}).`);
           })
         : null;
-    if (toolbarNotebankPanelElement) {
-      toolbarPanelResizeObserver?.observe(toolbarNotebankPanelElement);
+    const topToolbar = document.querySelector<HTMLElement>('.top-toolbar');
+    const controlsPanel = document.querySelector<HTMLElement>('.controls-panel');
+    const toolbarNotebankPanel = document.querySelector<HTMLElement>('.toolbar-notebank-panel');
+
+    if (topToolbar) {
+      tempoLayoutResizeObserver?.observe(topToolbar);
     }
-    if (topToolbarElement) {
-      tempoLayoutResizeObserver?.observe(topToolbarElement);
+    if (controlsPanel) {
+      tempoLayoutResizeObserver?.observe(controlsPanel);
     }
-    if (controlsPanelElement) {
-      tempoLayoutResizeObserver?.observe(controlsPanelElement);
+    if (toolbarNotebankPanel) {
+      tempoLayoutResizeObserver?.observe(toolbarNotebankPanel);
     }
-    if (tempoGroupElement) {
-      tempoLayoutResizeObserver?.observe(tempoGroupElement);
-    }
-    if (toolbarNotebankPanelElement) {
-      tempoLayoutResizeObserver?.observe(toolbarNotebankPanelElement);
-    }
-    updateSyncedToolbarPanelHeight();
     queueTempoSliderLayoutSnapshot('Mounted.');
     queueMobileLayoutSnapshot('Mounted.');
     return () => {
       stopPlayback();
+      canvasPanelRepositionToken += 1;
+      canvasPanelRepositionAnimation?.cancel();
       window.removeEventListener('keydown', handleGlobalKeyDown);
       window.removeEventListener('keyup', handleGlobalKeyUp);
       window.removeEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
@@ -520,7 +660,6 @@
       window.removeEventListener('resize', handleViewportDiagnostics);
       window.removeEventListener('orientationchange', handleViewportDiagnostics);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportDiagnostics);
-      toolbarPanelResizeObserver?.disconnect();
       tempoLayoutResizeObserver?.disconnect();
       unsubscribeModel?.();
       audio.dispose();
@@ -542,8 +681,148 @@
     };
   }
 
+  function voiceLabel(voiceIndex: VoiceIndex): 'A' | 'B' {
+    return voiceIndex === 0 ? 'A' : 'B';
+  }
+
+  function voiceKey(voiceIndex: VoiceIndex): 'a' | 'b' {
+    return voiceIndex === 0 ? 'a' : 'b';
+  }
+
+  function createEmptyVoiceRows(voiceIndex: VoiceIndex, rowCount = INITIAL_ROWS): GridRow[] {
+    return Array.from({ length: rowCount }, () => createEmptyRow(`row_${voiceKey(voiceIndex)}`));
+  }
+
+  function createEmptyVoicePickupRow(voiceIndex: VoiceIndex): GridRow {
+    return createEmptyRow(`pickup_${voiceKey(voiceIndex)}`);
+  }
+
+  function sharedRowCount(): number {
+    return voiceRows[0].length;
+  }
+
+  function visibleVoiceIndices(): VoiceIndex[] {
+    return voiceCount === 2 ? [...VOICE_INDEXES] : [0];
+  }
+
+  function isVoiceVisible(voiceIndex: VoiceIndex): boolean {
+    return voiceIndex === 0 || voiceCount === 2;
+  }
+
+  function rowsForVoice(voiceIndex: VoiceIndex): GridRow[] {
+    return voiceRows[voiceIndex];
+  }
+
+  function pickupRowForVoice(voiceIndex: VoiceIndex): GridRow {
+    return voicePickupRows[voiceIndex];
+  }
+
+  function setActiveCanvasVoice(voiceIndex: VoiceIndex): void {
+    activeCanvasVoiceIndex = voiceIndex;
+  }
+
+  function ensureVoiceRowCount(rows: GridRow[], voiceIndex: VoiceIndex, rowCount: number): GridRow[] {
+    if (rows.length === rowCount) return rows;
+
+    const nextRows = rows.slice(0, rowCount);
+    while (nextRows.length < rowCount) {
+      nextRows.push(createEmptyRow(`row_${voiceKey(voiceIndex)}`));
+    }
+
+    return nextRows;
+  }
+
+  function normalizeVoiceRows(
+    nextVoiceRows: [GridRow[], GridRow[]],
+    preferredRowCount: number | null = null,
+  ): [GridRow[], GridRow[]] {
+    const rowCount = Math.max(preferredRowCount ?? 0, nextVoiceRows[0].length, nextVoiceRows[1].length, 1);
+    return [
+      ensureVoiceRowCount(nextVoiceRows[0], 0, rowCount),
+      ensureVoiceRowCount(nextVoiceRows[1], 1, rowCount),
+    ];
+  }
+
+  function buildRenderedTrackRows(): RenderedTrackRow[] {
+    const rowCount = sharedRowCount();
+    const rows: RenderedTrackRow[] = [];
+
+    if (voiceCount === 1) {
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        rows.push({
+          voiceIndex: 0,
+          rowIndex,
+          key: `voice-a-${voiceRows[0][rowIndex]?.id ?? rowIndex}`,
+          row: voiceRows[0][rowIndex],
+          pickupRow: voicePickupRows[0],
+        });
+      }
+      return rows;
+    }
+
+    if (voiceLayoutMode === 'intertwined') {
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        for (const voiceIndex of VOICE_INDEXES) {
+          rows.push({
+            voiceIndex,
+            rowIndex,
+            key: `voice-${voiceKey(voiceIndex)}-${voiceRows[voiceIndex][rowIndex]?.id ?? rowIndex}`,
+            row: voiceRows[voiceIndex][rowIndex],
+            pickupRow: voicePickupRows[voiceIndex],
+          });
+        }
+      }
+      return rows;
+    }
+
+    for (const voiceIndex of VOICE_INDEXES) {
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        rows.push({
+          voiceIndex,
+          rowIndex,
+          key: `voice-${voiceKey(voiceIndex)}-${voiceRows[voiceIndex][rowIndex]?.id ?? rowIndex}`,
+          row: voiceRows[voiceIndex][rowIndex],
+          pickupRow: voicePickupRows[voiceIndex],
+        });
+      }
+    }
+
+    return rows;
+  }
+
   function pickupMicrobeatCount(): number {
     return pickupBeats * MICROBEATS_PER_BEAT;
+  }
+
+  function macrobeatSegmentTrackCount(cellCount: number): number {
+    if (cellCount <= 0) return 0;
+    return cellCount + Math.floor((cellCount - 1) / MICROBEATS_PER_BEAT);
+  }
+
+  function macrobeatGridTemplate(segmentCellCounts: number[]): string {
+    const tracks: string[] = [];
+
+    for (const cellCount of segmentCellCounts) {
+      for (let cellIndex = 0; cellIndex < cellCount; cellIndex += 1) {
+        tracks.push('minmax(0, 1fr)');
+        if ((cellIndex + 1) % MICROBEATS_PER_BEAT === 0 && cellIndex < cellCount - 1) {
+          tracks.push('var(--macrobeat-gap)');
+        }
+      }
+    }
+
+    return tracks.join(' ');
+  }
+
+  function trackGridInlineStyle(includeInlinePickup: boolean): string {
+    const segmentCellCounts = includeInlinePickup ? [pickupMicrobeatCount(), GRID_COLUMNS] : [GRID_COLUMNS];
+    return `grid-template-columns:${macrobeatGridTemplate(segmentCellCounts)};`;
+  }
+
+  function macrobeatCellInlineStyle(zone: GridZone, cellIndex: number, includeInlinePickup: boolean): string {
+    const segmentOffset = zone === 'pickup' || !includeInlinePickup ? 0 : macrobeatSegmentTrackCount(pickupMicrobeatCount());
+    const gridColumn = segmentOffset + cellIndex + 1 + Math.floor(cellIndex / MICROBEATS_PER_BEAT);
+    return `grid-column:${gridColumn};`;
   }
 
   function enforcePickupCellBoundaries(cells: Array<GridCellContent | null>, beats: number): void {
@@ -566,8 +845,10 @@
 
     pickupBeats = clamped;
 
-    updateGridData((_rows, pickupCells) => {
-      enforcePickupCellBoundaries(pickupCells, clamped);
+    updateGridData((_rowsByVoice, pickupCellsByVoice) => {
+      for (const voiceIndex of VOICE_INDEXES) {
+        enforcePickupCellBoundaries(pickupCellsByVoice[voiceIndex], clamped);
+      }
     });
 
     if (isPlaying) {
@@ -577,11 +858,18 @@
 
   function colorFromColorId(colorId: string): string {
     const palette = colorPaletteMode === 'chromanotes' ? CHROMANOTES_PALETTE : (COLOR_PALETTE as Record<string, string>);
-    return palette[colorId] ?? '#d9d9d9';
+    return palette[colorId] ?? SUPPLEMENTAL_NOTE_COLORS[colorId as keyof typeof SUPPLEMENTAL_NOTE_COLORS] ?? '#d9d9d9';
   }
 
-  function noteDefinitionFromId(noteId: string): NoteDefinition | null {
-    return findNoteDefinitionById(noteId);
+  function noteDefinitionFromId(noteId: string): ExtendedNoteDefinition | null {
+    return SUPPLEMENTAL_NOTE_DEFINITIONS.find((note) => note.id === noteId || note.aliasId === noteId) ?? findNoteDefinitionById(noteId);
+  }
+
+  function noteIconClass(noteId: string): string | null {
+    const iconId = noteDefinitionFromId(noteId)?.iconId;
+    if (iconId === 'clap') return 'glyph-icon--clap';
+    if (iconId === 'stomp') return 'glyph-icon--stomp';
+    return null;
   }
 
   function displayLabelFromText(label: string): string {
@@ -598,6 +886,8 @@
   }
 
   function displayLabelFromId(noteId: string): string {
+    const note = noteDefinitionFromId(noteId);
+    if (note?.sampleId) return displayLabelFromText(note.label);
     return displayLabelFromText(rawLabelFromNoteId(noteId));
   }
 
@@ -635,15 +925,17 @@
   }
 
   function applyPaletteToPlacedNotes(): void {
-    updateGridData((rows, pickupCells) => {
-      for (const row of rows) {
-        for (const cell of row.cells) {
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
+      for (const voiceIndex of VOICE_INDEXES) {
+        for (const row of rowsByVoice[voiceIndex]) {
+          for (const cell of row.cells) {
+            recolorCellNotes(cell);
+          }
+        }
+
+        for (const cell of pickupCellsByVoice[voiceIndex]) {
           recolorCellNotes(cell);
         }
-      }
-
-      for (const cell of pickupCells) {
-        recolorCellNotes(cell);
       }
     });
   }
@@ -727,9 +1019,23 @@
   }
 
   function notePitchTooltip(noteId: string): string {
-    const interval = noteDefinitionFromId(noteId)?.interval ?? 0;
+    const note = noteDefinitionFromId(noteId);
+    if (note?.sampleId) {
+      return note.label;
+    }
+
+    const interval = note?.interval ?? 0;
     const pitch = getPitchNameForDisplay(model.getFullRootNote(), interval);
     return pitch ? formatPitchWithAccidentals(pitch) : 'n/a';
+  }
+
+  function noteBankTokenTitle(noteId: string): string {
+    const note = noteDefinitionFromId(noteId);
+    if (!note) return displayLabelFromId(noteId);
+    if (note.sampleId) return note.label;
+
+    const pitch = getPitchNameForDisplay(model.getFullRootNote(), note.interval);
+    return pitch ? `${displayLabelFromId(noteId)} (${formatPitchWithAccidentals(pitch)})` : displayLabelFromId(noteId);
   }
 
   function createPlacedNote(noteId: string, shape: NoteShape): PlacedNote | null {
@@ -861,31 +1167,96 @@
     return null;
   }
 
+  function serializeVoiceCanvas(rows: GridRow[], pickupRowData: GridRow): PersistedVoiceCanvas {
+    return {
+      rows: rows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
+      pickupCells: pickupRowData.cells.map((cell) => serializeCellForPersistence(cell)),
+    };
+  }
+
+  function deserializeRowsInput(rawRows: unknown, voiceIndex: VoiceIndex): GridRow[] {
+    const rowsInput = Array.isArray(rawRows) ? rawRows : [];
+    const restoredRows = rowsInput
+      .map((rawRow) => {
+        if (!Array.isArray(rawRow)) return null;
+        return {
+          id: createId(`row_${voiceKey(voiceIndex)}`),
+          cells: Array.from({ length: GRID_COLUMNS }, (_, index) => deserializePersistedCell(rawRow[index] ?? null)),
+        };
+      })
+      .filter((row): row is GridRow => row !== null);
+
+    return restoredRows;
+  }
+
+  function deserializePickupRowInput(rawPickupCells: unknown, voiceIndex: VoiceIndex, beats: number): GridRow {
+    const pickupCellsInput = Array.isArray(rawPickupCells) ? rawPickupCells : [];
+    const restoredPickupCells = Array.from({ length: GRID_COLUMNS }, (_, index) =>
+      deserializePersistedCell(pickupCellsInput[index] ?? null),
+    );
+    enforcePickupCellBoundaries(restoredPickupCells, beats);
+
+    return {
+      id: createId(`pickup_${voiceKey(voiceIndex)}`),
+      cells: restoredPickupCells,
+    };
+  }
+
+  function emptyVoiceCanvas(rowCount: number, _voiceIndex: VoiceIndex): PersistedVoiceCanvas {
+    return {
+      rows: Array.from({ length: rowCount }, () => Array.from({ length: GRID_COLUMNS }, () => null)),
+      pickupCells: Array.from({ length: GRID_COLUMNS }, () => null),
+    };
+  }
+
+  function applyVoiceCanvasState(
+    nextVoiceRows: [GridRow[], GridRow[]],
+    nextVoicePickupRows: [GridRow, GridRow],
+    nextVoiceCount: VoiceCountMode = voiceCount,
+    nextVoiceLayoutMode: VoiceLayoutMode = voiceLayoutMode,
+  ): void {
+    voiceRows = normalizeVoiceRows(nextVoiceRows);
+    voicePickupRows = nextVoicePickupRows;
+    voiceCount = nextVoiceCount;
+    voiceLayoutMode = nextVoiceLayoutMode;
+    if (!isVoiceVisible(activeCanvasVoiceIndex)) {
+      activeCanvasVoiceIndex = 0;
+    }
+  }
+
   function captureCanvasHistorySnapshot(): CanvasHistorySnapshot {
     return {
       pickupBeats,
-      rows: gridRows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
-      pickupCells: pickupRow.cells.map((cell) => serializeCellForPersistence(cell)),
+      voiceCount,
+      voiceLayoutMode,
+      voices: [
+        serializeVoiceCanvas(voiceRows[0], voicePickupRows[0]),
+        serializeVoiceCanvas(voiceRows[1], voicePickupRows[1]),
+      ],
     };
   }
 
   function applyCanvasHistorySnapshot(snapshot: CanvasHistorySnapshot): void {
-    const restoredRows = snapshot.rows
-      .map((rawRow) => ({
-        id: createId('row'),
-        cells: Array.from({ length: GRID_COLUMNS }, (_, index) => deserializePersistedCell(rawRow[index] ?? null)),
-      }));
-    const restoredPickupCells = Array.from({ length: GRID_COLUMNS }, (_, index) =>
-      deserializePersistedCell(snapshot.pickupCells[index] ?? null),
-    );
-    enforcePickupCellBoundaries(restoredPickupCells, snapshot.pickupBeats);
+    const restoredVoiceRows = normalizeVoiceRows([
+      deserializeRowsInput(snapshot.voices[0]?.rows, 0),
+      deserializeRowsInput(snapshot.voices[1]?.rows, 1),
+    ]);
+    const restoredVoicePickupRows: [GridRow, GridRow] = [
+      deserializePickupRowInput(snapshot.voices[0]?.pickupCells, 0, snapshot.pickupBeats),
+      deserializePickupRowInput(snapshot.voices[1]?.pickupCells, 1, snapshot.pickupBeats),
+    ];
 
     suppressCanvasHistoryTracking = true;
     pickupBeats = snapshot.pickupBeats;
-    gridRows = restoredRows.length > 0 ? restoredRows : Array.from({ length: INITIAL_ROWS }, () => createEmptyRow());
-    pickupRow = { id: createId('pickup'), cells: restoredPickupCells };
+    applyVoiceCanvasState(
+      restoredVoiceRows,
+      restoredVoicePickupRows,
+      snapshot.voiceCount,
+      snapshot.voiceLayoutMode,
+    );
     suppressCanvasHistoryTracking = false;
 
+    activeCanvasVoiceIndex = 0;
     tapPlacementPayload = null;
     dragPayload = null;
     dragOverCell = null;
@@ -947,12 +1318,19 @@
   function persistCanvasState(): void {
     if (typeof window === 'undefined') return;
 
+    const primaryVoice = serializeVoiceCanvas(voiceRows[0], voicePickupRows[0]);
+    const secondaryVoice = serializeVoiceCanvas(voiceRows[1], voicePickupRows[1]);
+
     const persistedState: PersistedCanvasState = {
       version: 1,
       pickupBeats,
       microbeatTempo: state.microbeatTempo,
-      rows: gridRows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
-      pickupCells: pickupRow.cells.map((cell) => serializeCellForPersistence(cell)),
+      rows: primaryVoice.rows,
+      pickupCells: primaryVoice.pickupCells,
+      voiceCount,
+      voiceLayoutMode,
+      trackStyle,
+      voices: [primaryVoice, secondaryVoice],
     };
 
     try {
@@ -988,43 +1366,309 @@
       : DEFAULTS.MICROBEAT_TEMPO;
 
     const rowsInput = Array.isArray(persisted.rows) ? persisted.rows : [];
-    const restoredRows = rowsInput
-      .map((rawRow) => {
-        if (!Array.isArray(rawRow)) return null;
-        return {
-          id: createId('row'),
-          cells: Array.from({ length: GRID_COLUMNS }, (_, index) => deserializePersistedCell(rawRow[index] ?? null)),
-        };
-      })
-      .filter((row): row is GridRow => row !== null);
-
-    const pickupCellsInput = Array.isArray(persisted.pickupCells) ? persisted.pickupCells : [];
-    const restoredPickupCells = Array.from({ length: GRID_COLUMNS }, (_, index) =>
-      deserializePersistedCell(pickupCellsInput[index] ?? null),
+    const storedVoiceCount = persisted.voiceCount === 2 ? 2 : 1;
+    const storedVoiceLayoutMode = persisted.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
+    const storedTrackStyle = persisted.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
+    const persistedVoices = Array.isArray(persisted.voices) ? persisted.voices : [];
+    const primaryVoiceSource = (persistedVoices[0] as PersistedVoiceCanvas | undefined) ?? {
+      rows: rowsInput,
+      pickupCells: Array.isArray(persisted.pickupCells) ? persisted.pickupCells : [],
+    };
+    const secondaryVoiceSource = (persistedVoices[1] as PersistedVoiceCanvas | undefined) ?? emptyVoiceCanvas(
+      Math.max(Array.isArray(primaryVoiceSource.rows) ? primaryVoiceSource.rows.length : 0, INITIAL_ROWS),
+      1,
     );
-    enforcePickupCellBoundaries(restoredPickupCells, nextPickupBeats);
+    const restoredVoiceRows = normalizeVoiceRows([
+      deserializeRowsInput(primaryVoiceSource.rows, 0),
+      deserializeRowsInput(secondaryVoiceSource.rows, 1),
+    ]);
+    const restoredVoicePickupRows: [GridRow, GridRow] = [
+      deserializePickupRowInput(primaryVoiceSource.pickupCells, 0, nextPickupBeats),
+      deserializePickupRowInput(secondaryVoiceSource.pickupCells, 1, nextPickupBeats),
+    ];
 
     pickupBeats = nextPickupBeats;
-    gridRows = restoredRows.length > 0 ? restoredRows : Array.from({ length: INITIAL_ROWS }, () => createEmptyRow());
-    pickupRow = {
-      id: createId('pickup'),
-      cells: restoredPickupCells,
-    };
+    applyVoiceCanvasState(restoredVoiceRows, restoredVoicePickupRows, storedVoiceCount, storedVoiceLayoutMode);
+    trackStyle = storedTrackStyle;
+    activeCanvasVoiceIndex = 0;
     model.setMicrobeatTempo(nextMicrobeatTempo);
     resetCanvasHistoryToCurrent();
+  }
+
+  function clampUnitInterval(value: unknown, fallback: number): number {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.max(0, Math.min(1, numericValue));
+  }
+
+  function normalizeLibrarySketchSettings(value: unknown): LibrarySketchSettings {
+    const source = value && typeof value === 'object'
+      ? value as Record<string, unknown>
+      : {};
+
+    const mainPlaybackVoiceCandidate = source.mainPlaybackVoice;
+    const mainPlaybackVoice = (
+      typeof mainPlaybackVoiceCandidate === 'string'
+      && voiceOptions.includes(mainPlaybackVoiceCandidate as OscillatorType)
+    )
+      ? mainPlaybackVoiceCandidate as OscillatorType
+      : state.mainPlaybackVoice;
+
+    const colorPaletteModeCandidate = source.colorPaletteMode;
+    const colorPalette = colorPaletteModeCandidate === 'oklch' ? 'oklch' : 'chromanotes';
+
+    return {
+      countInEnabled: typeof source.countInEnabled === 'boolean' ? source.countInEnabled : true,
+      macrobeatMetronomeEnabled: typeof source.macrobeatMetronomeEnabled === 'boolean'
+        ? source.macrobeatMetronomeEnabled
+        : false,
+      metronomeVolume: clampUnitInterval(source.metronomeVolume, DEFAULT_METRONOME_VOLUME),
+      colorPaletteMode: colorPalette,
+      showAccidentals: typeof source.showAccidentals === 'boolean' ? source.showAccidentals : false,
+      showEighthsBank: typeof source.showEighthsBank === 'boolean' ? source.showEighthsBank : true,
+      showSixteenthsBank: typeof source.showSixteenthsBank === 'boolean' ? source.showSixteenthsBank : false,
+      mainPlaybackVoice,
+      mainVolume: clampUnitInterval(source.mainVolume, state.mainVolume),
+    };
+  }
+
+  function normalizeLibrarySketchDocument(value: unknown): LibrarySketchDocument | null {
+    if (!value || typeof value !== 'object') return null;
+    const source = value as Record<string, unknown>;
+    if (source.v !== 1) return null;
+
+    const compositionResult = validateShareDocument(source.composition);
+    if (!compositionResult.ok) return null;
+
+    return {
+      v: 1,
+      composition: compositionResult.doc,
+      settings: normalizeLibrarySketchSettings(source.settings),
+    };
+  }
+
+  function buildLibrarySketchDocument(): LibrarySketchDocument {
+    return {
+      v: 1,
+      composition: buildShareDocument(),
+      settings: {
+        countInEnabled,
+        macrobeatMetronomeEnabled,
+        metronomeVolume,
+        colorPaletteMode,
+        showAccidentals,
+        showEighthsBank,
+        showSixteenthsBank,
+        mainPlaybackVoice: state.mainPlaybackVoice,
+        mainVolume: state.mainVolume,
+      },
+    };
+  }
+
+  function loadFromLibrarySketchDocument(document: LibrarySketchDocument): void {
+    loadFromShareDocument(document.composition, { preserveLibraryContext: true });
+
+    const settings = normalizeLibrarySketchSettings(document.settings);
+    countInEnabled = settings.countInEnabled;
+    macrobeatMetronomeEnabled = settings.macrobeatMetronomeEnabled;
+    metronomeVolume = settings.metronomeVolume;
+    audio.setMetronomeVolume(metronomeVolume);
+    colorPaletteMode = settings.colorPaletteMode;
+    showAccidentals = settings.showAccidentals;
+    showEighthsBank = settings.showEighthsBank;
+    showSixteenthsBank = settings.showSixteenthsBank;
+    applyPaletteToPlacedNotes();
+    model.setMainPlaybackVoice(settings.mainPlaybackVoice);
+    model.setMainVolume(settings.mainVolume);
+  }
+
+  function buildSuggestedLibraryName(): string {
+    if (currentLibraryName?.trim()) {
+      return currentLibraryName.trim();
+    }
+
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `Boomwhacker Sketch ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}.${pad(now.getMinutes())}`;
+  }
+
+  function formatLibrarySavedAt(savedAt: string): string {
+    const parsed = new Date(savedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return savedAt;
+    }
+
+    return parsed.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function selectedLibraryEntry(): SketchpadLibraryEntry<LibrarySketchDocument> | null {
+    if (!librarySelectedEntryId) return null;
+    return libraryEntries.find((entry) => entry.id === librarySelectedEntryId) ?? null;
+  }
+
+  async function refreshLibraryEntries(preferredEntryId: string | null = librarySelectedEntryId): Promise<void> {
+    const storedEntries = await listSketchpadLibraryEntries<LibrarySketchDocument>();
+    const normalizedEntries = storedEntries.flatMap((entry) => {
+      const normalizedDocument = normalizeLibrarySketchDocument(entry.document);
+      if (!normalizedDocument) return [];
+      return [{
+        ...entry,
+        document: normalizedDocument,
+      }];
+    });
+
+    libraryEntries = normalizedEntries;
+    if (preferredEntryId && normalizedEntries.some((entry) => entry.id === preferredEntryId)) {
+      librarySelectedEntryId = preferredEntryId;
+      return;
+    }
+    librarySelectedEntryId = normalizedEntries[0]?.id ?? null;
+  }
+
+  async function openLibraryModal(): Promise<void> {
+    shareModalOpen = false;
+    studentViewModalOpen = false;
+    pickupBeatsModalOpen = false;
+    libraryModalOpen = true;
+    libraryPendingAction = null;
+    libraryError = null;
+    libraryStatus = null;
+    libraryFileName = buildSuggestedLibraryName();
+    libraryBusy = true;
+
+    try {
+      await refreshLibraryEntries(currentLibraryEntryId);
+    } catch (error) {
+      libraryError = error instanceof Error ? error.message : 'Sketch library could not be loaded.';
+    } finally {
+      libraryBusy = false;
+    }
+  }
+
+  function closeLibraryModal(): void {
+    libraryModalOpen = false;
+    libraryPendingAction = null;
+    libraryError = null;
+    libraryStatus = null;
+  }
+
+  function selectLibraryEntry(entryId: string): void {
+    librarySelectedEntryId = entryId;
+    libraryPendingAction = null;
+    libraryError = null;
+    libraryStatus = null;
+  }
+
+  async function handleLibrarySaveAs(): Promise<void> {
+    const nextName = libraryFileName.trim();
+    if (!nextName) {
+      libraryError = 'Please enter a file name before saving.';
+      libraryStatus = null;
+      return;
+    }
+
+    libraryBusy = true;
+    libraryPendingAction = null;
+    libraryError = null;
+    libraryStatus = null;
+
+    try {
+      const entry = await saveSketchpadLibraryEntry<LibrarySketchDocument>({
+        name: nextName,
+        document: buildLibrarySketchDocument(),
+      });
+
+      currentLibraryEntryId = entry.id;
+      currentLibraryName = entry.name;
+      libraryFileName = entry.name;
+      libraryStatus = `Saved "${entry.name}".`;
+      await refreshLibraryEntries(entry.id);
+    } catch (error) {
+      libraryError = error instanceof Error ? error.message : 'Sketch could not be saved to the library.';
+    } finally {
+      libraryBusy = false;
+    }
+  }
+
+  function requestLibraryAction(type: 'open' | 'delete'): void {
+    const entry = selectedLibraryEntry();
+    if (!entry) return;
+
+    libraryPendingAction = {
+      type,
+      entryId: entry.id,
+    };
+    libraryError = null;
+    libraryStatus = null;
+  }
+
+  function cancelLibraryAction(): void {
+    libraryPendingAction = null;
+  }
+
+  async function confirmLibraryAction(): Promise<void> {
+    const pendingAction = libraryPendingAction;
+    if (!pendingAction) return;
+
+    const entry = libraryEntries.find((candidate) => candidate.id === pendingAction.entryId);
+    if (!entry) {
+      libraryPendingAction = null;
+      return;
+    }
+
+    libraryBusy = true;
+    libraryError = null;
+    libraryStatus = null;
+
+    try {
+      if (pendingAction.type === 'open') {
+        loadFromLibrarySketchDocument(entry.document);
+        currentLibraryEntryId = entry.id;
+        currentLibraryName = entry.name;
+        libraryFileName = entry.name;
+        libraryPendingAction = null;
+        libraryModalOpen = false;
+        return;
+      }
+
+      await deleteSketchpadLibraryEntry(entry.id);
+      if (currentLibraryEntryId === entry.id) {
+        currentLibraryEntryId = null;
+      }
+      libraryPendingAction = null;
+      libraryStatus = `Deleted "${entry.name}".`;
+      await refreshLibraryEntries(librarySelectedEntryId === entry.id ? null : librarySelectedEntryId);
+    } catch (error) {
+      libraryError = error instanceof Error ? error.message : 'Library action failed.';
+    } finally {
+      libraryBusy = false;
+    }
   }
 
   // --- Share feature ---
 
   function buildShareDocument(): ShareDocument {
+    const primaryVoice = serializeVoiceCanvas(voiceRows[0], voicePickupRows[0]);
+    const secondaryVoice = serializeVoiceCanvas(voiceRows[1], voicePickupRows[1]);
+
     return {
       v: 1,
       tonic: state.rootNoteTonic,
       tempo: state.microbeatTempo,
       timeSig: [4, 4],
       pickupBeats,
-      rows: gridRows.map((row) => row.cells.map((cell) => serializeCellForPersistence(cell))),
-      pickupCells: pickupRow.cells.map((cell) => serializeCellForPersistence(cell)),
+      rows: primaryVoice.rows,
+      pickupCells: primaryVoice.pickupCells,
+      voiceCount,
+      voiceLayoutMode,
+      trackStyle,
+      voices: [primaryVoice, secondaryVoice],
     };
   }
 
@@ -1145,37 +1789,66 @@
     if (typeof doc.pickupBeats !== 'number') return { ok: false, reason: 'schema' };
     if (!Array.isArray(doc.rows)) return { ok: false, reason: 'schema' };
     if (!Array.isArray(doc.pickupCells)) return { ok: false, reason: 'schema' };
+    if (doc.voiceCount !== undefined && doc.voiceCount !== 1 && doc.voiceCount !== 2) return { ok: false, reason: 'schema' };
+    if (doc.voiceLayoutMode !== undefined && doc.voiceLayoutMode !== 'intertwined' && doc.voiceLayoutMode !== 'separate') {
+      return { ok: false, reason: 'schema' };
+    }
+    if (doc.trackStyle !== undefined && doc.trackStyle !== 'stacked' && doc.trackStyle !== 'horizontal') {
+      return { ok: false, reason: 'schema' };
+    }
+    if (doc.voices !== undefined && !Array.isArray(doc.voices)) return { ok: false, reason: 'schema' };
     return { ok: true, doc: doc as unknown as ShareDocument };
   }
 
-  function loadFromShareDocument(doc: ShareDocument): void {
+  function loadFromShareDocument(
+    doc: ShareDocument,
+    options: { preserveLibraryContext?: boolean } = {},
+  ): void {
+    if (isPlaying) {
+      stopPlayback();
+    }
+    if (!options.preserveLibraryContext) {
+      currentLibraryEntryId = null;
+      currentLibraryName = null;
+    }
+
     model.setRootNoteTonic(doc.tonic);
     model.setMicrobeatTempo(doc.tempo);
 
     const clampedPickupBeats = Math.max(0, Math.min(PICKUP_MAX_BEATS, Math.round(doc.pickupBeats)));
-    const restoredRows = doc.rows
-      .map((rawRow) => {
-        if (!Array.isArray(rawRow)) return null;
-        return {
-          id: createId('row'),
-          cells: Array.from({ length: GRID_COLUMNS }, (_, index) => deserializePersistedCell(rawRow[index] ?? null)),
-        };
-      })
-      .filter((row): row is GridRow => row !== null);
-
-    const restoredPickupCells = Array.from({ length: GRID_COLUMNS }, (_, index) =>
-      deserializePersistedCell(doc.pickupCells[index] ?? null),
+    const nextVoiceCount = doc.voiceCount === 2 ? 2 : 1;
+    const nextVoiceLayoutMode = doc.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
+    const nextTrackStyle = doc.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
+    const docVoices = Array.isArray(doc.voices) ? doc.voices : [];
+    const primaryVoiceSource = (docVoices[0] as PersistedVoiceCanvas | undefined) ?? {
+      rows: doc.rows,
+      pickupCells: doc.pickupCells,
+    };
+    const secondaryVoiceSource = (docVoices[1] as PersistedVoiceCanvas | undefined) ?? emptyVoiceCanvas(
+      Math.max(Array.isArray(primaryVoiceSource.rows) ? primaryVoiceSource.rows.length : 0, INITIAL_ROWS),
+      1,
     );
-    enforcePickupCellBoundaries(restoredPickupCells, clampedPickupBeats);
+    const restoredVoiceRows = normalizeVoiceRows([
+      deserializeRowsInput(primaryVoiceSource.rows, 0),
+      deserializeRowsInput(secondaryVoiceSource.rows, 1),
+    ]);
+    const restoredVoicePickupRows: [GridRow, GridRow] = [
+      deserializePickupRowInput(primaryVoiceSource.pickupCells, 0, clampedPickupBeats),
+      deserializePickupRowInput(secondaryVoiceSource.pickupCells, 1, clampedPickupBeats),
+    ];
 
     pickupBeats = clampedPickupBeats;
-    gridRows = restoredRows.length > 0 ? restoredRows : Array.from({ length: INITIAL_ROWS }, () => createEmptyRow());
-    pickupRow = { id: createId('pickup'), cells: restoredPickupCells };
+    applyVoiceCanvasState(restoredVoiceRows, restoredVoicePickupRows, nextVoiceCount, nextVoiceLayoutMode);
+    trackStyle = nextTrackStyle;
+    activeCanvasVoiceIndex = 0;
     resetCanvasHistoryToCurrent();
 
     if (doc.sv && Object.keys(doc.sv).length > 0) {
       isStudentView = true;
       activeStudentView = doc.sv;
+    } else {
+      isStudentView = false;
+      activeStudentView = {};
     }
   }
 
@@ -1725,20 +2398,26 @@
     }
   }
 
-  function removeDraggedSource(rows: GridRow[], pickupCells: Array<GridCellContent | null>, payload: DragPayload): void {
-    if (payload.zone === undefined || payload.rowIndex === undefined || payload.cellIndex === undefined) return;
+  function removeDraggedSource(
+    rowsByVoice: [GridRow[], GridRow[]],
+    pickupCellsByVoice: [Array<GridCellContent | null>, Array<GridCellContent | null>],
+    payload: DragPayload,
+  ): void {
+    if (payload.voiceIndex === undefined || payload.zone === undefined || payload.rowIndex === undefined || payload.cellIndex === undefined) return;
 
     const sourceZone = payload.zone;
     const sourceRowIndex = payload.rowIndex;
     const sourceCellIndex = payload.cellIndex;
-    const sourceCells = getCellsForZone(rows, pickupCells, sourceZone, sourceRowIndex);
+    const sourceRows = rowsByVoice[payload.voiceIndex];
+    const sourcePickupCells = pickupCellsByVoice[payload.voiceIndex];
+    const sourceCells = getCellsForZone(sourceRows, sourcePickupCells, sourceZone, sourceRowIndex);
     if (!sourceCells) return;
 
     const sourceCell = sourceCells[sourceCellIndex] ?? null;
     if (!sourceCell) return;
 
     if (sourceCell.shape === 'oval') {
-      setDraftCell(rows, pickupCells, sourceZone, sourceRowIndex, sourceCellIndex, null);
+      setDraftCell(sourceRows, sourcePickupCells, sourceZone, sourceRowIndex, sourceCellIndex, null);
       return;
     }
 
@@ -1749,26 +2428,46 @@
 
     const sourceNoteIndex = payload.noteIndex ?? 0;
     const nextCell = removeNoteFromCell(sourceCell, sourceNoteIndex);
-    setDraftCell(rows, pickupCells, sourceZone, sourceRowIndex, sourceCellIndex, nextCell);
+    setDraftCell(sourceRows, sourcePickupCells, sourceZone, sourceRowIndex, sourceCellIndex, nextCell);
   }
 
   function placedNoteTitle(note: PlacedNote): string {
     return displayLabelFromText(note.label);
   }
 
-  function updateGridData(mutator: (rows: GridRow[], pickupCells: Array<GridCellContent | null>) => void): void {
-    const nextRows = gridRows.map((row) => ({
-      id: row.id,
-      cells: row.cells.map((cell) => cloneCellContent(cell)),
-    }));
-    const nextPickupCells = pickupRow.cells.map((cell) => cloneCellContent(cell));
+  function updateGridData(
+    mutator: (
+      rowsByVoice: [GridRow[], GridRow[]],
+      pickupCellsByVoice: [
+        Array<GridCellContent | null>,
+        Array<GridCellContent | null>,
+      ],
+    ) => void,
+  ): void {
+    const nextVoiceRows = VOICE_INDEXES.map((voiceIndex) =>
+      voiceRows[voiceIndex].map((row) => ({
+        id: row.id,
+        cells: row.cells.map((cell) => cloneCellContent(cell)),
+      })),
+    ) as [GridRow[], GridRow[]];
+    const nextVoicePickupCells = VOICE_INDEXES.map((voiceIndex) =>
+      voicePickupRows[voiceIndex].cells.map((cell) => cloneCellContent(cell)),
+    ) as [Array<GridCellContent | null>, Array<GridCellContent | null>];
 
-    mutator(nextRows, nextPickupCells);
-    gridRows = nextRows;
-    pickupRow = {
-      ...pickupRow,
-      cells: nextPickupCells,
-    };
+    mutator(nextVoiceRows, nextVoicePickupCells);
+    applyVoiceCanvasState(
+      normalizeVoiceRows(nextVoiceRows, Math.max(nextVoiceRows[0].length, nextVoiceRows[1].length, 1)),
+      [
+        {
+          ...voicePickupRows[0],
+          cells: nextVoicePickupCells[0],
+        },
+        {
+          ...voicePickupRows[1],
+          cells: nextVoicePickupCells[1],
+        },
+      ],
+    );
   }
 
   function syncAudioWithState(nextState: BoomwhackerSketchpadState, previousState: BoomwhackerSketchpadState | null): void {
@@ -1794,29 +2493,50 @@
     }
   }
 
-  async function ensureAudioReady(): Promise<boolean> {
+  async function ensureAudioReady(): Promise<AudioReadinessResult> {
+    audioReady = audio.isReady();
+
     if (audioReady) {
-      return true;
+      return {
+        ready: true,
+        resumedAudioContext: false,
+        stabilizationDelayMs: 0,
+        startElapsedMs: 0,
+      };
     }
 
     if (audioStartPromise) {
       return audioStartPromise;
     }
 
+    const startRequestedAt = performance.now();
     audioStartPromise = (async () => {
       try {
         const started = await audio.start();
-        audioReady = started;
+        audioReady = started && audio.isReady();
+        const result: AudioReadinessResult = {
+          ready: audioReady,
+          resumedAudioContext: audioReady,
+          stabilizationDelayMs: audioReady ? AUDIO_RESUME_STABILIZATION_MS : 0,
+          startElapsedMs: Math.round(performance.now() - startRequestedAt),
+        };
 
-        if (started) {
+        if (audioReady) {
           syncAudioWithState(state, null);
+          audio.setMetronomeVolume(metronomeVolume);
         }
 
-        return started;
+        debugPlaybackStartup('Audio readiness requested.', result);
+        return result;
       } catch (error) {
         audioReady = false;
         console.warn('Boomwhacker Sketchpad audio initialization failed.', error);
-        return false;
+        return {
+          ready: false,
+          resumedAudioContext: false,
+          stabilizationDelayMs: 0,
+          startElapsedMs: Math.round(performance.now() - startRequestedAt),
+        };
       } finally {
         audioStartPromise = null;
       }
@@ -1860,6 +2580,62 @@
     model.setMainVolume(Number(target.value) / 100);
   }
 
+  function setMetronomeVolume(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLInputElement)) return;
+
+    const nextValue = Math.max(0, Math.min(100, Math.round(Number(target.value))));
+    if (!Number.isFinite(nextValue)) return;
+
+    metronomeVolume = nextValue / 100;
+    audio.setMetronomeVolume(metronomeVolume);
+  }
+
+  function handleVoiceCountModeChange(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLSelectElement)) return;
+
+    const nextVoiceCount: VoiceCountMode = target.value === '2' ? 2 : 1;
+    if (nextVoiceCount === voiceCount) return;
+
+    voiceCount = nextVoiceCount;
+    if (voiceCount === 1) {
+      activeCanvasVoiceIndex = 0;
+    }
+
+    if (isPlaying) {
+      stopPlayback();
+    }
+  }
+
+  function handleVoiceLayoutModeChange(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLSelectElement)) return;
+
+    const nextVoiceLayoutMode: VoiceLayoutMode = target.value === 'separate' ? 'separate' : 'intertwined';
+    if (nextVoiceLayoutMode === voiceLayoutMode) return;
+
+    voiceLayoutMode = nextVoiceLayoutMode;
+    if (isPlaying) {
+      stopPlayback();
+    }
+  }
+
+  function handleTrackStyleChange(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLSelectElement)) return;
+
+    const nextTrackStyle: TrackStyle = target.value === 'horizontal' ? 'horizontal' : 'stacked';
+    if (nextTrackStyle === trackStyle) return;
+
+    trackStyle = nextTrackStyle;
+    if (trackStyle === 'horizontal' && isPlaying && totalPlaybackCells() > 0) {
+      void tick().then(() => {
+        queueHorizontalPlaybackScroll(playbackIndex % totalPlaybackCells(), 'auto');
+      });
+    }
+  }
+
   function toggleEraserMode(): void {
     eraserMode = !eraserMode;
     tapPlacementPayload = null;
@@ -1881,6 +2657,10 @@
     volumePopupOpen = false;
   }
 
+  function navigateHome(): void {
+    window.location.href = hubHref;
+  }
+
   function handleQuarterTempoChange(quarterTempo: number): void {
     model.setMicrobeatTempo(quarterTempo * 2);
 
@@ -1890,27 +2670,35 @@
   }
 
   function addRow(): void {
-    gridRows = [...gridRows, createEmptyRow()];
+    voiceRows = [
+      [...voiceRows[0], createEmptyRow('row_a')],
+      [...voiceRows[1], createEmptyRow('row_b')],
+    ];
   }
 
   function removeRow(): void {
-    if (gridRows.length <= 1) return;
+    if (sharedRowCount() <= 1) return;
 
-    gridRows = gridRows.slice(0, -1);
+    voiceRows = [
+      voiceRows[0].slice(0, -1),
+      voiceRows[1].slice(0, -1),
+    ];
 
-    const totalCells = pickupMicrobeatCount() + gridRows.length * GRID_COLUMNS;
+    const totalCells = pickupMicrobeatCount() + sharedRowCount() * GRID_COLUMNS;
     if (playbackIndex >= totalCells) {
       stopPlayback();
     }
   }
 
   function clearGrid(): void {
-    updateGridData((rows, pickupCells) => {
-      for (const row of rows) {
-        row.cells = row.cells.map(() => null);
-      }
-      for (let index = 0; index < pickupCells.length; index += 1) {
-        pickupCells[index] = null;
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
+      for (const voiceIndex of VOICE_INDEXES) {
+        for (const row of rowsByVoice[voiceIndex]) {
+          row.cells = row.cells.map(() => null);
+        }
+        for (let index = 0; index < pickupCellsByVoice[voiceIndex].length; index += 1) {
+          pickupCellsByVoice[voiceIndex][index] = null;
+        }
       }
     });
 
@@ -1919,11 +2707,16 @@
   }
 
   async function previewBankNote(noteId: string): Promise<void> {
-    const ready = await ensureAudioReady();
-    if (!ready) return;
+    const readiness = await ensureAudioReady();
+    if (!readiness.ready) return;
 
     const note = noteDefinitionFromId(noteId);
     if (!note) return;
+
+    if (note.sampleId) {
+      audio.playSampleNow(note.sampleId);
+      return;
+    }
 
     const pitch = getPitchNameForDisplay(model.getFullRootNote(), note.interval);
     if (!pitch) return;
@@ -1963,6 +2756,7 @@
 
   function handleCellDragStart(
     event: DragEvent,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
@@ -1974,10 +2768,12 @@
       return;
     }
 
+    setActiveCanvasVoice(voiceIndex);
     tapPlacementPayload = null;
     dragPayload = {
       source: 'cell',
       note: clonePlacedNote(note),
+      voiceIndex,
       zone,
       rowIndex,
       cellIndex,
@@ -2001,7 +2797,7 @@
     debugPickupRender('Drag ended; pickup preview state cleared.');
   }
 
-  function handleCellDragOver(event: DragEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
+  function handleCellDragOver(event: DragEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
     if (!dragPayload) return;
 
     if (dragPayload.note.shape === 'circle') {
@@ -2023,6 +2819,7 @@
 
     event.preventDefault();
     dragOverCell = {
+      voiceIndex,
       zone,
       rowIndex,
       cellIndex,
@@ -2045,6 +2842,7 @@
 
   function applyPayloadDropToCell(
     activePayload: DragPayload,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
@@ -2054,6 +2852,7 @@
 
     const droppingIntoOriginCell =
       activePayload.source === 'cell' &&
+      activePayload.voiceIndex === voiceIndex &&
       activePayload.zone === zone &&
       activePayload.rowIndex === rowIndex &&
       activePayload.cellIndex === placementCellIndex;
@@ -2069,14 +2868,16 @@
       }
     }
 
-    updateGridData((rows, pickupCells) => {
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
       const incoming = clonePlacedNote(activePayload.note);
+      const targetRows = rowsByVoice[voiceIndex];
+      const targetPickupCells = pickupCellsByVoice[voiceIndex];
 
       if (activePayload.source === 'cell') {
-        removeDraggedSource(rows, pickupCells, activePayload);
+        removeDraggedSource(rowsByVoice, pickupCellsByVoice, activePayload);
       }
 
-      placeNoteAtLocation(rows, pickupCells, zone, rowIndex, placementCellIndex, incoming, targetSixteenthSlot);
+      placeNoteAtLocation(targetRows, targetPickupCells, zone, rowIndex, placementCellIndex, incoming, targetSixteenthSlot);
     });
 
     if (zone === 'pickup') {
@@ -2089,8 +2890,9 @@
     }
   }
 
-  function handleCellDrop(event: DragEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
+  function handleCellDrop(event: DragEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
     event.preventDefault();
+    setActiveCanvasVoice(voiceIndex);
 
     if (!dragPayload) {
       dragOverCell = null;
@@ -2101,18 +2903,20 @@
     const activePayload = dragPayload;
     const targetSixteenthSlot: SixteenthSlot | null =
       activePayload.note.shape === 'diamond' ? resolveSixteenthSlotFromEvent(event) : null;
-    applyPayloadDropToCell(activePayload, zone, rowIndex, cellIndex, targetSixteenthSlot);
+    applyPayloadDropToCell(activePayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
 
     dragPayload = null;
     dragOverCell = null;
     pickupPreviewLogKey = null;
   }
 
-  function handleCellPointerDown(event: PointerEvent, zone: GridZone, rowIndex: number, cellIndex: number): void {
+  function handleCellPointerDown(event: PointerEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    setActiveCanvasVoice(voiceIndex);
+
     if (eraserMode) {
       event.preventDefault();
       const targetSixteenthSlot = resolveSixteenthSlotFromClientX(event.currentTarget, event.clientX);
-      eraseCellAtLocation(zone, rowIndex, cellIndex, targetSixteenthSlot);
+      eraseCellAtLocation(voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
       return;
     }
 
@@ -2125,19 +2929,22 @@
         ? resolveSixteenthSlotFromClientX(event.currentTarget, event.clientX)
         : null;
 
-    applyPayloadDropToCell(tapPlacementPayload, zone, rowIndex, cellIndex, targetSixteenthSlot);
+    applyPayloadDropToCell(tapPlacementPayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
     dragPayload = null;
     dragOverCell = null;
     pickupPreviewLogKey = null;
   }
 
   function eraseCellAtLocation(
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
     preferredSlot: SixteenthSlot | null,
   ): void {
-    updateGridData((rows, pickupCells) => {
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
+      const rows = rowsByVoice[voiceIndex];
+      const pickupCells = pickupCellsByVoice[voiceIndex];
       const cells = getCellsForZone(rows, pickupCells, zone, rowIndex);
       if (!cells) return;
 
@@ -2164,14 +2971,18 @@
 
   function removeCellNote(
     event: MouseEvent,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
     noteIndex: number | null = null,
   ): void {
     event.preventDefault();
+    setActiveCanvasVoice(voiceIndex);
 
-    updateGridData((rows, pickupCells) => {
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
+      const rows = rowsByVoice[voiceIndex];
+      const pickupCells = pickupCellsByVoice[voiceIndex];
       const cells = getCellsForZone(rows, pickupCells, zone, rowIndex);
       if (!cells) return;
 
@@ -2206,20 +3017,20 @@
     karaokeBallSizePx = Math.max(KARAOKE_BALL_SIZE_MIN, Math.min(KARAOKE_BALL_SIZE_MAX, nextValue));
   }
 
-  function clearKaraokeAnimation(): void {
-    karaokeAnimationToken += 1;
-    if (karaokeAnimationFrame !== null) {
-      cancelAnimationFrame(karaokeAnimationFrame);
-      karaokeAnimationFrame = null;
+  function clearKaraokeAnimation(voiceIndex: VoiceIndex): void {
+    voiceKaraokeAnimationTokens[voiceIndex] += 1;
+    if (voiceKaraokeAnimationFrames[voiceIndex] !== null) {
+      cancelAnimationFrame(voiceKaraokeAnimationFrames[voiceIndex]!);
+      voiceKaraokeAnimationFrames[voiceIndex] = null;
     }
 
-    karaokeBallArcOffsetPx = 0;
+    voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
   }
 
-  function setKaraokeBallToAnchor(anchor: KaraokeAnchor): void {
-    karaokeBallRowIndex = anchor.rowIndex;
-    karaokeBallLeftPercent = anchor.leftPercent;
-    karaokeBallArcOffsetPx = 0;
+  function setKaraokeBallToAnchor(voiceIndex: VoiceIndex, anchor: KaraokeAnchor): void {
+    voiceKaraokeBallRowIndexes[voiceIndex] = anchor.rowIndex;
+    voiceKaraokeBallLeftPercents[voiceIndex] = anchor.leftPercent;
+    voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
   }
 
   function debugPlaybackHighlight(message: string, details?: Record<string, unknown>): void {
@@ -2245,6 +3056,64 @@
   function debugTempoSliderLayout(message: string, details?: Record<string, unknown>): void {
     if (!TEMPO_SLIDER_LAYOUT_DEBUG) return;
     console.log(`[BoomwhackerSketchpad][TempoSlider] ${message}`, details ?? {});
+  }
+
+  function debugPlaybackStartup(message: string, details?: Record<string, unknown>): void {
+    if (!PLAYBACK_STARTUP_DEBUG) return;
+    console.info(`[BoomwhackerSketchpad][PlaybackStartup] ${message}`, details ?? {});
+  }
+
+  function queueCanvasPanelReposition(previousRect: DOMRect | null): void {
+    if (typeof window === 'undefined' || !previousRect) return;
+
+    const token = ++canvasPanelRepositionToken;
+    void tick().then(() => {
+      if (token !== canvasPanelRepositionToken) return;
+
+      const element = canvasPanelElement;
+      if (!element || typeof element.animate !== 'function') return;
+
+      const nextRect = element.getBoundingClientRect();
+      const deltaX = roundTo2(previousRect.left - nextRect.left);
+      const deltaY = roundTo2(previousRect.top - nextRect.top);
+
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
+
+      canvasPanelRepositionAnimation?.cancel();
+      element.style.willChange = 'transform';
+
+      const animation = element.animate(
+        [
+          { transform: `translate(${deltaX}px, ${deltaY}px)` },
+          { transform: 'translate(0, 0)' },
+        ],
+        {
+          duration: CANVAS_PANEL_REPOSITION_MS,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        },
+      );
+
+      const clearAnimation = (): void => {
+        if (canvasPanelRepositionAnimation === animation) {
+          canvasPanelRepositionAnimation = null;
+        }
+        if (canvasPanelElement === element) {
+          element.style.willChange = '';
+        }
+      };
+
+      canvasPanelRepositionAnimation = animation;
+      animation.onfinish = clearAnimation;
+      animation.oncancel = clearAnimation;
+    });
+  }
+
+  function setPlaybackUiState(nextPlaying: boolean): void {
+    if (isPlaying === nextPlaying) return;
+
+    const previousRect = canvasPanelElement?.getBoundingClientRect() ?? null;
+    isPlaying = nextPlaying;
+    queueCanvasPanelReposition(previousRect);
   }
 
   function shouldUseViewportFitMode(): boolean {
@@ -2276,28 +3145,6 @@
     }
   }
 
-  function shouldSyncToolbarPanelHeight(): boolean {
-    if (typeof window === 'undefined') return false;
-    return !viewportFitMode && window.matchMedia('(min-width: 1201px)').matches;
-  }
-
-  function updateSyncedToolbarPanelHeight(): void {
-    const previousHeight = syncedToolbarPanelHeightPx;
-    if (!shouldSyncToolbarPanelHeight() || !toolbarNotebankPanelElement) {
-      syncedToolbarPanelHeightPx = null;
-      if (previousHeight !== null) {
-        queueTempoSliderLayoutSnapshot('Synced toolbar panel height cleared.');
-      }
-      return;
-    }
-
-    const nextHeight = roundTo2(toolbarNotebankPanelElement.getBoundingClientRect().height);
-    syncedToolbarPanelHeightPx = nextHeight > 0 ? nextHeight : null;
-    if (syncedToolbarPanelHeightPx !== previousHeight) {
-      queueTempoSliderLayoutSnapshot('Synced toolbar panel height updated.');
-    }
-  }
-
   function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
   }
@@ -2308,8 +3155,8 @@
         viewportWidth: 1024,
         viewportHeight: 768,
         coarsePointer: false,
-        controlsGroupCount: 5,
-        rowCount: gridRows.length,
+        controlsGroupCount: 1,
+        rowCount: sharedRowCount(),
       };
     }
 
@@ -2322,8 +3169,8 @@
       viewportWidth,
       viewportHeight,
       coarsePointer,
-      controlsGroupCount: controlsGroupCount > 0 ? controlsGroupCount : 5,
-      rowCount: gridRows.length,
+      controlsGroupCount: controlsGroupCount > 0 ? controlsGroupCount : 1,
+      rowCount: sharedRowCount(),
     };
   }
 
@@ -2631,15 +3478,12 @@
           max920: window.matchMedia('(max-width: 920px)').matches,
           max760: window.matchMedia('(max-width: 760px)').matches,
         },
-        shouldSyncToolbarPanelHeight: shouldSyncToolbarPanelHeight(),
-        syncedToolbarPanelHeightPx,
         adaptiveLayout,
-        syncHeightClassApplied: tempoGroupElement?.classList.contains('sync-height') ?? false,
         tempo: {
           topToolbar: tempoSliderElementSnapshot('.top-toolbar'),
           controlsPanel: tempoSliderElementSnapshot('.controls-panel'),
           toolbarNotebankPanel: tempoSliderElementSnapshot('.toolbar-notebank-panel'),
-          tempoGroup: tempoSliderElementSnapshot('.tempo-group'),
+          tempoInlineGroup: tempoSliderElementSnapshot('.tempo-inline-group'),
           tempoControls: tempoSliderElementSnapshot('.tempo-controls'),
           tempoRows: tempoSliderElementSnapshot('.tempo-rows'),
           tempoSliderContainer: tempoSliderElementSnapshot('.tempo-slider-container'),
@@ -2648,8 +3492,8 @@
         relations: {
           controlsPanelWithinTopToolbar: tempoSliderRelationSnapshot('.controls-panel', '.top-toolbar'),
           toolbarNotebankPanelWithinTopToolbar: tempoSliderRelationSnapshot('.toolbar-notebank-panel', '.top-toolbar'),
-          tempoGroupWithinControlsPanel: tempoSliderRelationSnapshot('.tempo-group', '.controls-panel'),
-          tempoControlsWithinTempoGroup: tempoSliderRelationSnapshot('.tempo-controls', '.tempo-group'),
+          tempoInlineGroupWithinControlsPanel: tempoSliderRelationSnapshot('.tempo-inline-group', '.controls-panel'),
+          tempoControlsWithinTempoInlineGroup: tempoSliderRelationSnapshot('.tempo-controls', '.tempo-inline-group'),
           tempoRowsWithinTempoControls: tempoSliderRelationSnapshot('.tempo-rows', '.tempo-controls'),
           tempoSliderContainerWithinTempoControls: tempoSliderRelationSnapshot('.tempo-slider-container', '.tempo-controls'),
           tempoSliderWithinTempoSliderContainer: tempoSliderRelationSnapshot('.tempo-slider', '.tempo-slider-container'),
@@ -2746,7 +3590,7 @@
         adaptiveControlsColumns: adaptiveLayout.controlsColumns,
         adaptiveRowsColumns: adaptiveLayout.rowsColumns,
         pickupBeats,
-        rows: gridRows.length,
+        rows: sharedRowCount(),
         showAccidentals,
         isPlaying,
         viewportFitMode,
@@ -2760,20 +3604,86 @@
     });
   }
 
-  function getTrackRowRect(rowIndex: number): DOMRect | null {
-    return trackRowElements[rowIndex]?.getBoundingClientRect() ?? null;
+  function getTrackRowRect(voiceIndex: VoiceIndex, rowIndex: number): DOMRect | null {
+    return voiceTrackRowElements[voiceIndex][rowIndex]?.getBoundingClientRect() ?? null;
   }
 
-  function rowsAreOnSameVisualLine(rowA: number, rowB: number): boolean {
-    const rectA = getTrackRowRect(rowA);
-    const rectB = getTrackRowRect(rowB);
+  function getTrackRowElement(voiceIndex: VoiceIndex, rowIndex: number): HTMLElement | null {
+    return voiceTrackRowElements[voiceIndex][rowIndex] ?? null;
+  }
+
+  function resolvePlaybackScrollVoiceIndex(): VoiceIndex {
+    if (isVoiceVisible(activeCanvasVoiceIndex)) {
+      return activeCanvasVoiceIndex;
+    }
+
+    return visibleVoiceIndices()[0] ?? 0;
+  }
+
+  function scrollHorizontalTrackToAnchor(
+    voiceIndex: VoiceIndex,
+    anchor: KaraokeAnchor,
+    behavior: ScrollBehavior = 'smooth',
+  ): void {
+    if (trackStyle !== 'horizontal') return;
+    if (typeof window === 'undefined') return;
+
+    const container = canvasPanelElement;
+    const rowElement = getTrackRowElement(voiceIndex, anchor.rowIndex);
+    if (!container || !rowElement) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const rowRect = rowElement.getBoundingClientRect();
+    const anchorX =
+      rowRect.left - containerRect.left + container.scrollLeft + (anchor.leftPercent / 100) * rowRect.width;
+    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    const targetScrollLeft = Math.max(
+      0,
+      Math.min(maxScrollLeft, anchorX - container.clientWidth * HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO),
+    );
+
+    if (Math.abs(targetScrollLeft - container.scrollLeft) < 6) return;
+    container.scrollTo({ left: targetScrollLeft, behavior });
+  }
+
+  function queueHorizontalPlaybackScroll(index: number, behavior: ScrollBehavior = 'smooth'): void {
+    if (trackStyle !== 'horizontal') return;
+    if (typeof window === 'undefined') return;
+
+    requestAnimationFrame(() => {
+      if (trackStyle !== 'horizontal') return;
+
+      const preferredVoiceIndex = resolvePlaybackScrollVoiceIndex();
+      const preferredAnchor = karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, index);
+      if (preferredAnchor) {
+        scrollHorizontalTrackToAnchor(preferredVoiceIndex, preferredAnchor, behavior);
+        return;
+      }
+
+      for (const voiceIndex of visibleVoiceIndices()) {
+        const anchor = karaokeAnchorFromPlaybackIndex(voiceIndex, index);
+        if (anchor) {
+          scrollHorizontalTrackToAnchor(voiceIndex, anchor, behavior);
+          return;
+        }
+      }
+    });
+  }
+
+  function rowsAreOnSameVisualLine(voiceIndex: VoiceIndex, rowA: number, rowB: number): boolean {
+    const rectA = getTrackRowRect(voiceIndex, rowA);
+    const rectB = getTrackRowRect(voiceIndex, rowB);
     if (!rectA || !rectB) return false;
     return Math.abs(rectA.top - rectB.top) < 2;
   }
 
-  function mapAnchorLeftPercentIntoRowFrame(sourceRowIndex: number, targetAnchor: KaraokeAnchor): number | null {
-    const sourceRect = getTrackRowRect(sourceRowIndex);
-    const targetRect = getTrackRowRect(targetAnchor.rowIndex);
+  function mapAnchorLeftPercentIntoRowFrame(
+    voiceIndex: VoiceIndex,
+    sourceRowIndex: number,
+    targetAnchor: KaraokeAnchor,
+  ): number | null {
+    const sourceRect = getTrackRowRect(voiceIndex, sourceRowIndex);
+    const targetRect = getTrackRowRect(voiceIndex, targetAnchor.rowIndex);
     if (!sourceRect || !targetRect || sourceRect.width <= 0) return null;
 
     const targetX = targetRect.left + (targetAnchor.leftPercent / 100) * targetRect.width;
@@ -2815,13 +3725,15 @@
     return isCircleMacrobeatPair(cells, macrobeatStart) || isEmptyMacrobeatPair(cells, macrobeatStart);
   }
 
-  function resolveKaraokeAnchor(cursor: GridCellRef | null): KaraokeAnchor | null {
+  function resolveKaraokeAnchor(voiceIndex: VoiceIndex, cursor: GridCellRef | null): KaraokeAnchor | null {
     if (!cursor) return null;
 
     const pickupColumns = pickupMicrobeatCount();
     const isPickupZone = cursor.zone === 'pickup';
     const rowIndex = isPickupZone ? 0 : cursor.rowIndex;
-    const rowCells = isPickupZone ? pickupRow.cells : gridRows[cursor.rowIndex]?.cells;
+    const rowCells = isPickupZone
+      ? pickupRowForVoice(voiceIndex).cells
+      : rowsForVoice(voiceIndex)[cursor.rowIndex]?.cells;
 
     if (!rowCells) return null;
 
@@ -2841,27 +3753,28 @@
     return { rowIndex, leftPercent };
   }
 
-  function karaokeAnchorFromPlaybackIndex(index: number): KaraokeAnchor | null {
+  function karaokeAnchorFromPlaybackIndex(voiceIndex: VoiceIndex, index: number): KaraokeAnchor | null {
     const totalCells = totalPlaybackCells();
     if (index < 0 || index >= totalCells) return null;
 
-    return resolveKaraokeAnchor(cellRefFromIndex(index));
+    return resolveKaraokeAnchor(voiceIndex, cellRefFromIndex(index));
   }
 
   function animateKaraokeBall(
+    voiceIndex: VoiceIndex,
     from: KaraokeAnchor,
     to: KaraokeAnchor,
     durationMs: number = playbackIntervalMs(),
   ): void {
-    clearKaraokeAnimation();
+    clearKaraokeAnimation(voiceIndex);
 
     if (karaokeAnchorsEqual(from, to)) {
-      setKaraokeBallToAnchor(to);
+      setKaraokeBallToAnchor(voiceIndex, to);
       return;
     }
 
     const motionDurationMs = Math.max(80, Math.floor(durationMs));
-    const token = karaokeAnimationToken;
+    const token = voiceKaraokeAnimationTokens[voiceIndex];
     const runArcSegment = (
       rowIndex: number,
       startLeft: number,
@@ -2871,41 +3784,41 @@
       onComplete: (() => void) | null = null,
       arcHeightPx: number = karaokeArcHeightPx,
     ): void => {
-      karaokeBallRowIndex = rowIndex;
+      voiceKaraokeBallRowIndexes[voiceIndex] = rowIndex;
 
       const segmentStartedAt = performance.now();
       const deltaLeft = endLeft - startLeft;
       const clampedSegmentMs = Math.max(24, Math.floor(segmentDurationMs));
 
       const step = (now: number): void => {
-        if (token !== karaokeAnimationToken) return;
+        if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
         const progress = Math.min(1, (now - segmentStartedAt) / clampedSegmentMs);
-        karaokeBallLeftPercent = startLeft + deltaLeft * progress;
+        voiceKaraokeBallLeftPercents[voiceIndex] = startLeft + deltaLeft * progress;
 
         if (arcPhase === 'first-half') {
-          karaokeBallArcOffsetPx = -arcHeightPx * (2 * progress - progress * progress);
+          voiceKaraokeBallArcOffsetPxs[voiceIndex] = -arcHeightPx * (2 * progress - progress * progress);
         } else if (arcPhase === 'second-half') {
-          karaokeBallArcOffsetPx = -arcHeightPx * (1 - progress * progress);
+          voiceKaraokeBallArcOffsetPxs[voiceIndex] = -arcHeightPx * (1 - progress * progress);
         } else {
-          karaokeBallArcOffsetPx = -4 * arcHeightPx * progress * (1 - progress);
+          voiceKaraokeBallArcOffsetPxs[voiceIndex] = -4 * arcHeightPx * progress * (1 - progress);
         }
 
         if (progress >= 1) {
-          karaokeBallLeftPercent = endLeft;
-          karaokeBallArcOffsetPx = arcPhase === 'first-half' ? -arcHeightPx : 0;
+          voiceKaraokeBallLeftPercents[voiceIndex] = endLeft;
+          voiceKaraokeBallArcOffsetPxs[voiceIndex] = arcPhase === 'first-half' ? -arcHeightPx : 0;
           if (onComplete) {
             onComplete();
           } else {
-            karaokeAnimationFrame = null;
+            voiceKaraokeAnimationFrames[voiceIndex] = null;
           }
           return;
         }
 
-        karaokeAnimationFrame = requestAnimationFrame(step);
+        voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
       };
 
-      karaokeAnimationFrame = requestAnimationFrame(step);
+      voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
     };
 
     const runArcTransition = (
@@ -2915,17 +3828,25 @@
       arcHeightPx: number,
     ): void => {
       if (transitionFrom.rowIndex === transitionTo.rowIndex) {
-        runArcSegment(transitionFrom.rowIndex, karaokeBallLeftPercent, transitionTo.leftPercent, transitionDurationMs, 'full', null, arcHeightPx);
+        runArcSegment(
+          transitionFrom.rowIndex,
+          voiceKaraokeBallLeftPercents[voiceIndex],
+          transitionTo.leftPercent,
+          transitionDurationMs,
+          'full',
+          null,
+          arcHeightPx,
+        );
         return;
       }
 
-      if (rowsAreOnSameVisualLine(transitionFrom.rowIndex, transitionTo.rowIndex)) {
-        const targetLeftInSourceFrame = mapAnchorLeftPercentIntoRowFrame(transitionFrom.rowIndex, transitionTo);
+      if (rowsAreOnSameVisualLine(voiceIndex, transitionFrom.rowIndex, transitionTo.rowIndex)) {
+        const targetLeftInSourceFrame = mapAnchorLeftPercentIntoRowFrame(voiceIndex, transitionFrom.rowIndex, transitionTo);
         if (targetLeftInSourceFrame !== null) {
-          runArcSegment(transitionFrom.rowIndex, karaokeBallLeftPercent, targetLeftInSourceFrame, transitionDurationMs, 'full', () => {
-            if (token !== karaokeAnimationToken) return;
-            setKaraokeBallToAnchor(transitionTo);
-            karaokeAnimationFrame = null;
+          runArcSegment(transitionFrom.rowIndex, voiceKaraokeBallLeftPercents[voiceIndex], targetLeftInSourceFrame, transitionDurationMs, 'full', () => {
+            if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
+            setKaraokeBallToAnchor(voiceIndex, transitionTo);
+            voiceKaraokeAnimationFrames[voiceIndex] = null;
           }, arcHeightPx);
           return;
         }
@@ -2934,11 +3855,11 @@
       const toRowLeftBoundary = karaokeRowLeftBoundaryPercent(transitionTo.rowIndex);
       const outgoingDurationMs = Math.max(20, Math.floor(transitionDurationMs / 2));
       const incomingDurationMs = Math.max(20, transitionDurationMs - outgoingDurationMs);
-      runArcSegment(transitionFrom.rowIndex, karaokeBallLeftPercent, 100, outgoingDurationMs, 'first-half', () => {
-        if (token !== karaokeAnimationToken) return;
-        karaokeBallRowIndex = transitionTo.rowIndex;
-        karaokeBallLeftPercent = toRowLeftBoundary;
-        karaokeBallArcOffsetPx = -arcHeightPx;
+      runArcSegment(transitionFrom.rowIndex, voiceKaraokeBallLeftPercents[voiceIndex], 100, outgoingDurationMs, 'first-half', () => {
+        if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
+        voiceKaraokeBallRowIndexes[voiceIndex] = transitionTo.rowIndex;
+        voiceKaraokeBallLeftPercents[voiceIndex] = toRowLeftBoundary;
+        voiceKaraokeBallArcOffsetPxs[voiceIndex] = -arcHeightPx;
         runArcSegment(transitionTo.rowIndex, toRowLeftBoundary, transitionTo.leftPercent, incomingDurationMs, 'second-half', null, arcHeightPx);
       }, arcHeightPx);
     };
@@ -2946,61 +3867,98 @@
     runArcTransition(from, to, motionDurationMs, karaokeArcHeightPx);
   }
 
-  function startKaraokeLeadIn(firstAnchor: KaraokeAnchor): number {
-    const leadInMs = Math.max(40, Math.floor(playbackIntervalMs() / 2));
-    const crestLeft = karaokeRowLeftBoundaryPercent(firstAnchor.rowIndex);
+  function animateKaraokeBallVertical(
+    voiceIndex: VoiceIndex,
+    anchor: KaraokeAnchor,
+    durationMs: number = countInBeatIntervalMs(),
+    arcHeightPx: number = karaokeArcHeightPx,
+  ): void {
+    clearKaraokeAnimation(voiceIndex);
+    voiceKaraokeBallRowIndexes[voiceIndex] = anchor.rowIndex;
+    voiceKaraokeBallLeftPercents[voiceIndex] = anchor.leftPercent;
 
-    clearKaraokeAnimation();
-    karaokeBallRowIndex = firstAnchor.rowIndex;
-    karaokeBallLeftPercent = crestLeft;
-    karaokeBallArcOffsetPx = -karaokeArcHeightPx;
-
-    const token = karaokeAnimationToken;
+    const motionDurationMs = Math.max(80, Math.floor(durationMs));
+    const token = voiceKaraokeAnimationTokens[voiceIndex];
     const startedAt = performance.now();
 
     const step = (now: number): void => {
-      if (token !== karaokeAnimationToken) return;
+      if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
-      const progress = Math.min(1, (now - startedAt) / leadInMs);
-      karaokeBallLeftPercent = crestLeft + (firstAnchor.leftPercent - crestLeft) * progress;
-      karaokeBallArcOffsetPx = -karaokeArcHeightPx * (1 - progress * progress);
+      const progress = Math.min(1, (now - startedAt) / motionDurationMs);
+      voiceKaraokeBallArcOffsetPxs[voiceIndex] = -4 * arcHeightPx * progress * (1 - progress);
 
       if (progress >= 1) {
-        setKaraokeBallToAnchor(firstAnchor);
-        karaokeAnchor = firstAnchor;
-        karaokeAnimationFrame = null;
+        setKaraokeBallToAnchor(voiceIndex, anchor);
+        voiceKaraokeAnimationFrames[voiceIndex] = null;
         return;
       }
 
-      karaokeAnimationFrame = requestAnimationFrame(step);
+      voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
     };
 
-    karaokeAnimationFrame = requestAnimationFrame(step);
+    voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
+  }
+
+  function startKaraokeLeadIn(voiceIndex: VoiceIndex, firstAnchor: KaraokeAnchor): number {
+    const leadInMs = Math.max(40, Math.floor(playbackIntervalMs() / 2));
+    const crestLeft = karaokeRowLeftBoundaryPercent(firstAnchor.rowIndex);
+
+    clearKaraokeAnimation(voiceIndex);
+    voiceKaraokeBallRowIndexes[voiceIndex] = firstAnchor.rowIndex;
+    voiceKaraokeBallLeftPercents[voiceIndex] = crestLeft;
+    voiceKaraokeBallArcOffsetPxs[voiceIndex] = -karaokeArcHeightPx;
+
+    const token = voiceKaraokeAnimationTokens[voiceIndex];
+    const startedAt = performance.now();
+
+    const step = (now: number): void => {
+      if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
+
+      const progress = Math.min(1, (now - startedAt) / leadInMs);
+      voiceKaraokeBallLeftPercents[voiceIndex] = crestLeft + (firstAnchor.leftPercent - crestLeft) * progress;
+      voiceKaraokeBallArcOffsetPxs[voiceIndex] = -karaokeArcHeightPx * (1 - progress * progress);
+
+      if (progress >= 1) {
+        setKaraokeBallToAnchor(voiceIndex, firstAnchor);
+        voiceKaraokeAnchors[voiceIndex] = firstAnchor;
+        voiceKaraokeAnimationFrames[voiceIndex] = null;
+        return;
+      }
+
+      voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
+    };
+
+    voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
     return leadInMs;
   }
 
-  function updateKaraokeAfterPlaybackStep(currentIndex: number, totalCells: number, currentCursor: GridCellRef): void {
-    const currentAnchor = karaokeAnchorFromPlaybackIndex(currentIndex);
+  function updateKaraokeAfterPlaybackStep(
+    voiceIndex: VoiceIndex,
+    currentIndex: number,
+    totalCells: number,
+    currentCursor: GridCellRef,
+  ): void {
+    const currentAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
     if (!currentAnchor) {
       debugPlaybackHighlight('No current karaoke anchor from playback index.', { currentIndex, totalCells });
-      clearKaraokeAnimation();
-      karaokeBallRowIndex = null;
-      karaokeBallLeftPercent = 50;
-      karaokeAnchor = null;
+      clearKaraokeAnimation(voiceIndex);
+      voiceKaraokeBallRowIndexes[voiceIndex] = null;
+      voiceKaraokeBallLeftPercents[voiceIndex] = 50;
+      voiceKaraokeAnchors[voiceIndex] = null;
       return;
     }
 
-    clearKaraokeAnimation();
-    setKaraokeBallToAnchor(currentAnchor);
-    karaokeAnchor = currentAnchor;
+    clearKaraokeAnimation(voiceIndex);
+    setKaraokeBallToAnchor(voiceIndex, currentAnchor);
+    voiceKaraokeAnchors[voiceIndex] = currentAnchor;
 
     const nextIndex = currentIndex + 1;
     if (nextIndex >= totalCells) {
-      markPlayedCellsForCursor(currentCursor);
+      markPlayedCellsForCursor(voiceIndex, currentCursor);
       return;
     }
 
-    const nextAnchor = karaokeAnchorFromPlaybackIndex(nextIndex);
+    const nextAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, nextIndex);
     if (!nextAnchor) {
       debugPlaybackHighlight('No next karaoke anchor from playback index.', { nextIndex, totalCells });
       return;
@@ -3011,15 +3969,17 @@
       return;
     }
 
-    markPlayedCellsForCursor(currentCursor);
-    animateKaraokeBall(currentAnchor, nextAnchor, playbackIntervalMs());
-    karaokeAnchor = nextAnchor;
+    markPlayedCellsForCursor(voiceIndex, currentCursor);
+    animateKaraokeBall(voiceIndex, currentAnchor, nextAnchor, playbackIntervalMs());
+    voiceKaraokeAnchors[voiceIndex] = nextAnchor;
   }
 
-  function resolvePlaybackHighlightForCursor(cursor: GridCellRef): Omit<PlaybackHighlight, 'pulseClass'> | null {
+  function resolvePlaybackHighlightForCursor(voiceIndex: VoiceIndex, cursor: GridCellRef): Omit<PlaybackHighlight, 'pulseClass'> | null {
     const isPickupZone = cursor.zone === 'pickup';
     const rowIndex = isPickupZone ? -1 : cursor.rowIndex;
-    const rowCells = isPickupZone ? pickupRow.cells : gridRows[cursor.rowIndex]?.cells;
+    const rowCells = isPickupZone
+      ? pickupRowForVoice(voiceIndex).cells
+      : rowsForVoice(voiceIndex)[cursor.rowIndex]?.cells;
     if (!rowCells) return null;
 
     const maxCells = isPickupZone ? pickupMicrobeatCount() : GRID_COLUMNS;
@@ -3044,35 +4004,35 @@
     };
   }
 
-  function updatePlaybackHighlight(cursor: GridCellRef): void {
-    const anchor = resolveKaraokeAnchor(cursor);
+  function updatePlaybackHighlight(voiceIndex: VoiceIndex, cursor: GridCellRef): void {
+    const anchor = resolveKaraokeAnchor(voiceIndex, cursor);
     if (!anchor) {
       debugPlaybackHighlight('Clearing highlight: no resolved anchor for cursor.', { cursor });
-      playbackHighlight = null;
-      playbackHighlightAnchor = null;
+      voicePlaybackHighlights[voiceIndex] = null;
+      voicePlaybackHighlightAnchors[voiceIndex] = null;
       return;
     }
 
-    if (playbackHighlightAnchor && karaokeAnchorsEqual(playbackHighlightAnchor, anchor)) {
+    if (voicePlaybackHighlightAnchors[voiceIndex] && karaokeAnchorsEqual(voicePlaybackHighlightAnchors[voiceIndex]!, anchor)) {
       debugPlaybackHighlight('Skipping highlight update: anchor unchanged.', { cursor, anchor });
       return;
     }
 
-    const nextHighlight = resolvePlaybackHighlightForCursor(cursor);
+    const nextHighlight = resolvePlaybackHighlightForCursor(voiceIndex, cursor);
     if (!nextHighlight) {
       debugPlaybackHighlight('Clearing highlight: failed to resolve highlight span.', { cursor, anchor });
-      playbackHighlight = null;
-      playbackHighlightAnchor = null;
+      voicePlaybackHighlights[voiceIndex] = null;
+      voicePlaybackHighlightAnchors[voiceIndex] = null;
       return;
     }
 
-    playbackPulseFlip = !playbackPulseFlip;
-    playbackHighlight = {
+    voicePlaybackPulseFlips[voiceIndex] = !voicePlaybackPulseFlips[voiceIndex];
+    voicePlaybackHighlights[voiceIndex] = {
       ...nextHighlight,
-      pulseClass: playbackPulseFlip ? 'playback-pulse-a' : 'playback-pulse-b',
+      pulseClass: voicePlaybackPulseFlips[voiceIndex] ? 'playback-pulse-a' : 'playback-pulse-b',
     };
-    playbackHighlightAnchor = anchor;
-    debugPlaybackHighlight('Highlight updated.', { cursor, anchor, highlight: playbackHighlight });
+    voicePlaybackHighlightAnchors[voiceIndex] = anchor;
+    debugPlaybackHighlight('Highlight updated.', { cursor, anchor, highlight: voicePlaybackHighlights[voiceIndex] });
   }
 
   function clearPlaybackTimer(): void {
@@ -3126,7 +4086,7 @@
   }
 
   function totalPlaybackCells(): number {
-    return pickupMicrobeatCount() + gridRows.length * GRID_COLUMNS;
+    return pickupMicrobeatCount() + sharedRowCount() * GRID_COLUMNS;
   }
 
   function absolutePlaybackCellIndex(zone: GridZone, rowIndex: number, cellIndex: number): number | null {
@@ -3137,27 +4097,28 @@
       return cellIndex;
     }
 
-    if (rowIndex < 0 || rowIndex >= gridRows.length) return null;
+    if (rowIndex < 0 || rowIndex >= sharedRowCount()) return null;
     if (cellIndex < 0 || cellIndex >= GRID_COLUMNS) return null;
     return pickupCells + rowIndex * GRID_COLUMNS + cellIndex;
   }
 
-  function markPlayedCellsForCursor(cursor: GridCellRef): void {
-    const highlight = resolvePlaybackHighlightForCursor(cursor);
+  function markPlayedCellsForCursor(voiceIndex: VoiceIndex, cursor: GridCellRef): void {
+    const highlight = resolvePlaybackHighlightForCursor(voiceIndex, cursor);
     if (!highlight) return;
 
-    const nextPlayed = new Set(playedCellIndexes);
+    const nextPlayed = new Set(voicePlayedCellIndexes[voiceIndex]);
     for (let offset = 0; offset < highlight.span; offset += 1) {
       const absoluteIndex = absolutePlaybackCellIndex(highlight.zone, highlight.rowIndex, highlight.startCellIndex + offset);
       if (absoluteIndex === null) continue;
       nextPlayed.add(absoluteIndex);
     }
 
-    playedCellIndexes = nextPlayed;
+    voicePlayedCellIndexes[voiceIndex] = nextPlayed;
     debugPlayedNoteMuting('Marked cells as played.', {
+      voice: voiceLabel(voiceIndex),
       cursor,
       highlight,
-      playedCount: playedCellIndexes.size,
+      playedCount: voicePlayedCellIndexes[voiceIndex].size,
     });
   }
 
@@ -3188,17 +4149,23 @@
   function playPlacedNote(note: PlacedNote): void {
     if (!audioReady) return;
 
+    const noteDefinition = noteDefinitionFromId(note.noteId);
+    if (noteDefinition?.sampleId) {
+      audio.playSampleNow(noteDefinition.sampleId);
+      return;
+    }
+
     const pitch = getPitchNameForDisplay(model.getFullRootNote(), note.interval);
     if (!pitch) return;
 
     audio.playNoteNow(pitch);
   }
 
-  function playCellNote(cellRef: GridCellRef): boolean {
+  function playCellNote(voiceIndex: VoiceIndex, cellRef: GridCellRef): boolean {
     const cell =
       cellRef.zone === 'pickup'
-        ? pickupRow.cells[cellRef.cellIndex]
-        : gridRows[cellRef.rowIndex]?.cells[cellRef.cellIndex];
+        ? pickupRowForVoice(voiceIndex).cells[cellRef.cellIndex]
+        : rowsForVoice(voiceIndex)[cellRef.rowIndex]?.cells[cellRef.cellIndex];
 
     if (!cell || !cellHasAnyNotes(cell)) return false;
 
@@ -3248,14 +4215,23 @@
     const currentIndex = playbackIndex % totalCells;
     const cursor = cellRefFromIndex(currentIndex);
     debugPlaybackHighlight('Playback step.', { currentIndex, totalCells, cursor });
-    playbackCursor = cursor;
-    updateKaraokeAfterPlaybackStep(currentIndex, totalCells, cursor);
-    updatePlaybackHighlight(cursor);
-    const hasSecondSixteenth = playCellNote(cursor);
+
+    if (macrobeatMetronomeEnabled && cursor.cellIndex % MICROBEATS_PER_BEAT === 0) {
+      audio.playMacrobeatCueNow();
+    }
+
+    let hasSecondSixteenth = false;
+    for (const voiceIndex of visibleVoiceIndices()) {
+      voicePlaybackCursors[voiceIndex] = cursor;
+      updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, totalCells, cursor);
+      updatePlaybackHighlight(voiceIndex, cursor);
+      hasSecondSixteenth = playCellNote(voiceIndex, cursor) || hasSecondSixteenth;
+    }
+    queueHorizontalPlaybackScroll(currentIndex);
     if (PLAYED_NOTE_MUTING_DEBUG && typeof window !== 'undefined' && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         debugPlayedNoteMuting('DOM muted-note classes.', {
-          playedCellCount: playedCellIndexes.size,
+          playedCellCount: visibleVoiceIndices().reduce<number>((sum, voiceIndex) => sum + voicePlayedCellIndexes[voiceIndex].size, 0),
           mutedNoteCount: document.querySelectorAll('.placed-note.played-note-muted').length,
         });
       });
@@ -3299,39 +4275,107 @@
     countInDisplayNumber = null;
   }
 
-  function startCountIn(firstAnchor: KaraokeAnchor): number {
-    const beatMs = countInBeatIntervalMs();
+  function triggerCountInBeat(
+    firstAnchors: Map<VoiceIndex, KaraokeAnchor>,
+    index: number,
+    beatMs: number,
+    scheduledDelayMs: number | null = null,
+    actualDelayMs: number | null = null,
+  ): void {
+    countInDisplayNumber = COUNT_IN_NUMBERS[index];
 
-    clearKaraokeAnimation();
-    setKaraokeBallToAnchor(firstAnchor);
-    karaokeAnchor = firstAnchor;
+    const accented = index === ACCENTED_COUNT_IN_INDEX;
+    const played = audio.playCountInCueNow(accented);
+    debugPlaybackStartup('Count-in beat fired.', {
+      count: COUNT_IN_NUMBERS[index],
+      accented,
+      beatMs,
+      played,
+      scheduledDelayMs,
+      actualDelayMs,
+      driftMs:
+        scheduledDelayMs !== null && actualDelayMs !== null
+          ? actualDelayMs - scheduledDelayMs
+          : null,
+    });
 
-    countInDisplayNumber = COUNT_IN_NUMBERS[0];
-    audio.playCountInCueNow();
+    for (const [voiceIndex, anchor] of firstAnchors) {
+      voiceKaraokeAnchors[voiceIndex] = anchor;
 
-    for (let index = 1; index < COUNT_IN_NUMBERS.length; index += 1) {
-      const countNumber = COUNT_IN_NUMBERS[index];
-      queuePlaybackTimeout(() => {
-        if (!isPlaying) return;
-        countInDisplayNumber = countNumber;
-        audio.playCountInCueNow();
-      }, beatMs * index);
+      if (accented) {
+        animateKaraokeBallVertical(voiceIndex, anchor, beatMs);
+      } else {
+        clearKaraokeAnimation(voiceIndex);
+        setKaraokeBallToAnchor(voiceIndex, anchor);
+      }
     }
-
-    return beatMs * COUNT_IN_NUMBERS.length;
   }
 
-  function startPlayback(): void {
+  function startCountIn(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, startupDelayMs = 0): number {
+    const beatMs = countInBeatIntervalMs();
+    const sequenceStartedAt = performance.now();
+
+    for (const [voiceIndex, anchor] of firstAnchors) {
+      clearKaraokeAnimation(voiceIndex);
+      setKaraokeBallToAnchor(voiceIndex, anchor);
+      voiceKaraokeAnchors[voiceIndex] = anchor;
+    }
+
+    for (let index = 0; index < COUNT_IN_NUMBERS.length; index += 1) {
+      const scheduledDelayMs = startupDelayMs + beatMs * index;
+      queuePlaybackTimeout(() => {
+        if (!isPlaying) return;
+        triggerCountInBeat(
+          firstAnchors,
+          index,
+          beatMs,
+          scheduledDelayMs,
+          Math.round(performance.now() - sequenceStartedAt),
+        );
+      }, scheduledDelayMs);
+    }
+
+    return startupDelayMs + beatMs * COUNT_IN_NUMBERS.length;
+  }
+
+  function startKaraokeLeadInWithDelay(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, startupDelayMs = 0): number {
+    if (startupDelayMs <= 0) {
+      for (const [voiceIndex, anchor] of firstAnchors) {
+        startKaraokeLeadIn(voiceIndex, anchor);
+      }
+      return Math.max(40, Math.floor(playbackIntervalMs() / 2));
+    }
+
+    const leadInMs = Math.max(40, Math.floor(playbackIntervalMs() / 2));
+    for (const [voiceIndex, anchor] of firstAnchors) {
+      clearKaraokeAnimation(voiceIndex);
+      setKaraokeBallToAnchor(voiceIndex, anchor);
+      voiceKaraokeAnchors[voiceIndex] = anchor;
+    }
+    queuePlaybackTimeout(() => {
+      if (!isPlaying) return;
+      for (const [voiceIndex, anchor] of firstAnchors) {
+        startKaraokeLeadIn(voiceIndex, anchor);
+      }
+    }, startupDelayMs);
+    return startupDelayMs + leadInMs;
+  }
+
+  function startPlayback(readiness: AudioReadinessResult): void {
     if (isPlaying) return;
 
     debugPlaybackHighlight('Starting playback.', { playbackIndex, totalCells: totalPlaybackCells() });
-    isPlaying = true;
+    volumePopupOpen = false;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
-    clearKaraokeAnimation();
+    for (const voiceIndex of VOICE_INDEXES) {
+      clearKaraokeAnimation(voiceIndex);
+      voicePlaybackHighlights[voiceIndex] = null;
+      voicePlaybackHighlightAnchors[voiceIndex] = null;
+      voicePlaybackCursors[voiceIndex] = null;
+      voicePlayedCellIndexes[voiceIndex] = new Set<number>();
+    }
     clearCountInDisplay();
-    playbackHighlight = null;
-    playbackHighlightAnchor = null;
 
     const totalCells = totalPlaybackCells();
     if (totalCells <= 0) {
@@ -3340,20 +4384,44 @@
     }
 
     const currentIndex = playbackIndex % totalCells;
-    const firstAnchor = karaokeAnchorFromPlaybackIndex(currentIndex);
+    setPlaybackUiState(true);
+    queueHorizontalPlaybackScroll(currentIndex, 'auto');
+
+    const firstAnchors = new Map<VoiceIndex, KaraokeAnchor>();
+    for (const voiceIndex of visibleVoiceIndices()) {
+      const firstAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
+      if (firstAnchor) {
+        firstAnchors.set(voiceIndex, firstAnchor);
+      }
+    }
     const shouldRunCountIn = countInEnabled && playbackIndex === 0;
-    const leadInMs = firstAnchor
+    const startupDelayMs = readiness.stabilizationDelayMs;
+    debugPlaybackStartup('Playback requested.', {
+      playbackIndex,
+      shouldRunCountIn,
+      resumedAudioContext: readiness.resumedAudioContext,
+      stabilizationDelayMs: startupDelayMs,
+      startElapsedMs: readiness.startElapsedMs,
+    });
+    const leadInMs = firstAnchors.size > 0
       ? shouldRunCountIn
-        ? startCountIn(firstAnchor)
-        : startKaraokeLeadIn(firstAnchor)
-      : 0;
-    if (!firstAnchor) {
-      karaokeBallRowIndex = null;
-      karaokeBallLeftPercent = 50;
+        ? startCountIn(firstAnchors, startupDelayMs)
+        : startKaraokeLeadInWithDelay(firstAnchors, startupDelayMs)
+      : startupDelayMs;
+    if (firstAnchors.size === 0) {
+      for (const voiceIndex of visibleVoiceIndices()) {
+        voiceKaraokeBallRowIndexes[voiceIndex] = null;
+        voiceKaraokeBallLeftPercents[voiceIndex] = 50;
+      }
     }
 
+    const playbackRequestedAt = performance.now();
     queuePlaybackTimeout(() => {
       if (!isPlaying) return;
+      debugPlaybackStartup('Playback lead-in completed.', {
+        leadInMs,
+        actualDelayMs: Math.round(performance.now() - playbackRequestedAt),
+      });
       clearCountInDisplay();
       playbackStep();
 
@@ -3364,31 +4432,35 @@
   }
 
   function pausePlayback(): void {
-    debugPlaybackHighlight('Pausing playback.', { playbackIndex, playbackHighlight, playbackHighlightAnchor });
-    isPlaying = false;
+    debugPlaybackHighlight('Pausing playback.', { playbackIndex });
+    setPlaybackUiState(false);
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
-    clearKaraokeAnimation();
+    for (const voiceIndex of VOICE_INDEXES) {
+      clearKaraokeAnimation(voiceIndex);
+      voicePlaybackHighlights[voiceIndex] = null;
+      voicePlaybackHighlightAnchors[voiceIndex] = null;
+    }
     clearCountInDisplay();
-    playbackHighlight = null;
-    playbackHighlightAnchor = null;
   }
 
   function stopPlayback(): void {
-    debugPlaybackHighlight('Stopping playback.', { playbackIndex, playbackHighlight, playbackHighlightAnchor });
-    isPlaying = false;
+    debugPlaybackHighlight('Stopping playback.', { playbackIndex });
+    setPlaybackUiState(false);
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
-    clearKaraokeAnimation();
+    for (const voiceIndex of VOICE_INDEXES) {
+      clearKaraokeAnimation(voiceIndex);
+      voicePlaybackCursors[voiceIndex] = null;
+      voiceKaraokeBallRowIndexes[voiceIndex] = null;
+      voiceKaraokeBallLeftPercents[voiceIndex] = 50;
+      voiceKaraokeAnchors[voiceIndex] = null;
+      voicePlaybackHighlights[voiceIndex] = null;
+      voicePlaybackHighlightAnchors[voiceIndex] = null;
+      voicePlayedCellIndexes[voiceIndex] = new Set<number>();
+    }
     clearCountInDisplay();
     playbackIndex = 0;
-    playbackCursor = null;
-    karaokeBallRowIndex = null;
-    karaokeBallLeftPercent = 50;
-    karaokeAnchor = null;
-    playbackHighlight = null;
-    playbackHighlightAnchor = null;
-    playedCellIndexes = new Set<number>();
   }
 
   async function togglePlayback(): Promise<void> {
@@ -3397,14 +4469,18 @@
       return;
     }
 
-    const ready = await ensureAudioReady();
-    if (!ready) return;
+    const readiness = await ensureAudioReady();
+    if (!readiness.ready) return;
 
-    startPlayback();
+    startPlayback(readiness);
   }
 
   function toggleCountIn(): void {
     countInEnabled = !countInEnabled;
+  }
+
+  function toggleMacrobeatMetronome(): void {
+    macrobeatMetronomeEnabled = !macrobeatMetronomeEnabled;
   }
 
   function toggleLoop(): void {
@@ -3472,17 +4548,18 @@
     return playbackHighlightMatches(highlight, zone, rowIndex, cellIndex) && highlight?.pulseClass === pulseClass;
   }
 
-  function isDropTarget(target: GridDropTarget | null, rowIndex: number, cellIndex: number): boolean {
-    return target?.zone === 'main' && target?.rowIndex === rowIndex && target?.cellIndex === cellIndex;
+  function isDropTarget(target: GridDropTarget | null, voiceIndex: VoiceIndex, rowIndex: number, cellIndex: number): boolean {
+    return target?.voiceIndex === voiceIndex && target?.zone === 'main' && target?.rowIndex === rowIndex && target?.cellIndex === cellIndex;
   }
 
-  function isPickupDropTarget(target: GridDropTarget | null, cellIndex: number): boolean {
-    return target?.zone === 'pickup' && target?.cellIndex === cellIndex;
+  function isPickupDropTarget(target: GridDropTarget | null, voiceIndex: VoiceIndex, cellIndex: number): boolean {
+    return target?.voiceIndex === voiceIndex && target?.zone === 'pickup' && target?.cellIndex === cellIndex;
   }
 
   function isSixteenthSlotDropTarget(
     payload: DragPayload | null,
     target: GridDropTarget | null,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
@@ -3492,6 +4569,7 @@
     if (slotIndex !== 0 && slotIndex !== 1) return false;
 
     return (
+      target?.voiceIndex === voiceIndex &&
       target?.zone === zone &&
       target?.rowIndex === rowIndex &&
       target?.cellIndex === cellIndex &&
@@ -3502,12 +4580,14 @@
   function isDragPreviewTarget(
     payload: DragPayload | null,
     target: GridDropTarget | null,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
   ): boolean {
     return (
       Boolean(payload) &&
+      target?.voiceIndex === voiceIndex &&
       target?.zone === zone &&
       target?.rowIndex === rowIndex &&
       target?.cellIndex === cellIndex
@@ -3517,6 +4597,7 @@
   function dragPreviewNote(
     payload: DragPayload | null,
     target: GridDropTarget | null,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
@@ -3525,15 +4606,15 @@
     if (!previewNote) return null;
 
     if (previewNote.shape === 'circle') {
-      if (target?.zone !== zone || target?.rowIndex !== rowIndex) return null;
+      if (target?.voiceIndex !== voiceIndex || target?.zone !== zone || target?.rowIndex !== rowIndex) return null;
       const hoveredCellIndex = target.cellIndex;
       if (macrobeatStartCellIndex(hoveredCellIndex) !== cellIndex) return null;
-    } else if (!isDragPreviewTarget(payload, target, zone, rowIndex, cellIndex)) {
+    } else if (!isDragPreviewTarget(payload, target, voiceIndex, zone, rowIndex, cellIndex)) {
       return null;
     }
 
     if (zone === 'pickup') {
-      const nextKey = `${rowIndex}:${cellIndex}:${target?.cellIndex ?? 'n'}:${previewNote.shape}:${previewNote.noteId}`;
+      const nextKey = `${voiceIndex}:${rowIndex}:${cellIndex}:${target?.cellIndex ?? 'n'}:${previewNote.shape}:${previewNote.noteId}`;
       if (pickupPreviewLogKey !== nextKey) {
         debugPickupRender('Pickup preview note resolved for render.', {
           rowIndex,
@@ -3552,35 +4633,38 @@
   function isDragPreviewSixteenthSlot(
     payload: DragPayload | null,
     target: GridDropTarget | null,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
     slotIndex: SixteenthSlot,
   ): boolean {
     if (!payload || payload.note.shape !== 'diamond') return false;
-    return isDragPreviewTarget(payload, target, zone, rowIndex, cellIndex) && target?.sixteenthSlot === slotIndex;
+    return isDragPreviewTarget(payload, target, voiceIndex, zone, rowIndex, cellIndex) && target?.sixteenthSlot === slotIndex;
   }
 
   function isCircleDragPreviewOnSecondMicrobeat(
     payload: DragPayload | null,
     target: GridDropTarget | null,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
   ): boolean {
     if (!payload || payload.note.shape !== 'circle') return false;
-    return isDragPreviewTarget(payload, target, zone, rowIndex, cellIndex) && !isMacrobeatStartCell(cellIndex);
+    return isDragPreviewTarget(payload, target, voiceIndex, zone, rowIndex, cellIndex) && !isMacrobeatStartCell(cellIndex);
   }
 
   function isCircleDragPreviewSpanStart(
     payload: DragPayload | null,
     target: GridDropTarget | null,
+    voiceIndex: VoiceIndex,
     zone: GridZone,
     rowIndex: number,
     cellIndex: number,
   ): boolean {
     if (!payload || payload.note.shape !== 'circle') return false;
-    if (target?.zone !== zone || target?.rowIndex !== rowIndex) return false;
+    if (target?.voiceIndex !== voiceIndex || target?.zone !== zone || target?.rowIndex !== rowIndex) return false;
     const hoveredCellIndex = target?.cellIndex;
     if (hoveredCellIndex === undefined) return false;
     const spanStartCellIndex = macrobeatStartCellIndex(hoveredCellIndex);
@@ -3598,14 +4682,15 @@
     return isSpanStart;
   }
 
-  function cellHasNote(rowIndex: number, cellIndex: number): boolean {
-    const rowCells = gridRows[rowIndex]?.cells ?? null;
+  function cellHasNote(voiceIndex: VoiceIndex, rowIndex: number, cellIndex: number): boolean {
+    const rowCells = rowsForVoice(voiceIndex)[rowIndex]?.cells ?? null;
     if (!rowCells) return false;
     return cellHasAnyNotes(rowCells[cellIndex] ?? null) || isCircleSpanContinuationCell(rowCells, cellIndex);
   }
 
-  function pickupCellHasNote(cellIndex: number): boolean {
-    return cellHasAnyNotes(pickupRow.cells[cellIndex]) || isCircleSpanContinuationCell(pickupRow.cells, cellIndex);
+  function pickupCellHasNote(voiceIndex: VoiceIndex, cellIndex: number): boolean {
+    const pickupCells = pickupRowForVoice(voiceIndex).cells;
+    return cellHasAnyNotes(pickupCells[cellIndex]) || isCircleSpanContinuationCell(pickupCells, cellIndex);
   }
 
   function isEditableTarget(target: EventTarget | null): boolean {
@@ -3692,217 +4777,219 @@
   style={rootInlineStyle()}
   on:dragover={handleCursorGhostDragOver}
 >
-  <div class="top-toolbar" bind:this={topToolbarElement}>
-  <section
-    class="panel controls-panel"
-    bind:this={controlsPanelElement}
-    style:height={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null ? `${syncedToolbarPanelHeightPx}px` : undefined}
-  >
-    {#if !isStudentView || !activeStudentView.hideTempoSlider}
-    <div
-      class="controls-group tempo-group"
-      bind:this={tempoGroupElement}
-      class:sync-height={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null}
-    >
-      <TempoControls
-        quarterTempo={state.microbeatTempo / 2}
-        minQuarter={MICROBEAT_TEMPO_MIN / 2}
-        maxQuarter={MICROBEAT_TEMPO_MAX / 2}
-        step={1}
-        sliderOrientation="vertical"
-        fillVerticalAvailableHeight={shouldSyncToolbarPanelHeight() && syncedToolbarPanelHeightPx !== null}
-        onchange={handleQuarterTempoChange}
-        showEighth={false}
-        showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
-        showDottedQuarter={false}
-        showRows={false}
-        showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
-      />
-    </div>
-    {/if}
-
+  <div class="top-toolbar" class:playback-compact={isPlaying}>
+  <section class="panel controls-panel">
     <div class="controls-group transport-group">
-      <div class="transport-row">
-        {#if !isStudentView || !activeStudentView.hideCanvasActions}
-        <button
-          type="button"
-          class="transport-btn clear-canvas-btn"
-          on:click={clearGrid}
-          title="Clear canvas"
-          aria-label="Clear canvas"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 372" fill="none" aria-hidden="true">
-            <path fill="currentColor" fill-rule="evenodd" d="M 167.00 326.50 L 156.00 324.50 L 45.50 215.00 L 42.50 210.00 L 43.50 199.00 L 49.00 192.50 L 128.00 151.50 L 147.00 132.50 L 151.00 130.50 L 163.00 129.50 L 169.00 131.50 L 189.00 149.50 L 291.00 46.50 L 298.00 43.50 L 307.00 43.50 L 312.00 45.50 L 321.50 54.00 L 326.50 63.00 L 327.50 70.00 L 323.50 81.00 L 221.50 184.00 L 238.50 202.00 L 240.50 207.00 L 239.50 219.00 L 222.50 236.00 L 179.50 316.00 L 172.00 324.50 L 167.00 326.50 Z M 210.50 172.00 L 309.50 73.00 L 310.50 68.00 L 304.00 60.50 L 300.00 60.50 L 198.50 161.00 L 209.00 172.50 L 210.50 172.00 Z M 215.50 221.00 L 224.50 212.00 L 224.50 209.00 L 160.00 145.50 L 158.00 145.50 L 148.50 155.00 L 148.50 157.00 L 212.00 219.50 L 215.50 221.00 Z M 164.50 308.00 L 204.50 235.00 L 137.00 167.50 L 134.00 165.50 L 59.50 206.00 L 88.00 234.50 L 116.00 215.50 L 120.00 213.50 L 127.00 214.50 L 129.50 218.00 L 129.50 224.00 L 100.50 247.00 L 124.00 270.50 L 145.00 248.50 L 153.00 248.50 L 157.50 254.00 L 156.50 259.00 L 136.50 281.00 L 136.50 283.00 L 162.00 308.50 L 164.50 308.00 Z M 252.00 295.50 L 245.00 295.50 L 238.50 289.00 L 239.50 280.00 L 248.00 274.50 L 253.00 275.50 L 258.50 281.00 L 259.50 285.00 L 257.50 291.00 L 252.00 295.50 Z M 218.00 326.50 L 211.00 325.50 L 205.50 318.00 L 206.50 312.00 L 212.00 306.50 L 220.00 306.50 L 225.50 312.00 L 225.50 321.00 L 218.00 326.50 Z"/>
-          </svg>
-        </button>
-        {/if}
-        <button
-          type="button"
-          class="transport-btn"
-          on:click={redoCanvas}
-          disabled={!canCanvasRedo()}
-          title="Redo (Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z)"
-          aria-label="Redo"
-        >
-          <img src={redoIconUrl} alt="Redo" class="transport-icon" />
-        </button>
-        <button
-          type="button"
-          class="transport-btn"
-          on:click={undoCanvas}
-          disabled={!canCanvasUndo()}
-          title="Undo (Ctrl/Cmd+Z)"
-          aria-label="Undo"
-        >
-          <img src={undoIconUrl} alt="Undo" class="transport-icon" />
-        </button>
-        <button
-          type="button"
-          class="transport-btn eraser-btn"
-          class:active={eraserMode}
-          on:click={toggleEraserMode}
-          title={eraserMode ? 'Disable eraser (E)' : 'Enable eraser (E)'}
-          aria-label={eraserMode ? 'Disable eraser' : 'Enable eraser'}
-          aria-pressed={eraserMode}
-        >
-          <img src={eraserIconUrl} alt="Eraser" class="transport-icon" />
-        </button>
-      </div>
-
-      <div class="transport-row">
-        <button type="button" class="transport-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
-          {#if isPlaying}
+      <div class="transport-actions">
+        <div class="transport-row">
+          <button type="button" class="transport-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
+            {#if isPlaying}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="5" y="4" width="4" height="16" rx="1" />
+                <rect x="15" y="4" width="4" height="16" rx="1" />
+              </svg>
+            {:else}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" aria-hidden="true">
+                <path fill="currentColor" d="M 152 104 L 144 106 L 143 108 L 141 108 L 133 114 L 130 120 L 128 130 L 128 382 L 132 396 L 140 404 L 147 406 L 149 408 L 164 408 L 165 406 L 168 406 L 178 401 L 180 398 L 184 397 L 207 381 L 224 372 L 229 367 L 240 362 L 242 359 L 249 356 L 254 351 L 267 345 L 269 342 L 286 333 L 293 327 L 304 322 L 306 319 L 316 314 L 322 309 L 326 308 L 331 303 L 335 302 L 344 295 L 354 290 L 356 287 L 367 282 L 378 271 L 381 265 L 382 250 L 377 239 L 367 230 L 363 229 L 343 215 L 325 205 L 318 199 L 309 195 L 308 193 L 301 190 L 287 180 L 283 179 L 281 176 L 274 173 L 268 168 L 259 164 L 257 161 L 246 156 L 244 153 L 237 150 L 232 145 L 221 140 L 217 136 L 210 133 L 201 126 L 197 125 L 195 122 L 183 116 L 177 111 L 164 105 Z"/>
+              </svg>
+            {/if}
+          </button>
+          <button type="button" class="transport-btn" on:click={stopPlayback} title="Stop" aria-label="Stop">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <rect x="5" y="4" width="4" height="16" rx="1" />
-              <rect x="15" y="4" width="4" height="16" rx="1" />
+              <rect x="5" y="5" width="14" height="14" rx="3" ry="3" />
             </svg>
-          {:else}
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" aria-hidden="true">
-              <path fill="currentColor" d="M 152 104 L 144 106 L 143 108 L 141 108 L 133 114 L 130 120 L 128 130 L 128 382 L 132 396 L 140 404 L 147 406 L 149 408 L 164 408 L 165 406 L 168 406 L 178 401 L 180 398 L 184 397 L 207 381 L 224 372 L 229 367 L 240 362 L 242 359 L 249 356 L 254 351 L 267 345 L 269 342 L 286 333 L 293 327 L 304 322 L 306 319 L 316 314 L 322 309 L 326 308 L 331 303 L 335 302 L 344 295 L 354 290 L 356 287 L 367 282 L 378 271 L 381 265 L 382 250 L 377 239 L 367 230 L 363 229 L 343 215 L 325 205 L 318 199 L 309 195 L 308 193 L 301 190 L 287 180 L 283 179 L 281 176 L 274 173 L 268 168 L 259 164 L 257 161 L 246 156 L 244 153 L 237 150 L 232 145 L 221 140 L 217 136 L 210 133 L 201 126 L 197 125 L 195 122 L 183 116 L 177 111 L 164 105 Z"/>
-            </svg>
-          {/if}
-        </button>
-        <button type="button" class="transport-btn" on:click={stopPlayback} title="Stop" aria-label="Stop">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <rect x="5" y="5" width="14" height="14" rx="3" ry="3" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="transport-btn count-in-btn"
-          class:active={countInEnabled}
-          on:click={toggleCountIn}
-          title={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
-          aria-label={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
-          aria-pressed={countInEnabled}
-        >
-          <img src={countInIconUrl} alt="" class="transport-icon transport-icon--count-in" />
-        </button>
-        <button
-          type="button"
-          class="transport-btn"
-          class:active={isLooping}
-          on:click={toggleLoop}
-          title={isLooping ? 'Disable Loop' : 'Enable Loop'}
-          aria-label={isLooping ? 'Disable Loop' : 'Enable Loop'}
-        >
-          <img src={loopIconUrl} alt="Loop" class="transport-icon" />
-        </button>
-        {#if !isStudentView || !activeStudentView.hideVolumeSlider}
-        <div class="volume-control-wrapper" bind:this={volumeControlWrapper}>
+          </button>
+          {#if !isPlaying}
           <button
             type="button"
-            class="transport-btn volume-icon-button"
-            class:active={volumePopupOpen}
-            on:click={handleVolumeIconClick}
-            title="Volume"
-            aria-label="Volume"
-            aria-expanded={volumePopupOpen}
-            aria-controls="main-volume-popup"
+            class="transport-btn count-in-btn"
+            class:active={countInEnabled}
+            on:click={toggleCountIn}
+            title={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
+            aria-label={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
+            aria-pressed={countInEnabled}
           >
-            <img src={volumeIconUrl} alt="Volume" class="transport-icon" />
+            <img src={countInIconUrl} alt="" class="transport-icon transport-icon--count-in" />
           </button>
-          <div id="main-volume-popup" class="volume-popup" class:visible={volumePopupOpen}>
-            <input
-              id="main-volume"
-              class="volume-slider"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={state.mainVolume * 100}
-              on:input={setMainVolume}
-              title="Main volume"
-              aria-label="Main volume"
-            />
+          <button
+            type="button"
+            class="transport-btn"
+            class:active={macrobeatMetronomeEnabled}
+            on:click={toggleMacrobeatMetronome}
+            title={macrobeatMetronomeEnabled ? 'Disable macrobeat click' : 'Enable macrobeat click'}
+            aria-label={macrobeatMetronomeEnabled ? 'Disable macrobeat click' : 'Enable macrobeat click'}
+            aria-pressed={macrobeatMetronomeEnabled}
+          >
+            <img src={metronomeIconUrl} alt="" class="transport-icon transport-icon--metronome" />
+          </button>
+          <button
+            type="button"
+            class="transport-btn"
+            class:active={isLooping}
+            on:click={toggleLoop}
+            title={isLooping ? 'Disable Loop' : 'Enable Loop'}
+            aria-label={isLooping ? 'Disable Loop' : 'Enable Loop'}
+          >
+            <img src={loopIconUrl} alt="Loop" class="transport-icon" />
+          </button>
+          {#if !isStudentView || !activeStudentView.hideVolumeSlider}
+          <div class="volume-control-wrapper" bind:this={volumeControlWrapper}>
+            <button
+              type="button"
+              class="transport-btn volume-icon-button"
+              class:active={volumePopupOpen}
+              on:click={handleVolumeIconClick}
+              title="Volume"
+              aria-label="Volume"
+              aria-expanded={volumePopupOpen}
+              aria-controls="main-volume-popup"
+            >
+              <img src={volumeIconUrl} alt="Volume" class="transport-icon" />
+            </button>
+            <div id="main-volume-popup" class="volume-popup" class:visible={volumePopupOpen}>
+              <input
+                id="main-volume"
+                class="volume-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={state.mainVolume * 100}
+                on:input={setMainVolume}
+                title="Main volume"
+                aria-label="Main volume"
+              />
+            </div>
           </div>
+          {/if}
+          {/if}
+        </div>
+
+        {#if !isPlaying}
+        <div class="transport-row">
+          {#if !isStudentView || !activeStudentView.hideCanvasActions}
+          <button
+            type="button"
+            class="transport-btn clear-canvas-btn"
+            on:click={clearGrid}
+            title="Clear canvas"
+            aria-label="Clear canvas"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 372" fill="none" aria-hidden="true">
+              <path fill="currentColor" fill-rule="evenodd" d="M 167.00 326.50 L 156.00 324.50 L 45.50 215.00 L 42.50 210.00 L 43.50 199.00 L 49.00 192.50 L 128.00 151.50 L 147.00 132.50 L 151.00 130.50 L 163.00 129.50 L 169.00 131.50 L 189.00 149.50 L 291.00 46.50 L 298.00 43.50 L 307.00 43.50 L 312.00 45.50 L 321.50 54.00 L 326.50 63.00 L 327.50 70.00 L 323.50 81.00 L 221.50 184.00 L 238.50 202.00 L 240.50 207.00 L 239.50 219.00 L 222.50 236.00 L 179.50 316.00 L 172.00 324.50 L 167.00 326.50 Z M 210.50 172.00 L 309.50 73.00 L 310.50 68.00 L 304.00 60.50 L 300.00 60.50 L 198.50 161.00 L 209.00 172.50 L 210.50 172.00 Z M 215.50 221.00 L 224.50 212.00 L 224.50 209.00 L 160.00 145.50 L 158.00 145.50 L 148.50 155.00 L 148.50 157.00 L 212.00 219.50 L 215.50 221.00 Z M 164.50 308.00 L 204.50 235.00 L 137.00 167.50 L 134.00 165.50 L 59.50 206.00 L 88.00 234.50 L 116.00 215.50 L 120.00 213.50 L 127.00 214.50 L 129.50 218.00 L 129.50 224.00 L 100.50 247.00 L 124.00 270.50 L 145.00 248.50 L 153.00 248.50 L 157.50 254.00 L 156.50 259.00 L 136.50 281.00 L 136.50 283.00 L 162.00 308.50 L 164.50 308.00 Z M 252.00 295.50 L 245.00 295.50 L 238.50 289.00 L 239.50 280.00 L 248.00 274.50 L 253.00 275.50 L 258.50 281.00 L 259.50 285.00 L 257.50 291.00 L 252.00 295.50 Z M 218.00 326.50 L 211.00 325.50 L 205.50 318.00 L 206.50 312.00 L 212.00 306.50 L 220.00 306.50 L 225.50 312.00 L 225.50 321.00 L 218.00 326.50 Z"/>
+            </svg>
+          </button>
+          {/if}
+          <button
+            type="button"
+            class="transport-btn"
+            on:click={redoCanvas}
+            disabled={!canCanvasRedo()}
+            title="Redo (Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z)"
+            aria-label="Redo"
+          >
+            <img src={redoIconUrl} alt="Redo" class="transport-icon" />
+          </button>
+          <button
+            type="button"
+            class="transport-btn"
+            on:click={undoCanvas}
+            disabled={!canCanvasUndo()}
+            title="Undo (Ctrl/Cmd+Z)"
+            aria-label="Undo"
+          >
+            <img src={undoIconUrl} alt="Undo" class="transport-icon" />
+          </button>
+          <button
+            type="button"
+            class="transport-btn eraser-btn"
+            class:active={eraserMode}
+            on:click={toggleEraserMode}
+            title={eraserMode ? 'Disable eraser (E)' : 'Enable eraser (E)'}
+            aria-label={eraserMode ? 'Disable eraser' : 'Enable eraser'}
+            aria-pressed={eraserMode}
+          >
+            <img src={eraserIconUrl} alt="Eraser" class="transport-icon" />
+          </button>
+          <button
+            type="button"
+            class="transport-btn home-btn"
+            on:click={navigateHome}
+            title="Back to home"
+            aria-label="Back to home"
+          >
+            <span class="transport-icon-mask home-btn-icon" aria-hidden="true"></span>
+          </button>
+          {#if !isStudentView}
+          <button
+            type="button"
+            class="transport-btn library-btn"
+            class:active={libraryModalOpen}
+            on:click={() => void openLibraryModal()}
+            title="Open sketch library"
+            aria-label="Open sketch library"
+            aria-pressed={libraryModalOpen}
+          >
+            <span class="transport-icon-mask library-btn-icon" aria-hidden="true"></span>
+          </button>
+          {/if}
+          <button type="button" class="transport-btn share-btn" on:click={handleShare} title="Share composition" aria-label="Share composition">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+          </button>
+          {#if !isStudentView || !activeStudentView.hidePickupBeats || !activeStudentView.hideCanvasActions}
+          <button
+            type="button"
+            class="transport-btn pickup-modal-trigger"
+            class:active={pickupBeatsModalOpen}
+            on:click={() => (pickupBeatsModalOpen = true)}
+            title="Pickup beats & canvas rows"
+            aria-label="Pickup beats and canvas rows"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+              <ellipse cx="12.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
+              <ellipse cx="37.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
+            </svg>
+          </button>
+          {/if}
+          {#if !isStudentView || !activeStudentView.hideGearSettings}
+          <button type="button" class="transport-btn settings-gear-btn" class:settings-open={settingsOpen} on:click={() => (settingsOpen = true)} title="Settings" aria-label="Open settings">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+            </svg>
+          </button>
+          {/if}
         </div>
         {/if}
       </div>
-    </div>
 
-    {#if !isStudentView || !activeStudentView.hideQuarterTempo}
-    <div class="controls-group tempo-rows-group">
-      <TempoControls
-        quarterTempo={state.microbeatTempo / 2}
-        minQuarter={MICROBEAT_TEMPO_MIN / 2}
-        maxQuarter={MICROBEAT_TEMPO_MAX / 2}
-        step={1}
-        sliderOrientation="vertical"
-        onchange={handleQuarterTempoChange}
-        showEighth={false}
-        showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
-        showDottedQuarter={false}
-        showSlider={false}
-      />
-    </div>
-    {/if}
-
-    <div class="controls-group settings-group">
-      <a
-        class="transport-btn home-btn"
-        href={hubHref}
-        title="Back to home"
-        aria-label="Back to home"
-      >
-        <span class="transport-icon-mask home-btn-icon" aria-hidden="true"></span>
-      </a>
-      <button type="button" class="transport-btn share-btn" on:click={handleShare} title="Share composition" aria-label="Share composition">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="18" cy="5" r="3"/>
-          <circle cx="6" cy="12" r="3"/>
-          <circle cx="18" cy="19" r="3"/>
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-        </svg>
-      </button>
-      {#if !isStudentView || !activeStudentView.hidePickupBeats || !activeStudentView.hideCanvasActions}
-      <button
-        type="button"
-        class="transport-btn pickup-modal-trigger"
-        class:active={pickupBeatsModalOpen}
-        on:click={() => (pickupBeatsModalOpen = true)}
-        title="Pickup beats & canvas rows"
-        aria-label="Pickup beats and canvas rows"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-          <ellipse cx="12.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
-          <ellipse cx="37.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
-        </svg>
-      </button>
-      {/if}
-      {#if !isStudentView || !activeStudentView.hideGearSettings}
-      <button type="button" class="transport-btn settings-gear-btn" class:settings-open={settingsOpen} on:click={() => (settingsOpen = true)} title="Settings" aria-label="Open settings">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/>
-        </svg>
-      </button>
+      {#if !isPlaying && ((!isStudentView || !activeStudentView.hideTempoSlider) || (!isStudentView || !activeStudentView.hideQuarterTempo))}
+      <div class="tempo-inline-group">
+        <TempoControls
+          quarterTempo={state.microbeatTempo / 2}
+          minQuarter={MICROBEAT_TEMPO_MIN / 2}
+          maxQuarter={MICROBEAT_TEMPO_MAX / 2}
+          step={1}
+          sliderOrientation="vertical"
+          onchange={handleQuarterTempoChange}
+          showEighth={false}
+          showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
+          showDottedQuarter={false}
+          showRows={!isStudentView || !activeStudentView.hideQuarterTempo}
+          showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
+        />
+      </div>
       {/if}
     </div>
   </section>
 
-  <section class="panel notebank-panel toolbar-notebank-panel" bind:this={toolbarNotebankPanelElement} class:playback-content-hidden={isPlaying}>
+  <section class="panel notebank-panel toolbar-notebank-panel" class:playback-content-hidden={isPlaying}>
       {#if tapPlacementPayload && showTapPlacementHint}
         <p class="tap-placement-hint toolbar-bank-hint">
           Touch placement armed: {displayLabelFromText(tapPlacementPayload.note.label)} {noteShapeLabel(tapPlacementPayload.note.shape)}.
@@ -3914,6 +5001,7 @@
         <div class="toolbar-bank-row">
           <div class="bank-row-wrap">
             <span class="bank-row-corner-label">Quarters</span>
+            <div class="bank-row-main">
             <div class="bank-lattice circle-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_CIRCLE};`}>
               {#if showAccidentals}
               <div class="bank-lattice-row top">
@@ -3930,7 +5018,7 @@
                       type="button"
                       class="token-hitbox single sharp"
                       draggable={bankNativeDragEnabled}
-                      title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                      title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} quarter sharp`}
                       on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
@@ -3938,7 +5026,7 @@
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
                       on:dragend={handleAnyDragEnd}
                     >
-                      <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
                     </button>
                   </div>
                 {/each}
@@ -3959,7 +5047,7 @@
                       type="button"
                       class="token-hitbox single natural"
                       draggable={bankNativeDragEnabled}
-                      title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                      title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} quarter`}
                       on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
@@ -3967,7 +5055,7 @@
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
                       on:dragend={handleAnyDragEnd}
                     >
-                      <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
                     </button>
                   </div>
                 {/each}
@@ -3988,7 +5076,7 @@
                       type="button"
                       class="token-hitbox single flat"
                       draggable={bankNativeDragEnabled}
-                      title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                      title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} quarter flat`}
                       on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
@@ -3996,12 +5084,37 @@
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
                       on:dragend={handleAnyDragEnd}
                     >
-                      <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
                     </button>
                   </div>
                 {/each}
               </div>
               {/if}
+            </div>
+            <div class="supplemental-note-bank supplemental-note-bank--circle" class:accidentals-hidden={!showAccidentals}>
+              {#each PERCUSSION_NOTE_IDS as noteId}
+                <div class="bank-token-shell circle supplemental-token">
+                  <svg class="token-glyph circle" viewBox="0 0 100 100" aria-hidden="true" focusable="false" style={`--token-color:${noteColor(noteId)};`}>
+                    <ellipse cx="50" cy="50" rx="44" ry="44" />
+                  </svg>
+                  <button
+                    type="button"
+                    class="token-hitbox single natural"
+                    draggable={bankNativeDragEnabled}
+                    title={noteBankTokenTitle(noteId)}
+                    aria-label={`Add ${displayLabelFromId(noteId)} quarter`}
+                    on:click={(event) => handleBankTokenClick(event, noteId)}
+                    on:pointerdown={(event) => handleBankTokenPointerDown(event, noteId, 'circle')}
+                    on:mousedown={(event) => handleBankTokenMouseDown(event, noteId, 'circle')}
+                    on:dragstart={(event) => handleBankDragStart(event, noteId, 'circle')}
+                    on:dragend={handleAnyDragEnd}
+                    style={`--token-color:${noteColor(noteId)};`}
+                  >
+                    <NoteGlyph label={displayLabelFromId(noteId)} markerClass={scaleDegreeOneMarkerClass(noteId)} iconClass={noteIconClass(noteId)} />
+                  </button>
+                </div>
+              {/each}
+            </div>
             </div>
           </div>
         </div>
@@ -4010,6 +5123,7 @@
         <div class="toolbar-bank-row">
           <div class="bank-row-wrap">
             <span class="bank-row-corner-label">Eighths</span>
+            <div class="bank-row-main">
             <div class="bank-lattice oval-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_OVAL};`}>
               {#if showAccidentals}
               <div class="bank-lattice-row top">
@@ -4026,7 +5140,7 @@
                       type="button"
                       class="token-hitbox single sharp"
                       draggable={bankNativeDragEnabled}
-                      title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                      title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} oval sharp`}
                       on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
@@ -4034,7 +5148,7 @@
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
                       on:dragend={handleAnyDragEnd}
                     >
-                      <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
                     </button>
                   </div>
                 {/each}
@@ -4055,7 +5169,7 @@
                       type="button"
                       class="token-hitbox single natural"
                       draggable={bankNativeDragEnabled}
-                      title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                      title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} oval`}
                       on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
@@ -4063,7 +5177,7 @@
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
                       on:dragend={handleAnyDragEnd}
                     >
-                      <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
                     </button>
                   </div>
                 {/each}
@@ -4084,7 +5198,7 @@
                       type="button"
                       class="token-hitbox single flat"
                       draggable={bankNativeDragEnabled}
-                      title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                      title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} oval flat`}
                       on:click={(event) => handleBankTokenClick(event, token.noteId)}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
@@ -4092,12 +5206,37 @@
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
                       on:dragend={handleAnyDragEnd}
                     >
-                      <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
                     </button>
                   </div>
                 {/each}
               </div>
               {/if}
+            </div>
+            <div class="supplemental-note-bank supplemental-note-bank--oval" class:accidentals-hidden={!showAccidentals}>
+              {#each PERCUSSION_NOTE_IDS as noteId}
+                <div class="bank-token-shell oval supplemental-token">
+                  <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" aria-hidden="true" focusable="false" style={`--token-color:${noteColor(noteId)};`}>
+                    <ellipse cx="50" cy="80" rx="44" ry="70.4" />
+                  </svg>
+                  <button
+                    type="button"
+                    class="token-hitbox single natural"
+                    draggable={bankNativeDragEnabled}
+                    title={noteBankTokenTitle(noteId)}
+                    aria-label={`Add ${displayLabelFromId(noteId)} eighth`}
+                    on:click={(event) => handleBankTokenClick(event, noteId)}
+                    on:pointerdown={(event) => handleBankTokenPointerDown(event, noteId, 'oval')}
+                    on:mousedown={(event) => handleBankTokenMouseDown(event, noteId, 'oval')}
+                    on:dragstart={(event) => handleBankDragStart(event, noteId, 'oval')}
+                    on:dragend={handleAnyDragEnd}
+                    style={`--token-color:${noteColor(noteId)};`}
+                  >
+                    <NoteGlyph label={displayLabelFromId(noteId)} markerClass={scaleDegreeOneMarkerClass(noteId)} iconClass={noteIconClass(noteId)} />
+                  </button>
+                </div>
+              {/each}
+            </div>
             </div>
           </div>
         </div>
@@ -4126,7 +5265,7 @@
                 type="button"
                 class="token-hitbox single sharp"
                 draggable={bankNativeDragEnabled}
-                title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                title={noteBankTokenTitle(token.noteId)}
                 aria-label={`Add ${token.label} sixteenth sharp`}
                 on:click={(event) => handleBankTokenClick(event, token.noteId)}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
@@ -4134,7 +5273,7 @@
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
                 on:dragend={handleAnyDragEnd}
               >
-                <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
               </button>
             </div>
           {/each}
@@ -4155,7 +5294,7 @@
                 type="button"
                 class="token-hitbox single natural"
                 draggable={bankNativeDragEnabled}
-                title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                title={noteBankTokenTitle(token.noteId)}
                 aria-label={`Add ${token.label} sixteenth`}
                 on:click={(event) => handleBankTokenClick(event, token.noteId)}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
@@ -4163,7 +5302,7 @@
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
                 on:dragend={handleAnyDragEnd}
               >
-                <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
               </button>
             </div>
           {/each}
@@ -4184,7 +5323,7 @@
                 type="button"
                 class="token-hitbox single flat"
                 draggable={bankNativeDragEnabled}
-                title={`${token.label} (${notePitchTooltip(token.noteId)})`}
+                title={noteBankTokenTitle(token.noteId)}
                 aria-label={`Add ${token.label} sixteenth flat`}
                 on:click={(event) => handleBankTokenClick(event, token.noteId)}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
@@ -4192,7 +5331,7 @@
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
                 on:dragend={handleAnyDragEnd}
               >
-                <span class={scaleDegreeOneMarkerClass(token.noteId)}>{token.label}</span>
+                <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
               </button>
             </div>
           {/each}
@@ -4203,13 +5342,48 @@
   </section>
   {/if}
 
-  <section class="panel canvas-panel" on:dragenter={handleCanvasDragEnter} on:dragleave={handleCanvasDragLeave}>
-    <div class="rows-grid" class:has-active-pickup={pickupBeats > 0} style={`--pickup-columns:${pickupMicrobeatCount()};`}>
-      {#each gridRows as row, rowIndex (row.id)}
-        <article class="track-row" class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0} bind:this={trackRowElements[rowIndex]}>
+  <section
+    class="panel canvas-panel"
+    class:track-style-horizontal={trackStyle === 'horizontal'}
+    bind:this={canvasPanelElement}
+    aria-label="Sketch canvas"
+    on:dragenter={handleCanvasDragEnter}
+    on:dragleave={handleCanvasDragLeave}
+  >
+    <div
+      class="rows-grid"
+      class:has-active-pickup={pickupBeats > 0}
+      class:two-voice-mode={voiceCount === 2}
+      class:track-style-horizontal={trackStyle === 'horizontal'}
+      style={`--pickup-columns:${pickupMicrobeatCount()}; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-arc-height-px:${karaokeArcHeightPx}px;`}
+    >
+      {#each renderedTrackRows as renderedRow (renderedRow.key)}
+        {@const voiceIndex = renderedRow.voiceIndex}
+        {@const rowIndex = renderedRow.rowIndex}
+        {@const row = renderedRow.row}
+        {@const pickupRow = renderedRow.pickupRow}
+        {@const playbackCursor = voicePlaybackCursors[voiceIndex]}
+        {@const playbackHighlight = voicePlaybackHighlights[voiceIndex]}
+        {@const playedCellIndexes = voicePlayedCellIndexes[voiceIndex]}
+        {@const karaokeBallRowIndex = voiceKaraokeBallRowIndexes[voiceIndex]}
+        {@const karaokeBallLeftPercent = voiceKaraokeBallLeftPercents[voiceIndex]}
+        {@const karaokeBallArcOffsetPx = voiceKaraokeBallArcOffsetPxs[voiceIndex]}
+        {@const hasInlinePickup = rowIndex === 0 && pickupBeats > 0}
+        <article
+          class="track-row voice-track-row"
+          class:voice-track-row--a={voiceIndex === 0}
+          class:voice-track-row--b={voiceIndex === 1}
+          class:voice-track-row--active={activeCanvasVoiceIndex === voiceIndex}
+          class:with-inline-pickup={hasInlinePickup}
+          bind:this={voiceTrackRowElements[voiceIndex][rowIndex]}
+          style={trackStyle === 'horizontal' && voiceCount === 2 ? `--track-row-column:${rowIndex + 1};` : undefined}
+          on:pointerdown={() => setActiveCanvasVoice(voiceIndex)}
+        >
           {#if karaokeBallRowIndex === rowIndex}
             <div
               class="karaoke-ball"
+              class:karaoke-ball--voice-a={voiceCount === 2 && voiceIndex === 0}
+              class:karaoke-ball--voice-b={voiceCount === 2 && voiceIndex === 1}
               class:karaoke-ball--count-in={countInDisplayNumber !== null}
               style={`--karaoke-ball-left:${karaokeBallLeftPercent}%; --karaoke-ball-y:${karaokeBallArcOffsetPx}px; --karaoke-ball-size-px:${karaokeBallSizePx}px;`}
               aria-hidden="true"
@@ -4221,23 +5395,29 @@
           {/if}
           <div
             class="track-row-grids"
-            class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0}
+            class:with-inline-pickup={hasInlinePickup}
           >
             <div
               class="track-grid main-grid"
-              class:with-inline-pickup={rowIndex === 0 && pickupBeats > 0}
-              style={rowIndex === 0 && pickupBeats > 0 ? `--inline-row-columns:${pickupMicrobeatCount() + GRID_COLUMNS};` : undefined}
+              class:with-inline-pickup={hasInlinePickup}
+              style={trackGridInlineStyle(hasInlinePickup)}
               role="group"
               aria-label={`Row ${rowIndex + 1}`}
             >
+              {#if voiceCount === 2 && rowIndex === 0}
+                <span class="voice-track-badge" aria-hidden="true">Voice {voiceLabel(voiceIndex)}</span>
+              {/if}
+              {#if voiceCount === 2}
+                <span class="voice-track-row-label" aria-hidden="true">{rowIndex + 1}</span>
+              {/if}
               {#if rowIndex === 0 && pickupBeats > 0}
                 {#each pickupRow.cells.slice(0, pickupMicrobeatCount()) as cell, cellIndex}
-                  {@const pickupPreviewNote = dragPreviewNote(dragPayload, dragOverCell, 'pickup', -1, cellIndex)}
+                  {@const pickupPreviewNote = dragPreviewNote(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                   <div
                     class="macrobeat-cell"
-                    class:has-note={pickupCellHasNote(cellIndex)}
-                    class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, 'pickup', -1, cellIndex)}
-                    class:drop-target={isPickupDropTarget(dragOverCell, cellIndex)}
+                    class:has-note={pickupCellHasNote(voiceIndex, cellIndex)}
+                    class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
+                    class:drop-target={isPickupDropTarget(dragOverCell, voiceIndex, cellIndex)}
                     class:playback-target={isPlaybackPickupCell(playbackCursor, cellIndex)}
                     class:playback-illuminated={isPlaybackPickupHighlightCell(playbackHighlight, cellIndex)}
                     class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'pickup', -1, cellIndex, 'playback-pulse-a')}
@@ -4245,12 +5425,13 @@
                     class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'pickup', -1, cellIndex)}
                     class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'pickup', -1, cellIndex)}
                     class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < pickupMicrobeatCount() - 1}
+                    style={macrobeatCellInlineStyle('pickup', cellIndex, hasInlinePickup)}
                     role="gridcell"
                     tabindex="-1"
-                    aria-label={`Pickup macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
-                    on:dragover={(event) => handleCellDragOver(event, 'pickup', -1, cellIndex)}
-                    on:drop={(event) => handleCellDrop(event, 'pickup', -1, cellIndex)}
-                    on:pointerdown={(event) => handleCellPointerDown(event, 'pickup', -1, cellIndex)}
+                    aria-label={`Voice ${voiceLabel(voiceIndex)} pickup macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
+                    on:dragover={(event) => handleCellDragOver(event, voiceIndex, 'pickup', -1, cellIndex)}
+                    on:drop={(event) => handleCellDrop(event, voiceIndex, 'pickup', -1, cellIndex)}
+                    on:pointerdown={(event) => handleCellPointerDown(event, voiceIndex, 'pickup', -1, cellIndex)}
                   >
                     {#if cell}
                       {#if cell.shape === 'oval' && cell.notes[0]}
@@ -4261,9 +5442,9 @@
                           style={`--token-color:${cell.notes[0].color};`}
                           draggable="true"
                           title={placedNoteTitle(cell.notes[0])}
-                          on:dragstart={(event) => handleCellDragStart(event, 'pickup', -1, cellIndex, cell.notes[0], 0)}
+                          on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'pickup', -1, cellIndex, cell.notes[0], 0)}
                           on:dragend={handleAnyDragEnd}
-                          on:contextmenu={(event) => removeCellNote(event, 'pickup', -1, cellIndex, 0)}
+                          on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'pickup', -1, cellIndex, 0)}
                         >
                           <svg
                             class="token-glyph oval"
@@ -4275,7 +5456,7 @@
                             <ellipse cx="50" cy="80" rx="50" ry="80" />
                           </svg>
                           <span class="glyph-label">
-                            <span class={scaleDegreeOneMarkerClass(cell.notes[0].noteId)}>{displayLabelFromText(cell.notes[0].label)}</span>
+                            <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
                           </span>
                         </button>
                       {:else if cell.shape === 'circle' && cell.role === 'start' && cell.notes[0]}
@@ -4286,9 +5467,9 @@
                           style={`--token-color:${cell.notes[0].color};`}
                           draggable="true"
                           title={placedNoteTitle(cell.notes[0])}
-                          on:dragstart={(event) => handleCellDragStart(event, 'pickup', -1, cellIndex, cell.notes[0], 0)}
+                          on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'pickup', -1, cellIndex, cell.notes[0], 0)}
                           on:dragend={handleAnyDragEnd}
-                          on:contextmenu={(event) => removeCellNote(event, 'pickup', -1, cellIndex, 0)}
+                          on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'pickup', -1, cellIndex, 0)}
                         >
                           <svg
                             class="token-glyph circle"
@@ -4300,13 +5481,13 @@
                             <ellipse cx="50" cy="50" rx="50" ry="50" />
                           </svg>
                           <span class="glyph-label">
-                            <span class={scaleDegreeOneMarkerClass(cell.notes[0].noteId)}>{displayLabelFromText(cell.notes[0].label)}</span>
+                            <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
                           </span>
                         </button>
                       {:else if cell.shape === 'diamond'}
                         <div class="placed-sixteenth-pair">
                           {#each cell.notes as diamondNote, slotIndex}
-                            <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, 'pickup', -1, cellIndex, slotIndex)}>
+                            <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}>
                               {#if diamondNote}
                                 <button
                                   type="button"
@@ -4315,9 +5496,9 @@
                                   style={`--token-color:${diamondNote.color};`}
                                   draggable="true"
                                   title={placedNoteTitle(diamondNote)}
-                                  on:dragstart={(event) => handleCellDragStart(event, 'pickup', -1, cellIndex, diamondNote, slotIndex)}
+                                  on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'pickup', -1, cellIndex, diamondNote, slotIndex)}
                                   on:dragend={handleAnyDragEnd}
-                                  on:contextmenu={(event) => removeCellNote(event, 'pickup', -1, cellIndex, slotIndex)}
+                                  on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}
                                 >
                                   <svg
                                     class="token-glyph diamond"
@@ -4329,7 +5510,7 @@
                                     <path d={PLACED_SIXTEENTH_HEX_PATH} />
                                   </svg>
                                   <span class="glyph-label">
-                                    <span class={scaleDegreeOneMarkerClass(diamondNote.noteId)}>{displayLabelFromText(diamondNote.label)}</span>
+                                    <NoteGlyph label={displayLabelFromText(diamondNote.label)} markerClass={scaleDegreeOneMarkerClass(diamondNote.noteId)} iconClass={noteIconClass(diamondNote.noteId)} />
                                   </span>
                                 </button>
                               {:else}
@@ -4355,15 +5536,15 @@
                         aria-hidden="true"
                         focusable="false"
                       >
-                        <ellipse cx="50" cy="80" rx="50" ry="80" />
+                        <ellipse cx="50" cy="80" rx="47.5" ry="77.5" />
                       </svg>
                     {/if}
                     {#if pickupPreviewNote}
                       {#if pickupPreviewNote.shape === 'diamond'}
                         <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
                           {#each SIXTEENTH_SLOTS as previewSlot}
-                            <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'pickup', -1, cellIndex, previewSlot)}>
-                              {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'pickup', -1, cellIndex, previewSlot)}
+                            <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, previewSlot)}>
+                              {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, previewSlot)}
                                 <div
                                   class="drag-preview-note placed-note diamond sixteenth single"
                                   style={`--token-color:${pickupPreviewNote.color};`}
@@ -4378,7 +5559,7 @@
                                     <path d={PLACED_SIXTEENTH_HEX_PATH} />
                                   </svg>
                                   <span class="glyph-label">
-                                    <span class={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)}>{displayLabelFromText(pickupPreviewNote.label)}</span>
+                                    <NoteGlyph label={displayLabelFromText(pickupPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)} iconClass={noteIconClass(pickupPreviewNote.noteId)} />
                                   </span>
                                 </div>
                               {/if}
@@ -4392,7 +5573,7 @@
                               <ellipse cx="50" cy="80" rx="50" ry="80" />
                             </svg>
                             <span class="glyph-label">
-                              <span class={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)}>{displayLabelFromText(pickupPreviewNote.label)}</span>
+                              <NoteGlyph label={displayLabelFromText(pickupPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)} iconClass={noteIconClass(pickupPreviewNote.noteId)} />
                             </span>
                           </div>
                         </div>
@@ -4400,14 +5581,14 @@
                         <div class="drag-preview-layer" aria-hidden="true">
                           <div
                             class="drag-preview-note placed-note circle"
-                            class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, 'pickup', -1, cellIndex)}
+                            class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                             style={`--token-color:${pickupPreviewNote.color};`}
                           >
                             <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
                               <ellipse cx="50" cy="50" rx="50" ry="50" />
                             </svg>
                             <span class="glyph-label">
-                              <span class={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)}>{displayLabelFromText(pickupPreviewNote.label)}</span>
+                              <NoteGlyph label={displayLabelFromText(pickupPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)} iconClass={noteIconClass(pickupPreviewNote.noteId)} />
                             </span>
                           </div>
                         </div>
@@ -4417,12 +5598,12 @@
                 {/each}
               {/if}
             {#each row.cells as cell, cellIndex}
-              {@const mainPreviewNote = dragPreviewNote(dragPayload, dragOverCell, 'main', rowIndex, cellIndex)}
+              {@const mainPreviewNote = dragPreviewNote(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
               <div
                 class="macrobeat-cell"
-                class:has-note={cellHasNote(rowIndex, cellIndex)}
-                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, 'main', rowIndex, cellIndex)}
-                class:drop-target={isDropTarget(dragOverCell, rowIndex, cellIndex)}
+                class:has-note={cellHasNote(voiceIndex, rowIndex, cellIndex)}
+                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
+                class:drop-target={isDropTarget(dragOverCell, voiceIndex, rowIndex, cellIndex)}
                 class:playback-target={isPlaybackCell(playbackCursor, rowIndex, cellIndex)}
                 class:playback-illuminated={isPlaybackHighlightCell(playbackHighlight, rowIndex, cellIndex)}
                 class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-a')}
@@ -4430,12 +5611,13 @@
                 class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < GRID_COLUMNS - 1}
+                style={macrobeatCellInlineStyle('main', cellIndex, hasInlinePickup)}
                 role="gridcell"
                 tabindex="-1"
-                aria-label={`Row ${rowIndex + 1}, macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
-                on:dragover={(event) => handleCellDragOver(event, 'main', rowIndex, cellIndex)}
-                on:drop={(event) => handleCellDrop(event, 'main', rowIndex, cellIndex)}
-                on:pointerdown={(event) => handleCellPointerDown(event, 'main', rowIndex, cellIndex)}
+                aria-label={`Voice ${voiceLabel(voiceIndex)} row ${rowIndex + 1}, macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
+                on:dragover={(event) => handleCellDragOver(event, voiceIndex, 'main', rowIndex, cellIndex)}
+                on:drop={(event) => handleCellDrop(event, voiceIndex, 'main', rowIndex, cellIndex)}
+                on:pointerdown={(event) => handleCellPointerDown(event, voiceIndex, 'main', rowIndex, cellIndex)}
               >
                 {#if cell}
                   {#if cell.shape === 'oval' && cell.notes[0]}
@@ -4446,9 +5628,9 @@
                       style={`--token-color:${cell.notes[0].color};`}
                       draggable="true"
                       title={placedNoteTitle(cell.notes[0])}
-                      on:dragstart={(event) => handleCellDragStart(event, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
+                      on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
                       on:dragend={handleAnyDragEnd}
-                      on:contextmenu={(event) => removeCellNote(event, 'main', rowIndex, cellIndex, 0)}
+                      on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
                     >
                       <svg
                         class="token-glyph oval"
@@ -4460,7 +5642,7 @@
                         <ellipse cx="50" cy="80" rx="50" ry="80" />
                       </svg>
                       <span class="glyph-label">
-                        <span class={scaleDegreeOneMarkerClass(cell.notes[0].noteId)}>{displayLabelFromText(cell.notes[0].label)}</span>
+                        <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
                       </span>
                     </button>
                   {:else if cell.shape === 'circle' && cell.role === 'start' && cell.notes[0]}
@@ -4471,9 +5653,9 @@
                       style={`--token-color:${cell.notes[0].color};`}
                       draggable="true"
                       title={placedNoteTitle(cell.notes[0])}
-                      on:dragstart={(event) => handleCellDragStart(event, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
+                      on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
                       on:dragend={handleAnyDragEnd}
-                      on:contextmenu={(event) => removeCellNote(event, 'main', rowIndex, cellIndex, 0)}
+                      on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
                     >
                       <svg
                         class="token-glyph circle"
@@ -4485,13 +5667,13 @@
                         <ellipse cx="50" cy="50" rx="50" ry="50" />
                       </svg>
                       <span class="glyph-label">
-                        <span class={scaleDegreeOneMarkerClass(cell.notes[0].noteId)}>{displayLabelFromText(cell.notes[0].label)}</span>
+                        <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
                       </span>
                     </button>
                   {:else if cell.shape === 'diamond'}
                     <div class="placed-sixteenth-pair">
                       {#each cell.notes as diamondNote, slotIndex}
-                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, 'main', rowIndex, cellIndex, slotIndex)}>
+                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}>
                           {#if diamondNote}
                             <button
                               type="button"
@@ -4500,9 +5682,9 @@
                               style={`--token-color:${diamondNote.color};`}
                               draggable="true"
                               title={placedNoteTitle(diamondNote)}
-                              on:dragstart={(event) => handleCellDragStart(event, 'main', rowIndex, cellIndex, diamondNote, slotIndex)}
+                              on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, diamondNote, slotIndex)}
                               on:dragend={handleAnyDragEnd}
-                              on:contextmenu={(event) => removeCellNote(event, 'main', rowIndex, cellIndex, slotIndex)}
+                              on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
                             >
                               <svg
                                 class="token-glyph diamond"
@@ -4514,7 +5696,7 @@
                                 <path d={PLACED_SIXTEENTH_HEX_PATH} />
                               </svg>
                               <span class="glyph-label">
-                                <span class={scaleDegreeOneMarkerClass(diamondNote.noteId)}>{displayLabelFromText(diamondNote.label)}</span>
+                                <NoteGlyph label={displayLabelFromText(diamondNote.label)} markerClass={scaleDegreeOneMarkerClass(diamondNote.noteId)} iconClass={noteIconClass(diamondNote.noteId)} />
                               </span>
                             </button>
                           {:else}
@@ -4540,15 +5722,15 @@
                     aria-hidden="true"
                     focusable="false"
                   >
-                    <ellipse cx="50" cy="80" rx="50" ry="80" />
+                    <ellipse cx="50" cy="80" rx="47.5" ry="77.5" />
                   </svg>
                 {/if}
                 {#if mainPreviewNote}
                   {#if mainPreviewNote.shape === 'diamond'}
                     <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
                       {#each SIXTEENTH_SLOTS as previewSlot}
-                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'main', rowIndex, cellIndex, previewSlot)}>
-                          {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, 'main', rowIndex, cellIndex, previewSlot)}
+                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}>
+                          {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}
                             <div
                               class="drag-preview-note placed-note diamond sixteenth single"
                               style={`--token-color:${mainPreviewNote.color};`}
@@ -4563,7 +5745,7 @@
                                 <path d={PLACED_SIXTEENTH_HEX_PATH} />
                               </svg>
                               <span class="glyph-label">
-                                <span class={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)}>{displayLabelFromText(mainPreviewNote.label)}</span>
+                                <NoteGlyph label={displayLabelFromText(mainPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)} iconClass={noteIconClass(mainPreviewNote.noteId)} />
                               </span>
                             </div>
                           {/if}
@@ -4577,7 +5759,7 @@
                           <ellipse cx="50" cy="80" rx="50" ry="80" />
                         </svg>
                         <span class="glyph-label">
-                          <span class={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)}>{displayLabelFromText(mainPreviewNote.label)}</span>
+                          <NoteGlyph label={displayLabelFromText(mainPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)} iconClass={noteIconClass(mainPreviewNote.noteId)} />
                         </span>
                       </div>
                     </div>
@@ -4585,14 +5767,14 @@
                     <div class="drag-preview-layer" aria-hidden="true">
                       <div
                         class="drag-preview-note placed-note circle"
-                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, 'main', rowIndex, cellIndex)}
+                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
                         style={`--token-color:${mainPreviewNote.color};`}
                       >
                         <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
                           <ellipse cx="50" cy="50" rx="50" ry="50" />
                         </svg>
                         <span class="glyph-label">
-                          <span class={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)}>{displayLabelFromText(mainPreviewNote.label)}</span>
+                          <NoteGlyph label={displayLabelFromText(mainPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)} iconClass={noteIconClass(mainPreviewNote.noteId)} />
                         </span>
                       </div>
                     </div>
@@ -4619,21 +5801,27 @@
           <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
             <ellipse cx="50" cy="80" rx="50" ry="80" />
           </svg>
-          <span class="glyph-label">{displayLabelFromText(cursorPreview.note.label)}</span>
+          <span class="glyph-label">
+            <NoteGlyph label={displayLabelFromText(cursorPreview.note.label)} markerClass={scaleDegreeOneMarkerClass(cursorPreview.note.noteId)} iconClass={noteIconClass(cursorPreview.note.noteId)} />
+          </span>
         </div>
       {:else if cursorPreview.note.shape === 'circle'}
         <div class="drag-preview-note placed-note circle">
           <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
             <ellipse cx="50" cy="50" rx="50" ry="50" />
           </svg>
-          <span class="glyph-label">{displayLabelFromText(cursorPreview.note.label)}</span>
+          <span class="glyph-label">
+            <NoteGlyph label={displayLabelFromText(cursorPreview.note.label)} markerClass={scaleDegreeOneMarkerClass(cursorPreview.note.noteId)} iconClass={noteIconClass(cursorPreview.note.noteId)} />
+          </span>
         </div>
       {:else}
         <div class="drag-preview-note placed-note diamond sixteenth single">
           <svg class="token-glyph diamond" viewBox={PLACED_SIXTEENTH_HEX_VIEWBOX} preserveAspectRatio="none" focusable="false">
             <path d={PLACED_SIXTEENTH_HEX_PATH} />
           </svg>
-          <span class="glyph-label">{displayLabelFromText(cursorPreview.note.label)}</span>
+          <span class="glyph-label">
+            <NoteGlyph label={displayLabelFromText(cursorPreview.note.label)} markerClass={scaleDegreeOneMarkerClass(cursorPreview.note.noteId)} iconClass={noteIconClass(cursorPreview.note.noteId)} />
+          </span>
         </div>
       {/if}
     </div>
@@ -4682,6 +5870,13 @@
             <option value="chromanotes">ChromaNotes</option>
           </select>
         </div>
+        <div class="settings-field">
+          <label for="settings-track-style-select">Track style</label>
+          <select id="settings-track-style-select" value={trackStyle} on:change={handleTrackStyleChange}>
+            <option value="stacked">Stacked</option>
+            <option value="horizontal">Horizontal highway</option>
+          </select>
+        </div>
         <div class="settings-field settings-checkbox-field">
           <label>
             <input type="checkbox" bind:checked={showAccidentals} />
@@ -4699,6 +5894,46 @@
             <input type="checkbox" bind:checked={showSixteenthsBank} />
             Sixteenths bank
           </label>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-label">Voices</h3>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label for="settings-voice-count-select">Canvas voices</label>
+          <select id="settings-voice-count-select" value={String(voiceCount)} on:change={handleVoiceCountModeChange}>
+            <option value="1">1 voice</option>
+            <option value="2">2 voices</option>
+          </select>
+        </div>
+        {#if voiceCount === 2}
+          <div class="settings-field">
+            <label for="settings-voice-layout-select">Row layout</label>
+            <select id="settings-voice-layout-select" value={voiceLayoutMode} on:change={handleVoiceLayoutModeChange}>
+              <option value="intertwined">A B A B</option>
+              <option value="separate">A A B B</option>
+            </select>
+          </div>
+        {/if}
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section-label">Audio</h3>
+      <div class="settings-row">
+        <div class="settings-slider-field">
+          <label for="settings-metronome-volume">Metronome volume</label>
+          <input
+            id="settings-metronome-volume"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={metronomeVolume * 100}
+            on:input={setMetronomeVolume}
+            title="Metronome volume"
+          />
+          <output class="value-readout" for="settings-metronome-volume">{Math.round(metronomeVolume * 100)}%</output>
         </div>
       </div>
     </div>
@@ -4746,6 +5981,107 @@
         <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
       </svg>
     </button>
+  </div>
+{/if}
+
+{#if libraryModalOpen}
+  <div class="share-modal-backdrop" on:click={closeLibraryModal} role="presentation"></div>
+  <div class="share-modal library-modal" role="dialog" aria-modal="true" aria-label="Sketch library">
+    <div class="share-modal-header">
+      <h2>Sketch Library</h2>
+      <button type="button" class="share-modal-close" on:click={closeLibraryModal} aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="library-modal-body">
+      <section class="library-save-panel">
+        <label class="library-panel-label" for="library-file-name">File name</label>
+        <div class="library-save-row">
+          <input
+            id="library-file-name"
+            type="text"
+            class="load-code-input library-file-name-input"
+            bind:value={libraryFileName}
+            placeholder="Boomwhacker Sketch"
+            aria-label="Library file name"
+            on:keydown={(event) => { if (event.key === 'Enter') void handleLibrarySaveAs(); }}
+          />
+          <button type="button" class="load-code-btn" on:click={() => void handleLibrarySaveAs()} disabled={libraryBusy}>
+            Save As
+          </button>
+        </div>
+        <p class="library-help">
+          Save As stores the current sketch, tempo, tonic, layout, and playback settings as a new library item.
+        </p>
+      </section>
+
+      {#if libraryError}
+        <p class="share-error library-feedback">{libraryError}</p>
+      {/if}
+      {#if libraryStatus}
+        <p class="library-status">{libraryStatus}</p>
+      {/if}
+
+      <section class="library-list-panel">
+        <p class="library-panel-label">Saved sketches</p>
+        {#if libraryBusy && libraryEntries.length === 0}
+          <p class="library-empty-state">Loading library…</p>
+        {:else if libraryEntries.length === 0}
+          <p class="library-empty-state">No saved sketches yet.</p>
+        {:else}
+          <div class="library-entry-list" role="listbox" aria-label="Saved sketches">
+            {#each libraryEntries as entry (entry.id)}
+              <button
+                type="button"
+                class="library-entry"
+                class:library-entry--selected={librarySelectedEntryId === entry.id}
+                on:click={() => selectLibraryEntry(entry.id)}
+                aria-pressed={librarySelectedEntryId === entry.id}
+              >
+                <span class="library-entry-copy">
+                  <span class="library-entry-name">{entry.name}</span>
+                  <span class="library-entry-meta">{formatLibrarySavedAt(entry.savedAt)}</span>
+                </span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
+      {#if selectedLibraryEntry()}
+        <div class="library-actions">
+          <button type="button" class="load-code-open-btn" on:click={() => requestLibraryAction('open')} disabled={libraryBusy}>
+            Open
+          </button>
+          <button type="button" class="library-delete-btn" on:click={() => requestLibraryAction('delete')} disabled={libraryBusy}>
+            Delete
+          </button>
+        </div>
+      {/if}
+
+      {#if libraryPendingAction}
+        {@const pendingLibraryEntryName = libraryEntries.find((entry) => entry.id === libraryPendingAction?.entryId)?.name ?? 'this sketch'}
+        <div class="library-confirm-panel" role="alert">
+          <p class="library-confirm-copy">
+            {#if libraryPendingAction.type === 'open'}
+              Open "{pendingLibraryEntryName}" and replace the current canvas?
+            {:else}
+              Delete "{pendingLibraryEntryName}" from the library?
+            {/if}
+          </p>
+          <div class="library-confirm-actions">
+            <button type="button" class="load-code-btn" on:click={() => void confirmLibraryAction()} disabled={libraryBusy}>
+              {#if libraryPendingAction.type === 'open'}Open{:else}Delete{/if}
+            </button>
+            <button type="button" class="load-code-cancel" on:click={cancelLibraryAction} disabled={libraryBusy}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -4970,7 +6306,7 @@
         <h3 class="pickup-modal-section-label">Canvas Rows</h3>
         <div class="canvas-actions">
           <button type="button" on:click={addRow}>Add Row</button>
-          <button type="button" on:click={removeRow} disabled={gridRows.length <= 1}>Remove Row</button>
+          <button type="button" on:click={removeRow} disabled={sharedRowCount() <= 1}>Remove Row</button>
         </div>
       </div>
       {/if}

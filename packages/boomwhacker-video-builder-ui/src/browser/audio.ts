@@ -1,4 +1,5 @@
 import type { BeatPin, ProjectAudio } from '@mlt/boomwhacker-video-builder-core';
+import { audioBufferToWavBlob } from './audioTransform.js';
 
 const DEFAULT_WAVEFORM_BUCKET_COUNT = 2048;
 const ANALYSIS_WINDOW_SIZE = 2048;
@@ -72,11 +73,35 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+function canBrowserPlayAudioBlob(blob: Blob): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  const mimeType = blob.type.trim();
+  if (!mimeType) {
+    return false;
+  }
+
+  return document.createElement('audio').canPlayType(mimeType) !== '';
+}
+
+function getPreviewPlaybackBlob(audioBuffer: AudioBuffer, sourceBlob: Blob): Blob {
+  if (canBrowserPlayAudioBlob(sourceBlob)) {
+    return sourceBlob;
+  }
+
+  // Some uploads decode successfully in Web Audio but fail or stay silent in
+  // HTMLAudioElement when the Blob MIME type is empty or too generic.
+  return audioBufferToWavBlob(audioBuffer);
+}
+
 function createImportedAudioAsset(
   projectAudio: ProjectAudio,
   audioBuffer: AudioBuffer,
   previewBlob: Blob,
 ): ImportedAudioAsset {
+  const previewPlaybackBlob = getPreviewPlaybackBlob(audioBuffer, previewBlob);
   return {
     audio: {
       ...projectAudio,
@@ -85,7 +110,7 @@ function createImportedAudioAsset(
       channelCount: audioBuffer.numberOfChannels,
     },
     audioBuffer,
-    audioPreviewUrl: URL.createObjectURL(previewBlob),
+    audioPreviewUrl: URL.createObjectURL(previewPlaybackBlob),
     waveform: extractWaveformOverview(audioBuffer),
     beatAnalysis: analyzeBeatPins(audioBuffer),
   };

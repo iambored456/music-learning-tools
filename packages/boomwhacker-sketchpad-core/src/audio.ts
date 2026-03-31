@@ -5,13 +5,40 @@ import { BLOCK_MICROBEAT_CAPACITIES, MAIN_PLAYBACK_SYNTH_PROFILE } from './const
 import type { BoomwhackerSketchpadModel } from './model.js';
 import type { NoteData, PlaybackTick } from './types.js';
 
-const COUNT_IN_SAMPLE_IDS = [
+const COUNT_IN_REGULAR_SAMPLE_IDS = [
+  'linn-lm-1-linndrum-linndrum-congah',
+  'linn-lm-1-linndrum-linndrum-conga',
   'alesis-hr16a-alesis-hr16a-18',
   'kr-33-kr-33-cow',
 ] as const;
 
-const COUNT_IN_SAMPLE_URL =
-  COUNT_IN_SAMPLE_IDS.map((sampleId) => getLocalDrumSampleById(sampleId)?.url ?? null).find(Boolean) ?? null;
+const COUNT_IN_ACCENT_SAMPLE_IDS = [
+  'linn-lm-1-linndrum-linndrum-congahh',
+  'linn-lm-1-linndrum-linndrum-congah',
+  'kr-33-kr-33-cow',
+  'alesis-hr16a-alesis-hr16a-18',
+] as const;
+
+const MACROBEAT_METRONOME_SAMPLE_IDS = [
+  'linn-lm-1-linndrum-linndrum-cowb',
+  'kr-33-kr-33-cow',
+  'linn-lm-1-linndrum-linndrum-congahh',
+] as const;
+
+const SUPPLEMENTAL_NOTE_SAMPLE_IDS = [
+  'roland-tr-909-roland-tr-909-handclp2',
+  'roland-tr-909-roland-tr-909-st3t0s3',
+] as const;
+
+function firstAvailableDrumSampleUrl(sampleIds: readonly string[]): string | null {
+  return sampleIds.map((sampleId) => getLocalDrumSampleById(sampleId)?.url ?? null).find(Boolean) ?? null;
+}
+
+const COUNT_IN_SAMPLE_URL = firstAvailableDrumSampleUrl(COUNT_IN_REGULAR_SAMPLE_IDS);
+const COUNT_IN_ACCENT_SAMPLE_URL = firstAvailableDrumSampleUrl(COUNT_IN_ACCENT_SAMPLE_IDS) ?? COUNT_IN_SAMPLE_URL;
+const MACROBEAT_METRONOME_SAMPLE_URL =
+  firstAvailableDrumSampleUrl(MACROBEAT_METRONOME_SAMPLE_IDS) ?? COUNT_IN_ACCENT_SAMPLE_URL ?? COUNT_IN_SAMPLE_URL;
+const DEFAULT_METRONOME_VOLUME = 0.72;
 
 export type AudioCallbacks = {
   onPlaybackTick?: (tick: PlaybackTick) => void;
@@ -24,11 +51,15 @@ export class BoomwhackerSketchpadAudioEngine {
 
   private readonly scheduledEventIds: number[] = [];
 
-  private mainSynth: Tone.Synth | null = null;
+  private mainSynth: Tone.PolySynth | null = null;
 
-  private mainVolumeNode: Tone.Volume | null = null;
+  private masterVolumeNode: Tone.Volume | null = null;
 
-  private countInPlayers: Tone.Players | null = null;
+  private metronomeVolumeNode: Tone.Volume | null = null;
+
+  private metronomePlayers: Tone.Players | null = null;
+
+  private supplementalNotePlayers: Tone.Players | null = null;
 
   private droneVolumeNode: Tone.Volume | null = null;
 
@@ -43,6 +74,8 @@ export class BoomwhackerSketchpadAudioEngine {
   private currentPlaybackMicrobeatGlobal = -1;
 
   private totalMicrobeatsInScoreForPlayback = 0;
+
+  private metronomeVolumeLevel = DEFAULT_METRONOME_VOLUME;
 
   constructor(private readonly model: BoomwhackerSketchpadModel, callbacks: AudioCallbacks = {}) {
     this.callbacks = callbacks;
@@ -69,26 +102,57 @@ export class BoomwhackerSketchpadAudioEngine {
     try {
       const state = this.model.getState();
 
-      this.mainVolumeNode = new Tone.Volume(Tone.gainToDb(state.mainVolume)).toDestination();
-      this.mainSynth = new Tone.Synth({
+      this.masterVolumeNode = new Tone.Volume(Tone.gainToDb(state.mainVolume)).toDestination();
+      this.mainSynth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: MAIN_PLAYBACK_SYNTH_PROFILE.oscillatorType },
         envelope: MAIN_PLAYBACK_SYNTH_PROFILE.envelope,
-      }).connect(this.mainVolumeNode);
+      }).connect(this.masterVolumeNode);
+      this.mainSynth.maxPolyphony = 12;
 
-      if (COUNT_IN_SAMPLE_URL) {
+      this.metronomeVolumeNode = new Tone.Volume(Tone.gainToDb(this.metronomeVolumeLevel)).connect(this.masterVolumeNode);
+
+      if (COUNT_IN_SAMPLE_URL || COUNT_IN_ACCENT_SAMPLE_URL || MACROBEAT_METRONOME_SAMPLE_URL) {
         try {
-          this.countInPlayers = new Tone.Players({
-            cue: COUNT_IN_SAMPLE_URL,
-          }).connect(this.mainVolumeNode);
-          await this.countInPlayers.loaded;
+          const cueUrl = (COUNT_IN_SAMPLE_URL ?? COUNT_IN_ACCENT_SAMPLE_URL ?? MACROBEAT_METRONOME_SAMPLE_URL)!;
+          const cueAccentUrl = COUNT_IN_ACCENT_SAMPLE_URL ?? cueUrl;
+          const macrobeatUrl = MACROBEAT_METRONOME_SAMPLE_URL ?? cueAccentUrl ?? cueUrl;
+          const playerUrls: Record<string, string> = {
+            cue: cueUrl,
+            cueAccent: cueAccentUrl,
+            macrobeat: macrobeatUrl,
+          };
+
+          this.metronomePlayers = new Tone.Players(playerUrls).connect(this.metronomeVolumeNode);
+          await this.metronomePlayers.loaded;
+          this.metronomePlayers.player('cue')!.playbackRate = 1;
+          this.metronomePlayers.player('cueAccent')!.playbackRate =
+            COUNT_IN_ACCENT_SAMPLE_URL === COUNT_IN_SAMPLE_URL ? 1.18 : 1;
+          this.metronomePlayers.player('macrobeat')!.playbackRate = 1;
         } catch {
-          this.countInPlayers?.dispose();
-          this.countInPlayers = null;
+          this.metronomePlayers?.dispose();
+          this.metronomePlayers = null;
         }
       }
 
-      this.droneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).toDestination();
-      this.momentaryDroneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).toDestination();
+      const supplementalNotePlayerUrls = Object.fromEntries(
+        SUPPLEMENTAL_NOTE_SAMPLE_IDS.flatMap((sampleId) => {
+          const sampleUrl = getLocalDrumSampleById(sampleId)?.url;
+          return sampleUrl ? [[sampleId, sampleUrl]] : [];
+        }),
+      );
+
+      if (Object.keys(supplementalNotePlayerUrls).length > 0) {
+        try {
+          this.supplementalNotePlayers = new Tone.Players(supplementalNotePlayerUrls).connect(this.masterVolumeNode);
+          await this.supplementalNotePlayers.loaded;
+        } catch {
+          this.supplementalNotePlayers?.dispose();
+          this.supplementalNotePlayers = null;
+        }
+      }
+
+      this.droneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).connect(this.masterVolumeNode);
+      this.momentaryDroneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).connect(this.masterVolumeNode);
 
       Tone.Transport.loop = false;
       Tone.Transport.bpm.value = state.microbeatTempo / 2;
@@ -117,14 +181,18 @@ export class BoomwhackerSketchpadAudioEngine {
     this.stopAndDisposeMomentaryDroneOsc();
 
     this.mainSynth?.dispose();
-    this.mainVolumeNode?.dispose();
-    this.countInPlayers?.dispose();
+    this.masterVolumeNode?.dispose();
+    this.metronomeVolumeNode?.dispose();
+    this.metronomePlayers?.dispose();
+    this.supplementalNotePlayers?.dispose();
     this.droneVolumeNode?.dispose();
     this.momentaryDroneVolumeNode?.dispose();
 
     this.mainSynth = null;
-    this.mainVolumeNode = null;
-    this.countInPlayers = null;
+    this.masterVolumeNode = null;
+    this.metronomeVolumeNode = null;
+    this.metronomePlayers = null;
+    this.supplementalNotePlayers = null;
     this.droneVolumeNode = null;
     this.momentaryDroneVolumeNode = null;
 
@@ -149,7 +217,7 @@ export class BoomwhackerSketchpadAudioEngine {
 
   setMainVoiceType(type: OscillatorType): void {
     if (!this.isReady() || !this.mainSynth) return;
-    this.mainSynth.oscillator.type = type;
+    this.mainSynth.set({ oscillator: { type } });
   }
 
   setDroneVoiceType(type: OscillatorType): void {
@@ -165,8 +233,16 @@ export class BoomwhackerSketchpadAudioEngine {
   }
 
   setMainVolume(level0to1: number): void {
-    if (!this.isReady() || !this.mainVolumeNode) return;
-    this.mainVolumeNode.volume.linearRampToValueAtTime(Tone.gainToDb(level0to1), Tone.now() + 0.02);
+    if (!this.isReady() || !this.masterVolumeNode) return;
+    this.masterVolumeNode.volume.linearRampToValueAtTime(Tone.gainToDb(level0to1), Tone.now() + 0.02);
+  }
+
+  setMetronomeVolume(level0to1: number): void {
+    const clamped = Math.max(0, Math.min(1, level0to1));
+    this.metronomeVolumeLevel = clamped;
+
+    if (!this.metronomeVolumeNode) return;
+    this.metronomeVolumeNode.volume.linearRampToValueAtTime(Tone.gainToDb(clamped), Tone.now() + 0.02);
   }
 
   setDroneVolume(level0to1: number): void {
@@ -236,18 +312,40 @@ export class BoomwhackerSketchpadAudioEngine {
     if (!this.isReady() || !this.mainSynth) return;
 
     try {
-      this.mainSynth.oscillator.type = this.model.getMainPlaybackVoice();
+      this.mainSynth.set({ oscillator: { type: this.model.getMainPlaybackVoice() } });
       this.mainSynth.triggerAttackRelease(pitchString, duration, Tone.now());
     } catch {
       // Ignore invalid note playback requests.
     }
   }
 
-  playCountInCueNow(): boolean {
-    if (!this.isReady() || !this.countInPlayers?.loaded) return false;
+  playCountInCueNow(accented = false): boolean {
+    if (!this.isReady() || !this.metronomePlayers?.loaded) return false;
 
     try {
-      this.countInPlayers.player('cue')?.start(Tone.now());
+      this.metronomePlayers.player(accented ? 'cueAccent' : 'cue')?.start(Tone.now());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  playMacrobeatCueNow(): boolean {
+    if (!this.isReady() || !this.metronomePlayers?.loaded) return false;
+
+    try {
+      this.metronomePlayers.player('macrobeat')?.start(Tone.now());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  playSampleNow(sampleId: string): boolean {
+    if (!this.isReady() || !this.supplementalNotePlayers?.loaded) return false;
+
+    try {
+      this.supplementalNotePlayers.player(sampleId)?.start(Tone.now());
       return true;
     } catch {
       return false;

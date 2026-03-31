@@ -8,6 +8,7 @@ const SUSTAIN_LEVEL = MAIN_PLAYBACK_SYNTH_PROFILE.envelope.sustain;
 const RELEASE_SEC = MAIN_PLAYBACK_SYNTH_PROFILE.envelope.release;
 const OSCILLATOR_TYPE = MAIN_PLAYBACK_SYNTH_PROFILE.oscillatorType;
 const ENVELOPE_FLOOR_GAIN = 0.0001;
+const MASTER_GAIN = 0.24;
 
 type ActiveVoice = {
   oscillator: OscillatorNode;
@@ -31,12 +32,22 @@ function getAudioContextConstructor():
   return audioWindow.AudioContext ?? audioWindow.webkitAudioContext ?? null;
 }
 
+function clampUnitInterval(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.min(1, Math.max(0, value));
+}
+
 export class TrianglePreviewSynth {
   private audioContext: AudioContext | null = null;
 
   private masterGainNode: GainNode | null = null;
 
   private activeVoices = new Map<string, ActiveVoice>();
+
+  private masterVolume = 1;
 
   async ensureReady(): Promise<boolean> {
     const AudioContextConstructor = getAudioContextConstructor();
@@ -47,7 +58,7 @@ export class TrianglePreviewSynth {
     if (!this.audioContext) {
       this.audioContext = new AudioContextConstructor();
       this.masterGainNode = this.audioContext.createGain();
-      this.masterGainNode.gain.value = 0.24;
+      this.masterGainNode.gain.value = MASTER_GAIN * this.masterVolume;
       this.masterGainNode.connect(this.audioContext.destination);
     }
 
@@ -56,6 +67,13 @@ export class TrianglePreviewSynth {
     }
 
     return this.audioContext.state === 'running';
+  }
+
+  setMasterVolume(nextVolume: number): void {
+    this.masterVolume = clampUnitInterval(nextVolume);
+    if (this.masterGainNode) {
+      this.masterGainNode.gain.value = MASTER_GAIN * this.masterVolume;
+    }
   }
 
   stopAll(): void {

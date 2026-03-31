@@ -217,6 +217,7 @@
   let audioInput: HTMLInputElement | null = null;
   let projectInput: HTMLInputElement | null = null;
   let backgroundImageInput: HTMLInputElement | null = null;
+  let setupAudioPreviewPlayer: HTMLAudioElement | null = null;
   let audioPlayer: HTMLAudioElement | null = null;
   let beatEditorCurrentTimeSec = 0;
   let beatEditorIsPlaying = false;
@@ -272,6 +273,20 @@
   let previewScrubState: PreviewScrubState | null = null;
   const DEBUG_BEAT_EDITOR_PLAYHEAD = false;
   const DEBUG_HIGHWAY_SCROLL = false;
+
+  function hasCapturedTapEntryData(): boolean {
+    return tapBeatTimesSec.length > 0;
+  }
+
+  function hasExistingEditorWork(sourceProject: BoomwhackerVideoBuilderProject = project): boolean {
+    return (
+      sourceProject.beatMap.beatPins.length > 0
+      || sourceProject.notes.placedNotes.length > 0
+      || sourceProject.annotations.sections.length > 0
+      || sourceProject.annotations.timelineNotes.length > 0
+      || hasCapturedTapEntryData()
+    );
+  }
   let beatEditorDebugLastAnimationBucket = -1;
   let highwayScrollDebugLastBucket = -1;
   let highwayZoomPreview = '';
@@ -390,6 +405,18 @@
     return Math.max(MIN_TIMELINE_ZOOM, Math.min(MAX_TIMELINE_ZOOM, value));
   }
 
+  function clampPreviewVolume(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 1;
+    }
+
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function formatVolumePercent(value: number): string {
+    return `${Math.round(clampPreviewVolume(value) * 100)}%`;
+  }
+
   function normalizeWheelDelta(delta: number, deltaMode: number): number {
     if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
       return delta * 16;
@@ -419,6 +446,21 @@
   function getProjectAudioToken(projectId: string): string {
     return `project-audio:${projectId}`;
   }
+
+  $: {
+    const audioVolume = clampPreviewVolume(project.previewState.audioVolume);
+    if (setupAudioPreviewPlayer) {
+      setupAudioPreviewPlayer.volume = audioVolume;
+    }
+    if (audioPlayer) {
+      audioPlayer.volume = audioVolume;
+    }
+    if (previewAudioPlayer) {
+      previewAudioPlayer.volume = audioVolume;
+    }
+  }
+
+  $: previewSynth.setMasterVolume(project.previewState.synthVolume);
 
   async function persistProjectAudioLocally(
     projectId: string,
@@ -666,6 +708,22 @@
     if (!asset) {
       clearAudioPresentation();
       return;
+    }
+
+    const shouldRestorePlayAudio = (
+      !project.previewState.playAudio
+      && !sourceAudioPreviewUrl
+      && !decodedAudioBuffer
+    );
+
+    if (shouldRestorePlayAudio) {
+      project = {
+        ...project,
+        previewState: {
+          ...project.previewState,
+          playAudio: true,
+        },
+      };
     }
 
     replaceAudioPreviewUrl(null);
@@ -945,6 +1003,17 @@
     nextPreviewState: Partial<BoomwhackerVideoBuilderProject['previewState']>,
     nextStatus?: string,
   ): void {
+    const shouldSyncPreviewOutputs = (
+      'playAudio' in nextPreviewState
+      || 'playGrid' in nextPreviewState
+      || 'includeSynthPlayback' in nextPreviewState
+      || 'playbackOffsetSec' in nextPreviewState
+    );
+    const shouldRefreshPreviewSynth = (
+      'playGrid' in nextPreviewState
+      || 'includeSynthPlayback' in nextPreviewState
+    );
+
     setProjectState(
       touchProject({
         ...project,
@@ -955,12 +1024,27 @@
       }),
       nextStatus,
     );
-    void syncPreviewOutputsWhilePlaying();
-    if (previewIsPlaying) {
-      restartPreviewSynthAtTime(previewCurrentTimeSec);
-    } else {
-      stopPreviewSynth();
+
+    if (shouldSyncPreviewOutputs) {
+      void syncPreviewOutputsWhilePlaying();
     }
+    if (shouldRefreshPreviewSynth) {
+      if (previewIsPlaying) {
+        restartPreviewSynthAtTime(previewCurrentTimeSec);
+      } else {
+        stopPreviewSynth();
+      }
+    }
+  }
+
+  function setPreviewAudioVolume(nextVolume: number, nextStatus?: string): void {
+    const audioVolume = clampPreviewVolume(nextVolume);
+    updatePreviewState({ audioVolume }, nextStatus);
+  }
+
+  function setPreviewSynthVolume(nextVolume: number, nextStatus?: string): void {
+    const synthVolume = clampPreviewVolume(nextVolume);
+    updatePreviewState({ synthVolume }, nextStatus);
   }
 
   function togglePlaybackAudio(): void {
@@ -990,6 +1074,24 @@
       { playGrid: !project.previewState.playGrid },
       `Playback mode set to ${project.previewState.playGrid ? (project.previewState.playAudio ? 'audio only' : 'audio and grid') : (project.previewState.playAudio ? 'audio and grid' : 'grid only')}.`,
     );
+  }
+
+  function handlePreviewAudioVolumeInput(event: Event): void {
+    setPreviewAudioVolume(Number((event.currentTarget as HTMLInputElement).value));
+  }
+
+  function handlePreviewAudioVolumeChange(event: Event): void {
+    const audioVolume = Number((event.currentTarget as HTMLInputElement).value);
+    setPreviewAudioVolume(audioVolume, `Source audio volume set to ${formatVolumePercent(audioVolume)}.`);
+  }
+
+  function handlePreviewSynthVolumeInput(event: Event): void {
+    setPreviewSynthVolume(Number((event.currentTarget as HTMLInputElement).value));
+  }
+
+  function handlePreviewSynthVolumeChange(event: Event): void {
+    const synthVolume = Number((event.currentTarget as HTMLInputElement).value);
+    setPreviewSynthVolume(synthVolume, `Canvas note volume set to ${formatVolumePercent(synthVolume)}.`);
   }
 
   async function setAudioTransposeSemitones(nextTransposeSemitones: number): Promise<void> {
@@ -1767,6 +1869,9 @@
 
     errorMessage = '';
     try {
+      if (audioPlayer.readyState === HTMLMediaElement.HAVE_NOTHING) {
+        audioPlayer.load();
+      }
       await audioPlayer.play();
       statusMessage = 'Audio playback started.';
       logBeatEditorPlayheadDebug('toggle-playback-started');
@@ -1831,6 +1936,9 @@
       previewAudioPlayer.currentTime = clampPreviewTimeSec(previewCurrentTimeSec);
       if (previewAudioPlayer.paused) {
         try {
+          if (previewAudioPlayer.readyState === HTMLMediaElement.HAVE_NOTHING) {
+            previewAudioPlayer.load();
+          }
           await previewAudioPlayer.play();
         } catch (error) {
           console.error('Boomwhacker Video Builder audio playback failed.', error);
@@ -1917,6 +2025,9 @@
     if (previewCanUseSourceAudio() && previewAudioPlayer) {
       previewAudioPlayer.currentTime = clampPreviewTimeSec(previewCurrentTimeSec);
       try {
+        if (previewAudioPlayer.readyState === HTMLMediaElement.HAVE_NOTHING) {
+          previewAudioPlayer.load();
+        }
         await previewAudioPlayer.play();
       } catch (error) {
         console.error('Boomwhacker Video Builder audio playback failed.', error);
@@ -4071,7 +4182,6 @@
 
     try {
       resetPreviewTransport();
-      clearTapBeatSequence();
       selectedNoteIds = [];
       clipboardNotes = [];
       autosaveRecoveryState = null;
@@ -4080,45 +4190,66 @@
       const nextGrouping = options?.grouping ?? project.grid.defaultMacrobeatGrouping;
       const beatMapMode = options?.beatMapMode ?? 'tap';
       const shouldAutoSuggestBeats = beatMapMode === 'auto';
-      const baseProject = touchProject({
-        ...createBoomwhackerVideoBuilderProject({
-          title: nextTitle,
-          appVersion: project.metadata.appVersion,
-          audio: importedAsset.audio,
-        }),
-        audioProcessing: {
-          ...project.audioProcessing,
-        },
-        grid: {
-          defaultMacrobeatGrouping: nextGrouping,
-          localMacrobeatGroupings: [],
-        },
-        viewState: {
-          ...project.viewState,
-          activeTab: shouldAutoSuggestBeats ? 'editor' : 'beats',
-          scrollSlotIndex: 0,
-        },
-        previewState: {
-          ...project.previewState,
-        },
-        exportState: {
-          ...project.exportState,
-          titleCard: {
-            ...project.exportState.titleCard,
-            title: nextTitle,
-          },
-        },
-        beatMap: {
-          beatPins: shouldAutoSuggestBeats ? importedAsset.beatAnalysis.beatPins : [],
-        },
-        notes: {
-          placedNotes: [],
-        },
-        annotations: {
-          sections: [],
-          timelineNotes: [],
-        },
-      });
+      const preserveExistingEditorData = hasExistingEditorWork() && !shouldAutoSuggestBeats;
+      const baseProject = preserveExistingEditorData
+        ? touchProject({
+            ...project,
+            metadata: {
+              ...project.metadata,
+              title: nextTitle,
+            },
+            audio: importedAsset.audio,
+            grid: {
+              ...project.grid,
+              defaultMacrobeatGrouping: nextGrouping,
+            },
+            exportState: {
+              ...project.exportState,
+              titleCard: {
+                ...project.exportState.titleCard,
+                title: nextTitle,
+              },
+            },
+          })
+        : touchProject({
+            ...createBoomwhackerVideoBuilderProject({
+              title: nextTitle,
+              appVersion: project.metadata.appVersion,
+              audio: importedAsset.audio,
+            }),
+            audioProcessing: {
+              ...project.audioProcessing,
+            },
+            grid: {
+              defaultMacrobeatGrouping: nextGrouping,
+              localMacrobeatGroupings: [],
+            },
+            viewState: {
+              ...project.viewState,
+              activeTab: shouldAutoSuggestBeats ? 'editor' : 'beats',
+              scrollSlotIndex: 0,
+            },
+            previewState: {
+              ...project.previewState,
+            },
+            exportState: {
+              ...project.exportState,
+              titleCard: {
+                ...project.exportState.titleCard,
+                title: nextTitle,
+              },
+            },
+            beatMap: {
+              beatPins: shouldAutoSuggestBeats ? importedAsset.beatAnalysis.beatPins : [],
+            },
+            notes: {
+              placedNotes: [],
+            },
+            annotations: {
+              sections: [],
+              timelineNotes: [],
+            },
+          });
       const persistedAudio = await persistProjectAudioLocally(baseProject.metadata.id, file, importedAsset.audio);
       const nextProject = touchProject({
         ...baseProject,
@@ -4127,7 +4258,9 @@
 
       setProjectState(
         nextProject,
-        shouldAutoSuggestBeats
+        preserveExistingEditorData
+          ? `Loaded "${file.name}" without clearing the current beat map, notes, or captured taps.`
+          : shouldAutoSuggestBeats
           ? `Loaded "${file.name}" and generated ${importedAsset.beatAnalysis.beatPins.length} suggested beat pins.`
           : `Loaded "${file.name}". Tap along with playback in the Beat Editor to build the beat map.`,
       );
@@ -4148,7 +4281,6 @@
 
     try {
       resetPreviewTransport();
-      clearTapBeatSequence();
       const importedAsset = await importAudioFile(file);
       const persistedAudio = await persistProjectAudioLocally(project.metadata.id, file, importedAsset.audio);
       const nextProject = touchProject({
@@ -4863,6 +4995,36 @@
                 Grid
               </button>
             </div>
+            <div class="preview-level-controls" role="group" aria-label="Highway playback levels">
+              <label class="range-field preview-level-control">
+                <span class="range-field__label">Source audio</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={project.previewState.audioVolume}
+                  disabled={!audioPreviewUrl}
+                  on:input={handlePreviewAudioVolumeInput}
+                  on:change={handlePreviewAudioVolumeChange}
+                />
+                <strong>{formatVolumePercent(project.previewState.audioVolume)}</strong>
+              </label>
+
+              <label class="range-field preview-level-control">
+                <span class="range-field__label">Canvas notes</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={project.previewState.synthVolume}
+                  on:input={handlePreviewSynthVolumeInput}
+                  on:change={handlePreviewSynthVolumeChange}
+                />
+                <strong>{formatVolumePercent(project.previewState.synthVolume)}</strong>
+              </label>
+            </div>
             <button type="button" class="ghost-button" disabled={Boolean(busyMessage)} on:click={loadDemoChart}>
               Demo chart
             </button>
@@ -5141,7 +5303,7 @@
         </div>
 
         {#if audioPreviewUrl}
-          <audio class="audio-player" controls preload="metadata" src={audioPreviewUrl}></audio>
+          <audio bind:this={setupAudioPreviewPlayer} class="audio-player" controls preload="metadata" src={audioPreviewUrl}></audio>
         {/if}
       {:else}
         <div class="empty-state">

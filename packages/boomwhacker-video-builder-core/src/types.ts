@@ -97,6 +97,8 @@ export interface PlaybackState {
   includeSynthPlayback: boolean;
   playAudio: boolean;
   playGrid: boolean;
+  audioVolume: number;
+  synthVolume: number;
   playbackOffsetSec: number;
 }
 

@@ -73,6 +73,8 @@ export const DEFAULT_PREVIEW_STATE: PlaybackState = {
   includeSynthPlayback: true,
   playAudio: true,
   playGrid: true,
+  audioVolume: 1,
+  synthVolume: 1,
   playbackOffsetSec: 0,
 };
 
