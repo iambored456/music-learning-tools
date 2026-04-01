@@ -211,6 +211,23 @@
     rowCount: number;
   };
 
+  type KaraokeOverlayBall = {
+    voiceIndex: VoiceIndex;
+    style: string | null;
+  };
+
+  type KaraokeAnchorTransition = {
+    anchor: KaraokeAnchor;
+    targetIndex: number;
+    durationMs: number;
+  };
+
+  type HorizontalPlaybackHighwayState = {
+    activationIndex: number | null;
+    pinnedVoiceIndex: VoiceIndex | null;
+    referenceViewportLeftPx: number | null;
+  };
+
   type AudioReadinessResult = {
     ready: boolean;
     resumedAudioContext: boolean;
@@ -267,6 +284,15 @@
     v: 1;
     composition: ShareDocument;
     settings: LibrarySketchSettings;
+  };
+
+  type LibrarySketchExportDocument = {
+    v: 1;
+    source: 'boomwhacker-sketchpad-library';
+    name: string;
+    savedAt: string;
+    exportedAt: string;
+    document: LibrarySketchDocument;
   };
 
   const PERCUSSION_NOTE_IDS = ['clap', 'stomp'] as const;
@@ -351,9 +377,9 @@
   const CANVAS_HISTORY_MAX_SIZE = 300;
   const PLAYBACK_HIGHLIGHT_DEBUG = false;
   const PLAYED_NOTE_MUTING_DEBUG = false;
-  const PLAYBACK_STARTUP_DEBUG = true;
+  const PLAYBACK_STARTUP_DEBUG = false;
   const PICKUP_RENDER_DEBUG = false;
-  const MOBILE_LAYOUT_DEBUG = true;
+  const MOBILE_LAYOUT_DEBUG = false;
   const TEMPO_SLIDER_LAYOUT_DEBUG = false;
   const AUDIO_RESUME_STABILIZATION_MS = 120;
   const CANVAS_PANEL_REPOSITION_MS = 240;
@@ -415,6 +441,7 @@
   let voicePlaybackCursors: [GridCellRef | null, GridCellRef | null] = [null, null];
   let voiceKaraokeBallRowIndexes: [number | null, number | null] = [null, null];
   let voiceKaraokeBallLeftPercents: [number, number] = [50, 50];
+  let voiceKaraokeBallPinnedLeftPxs: [number | null, number | null] = [null, null];
   let voiceKaraokeBallArcOffsetPxs: [number, number] = [0, 0];
   let karaokeArcHeightPx = 64;
   let karaokeBallSizePx = 40;
@@ -425,6 +452,17 @@
   let voiceKaraokeAnchors: [KaraokeAnchor | null, KaraokeAnchor | null] = [null, null];
   let voiceKaraokeAnimationFrames: [number | null, number | null] = [null, null];
   let voiceKaraokeAnimationTokens: [number, number] = [0, 0];
+  let horizontalPlaybackHighway: HorizontalPlaybackHighwayState = {
+    activationIndex: null,
+    pinnedVoiceIndex: null,
+    referenceViewportLeftPx: null,
+  };
+  let horizontalPlaybackScrollFrame: number | null = null;
+  let horizontalPlaybackScrollToken = 0;
+  let horizontalPlaybackRunwayPx = 0;
+  let voiceHorizontalPlaybackLaneShiftPxs: [number, number] = [0, 0];
+  let voiceHorizontalPlaybackLaneShiftFrames: [number | null, number | null] = [null, null];
+  let voiceHorizontalPlaybackLaneShiftTokens: [number, number] = [0, 0];
   let voiceTrackRowElements: [Array<HTMLElement | null>, Array<HTMLElement | null>] = [[], []];
   let voicePlaybackHighlights: [PlaybackHighlight | null, PlaybackHighlight | null] = [null, null];
   let voicePlaybackHighlightAnchors: [KaraokeAnchor | null, KaraokeAnchor | null] = [null, null];
@@ -434,6 +472,7 @@
   let dragPayload: DragPayload | null = null;
   let dragOverCell: GridDropTarget | null = null;
   let tapPlacementPayload: DragPayload | null = null;
+  let activePreviewPayload: DragPayload | null = null;
   let cursorPreview: { note: PlacedNote; x: number; y: number } | null = null;
   let cursorOverCanvas = false;
   let pendingBankTouchActivation: PendingBankTouchActivation | null = null;
@@ -481,7 +520,8 @@
   let volumePopupOpen = false;
   let volumeControlWrapper: HTMLDivElement | null = null;
   let canvasPanelElement: HTMLElement | null = null;
-  let showTapPlacementHint = true;
+  let canvasScrollShellElement: HTMLDivElement | null = null;
+  let canvasScrollRevision = 0;
   let eraserMode = false;
   let canvasHistory: CanvasHistorySnapshot[] = [];
   let canvasHistoryPointer = -1;
@@ -500,6 +540,7 @@
     Array.from({ length: INITIAL_ROWS }, () => createEmptyRow('row_a')),
     Array.from({ length: INITIAL_ROWS }, () => createEmptyRow('row_b')),
   ];
+  let karaokeOverlayBalls: KaraokeOverlayBall[] = [];
   let renderedTrackRows: RenderedTrackRow[] = [];
   let canvasPersistenceReady = false;
 
@@ -520,8 +561,30 @@
     bankLatticeRowsDiamond = buildBankLatticeRows(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
   }
 
+  $: activePreviewPayload = dragPayload ?? tapPlacementPayload;
   $: showToolbarEighthBank = (!isStudentView || !activeStudentView.hideEighthBank) && showEighthsBank;
   $: showLowerSixteenthBank = (!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank;
+  $: {
+    trackStyle;
+    canvasScrollRevision;
+    horizontalPlaybackHighway.referenceViewportLeftPx;
+    const scrollShellWidth = canvasScrollShellElement?.clientWidth ?? 0;
+    horizontalPlaybackRunwayPx =
+      trackStyle === 'horizontal' && horizontalPlaybackHighway.referenceViewportLeftPx !== null
+        ? Math.max(0, scrollShellWidth - horizontalPlaybackHighway.referenceViewportLeftPx)
+        : 0;
+  }
+  $: {
+    voiceKaraokeBallRowIndexes;
+    voiceKaraokeBallLeftPercents;
+    voiceKaraokeBallArcOffsetPxs;
+    karaokeBallSizePx;
+    canvasScrollRevision;
+    karaokeOverlayBalls = VOICE_INDEXES.map((voiceIndex) => ({
+      voiceIndex,
+      style: karaokeBallOverlayStyle(voiceIndex),
+    }));
+  }
   $: {
     voiceRows;
     voicePickupRows;
@@ -1257,10 +1320,7 @@
     suppressCanvasHistoryTracking = false;
 
     activeCanvasVoiceIndex = 0;
-    tapPlacementPayload = null;
-    dragPayload = null;
-    dragOverCell = null;
-    pickupPreviewLogKey = null;
+    clearTapPlacementSelection();
   }
 
   function trackCanvasHistorySnapshot(): void {
@@ -1492,6 +1552,47 @@
     return `Boomwhacker Sketch ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}.${pad(now.getMinutes())}`;
   }
 
+  function sanitizeLibraryDownloadFileName(name: string): string {
+    const sanitized = name
+      .trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+      .replace(/\s+/g, ' ')
+      .replace(/\.+$/g, '');
+
+    return sanitized || 'boomwhacker-sketch';
+  }
+
+  function buildLibrarySketchExportDocument(
+    entry: SketchpadLibraryEntry<LibrarySketchDocument>,
+  ): LibrarySketchExportDocument {
+    return {
+      v: 1,
+      source: 'boomwhacker-sketchpad-library',
+      name: entry.name,
+      savedAt: entry.savedAt,
+      exportedAt: new Date().toISOString(),
+      document: entry.document,
+    };
+  }
+
+  function downloadLibraryEntry(entry: SketchpadLibraryEntry<LibrarySketchDocument>): void {
+    if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof Blob === 'undefined') {
+      throw new Error('File downloads are unavailable in this environment.');
+    }
+
+    const exportDocument = buildLibrarySketchExportDocument(entry);
+    const blob = new Blob([`${JSON.stringify(exportDocument, null, 2)}\n`], { type: 'application/json' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = downloadUrl;
+    downloadLink.download = `${sanitizeLibraryDownloadFileName(entry.name)}.boomwhacker-sketch.json`;
+    downloadLink.style.display = 'none';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+  }
+
   function formatLibrarySavedAt(savedAt: string): string {
     const parsed = new Date(savedAt);
     if (Number.isNaN(parsed.getTime())) {
@@ -1593,6 +1694,22 @@
       libraryError = error instanceof Error ? error.message : 'Sketch could not be saved to the library.';
     } finally {
       libraryBusy = false;
+    }
+  }
+
+  function handleLibraryExport(): void {
+    const entry = selectedLibraryEntry();
+    if (!entry) return;
+
+    libraryPendingAction = null;
+    libraryError = null;
+    libraryStatus = null;
+
+    try {
+      downloadLibraryEntry(entry);
+      libraryStatus = `Exported "${entry.name}".`;
+    } catch (error) {
+      libraryError = error instanceof Error ? error.message : 'Sketch could not be exported.';
     }
   }
 
@@ -2282,12 +2399,24 @@
     return Boolean(tapPlacementPayload && tapPlacementPayload.note.noteId === noteId && tapPlacementPayload.note.shape === shape);
   }
 
+  function clearPlacementHoverPreview(): void {
+    dragOverCell = null;
+    pickupPreviewLogKey = null;
+  }
+
+  function clearPlacementPreviewState(): void {
+    dragPayload = null;
+    clearPlacementHoverPreview();
+  }
+
+  function clearTapPlacementSelection(): void {
+    tapPlacementPayload = null;
+    clearPlacementPreviewState();
+  }
+
   function armTapPlacementSelection(noteId: string, shape: NoteShape): boolean {
     if (tapPlacementSelectionMatches(noteId, shape)) {
-      tapPlacementPayload = null;
-      dragPayload = null;
-      dragOverCell = null;
-      pickupPreviewLogKey = null;
+      clearTapPlacementSelection();
       return false;
     }
 
@@ -2298,9 +2427,7 @@
       source: 'bank',
       note,
     };
-    dragPayload = null;
-    dragOverCell = null;
-    pickupPreviewLogKey = null;
+    clearPlacementPreviewState();
     return true;
   }
 
@@ -2340,14 +2467,22 @@
     document.addEventListener('mouseup', onUp);
   }
 
-  function handleBankTokenClick(event: MouseEvent, noteId: string): void {
+  function handleBankTokenClick(event: MouseEvent, noteId: string, shape: NoteShape): void {
     if (suppressNextBankClick) {
       suppressNextBankClick = false;
       event.preventDefault();
       return;
     }
 
-    void previewBankNote(noteId);
+    if (eraserMode) {
+      void previewBankNote(noteId);
+      return;
+    }
+
+    const armed = armTapPlacementSelection(noteId, shape);
+    if (armed) {
+      void previewBankNote(noteId);
+    }
   }
 
   function handleWindowPointerMoveForBankActivation(event: PointerEvent): void {
@@ -2394,8 +2529,51 @@
     const target = event.currentTarget as HTMLElement;
     if (!target.contains(event.relatedTarget as Node | null)) {
       cursorOverCanvas = false;
-      dragOverCell = null;
+      clearPlacementHoverPreview();
     }
+  }
+
+  function handleCanvasMouseMove(event: MouseEvent): void {
+    if (dragPayload) return;
+
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('.macrobeat-cell')) return;
+
+    clearPlacementHoverPreview();
+  }
+
+  function handleCanvasMouseLeave(): void {
+    if (dragPayload) return;
+
+    clearPlacementHoverPreview();
+  }
+
+  function invalidateCanvasLayout(): void {
+    canvasScrollRevision += 1;
+  }
+
+  function handleCanvasScroll(): void {
+    invalidateCanvasLayout();
+  }
+
+  function notifyCanvasLayoutChange(node: HTMLElement): { destroy(): void } {
+    invalidateCanvasLayout();
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        invalidateCanvasLayout();
+      });
+      resizeObserver.observe(node);
+    }
+
+    return {
+      destroy() {
+        resizeObserver?.disconnect();
+        invalidateCanvasLayout();
+      },
+    };
   }
 
   function removeDraggedSource(
@@ -2638,10 +2816,7 @@
 
   function toggleEraserMode(): void {
     eraserMode = !eraserMode;
-    tapPlacementPayload = null;
-    dragPayload = null;
-    dragOverCell = null;
-    pickupPreviewLogKey = null;
+    clearTapPlacementSelection();
   }
 
   function handleVolumeIconClick(event: Event): void {
@@ -2738,11 +2913,11 @@
     if (!note) return;
 
     tapPlacementPayload = null;
+    clearPlacementHoverPreview();
     dragPayload = {
       source: 'bank',
       note,
     };
-    pickupPreviewLogKey = null;
 
     event.dataTransfer?.setData('text/plain', `${noteId}:${shape}`);
     if (event.dataTransfer) {
@@ -2770,6 +2945,7 @@
 
     setActiveCanvasVoice(voiceIndex);
     tapPlacementPayload = null;
+    clearPlacementHoverPreview();
     dragPayload = {
       source: 'cell',
       note: clonePlacedNote(note),
@@ -2779,8 +2955,6 @@
       cellIndex,
       noteIndex: noteIndex ?? undefined,
     };
-    pickupPreviewLogKey = null;
-
     event.dataTransfer?.setData('text/plain', `${note.noteId}:${note.shape}`);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -2788,19 +2962,23 @@
   }
 
   function handleAnyDragEnd(): void {
-    dragPayload = null;
-    dragOverCell = null;
+    clearPlacementPreviewState();
     cursorPreview = null;
     cursorOverCanvas = false;
     pendingBankTouchActivation = null;
-    pickupPreviewLogKey = null;
     debugPickupRender('Drag ended; pickup preview state cleared.');
   }
 
-  function handleCellDragOver(event: DragEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
-    if (!dragPayload) return;
-
-    if (dragPayload.note.shape === 'circle') {
+  function updateCellPreviewTarget(
+    activePayload: DragPayload,
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    currentTarget: EventTarget | null,
+    clientX: number,
+  ): boolean {
+    if (activePayload.note.shape === 'circle') {
       const maxCells = maxCellsForZone(zone);
       const circleStartCellIndex = macrobeatStartCellIndex(cellIndex);
       if (circleStartCellIndex + 1 >= maxCells) {
@@ -2812,32 +2990,49 @@
             maxCells,
           });
         }
-        dragOverCell = null;
-        return;
+        clearPlacementHoverPreview();
+        return false;
       }
     }
 
-    event.preventDefault();
     dragOverCell = {
       voiceIndex,
       zone,
       rowIndex,
       cellIndex,
-      sixteenthSlot: dragPayload.note.shape === 'diamond' ? resolveSixteenthSlotFromEvent(event) : null,
+      sixteenthSlot: activePayload.note.shape === 'diamond' ? resolveSixteenthSlotFromClientX(currentTarget, clientX) : null,
     };
-
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = dragPayload.source === 'bank' ? 'copy' : 'move';
-    }
 
     if (zone === 'pickup') {
       debugPickupRender('Pickup drag over target updated.', {
         rowIndex,
         hoverCellIndex: cellIndex,
-        normalizedCircleStartCellIndex: dragPayload.note.shape === 'circle' ? macrobeatStartCellIndex(cellIndex) : null,
-        shape: dragPayload.note.shape,
+        normalizedCircleStartCellIndex: activePayload.note.shape === 'circle' ? macrobeatStartCellIndex(cellIndex) : null,
+        shape: activePayload.note.shape,
       });
     }
+
+    return true;
+  }
+
+  function handleCellDragOver(event: DragEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    if (!dragPayload) return;
+
+    event.preventDefault();
+    if (!updateCellPreviewTarget(dragPayload, voiceIndex, zone, rowIndex, cellIndex, event.currentTarget, event.clientX)) return;
+
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = dragPayload.source === 'bank' ? 'copy' : 'move';
+    }
+  }
+
+  function handleCellMouseMove(event: MouseEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    if (dragPayload) return;
+    if (eraserMode) return;
+    if (!bankNativeDragEnabled) return;
+    if (!tapPlacementPayload) return;
+
+    updateCellPreviewTarget(tapPlacementPayload, voiceIndex, zone, rowIndex, cellIndex, event.currentTarget, event.clientX);
   }
 
   function applyPayloadDropToCell(
@@ -2895,8 +3090,7 @@
     setActiveCanvasVoice(voiceIndex);
 
     if (!dragPayload) {
-      dragOverCell = null;
-      pickupPreviewLogKey = null;
+      clearPlacementHoverPreview();
       return;
     }
 
@@ -2905,9 +3099,7 @@
       activePayload.note.shape === 'diamond' ? resolveSixteenthSlotFromEvent(event) : null;
     applyPayloadDropToCell(activePayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
 
-    dragPayload = null;
-    dragOverCell = null;
-    pickupPreviewLogKey = null;
+    clearPlacementPreviewState();
   }
 
   function handleCellPointerDown(event: PointerEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
@@ -2930,9 +3122,42 @@
         : null;
 
     applyPayloadDropToCell(tapPlacementPayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
-    dragPayload = null;
-    dragOverCell = null;
-    pickupPreviewLogKey = null;
+    clearPlacementPreviewState();
+  }
+
+  function handleCellClick(event: MouseEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    setActiveCanvasVoice(voiceIndex);
+
+    if (eraserMode) return;
+    if (!bankNativeDragEnabled) return;
+    if (!tapPlacementPayload) return;
+
+    event.preventDefault();
+    const targetSixteenthSlot: SixteenthSlot | null =
+      tapPlacementPayload.note.shape === 'diamond'
+        ? resolveSixteenthSlotFromClientX(event.currentTarget, event.clientX)
+        : null;
+
+    applyPayloadDropToCell(tapPlacementPayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
+    clearPlacementPreviewState();
+  }
+
+  function handleCellKeyDown(event: KeyboardEvent, voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+
+    setActiveCanvasVoice(voiceIndex);
+    event.preventDefault();
+
+    if (eraserMode) {
+      eraseCellAtLocation(voiceIndex, zone, rowIndex, cellIndex, 0);
+      return;
+    }
+
+    if (!tapPlacementPayload) return;
+
+    const targetSixteenthSlot: SixteenthSlot | null = tapPlacementPayload.note.shape === 'diamond' ? 0 : null;
+    applyPayloadDropToCell(tapPlacementPayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
+    clearPlacementPreviewState();
   }
 
   function eraseCellAtLocation(
@@ -3033,6 +3258,65 @@
     voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
   }
 
+  function clearKaraokeBallDisplay(voiceIndex: VoiceIndex): void {
+    clearKaraokeAnimation(voiceIndex);
+    voiceKaraokeBallRowIndexes[voiceIndex] = null;
+    voiceKaraokeBallLeftPercents[voiceIndex] = 50;
+    voiceKaraokeAnchors[voiceIndex] = null;
+  }
+
+  function clearHorizontalPlaybackScrollAnimation(): void {
+    horizontalPlaybackScrollToken += 1;
+    if (horizontalPlaybackScrollFrame !== null) {
+      cancelAnimationFrame(horizontalPlaybackScrollFrame);
+      horizontalPlaybackScrollFrame = null;
+    }
+  }
+
+  function setHorizontalPlaybackLaneShiftPx(voiceIndex: VoiceIndex, shiftPx: number): void {
+    voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] = shiftPx;
+    voiceHorizontalPlaybackLaneShiftPxs = [...voiceHorizontalPlaybackLaneShiftPxs] as [number, number];
+  }
+
+  function clearHorizontalPlaybackLaneShiftAnimation(voiceIndex: VoiceIndex): void {
+    voiceHorizontalPlaybackLaneShiftTokens[voiceIndex] += 1;
+    if (voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] !== null) {
+      cancelAnimationFrame(voiceHorizontalPlaybackLaneShiftFrames[voiceIndex]!);
+      voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] = null;
+    }
+  }
+
+  function clearHorizontalPlaybackLaneShiftAnimations(): void {
+    for (const voiceIndex of VOICE_INDEXES) {
+      clearHorizontalPlaybackLaneShiftAnimation(voiceIndex);
+    }
+  }
+
+  function resetHorizontalPlaybackHighway(): void {
+    clearHorizontalPlaybackScrollAnimation();
+    clearHorizontalPlaybackLaneShiftAnimations();
+    horizontalPlaybackHighway = {
+      activationIndex: null,
+      pinnedVoiceIndex: null,
+      referenceViewportLeftPx: null,
+    };
+    voiceKaraokeBallPinnedLeftPxs = [null, null];
+    voiceHorizontalPlaybackLaneShiftPxs = [0, 0];
+  }
+
+  function prepareHorizontalPlaybackHighway(startIndex: number, totalCells: number): void {
+    resetHorizontalPlaybackHighway();
+    if (trackStyle !== 'horizontal') return;
+    const activationIndex = startIndex + MICROBEATS_PER_BEAT;
+    if (activationIndex >= totalCells) return;
+
+    horizontalPlaybackHighway = {
+      activationIndex,
+      pinnedVoiceIndex: resolvePlaybackScrollVoiceIndex(),
+      referenceViewportLeftPx: null,
+    };
+  }
+
   function debugPlaybackHighlight(message: string, details?: Record<string, unknown>): void {
     if (!PLAYBACK_HIGHLIGHT_DEBUG) return;
     console.log(`[BoomwhackerSketchpad][PlaybackHighlight] ${message}`, details ?? {});
@@ -3131,13 +3415,11 @@
 
   function updateTapPlacementHintVisibility(): void {
     if (typeof window === 'undefined') {
-      showTapPlacementHint = true;
       bankNativeDragEnabled = true;
       return;
     }
 
     const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
-    showTapPlacementHint = coarsePointer;
     bankNativeDragEnabled = !coarsePointer;
     if (bankNativeDragEnabled) {
       pendingBankTouchActivation = null;
@@ -3620,29 +3902,105 @@
     return visibleVoiceIndices()[0] ?? 0;
   }
 
+  function karaokeAnchorViewportLeftPx(
+    voiceIndex: VoiceIndex,
+    anchor: KaraokeAnchor,
+    relativeTo: 'panel' | 'scroll-shell',
+  ): number | null {
+    const rowElement = getTrackRowElement(voiceIndex, anchor.rowIndex);
+    const referenceElement = relativeTo === 'panel' ? canvasPanelElement : canvasScrollShellElement;
+    if (!rowElement || !referenceElement) return null;
+
+    const rowRect = rowElement.getBoundingClientRect();
+    const referenceRect = referenceElement.getBoundingClientRect();
+    const referenceBorder = relativeTo === 'panel' ? canvasPanelElement?.clientLeft ?? 0 : canvasScrollShellElement?.clientLeft ?? 0;
+    return rowRect.left - referenceRect.left - referenceBorder + (anchor.leftPercent / 100) * rowRect.width;
+  }
+
+  function karaokeAnchorContentLeftPx(voiceIndex: VoiceIndex, anchor: KaraokeAnchor): number | null {
+    const container = canvasScrollShellElement;
+    if (!container) return null;
+
+    const viewportLeft = karaokeAnchorViewportLeftPx(voiceIndex, anchor, 'scroll-shell');
+    if (viewportLeft === null) return null;
+    return container.scrollLeft + viewportLeft;
+  }
+
+  function scrollLeftForKaraokeAnchor(
+    voiceIndex: VoiceIndex,
+    anchor: KaraokeAnchor,
+    targetViewportLeftPx: number,
+  ): number | null {
+    const container = canvasScrollShellElement;
+    if (!container) return null;
+
+    const anchorContentLeft = karaokeAnchorContentLeftPx(voiceIndex, anchor);
+    if (anchorContentLeft === null) return null;
+
+    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    return Math.max(0, Math.min(maxScrollLeft, anchorContentLeft - targetViewportLeftPx));
+  }
+
+  function animateHorizontalPlaybackScrollTo(targetScrollLeft: number, durationMs: number): void {
+    const container = canvasScrollShellElement;
+    if (!container) return;
+
+    clearHorizontalPlaybackScrollAnimation();
+
+    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    const clampedTarget = Math.max(0, Math.min(maxScrollLeft, targetScrollLeft));
+    if (Math.abs(clampedTarget - container.scrollLeft) < 0.5) {
+      container.scrollLeft = clampedTarget;
+      return;
+    }
+
+    const token = horizontalPlaybackScrollToken;
+    const startedAt = performance.now();
+    const startScrollLeft = container.scrollLeft;
+    const deltaScrollLeft = clampedTarget - startScrollLeft;
+    const motionDurationMs = Math.max(24, Math.floor(durationMs));
+
+    const step = (now: number): void => {
+      if (token !== horizontalPlaybackScrollToken) return;
+
+      const progress = Math.min(1, (now - startedAt) / motionDurationMs);
+      container.scrollLeft = startScrollLeft + deltaScrollLeft * progress;
+
+      if (progress >= 1) {
+        horizontalPlaybackScrollFrame = null;
+        return;
+      }
+
+      horizontalPlaybackScrollFrame = requestAnimationFrame(step);
+    };
+
+    horizontalPlaybackScrollFrame = requestAnimationFrame(step);
+  }
+
   function scrollHorizontalTrackToAnchor(
     voiceIndex: VoiceIndex,
     anchor: KaraokeAnchor,
     behavior: ScrollBehavior = 'smooth',
+    targetViewportLeftPx: number | null = null,
+    durationMs: number | null = null,
   ): void {
     if (trackStyle !== 'horizontal') return;
     if (typeof window === 'undefined') return;
 
-    const container = canvasPanelElement;
-    const rowElement = getTrackRowElement(voiceIndex, anchor.rowIndex);
-    if (!container || !rowElement) return;
+    const container = canvasScrollShellElement;
+    if (!container) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const rowRect = rowElement.getBoundingClientRect();
-    const anchorX =
-      rowRect.left - containerRect.left + container.scrollLeft + (anchor.leftPercent / 100) * rowRect.width;
-    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-    const targetScrollLeft = Math.max(
-      0,
-      Math.min(maxScrollLeft, anchorX - container.clientWidth * HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO),
-    );
+    const resolvedViewportLeftPx = targetViewportLeftPx ?? container.clientWidth * HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO;
+    const targetScrollLeft = scrollLeftForKaraokeAnchor(voiceIndex, anchor, resolvedViewportLeftPx);
+    if (targetScrollLeft === null) return;
 
     if (Math.abs(targetScrollLeft - container.scrollLeft) < 6) return;
+    if (durationMs !== null) {
+      animateHorizontalPlaybackScrollTo(targetScrollLeft, durationMs);
+      return;
+    }
+
+    clearHorizontalPlaybackScrollAnimation();
     container.scrollTo({ left: targetScrollLeft, behavior });
   }
 
@@ -3668,6 +4026,120 @@
         }
       }
     });
+  }
+
+  function activateHorizontalPlaybackHighway(currentIndex: number): void {
+    if (trackStyle !== 'horizontal') return;
+    if (horizontalPlaybackHighway.activationIndex !== currentIndex) return;
+    if (horizontalPlaybackHighway.referenceViewportLeftPx !== null) return;
+
+    const panel = canvasPanelElement;
+    const container = canvasScrollShellElement;
+    if (!panel || !container) return;
+
+    const preferredVoiceIndex = horizontalPlaybackHighway.pinnedVoiceIndex;
+    let fallbackVoiceIndex: VoiceIndex | null = null;
+    let fallbackReferenceViewportLeftPx: number | null = null;
+    let fallbackPinnedLeftPx: number | null = null;
+    let preferredReferenceViewportLeftPx: number | null = null;
+    let preferredPinnedLeftPx: number | null = null;
+
+    for (const voiceIndex of visibleVoiceIndices()) {
+      const anchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
+      if (!anchor) continue;
+
+      const panelLeftPx = karaokeAnchorViewportLeftPx(voiceIndex, anchor, 'panel');
+      const containerLeftPx = karaokeAnchorViewportLeftPx(voiceIndex, anchor, 'scroll-shell');
+      if (panelLeftPx === null || containerLeftPx === null) continue;
+
+      voiceKaraokeBallPinnedLeftPxs[voiceIndex] = panelLeftPx;
+      if (fallbackReferenceViewportLeftPx === null) {
+        fallbackReferenceViewportLeftPx = containerLeftPx;
+        fallbackPinnedLeftPx = panelLeftPx;
+        fallbackVoiceIndex = voiceIndex;
+      }
+      if (voiceIndex === preferredVoiceIndex) {
+        preferredReferenceViewportLeftPx = containerLeftPx;
+        preferredPinnedLeftPx = panelLeftPx;
+      }
+    }
+
+    const resolvedPinnedLeftPx = preferredPinnedLeftPx ?? fallbackPinnedLeftPx;
+    if (resolvedPinnedLeftPx !== null) {
+      for (const voiceIndex of visibleVoiceIndices()) {
+        voiceKaraokeBallPinnedLeftPxs[voiceIndex] = resolvedPinnedLeftPx;
+      }
+    }
+
+    horizontalPlaybackHighway = {
+      activationIndex: null,
+      pinnedVoiceIndex: preferredReferenceViewportLeftPx !== null ? preferredVoiceIndex : fallbackVoiceIndex,
+      referenceViewportLeftPx: preferredReferenceViewportLeftPx ?? fallbackReferenceViewportLeftPx,
+    };
+  }
+
+  function queuePlaybackScrollForCurrentStep(currentIndex: number, totalCells: number): void {
+    if (trackStyle !== 'horizontal') return;
+    if (typeof window === 'undefined') return;
+
+    const referenceViewportLeftPx = horizontalPlaybackHighway.referenceViewportLeftPx;
+    if (referenceViewportLeftPx === null) return;
+
+    if (voiceCount === 2) return;
+
+    if (currentIndex + 1 >= totalCells) return;
+
+    requestAnimationFrame(() => {
+      if (trackStyle !== 'horizontal') return;
+
+      const preferredVoiceIndex = horizontalPlaybackHighway.pinnedVoiceIndex ?? resolvePlaybackScrollVoiceIndex();
+      const preferredTransition = nextDistinctKaraokeAnchorTransition(preferredVoiceIndex, currentIndex, totalCells);
+      if (preferredTransition) {
+        scrollHorizontalTrackToAnchor(
+          preferredVoiceIndex,
+          preferredTransition.anchor,
+          'auto',
+          referenceViewportLeftPx,
+          preferredTransition.durationMs,
+        );
+        return;
+      }
+
+      for (const voiceIndex of visibleVoiceIndices()) {
+        const transition = nextDistinctKaraokeAnchorTransition(voiceIndex, currentIndex, totalCells);
+        if (transition) {
+          scrollHorizontalTrackToAnchor(
+            voiceIndex,
+            transition.anchor,
+            'auto',
+            referenceViewportLeftPx,
+            transition.durationMs,
+          );
+          return;
+        }
+      }
+    });
+  }
+
+  function karaokeBallOverlayStyle(voiceIndex: VoiceIndex): string | null {
+    canvasScrollRevision;
+
+    const rowIndex = voiceKaraokeBallRowIndexes[voiceIndex];
+    if (rowIndex === null) return null;
+
+    const panel = canvasPanelElement;
+    const rowElement = getTrackRowElement(voiceIndex, rowIndex);
+    if (!panel || !rowElement) return null;
+
+    const panelRect = panel.getBoundingClientRect();
+    const rowRect = rowElement.getBoundingClientRect();
+    const pinnedLeftPx = trackStyle === 'horizontal' ? voiceKaraokeBallPinnedLeftPxs[voiceIndex] : null;
+    const leftPx =
+      pinnedLeftPx ??
+      (rowRect.left - panelRect.left - panel.clientLeft + (voiceKaraokeBallLeftPercents[voiceIndex] / 100) * rowRect.width);
+    const topPx = rowRect.top - panelRect.top - panel.clientTop;
+
+    return `left:${leftPx}px; top:${topPx}px; --karaoke-ball-y:${voiceKaraokeBallArcOffsetPxs[voiceIndex]}px; --karaoke-ball-size-px:${karaokeBallSizePx}px;`;
   }
 
   function rowsAreOnSameVisualLine(voiceIndex: VoiceIndex, rowA: number, rowB: number): boolean {
@@ -3698,6 +4170,51 @@
     const pickupColumns = pickupMicrobeatCount();
     if (pickupColumns <= 0 || rowIndex <= 0) return 0;
     return (pickupColumns / (pickupColumns + GRID_COLUMNS)) * 100;
+  }
+
+  function getTrackCellElement(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): HTMLElement | null {
+    const containerRowIndex = zone === 'pickup' ? 0 : rowIndex;
+    const rowElement = getTrackRowElement(voiceIndex, containerRowIndex);
+    if (!rowElement) return null;
+
+    return rowElement.querySelector<HTMLElement>(
+      `.macrobeat-cell[data-voice-index="${voiceIndex}"][data-track-zone="${zone}"][data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`,
+    );
+  }
+
+  function resolveRenderedKaraokeAnchorLeftPercent(
+    voiceIndex: VoiceIndex,
+    cursor: GridCellRef,
+    anchorRowIndex: number,
+    anchorStartCellIndex: number,
+    anchorSpan: 1 | 2,
+  ): number | null {
+    const rowElement = getTrackRowElement(voiceIndex, anchorRowIndex);
+    const startCellElement = getTrackCellElement(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex);
+    if (!rowElement || !startCellElement) return null;
+
+    const rowRect = rowElement.getBoundingClientRect();
+    const startRect = startCellElement.getBoundingClientRect();
+    if (rowRect.width <= 0 || startRect.width <= 0) return null;
+
+    let anchorLeftPx = startRect.left;
+    let anchorRightPx = startRect.right;
+    if (anchorSpan === 2) {
+      const endCellElement = getTrackCellElement(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex + 1);
+      const endRect = endCellElement?.getBoundingClientRect() ?? null;
+      if (endRect && endRect.width > 0) {
+        anchorLeftPx = Math.min(anchorLeftPx, endRect.left);
+        anchorRightPx = Math.max(anchorRightPx, endRect.right);
+      }
+    }
+
+    const anchorCenterPx = (anchorLeftPx + anchorRightPx) / 2;
+    return ((anchorCenterPx - rowRect.left) / rowRect.width) * 100;
   }
 
   function isCircleMacrobeatPair(cells: Array<GridCellContent | null>, startCellIndex: number): boolean {
@@ -3741,6 +4258,22 @@
     if (cursor.cellIndex < 0 || cursor.cellIndex >= maxCells) return null;
 
     const macrobeatMidpoint = shouldUseMacrobeatMidpoint(rowCells, maxCells, cursor.cellIndex);
+    const anchorStartCellIndex = macrobeatMidpoint
+      ? cursor.cellIndex - (cursor.cellIndex % MICROBEATS_PER_BEAT)
+      : cursor.cellIndex;
+    const renderedLeftPercent = typeof window !== 'undefined'
+      ? resolveRenderedKaraokeAnchorLeftPercent(
+          voiceIndex,
+          cursor,
+          rowIndex,
+          anchorStartCellIndex,
+          macrobeatMidpoint ? 2 : 1,
+        )
+      : null;
+    if (renderedLeftPercent !== null) {
+      return { rowIndex, leftPercent: renderedLeftPercent };
+    }
+
     const localColumn = macrobeatMidpoint
       ? cursor.cellIndex - (cursor.cellIndex % MICROBEATS_PER_BEAT) + 1
       : cursor.cellIndex + 0.5;
@@ -3758,6 +4291,29 @@
     if (index < 0 || index >= totalCells) return null;
 
     return resolveKaraokeAnchor(voiceIndex, cellRefFromIndex(index));
+  }
+
+  function nextDistinctKaraokeAnchorTransition(
+    voiceIndex: VoiceIndex,
+    currentIndex: number,
+    totalCells: number,
+    currentAnchor: KaraokeAnchor | null = null,
+  ): KaraokeAnchorTransition | null {
+    const resolvedCurrentAnchor = currentAnchor ?? karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
+    if (!resolvedCurrentAnchor) return null;
+
+    for (let targetIndex = currentIndex + 1; targetIndex < totalCells; targetIndex += 1) {
+      const targetAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, targetIndex);
+      if (!targetAnchor || karaokeAnchorsEqual(resolvedCurrentAnchor, targetAnchor)) continue;
+
+      return {
+        anchor: targetAnchor,
+        targetIndex,
+        durationMs: Math.max(24, Math.floor((targetIndex - currentIndex) * playbackIntervalMs())),
+      };
+    }
+
+    return null;
   }
 
   function animateKaraokeBall(
@@ -3899,6 +4455,86 @@
     voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
   }
 
+  function animatePinnedKaraokeBallVertical(
+    voiceIndex: VoiceIndex,
+    currentAnchor: KaraokeAnchor,
+    nextAnchor: KaraokeAnchor,
+    durationMs: number = playbackIntervalMs(),
+    arcHeightPx: number = karaokeArcHeightPx,
+    startedAtMs: number = performance.now(),
+  ): void {
+    clearKaraokeAnimation(voiceIndex);
+    voiceKaraokeBallRowIndexes[voiceIndex] = currentAnchor.rowIndex;
+    voiceKaraokeBallLeftPercents[voiceIndex] = currentAnchor.leftPercent;
+
+    const motionDurationMs = Math.max(80, Math.floor(durationMs));
+    const token = voiceKaraokeAnimationTokens[voiceIndex];
+    const startedAt = startedAtMs;
+
+    const step = (now: number): void => {
+      if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
+
+      const progress = Math.min(1, (now - startedAt) / motionDurationMs);
+      voiceKaraokeBallArcOffsetPxs[voiceIndex] = -4 * arcHeightPx * progress * (1 - progress);
+
+      if (progress >= 1) {
+        voiceKaraokeBallRowIndexes[voiceIndex] = nextAnchor.rowIndex;
+        voiceKaraokeBallLeftPercents[voiceIndex] = nextAnchor.leftPercent;
+        voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
+        voiceKaraokeAnimationFrames[voiceIndex] = null;
+        return;
+      }
+
+      voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
+    };
+
+    voiceKaraokeAnimationFrames[voiceIndex] = requestAnimationFrame(step);
+  }
+
+  function animateHorizontalPlaybackLaneShift(
+    voiceIndex: VoiceIndex,
+    currentAnchorViewportLeftPx: number,
+    targetAnchorViewportLeftPx: number,
+    pinnedLeftPx: number,
+    durationMs: number = playbackIntervalMs(),
+    startedAtMs: number = performance.now(),
+  ): void {
+    if (trackStyle !== 'horizontal' || voiceCount !== 2) return;
+
+    clearHorizontalPlaybackLaneShiftAnimation(voiceIndex);
+
+    const startShiftPx = voiceHorizontalPlaybackLaneShiftPxs[voiceIndex];
+    const normalizedStartShiftPx = startShiftPx + pinnedLeftPx - currentAnchorViewportLeftPx;
+    const targetShiftPx = startShiftPx + pinnedLeftPx - targetAnchorViewportLeftPx;
+    setHorizontalPlaybackLaneShiftPx(voiceIndex, normalizedStartShiftPx);
+    if (Math.abs(targetShiftPx - normalizedStartShiftPx) < 0.25) {
+      setHorizontalPlaybackLaneShiftPx(voiceIndex, targetShiftPx);
+      return;
+    }
+
+    const motionDurationMs = Math.max(24, Math.floor(durationMs));
+    const token = voiceHorizontalPlaybackLaneShiftTokens[voiceIndex];
+
+    const step = (now: number): void => {
+      if (token !== voiceHorizontalPlaybackLaneShiftTokens[voiceIndex]) return;
+
+      const progress = Math.min(1, (now - startedAtMs) / motionDurationMs);
+      setHorizontalPlaybackLaneShiftPx(
+        voiceIndex,
+        normalizedStartShiftPx + (targetShiftPx - normalizedStartShiftPx) * progress,
+      );
+
+      if (progress >= 1) {
+        voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] = null;
+        return;
+      }
+
+      voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] = requestAnimationFrame(step);
+    };
+
+    voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] = requestAnimationFrame(step);
+  }
+
   function startKaraokeLeadIn(voiceIndex: VoiceIndex, firstAnchor: KaraokeAnchor): number {
     const leadInMs = Math.max(40, Math.floor(playbackIntervalMs() / 2));
     const crestLeft = karaokeRowLeftBoundaryPercent(firstAnchor.rowIndex);
@@ -3937,20 +4573,33 @@
     currentIndex: number,
     totalCells: number,
     currentCursor: GridCellRef,
+    stepStartedAtMs: number,
   ): void {
     const currentAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
     if (!currentAnchor) {
       debugPlaybackHighlight('No current karaoke anchor from playback index.', { currentIndex, totalCells });
-      clearKaraokeAnimation(voiceIndex);
-      voiceKaraokeBallRowIndexes[voiceIndex] = null;
-      voiceKaraokeBallLeftPercents[voiceIndex] = 50;
-      voiceKaraokeAnchors[voiceIndex] = null;
+      clearKaraokeBallDisplay(voiceIndex);
+      return;
+    }
+
+    if (
+      trackStyle === 'horizontal' &&
+      horizontalPlaybackHighway.referenceViewportLeftPx !== null &&
+      voicePlaybackHighlightAnchors[voiceIndex] &&
+      karaokeAnchorsEqual(voicePlaybackHighlightAnchors[voiceIndex]!, currentAnchor)
+    ) {
+      markPlayedCellsForCursor(voiceIndex, currentCursor);
+      voiceKaraokeAnchors[voiceIndex] = currentAnchor;
       return;
     }
 
     clearKaraokeAnimation(voiceIndex);
     setKaraokeBallToAnchor(voiceIndex, currentAnchor);
     voiceKaraokeAnchors[voiceIndex] = currentAnchor;
+
+    if (trackStyle === 'horizontal') {
+      activateHorizontalPlaybackHighway(currentIndex);
+    }
 
     const nextIndex = currentIndex + 1;
     if (nextIndex >= totalCells) {
@@ -3961,6 +4610,38 @@
     const nextAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, nextIndex);
     if (!nextAnchor) {
       debugPlaybackHighlight('No next karaoke anchor from playback index.', { nextIndex, totalCells });
+      return;
+    }
+
+    if (trackStyle === 'horizontal' && horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
+      markPlayedCellsForCursor(voiceIndex, currentCursor);
+      const highwayTransition = nextDistinctKaraokeAnchorTransition(voiceIndex, currentIndex, totalCells, currentAnchor);
+      if (!highwayTransition) {
+        return;
+      }
+
+      const pinnedLeftPx = voiceKaraokeBallPinnedLeftPxs[voiceIndex];
+      const currentAnchorViewportLeftPx = karaokeAnchorViewportLeftPx(voiceIndex, currentAnchor, 'panel');
+      const targetAnchorViewportLeftPx = karaokeAnchorViewportLeftPx(voiceIndex, highwayTransition.anchor, 'panel');
+      if (pinnedLeftPx !== null && currentAnchorViewportLeftPx !== null && targetAnchorViewportLeftPx !== null) {
+        animateHorizontalPlaybackLaneShift(
+          voiceIndex,
+          currentAnchorViewportLeftPx,
+          targetAnchorViewportLeftPx,
+          pinnedLeftPx,
+          highwayTransition.durationMs,
+          stepStartedAtMs,
+        );
+      }
+      animatePinnedKaraokeBallVertical(
+        voiceIndex,
+        currentAnchor,
+        highwayTransition.anchor,
+        highwayTransition.durationMs,
+        karaokeArcHeightPx,
+        stepStartedAtMs,
+      );
+      voiceKaraokeAnchors[voiceIndex] = highwayTransition.anchor;
       return;
     }
 
@@ -4214,7 +4895,12 @@
 
     const currentIndex = playbackIndex % totalCells;
     const cursor = cellRefFromIndex(currentIndex);
+    const stepStartedAtMs = performance.now();
     debugPlaybackHighlight('Playback step.', { currentIndex, totalCells, cursor });
+
+    if (trackStyle === 'horizontal' && horizontalPlaybackHighway.activationIndex === currentIndex) {
+      activateHorizontalPlaybackHighway(currentIndex);
+    }
 
     if (macrobeatMetronomeEnabled && cursor.cellIndex % MICROBEATS_PER_BEAT === 0) {
       audio.playMacrobeatCueNow();
@@ -4223,11 +4909,11 @@
     let hasSecondSixteenth = false;
     for (const voiceIndex of visibleVoiceIndices()) {
       voicePlaybackCursors[voiceIndex] = cursor;
-      updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, totalCells, cursor);
+      updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, totalCells, cursor, stepStartedAtMs);
       updatePlaybackHighlight(voiceIndex, cursor);
       hasSecondSixteenth = playCellNote(voiceIndex, cursor) || hasSecondSixteenth;
     }
-    queueHorizontalPlaybackScroll(currentIndex);
+    queuePlaybackScrollForCurrentStep(currentIndex, totalCells);
     if (PLAYED_NOTE_MUTING_DEBUG && typeof window !== 'undefined' && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         debugPlayedNoteMuting('DOM muted-note classes.', {
@@ -4268,6 +4954,10 @@
 
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    if (playbackIndex === 0) {
+      prepareHorizontalPlaybackHighway(playbackIndex, totalPlaybackCells());
+      queueHorizontalPlaybackScroll(playbackIndex, 'auto');
+    }
     playbackTimer = setInterval(playbackStep, playbackIntervalMs());
   }
 
@@ -4338,6 +5028,14 @@
     return startupDelayMs + beatMs * COUNT_IN_NUMBERS.length;
   }
 
+  function holdKaraokeAtFirstAnchors(firstAnchors: Map<VoiceIndex, KaraokeAnchor>): void {
+    for (const [voiceIndex, anchor] of firstAnchors) {
+      clearKaraokeAnimation(voiceIndex);
+      setKaraokeBallToAnchor(voiceIndex, anchor);
+      voiceKaraokeAnchors[voiceIndex] = anchor;
+    }
+  }
+
   function startKaraokeLeadInWithDelay(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, startupDelayMs = 0): number {
     if (startupDelayMs <= 0) {
       for (const [voiceIndex, anchor] of firstAnchors) {
@@ -4384,6 +5082,7 @@
     }
 
     const currentIndex = playbackIndex % totalCells;
+    prepareHorizontalPlaybackHighway(currentIndex, totalCells);
     setPlaybackUiState(true);
     queueHorizontalPlaybackScroll(currentIndex, 'auto');
 
@@ -4396,6 +5095,7 @@
     }
     const shouldRunCountIn = countInEnabled && playbackIndex === 0;
     const startupDelayMs = readiness.stabilizationDelayMs;
+    const shouldUseHorizontalPlaybackHighway = trackStyle === 'horizontal' && firstAnchors.size > 0;
     debugPlaybackStartup('Playback requested.', {
       playbackIndex,
       shouldRunCountIn,
@@ -4406,12 +5106,13 @@
     const leadInMs = firstAnchors.size > 0
       ? shouldRunCountIn
         ? startCountIn(firstAnchors, startupDelayMs)
-        : startKaraokeLeadInWithDelay(firstAnchors, startupDelayMs)
+        : shouldUseHorizontalPlaybackHighway
+          ? (holdKaraokeAtFirstAnchors(firstAnchors), startupDelayMs)
+          : startKaraokeLeadInWithDelay(firstAnchors, startupDelayMs)
       : startupDelayMs;
     if (firstAnchors.size === 0) {
       for (const voiceIndex of visibleVoiceIndices()) {
-        voiceKaraokeBallRowIndexes[voiceIndex] = null;
-        voiceKaraokeBallLeftPercents[voiceIndex] = 50;
+        clearKaraokeBallDisplay(voiceIndex);
       }
     }
 
@@ -4436,6 +5137,7 @@
     setPlaybackUiState(false);
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    resetHorizontalPlaybackHighway();
     for (const voiceIndex of VOICE_INDEXES) {
       clearKaraokeAnimation(voiceIndex);
       voicePlaybackHighlights[voiceIndex] = null;
@@ -4449,12 +5151,10 @@
     setPlaybackUiState(false);
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    resetHorizontalPlaybackHighway();
     for (const voiceIndex of VOICE_INDEXES) {
-      clearKaraokeAnimation(voiceIndex);
+      clearKaraokeBallDisplay(voiceIndex);
       voicePlaybackCursors[voiceIndex] = null;
-      voiceKaraokeBallRowIndexes[voiceIndex] = null;
-      voiceKaraokeBallLeftPercents[voiceIndex] = 50;
-      voiceKaraokeAnchors[voiceIndex] = null;
       voicePlaybackHighlights[voiceIndex] = null;
       voicePlaybackHighlightAnchors[voiceIndex] = null;
       voicePlayedCellIndexes[voiceIndex] = new Set<number>();
@@ -4724,6 +5424,12 @@
 
     if (isEditableTarget(event.target)) return;
 
+    if (event.key === 'Escape' && tapPlacementPayload) {
+      event.preventDefault();
+      clearTapPlacementSelection();
+      return;
+    }
+
     if (event.code === 'KeyE') {
       event.preventDefault();
       toggleEraserMode();
@@ -4990,13 +5696,6 @@
   </section>
 
   <section class="panel notebank-panel toolbar-notebank-panel" class:playback-content-hidden={isPlaying}>
-      {#if tapPlacementPayload && showTapPlacementHint}
-        <p class="tap-placement-hint toolbar-bank-hint">
-          Touch placement armed: {displayLabelFromText(tapPlacementPayload.note.label)} {noteShapeLabel(tapPlacementPayload.note.shape)}.
-          Tap a canvas cell to place.
-        </p>
-      {/if}
-
       <div class="toolbar-notebank-stack">
         <div class="toolbar-bank-row">
           <div class="bank-row-wrap">
@@ -5017,10 +5716,12 @@
                     <button
                       type="button"
                       class="token-hitbox single sharp"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'circle')}
                       draggable={bankNativeDragEnabled}
                       title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} quarter sharp`}
-                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'circle')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'circle')}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
@@ -5046,10 +5747,12 @@
                     <button
                       type="button"
                       class="token-hitbox single natural"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'circle')}
                       draggable={bankNativeDragEnabled}
                       title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} quarter`}
-                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'circle')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'circle')}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
@@ -5075,10 +5778,12 @@
                     <button
                       type="button"
                       class="token-hitbox single flat"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'circle')}
                       draggable={bankNativeDragEnabled}
                       title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} quarter flat`}
-                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'circle')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'circle')}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'circle')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'circle')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'circle')}
@@ -5100,10 +5805,12 @@
                   <button
                     type="button"
                     class="token-hitbox single natural"
+                    class:selection-armed={tapPlacementSelectionMatches(noteId, 'circle')}
                     draggable={bankNativeDragEnabled}
                     title={noteBankTokenTitle(noteId)}
                     aria-label={`Add ${displayLabelFromId(noteId)} quarter`}
-                    on:click={(event) => handleBankTokenClick(event, noteId)}
+                    aria-pressed={tapPlacementSelectionMatches(noteId, 'circle')}
+                    on:click={(event) => handleBankTokenClick(event, noteId, 'circle')}
                     on:pointerdown={(event) => handleBankTokenPointerDown(event, noteId, 'circle')}
                     on:mousedown={(event) => handleBankTokenMouseDown(event, noteId, 'circle')}
                     on:dragstart={(event) => handleBankDragStart(event, noteId, 'circle')}
@@ -5139,10 +5846,12 @@
                     <button
                       type="button"
                       class="token-hitbox single sharp"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'oval')}
                       draggable={bankNativeDragEnabled}
                       title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} oval sharp`}
-                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'oval')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'oval')}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
@@ -5168,10 +5877,12 @@
                     <button
                       type="button"
                       class="token-hitbox single natural"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'oval')}
                       draggable={bankNativeDragEnabled}
                       title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} oval`}
-                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'oval')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'oval')}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
@@ -5197,10 +5908,12 @@
                     <button
                       type="button"
                       class="token-hitbox single flat"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'oval')}
                       draggable={bankNativeDragEnabled}
                       title={noteBankTokenTitle(token.noteId)}
                       aria-label={`Add ${token.label} oval flat`}
-                      on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'oval')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'oval')}
                       on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'oval')}
                       on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'oval')}
                       on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'oval')}
@@ -5222,10 +5935,12 @@
                   <button
                     type="button"
                     class="token-hitbox single natural"
+                    class:selection-armed={tapPlacementSelectionMatches(noteId, 'oval')}
                     draggable={bankNativeDragEnabled}
                     title={noteBankTokenTitle(noteId)}
                     aria-label={`Add ${displayLabelFromId(noteId)} eighth`}
-                    on:click={(event) => handleBankTokenClick(event, noteId)}
+                    aria-pressed={tapPlacementSelectionMatches(noteId, 'oval')}
+                    on:click={(event) => handleBankTokenClick(event, noteId, 'oval')}
                     on:pointerdown={(event) => handleBankTokenPointerDown(event, noteId, 'oval')}
                     on:mousedown={(event) => handleBankTokenMouseDown(event, noteId, 'oval')}
                     on:dragstart={(event) => handleBankDragStart(event, noteId, 'oval')}
@@ -5264,10 +5979,12 @@
               <button
                 type="button"
                 class="token-hitbox single sharp"
+                class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
                 draggable={bankNativeDragEnabled}
                 title={noteBankTokenTitle(token.noteId)}
                 aria-label={`Add ${token.label} sixteenth sharp`}
-                on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
                 on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
@@ -5293,10 +6010,12 @@
               <button
                 type="button"
                 class="token-hitbox single natural"
+                class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
                 draggable={bankNativeDragEnabled}
                 title={noteBankTokenTitle(token.noteId)}
                 aria-label={`Add ${token.label} sixteenth`}
-                on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
                 on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
@@ -5322,10 +6041,12 @@
               <button
                 type="button"
                 class="token-hitbox single flat"
+                class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
                 draggable={bankNativeDragEnabled}
                 title={noteBankTokenTitle(token.noteId)}
                 aria-label={`Add ${token.label} sixteenth flat`}
-                on:click={(event) => handleBankTokenClick(event, token.noteId)}
+                aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
                 on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
                 on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
                 on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
@@ -5349,15 +6070,26 @@
     aria-label="Sketch canvas"
     on:dragenter={handleCanvasDragEnter}
     on:dragleave={handleCanvasDragLeave}
+    on:mousemove={handleCanvasMouseMove}
+    on:mouseleave={handleCanvasMouseLeave}
   >
     <div
-      class="rows-grid"
-      class:has-active-pickup={pickupBeats > 0}
-      class:two-voice-mode={voiceCount === 2}
+      class="canvas-scroll-shell"
       class:track-style-horizontal={trackStyle === 'horizontal'}
-      style={`--pickup-columns:${pickupMicrobeatCount()}; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-arc-height-px:${karaokeArcHeightPx}px;`}
+      class:two-voice-mode={voiceCount === 2}
+      class:playback-highway-active={trackStyle === 'horizontal' && isPlaying && horizontalPlaybackHighway.referenceViewportLeftPx !== null}
+      bind:this={canvasScrollShellElement}
+      use:notifyCanvasLayoutChange
+      on:scroll={handleCanvasScroll}
     >
-      {#each renderedTrackRows as renderedRow (renderedRow.key)}
+      <div
+        class="rows-grid"
+        class:has-active-pickup={pickupBeats > 0}
+        class:two-voice-mode={voiceCount === 2}
+        class:track-style-horizontal={trackStyle === 'horizontal'}
+        style={`--pickup-columns:${pickupMicrobeatCount()}; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-arc-height-px:${karaokeArcHeightPx}px; --horizontal-playback-runway-px:${horizontalPlaybackRunwayPx}px;`}
+      >
+        {#each renderedTrackRows as renderedRow (renderedRow.key)}
         {@const voiceIndex = renderedRow.voiceIndex}
         {@const rowIndex = renderedRow.rowIndex}
         {@const row = renderedRow.row}
@@ -5365,9 +6097,6 @@
         {@const playbackCursor = voicePlaybackCursors[voiceIndex]}
         {@const playbackHighlight = voicePlaybackHighlights[voiceIndex]}
         {@const playedCellIndexes = voicePlayedCellIndexes[voiceIndex]}
-        {@const karaokeBallRowIndex = voiceKaraokeBallRowIndexes[voiceIndex]}
-        {@const karaokeBallLeftPercent = voiceKaraokeBallLeftPercents[voiceIndex]}
-        {@const karaokeBallArcOffsetPx = voiceKaraokeBallArcOffsetPxs[voiceIndex]}
         {@const hasInlinePickup = rowIndex === 0 && pickupBeats > 0}
         <article
           class="track-row voice-track-row"
@@ -5376,23 +6105,11 @@
           class:voice-track-row--active={activeCanvasVoiceIndex === voiceIndex}
           class:with-inline-pickup={hasInlinePickup}
           bind:this={voiceTrackRowElements[voiceIndex][rowIndex]}
-          style={trackStyle === 'horizontal' && voiceCount === 2 ? `--track-row-column:${rowIndex + 1};` : undefined}
+          use:notifyCanvasLayoutChange
+          style:--track-row-column={trackStyle === 'horizontal' && voiceCount === 2 ? `${rowIndex + 1}` : null}
+          style:--horizontal-playback-lane-shift-px={trackStyle === 'horizontal' && voiceCount === 2 ? `${voiceHorizontalPlaybackLaneShiftPxs[voiceIndex]}px` : null}
           on:pointerdown={() => setActiveCanvasVoice(voiceIndex)}
         >
-          {#if karaokeBallRowIndex === rowIndex}
-            <div
-              class="karaoke-ball"
-              class:karaoke-ball--voice-a={voiceCount === 2 && voiceIndex === 0}
-              class:karaoke-ball--voice-b={voiceCount === 2 && voiceIndex === 1}
-              class:karaoke-ball--count-in={countInDisplayNumber !== null}
-              style={`--karaoke-ball-left:${karaokeBallLeftPercent}%; --karaoke-ball-y:${karaokeBallArcOffsetPx}px; --karaoke-ball-size-px:${karaokeBallSizePx}px;`}
-              aria-hidden="true"
-            >
-              {#if countInDisplayNumber !== null}
-                <span class="karaoke-ball-count">{countInDisplayNumber}</span>
-              {/if}
-            </div>
-          {/if}
           <div
             class="track-row-grids"
             class:with-inline-pickup={hasInlinePickup}
@@ -5412,11 +6129,11 @@
               {/if}
               {#if rowIndex === 0 && pickupBeats > 0}
                 {#each pickupRow.cells.slice(0, pickupMicrobeatCount()) as cell, cellIndex}
-                  {@const pickupPreviewNote = dragPreviewNote(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
+                  {@const pickupPreviewNote = dragPreviewNote(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                   <div
                     class="macrobeat-cell"
                     class:has-note={pickupCellHasNote(voiceIndex, cellIndex)}
-                    class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
+                    class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                     class:drop-target={isPickupDropTarget(dragOverCell, voiceIndex, cellIndex)}
                     class:playback-target={isPlaybackPickupCell(playbackCursor, cellIndex)}
                     class:playback-illuminated={isPlaybackPickupHighlightCell(playbackHighlight, cellIndex)}
@@ -5425,13 +6142,20 @@
                     class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'pickup', -1, cellIndex)}
                     class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'pickup', -1, cellIndex)}
                     class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < pickupMicrobeatCount() - 1}
+                    data-voice-index={voiceIndex}
+                    data-track-zone="pickup"
+                    data-row-index={-1}
+                    data-cell-index={cellIndex}
                     style={macrobeatCellInlineStyle('pickup', cellIndex, hasInlinePickup)}
                     role="gridcell"
-                    tabindex="-1"
+                    tabindex={tapPlacementPayload || eraserMode ? 0 : -1}
                     aria-label={`Voice ${voiceLabel(voiceIndex)} pickup macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
+                    on:mousemove={(event) => handleCellMouseMove(event, voiceIndex, 'pickup', -1, cellIndex)}
                     on:dragover={(event) => handleCellDragOver(event, voiceIndex, 'pickup', -1, cellIndex)}
                     on:drop={(event) => handleCellDrop(event, voiceIndex, 'pickup', -1, cellIndex)}
                     on:pointerdown={(event) => handleCellPointerDown(event, voiceIndex, 'pickup', -1, cellIndex)}
+                    on:click={(event) => handleCellClick(event, voiceIndex, 'pickup', -1, cellIndex)}
+                    on:keydown={(event) => handleCellKeyDown(event, voiceIndex, 'pickup', -1, cellIndex)}
                   >
                     {#if cell}
                       {#if cell.shape === 'oval' && cell.notes[0]}
@@ -5453,7 +6177,7 @@
                             aria-hidden="true"
                             focusable="false"
                           >
-                            <ellipse cx="50" cy="80" rx="50" ry="80" />
+                            <ellipse cx="50" cy="80" rx="47" ry="77" />
                           </svg>
                           <span class="glyph-label">
                             <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
@@ -5478,7 +6202,7 @@
                             aria-hidden="true"
                             focusable="false"
                           >
-                            <ellipse cx="50" cy="50" rx="50" ry="50" />
+                            <ellipse cx="50" cy="50" rx="47" ry="47" />
                           </svg>
                           <span class="glyph-label">
                             <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
@@ -5487,7 +6211,7 @@
                       {:else if cell.shape === 'diamond'}
                         <div class="placed-sixteenth-pair">
                           {#each cell.notes as diamondNote, slotIndex}
-                            <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}>
+                            <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}>
                               {#if diamondNote}
                                 <button
                                   type="button"
@@ -5543,8 +6267,8 @@
                       {#if pickupPreviewNote.shape === 'diamond'}
                         <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
                           {#each SIXTEENTH_SLOTS as previewSlot}
-                            <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, previewSlot)}>
-                              {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, previewSlot)}
+                            <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, previewSlot)}>
+                              {#if isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, previewSlot)}
                                 <div
                                   class="drag-preview-note placed-note diamond sixteenth single"
                                   style={`--token-color:${pickupPreviewNote.color};`}
@@ -5570,7 +6294,7 @@
                         <div class="drag-preview-layer" aria-hidden="true">
                           <div class="drag-preview-note placed-note oval" style={`--token-color:${pickupPreviewNote.color};`}>
                             <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
-                              <ellipse cx="50" cy="80" rx="50" ry="80" />
+                              <ellipse cx="50" cy="80" rx="47" ry="77" />
                             </svg>
                             <span class="glyph-label">
                               <NoteGlyph label={displayLabelFromText(pickupPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)} iconClass={noteIconClass(pickupPreviewNote.noteId)} />
@@ -5581,11 +6305,11 @@
                         <div class="drag-preview-layer" aria-hidden="true">
                           <div
                             class="drag-preview-note placed-note circle"
-                            class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
+                            class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                             style={`--token-color:${pickupPreviewNote.color};`}
                           >
                             <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-                              <ellipse cx="50" cy="50" rx="50" ry="50" />
+                              <ellipse cx="50" cy="50" rx="47" ry="47" />
                             </svg>
                             <span class="glyph-label">
                               <NoteGlyph label={displayLabelFromText(pickupPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(pickupPreviewNote.noteId)} iconClass={noteIconClass(pickupPreviewNote.noteId)} />
@@ -5598,11 +6322,11 @@
                 {/each}
               {/if}
             {#each row.cells as cell, cellIndex}
-              {@const mainPreviewNote = dragPreviewNote(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
+              {@const mainPreviewNote = dragPreviewNote(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
               <div
                 class="macrobeat-cell"
                 class:has-note={cellHasNote(voiceIndex, rowIndex, cellIndex)}
-                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
+                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
                 class:drop-target={isDropTarget(dragOverCell, voiceIndex, rowIndex, cellIndex)}
                 class:playback-target={isPlaybackCell(playbackCursor, rowIndex, cellIndex)}
                 class:playback-illuminated={isPlaybackHighlightCell(playbackHighlight, rowIndex, cellIndex)}
@@ -5611,13 +6335,20 @@
                 class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < GRID_COLUMNS - 1}
+                data-voice-index={voiceIndex}
+                data-track-zone="main"
+                data-row-index={rowIndex}
+                data-cell-index={cellIndex}
                 style={macrobeatCellInlineStyle('main', cellIndex, hasInlinePickup)}
                 role="gridcell"
-                tabindex="-1"
+                tabindex={tapPlacementPayload || eraserMode ? 0 : -1}
                 aria-label={`Voice ${voiceLabel(voiceIndex)} row ${rowIndex + 1}, macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
+                on:mousemove={(event) => handleCellMouseMove(event, voiceIndex, 'main', rowIndex, cellIndex)}
                 on:dragover={(event) => handleCellDragOver(event, voiceIndex, 'main', rowIndex, cellIndex)}
                 on:drop={(event) => handleCellDrop(event, voiceIndex, 'main', rowIndex, cellIndex)}
                 on:pointerdown={(event) => handleCellPointerDown(event, voiceIndex, 'main', rowIndex, cellIndex)}
+                on:click={(event) => handleCellClick(event, voiceIndex, 'main', rowIndex, cellIndex)}
+                on:keydown={(event) => handleCellKeyDown(event, voiceIndex, 'main', rowIndex, cellIndex)}
               >
                 {#if cell}
                   {#if cell.shape === 'oval' && cell.notes[0]}
@@ -5639,7 +6370,7 @@
                         aria-hidden="true"
                         focusable="false"
                       >
-                        <ellipse cx="50" cy="80" rx="50" ry="80" />
+                        <ellipse cx="50" cy="80" rx="47" ry="77" />
                       </svg>
                       <span class="glyph-label">
                         <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
@@ -5664,7 +6395,7 @@
                         aria-hidden="true"
                         focusable="false"
                       >
-                        <ellipse cx="50" cy="50" rx="50" ry="50" />
+                        <ellipse cx="50" cy="50" rx="47" ry="47" />
                       </svg>
                       <span class="glyph-label">
                         <NoteGlyph label={displayLabelFromText(cell.notes[0].label)} markerClass={scaleDegreeOneMarkerClass(cell.notes[0].noteId)} iconClass={noteIconClass(cell.notes[0].noteId)} />
@@ -5673,7 +6404,7 @@
                   {:else if cell.shape === 'diamond'}
                     <div class="placed-sixteenth-pair">
                       {#each cell.notes as diamondNote, slotIndex}
-                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}>
+                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}>
                           {#if diamondNote}
                             <button
                               type="button"
@@ -5729,8 +6460,8 @@
                   {#if mainPreviewNote.shape === 'diamond'}
                     <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
                       {#each SIXTEENTH_SLOTS as previewSlot}
-                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}>
-                          {#if isDragPreviewSixteenthSlot(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}
+                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}>
+                          {#if isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}
                             <div
                               class="drag-preview-note placed-note diamond sixteenth single"
                               style={`--token-color:${mainPreviewNote.color};`}
@@ -5756,7 +6487,7 @@
                     <div class="drag-preview-layer" aria-hidden="true">
                       <div class="drag-preview-note placed-note oval" style={`--token-color:${mainPreviewNote.color};`}>
                         <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
-                          <ellipse cx="50" cy="80" rx="50" ry="80" />
+                          <ellipse cx="50" cy="80" rx="47" ry="77" />
                         </svg>
                         <span class="glyph-label">
                           <NoteGlyph label={displayLabelFromText(mainPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)} iconClass={noteIconClass(mainPreviewNote.noteId)} />
@@ -5767,11 +6498,11 @@
                     <div class="drag-preview-layer" aria-hidden="true">
                       <div
                         class="drag-preview-note placed-note circle"
-                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(dragPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
+                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
                         style={`--token-color:${mainPreviewNote.color};`}
                       >
                         <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-                          <ellipse cx="50" cy="50" rx="50" ry="50" />
+                          <ellipse cx="50" cy="50" rx="47" ry="47" />
                         </svg>
                         <span class="glyph-label">
                           <NoteGlyph label={displayLabelFromText(mainPreviewNote.label)} markerClass={scaleDegreeOneMarkerClass(mainPreviewNote.noteId)} iconClass={noteIconClass(mainPreviewNote.noteId)} />
@@ -5785,6 +6516,25 @@
             </div>
           </div>
         </article>
+        {/each}
+      </div>
+    </div>
+
+    <div class="karaoke-overlay" aria-hidden="true">
+      {#each karaokeOverlayBalls as overlayBall (overlayBall.voiceIndex)}
+        {#if overlayBall.style}
+          <div
+            class="karaoke-ball"
+            class:karaoke-ball--voice-a={voiceCount === 2 && overlayBall.voiceIndex === 0}
+            class:karaoke-ball--voice-b={voiceCount === 2 && overlayBall.voiceIndex === 1}
+            class:karaoke-ball--count-in={countInDisplayNumber !== null}
+            style={overlayBall.style}
+          >
+            {#if countInDisplayNumber !== null}
+              <span class="karaoke-ball-count">{countInDisplayNumber}</span>
+            {/if}
+          </div>
+        {/if}
       {/each}
     </div>
 
@@ -5799,7 +6549,7 @@
       {#if cursorPreview.note.shape === 'oval'}
         <div class="drag-preview-note placed-note oval">
           <svg class="token-glyph oval" viewBox="0 0 100 160" preserveAspectRatio="none" focusable="false">
-            <ellipse cx="50" cy="80" rx="50" ry="80" />
+            <ellipse cx="50" cy="80" rx="47" ry="77" />
           </svg>
           <span class="glyph-label">
             <NoteGlyph label={displayLabelFromText(cursorPreview.note.label)} markerClass={scaleDegreeOneMarkerClass(cursorPreview.note.noteId)} iconClass={noteIconClass(cursorPreview.note.noteId)} />
@@ -5808,7 +6558,7 @@
       {:else if cursorPreview.note.shape === 'circle'}
         <div class="drag-preview-note placed-note circle">
           <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-            <ellipse cx="50" cy="50" rx="50" ry="50" />
+            <ellipse cx="50" cy="50" rx="47" ry="47" />
           </svg>
           <span class="glyph-label">
             <NoteGlyph label={displayLabelFromText(cursorPreview.note.label)} markerClass={scaleDegreeOneMarkerClass(cursorPreview.note.noteId)} iconClass={noteIconClass(cursorPreview.note.noteId)} />
@@ -6054,6 +6804,9 @@
         <div class="library-actions">
           <button type="button" class="load-code-open-btn" on:click={() => requestLibraryAction('open')} disabled={libraryBusy}>
             Open
+          </button>
+          <button type="button" class="load-code-open-btn" on:click={handleLibraryExport} disabled={libraryBusy}>
+            Export
           </button>
           <button type="button" class="library-delete-btn" on:click={() => requestLibraryAction('delete')} disabled={libraryBusy}>
             Delete
