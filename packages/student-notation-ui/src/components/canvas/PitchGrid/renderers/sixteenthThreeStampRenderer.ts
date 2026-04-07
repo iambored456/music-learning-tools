@@ -1,13 +1,14 @@
 // js/components/Canvas/PitchGrid/renderers/sixteenthThreeStampRenderer.ts
-import { getSixteenthThreeStampById } from '../../../../rhythm/sixteenthThreeStamps.js';
+import { getSixteenthThreeStampById } from '../../../../rhythm/sixteenthThreeStamps.ts';
 import { defaultSixteenthThreeStampRenderer } from '../../../../utils/sixteenthThreeStampRenderer.ts';
-import { getRowY, getColumnX } from './rendererUtils.js';
+import { getRowY, getColumnX } from './rendererUtils.ts';
 import store from '@state/initStore.ts';
-import logger from '../../../../utils/logger.js';
+import logger from '@utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { timeToCanvas } from '../../../../services/columnMapService.ts';
+import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildSixteenthStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
-import type { ModulationMarker, SixteenthThreeStampPlacement } from '@app-types/state.js';
+import type { ModulationMarker, SixteenthThreeStampPlacement } from '@mlt/types';
 import type { SixteenthThreeStampShape } from '../../../../utils/sixteenthThreeStampRenderer.ts';
 
 /** Constant span: 1.5 microbeats */
@@ -30,8 +31,7 @@ interface AnimationEffectsManager {
 }
 
 const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
-  const effectsWindow = window as Window & { animationEffectsManager?: AnimationEffectsManager };
-  return effectsWindow.animationEffectsManager;
+  return getRuntimeAnimationEffectsManager() as AnimationEffectsManager | undefined;
 };
 
 function getShapeFillLevels(placement: SixteenthThreeStampPlacement, stamp: SixteenthThreeStampShape): Record<string, number> | null {

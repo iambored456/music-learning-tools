@@ -1,11 +1,11 @@
 // js/components/Canvas/PitchGrid/renderers/modulationRenderer.ts
-import { getModulationDisplayText, getModulationColor } from '../../../../rhythm/modulationMapping.js';
+import { getModulationDisplayText, getModulationColor } from '../../../../rhythm/modulationMapping.ts';
 import { getMacrobeatInfo } from '@state/selectors.ts';
-import { getColumnX } from './rendererUtils.js';
+import { getColumnX } from './rendererUtils.ts';
 import logger from '@utils/logger.ts';
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
-import type { AppState, ModulationMarker } from '@app-types/state.js';
+import type { AppState, ModulationMarker } from '@mlt/types';
 
 type RendererOptions = AppState & {
   columnWidths: number[];

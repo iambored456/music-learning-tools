@@ -91,7 +91,7 @@ h1 {
 }
 
 .subhead {
-  max-width: 640px;
+  max-width: min(100%, 72ch);
   font-size: 1.1rem;
   color: var(--text-muted);
   margin: 0;

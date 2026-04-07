@@ -11,7 +11,7 @@
  *
  * 2) Pitch viewport row (aka relative row)
  *    - Index relative to the current pitch viewport (`pitchRange`)
- *    - Used for: legacy state, some UI interactions
+ *    - Used for: state-level row references, some UI interactions
  *    - Stored on items as: `item.row`
  *
  * Conversion (pitch viewport ↔ pitch gamut):

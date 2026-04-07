@@ -89,6 +89,8 @@ export type TalkingAvatarController = {
   listVoices(): Promise<SpeechSynthesisVoice[]>;
   /** Set preferred voice by URI */
   setVoiceURI(uri: string | undefined): void;
+  /** Set default speech volume for current and future utterances */
+  setVolume(volume: number): void;
   /** Clean up resources and remove from DOM */
   dispose(): void;
 };

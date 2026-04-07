@@ -2,8 +2,9 @@ import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import GlobalService from '@services/globalService.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
+import { getWaveformVisualizer } from '@services/runtimeGlobals.ts';
 import { isNotePlayableAtColumn } from '@/utils/tonicColumnUtils.ts';
-import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
+import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
 
 export interface PitchGridNoteToolState {
   activeNote: PlacedNote | null;
@@ -54,7 +55,7 @@ export class PitchGridNoteToolInteractor {
       };
     }
 
-    const staticWaveform = window.waveformVisualizer;
+    const staticWaveform = getWaveformVisualizer();
     if (staticWaveform) {
       staticWaveform.currentColor = existingNote.color;
       staticWaveform.generateWaveform();
@@ -153,7 +154,7 @@ export class PitchGridNoteToolInteractor {
         );
       }
 
-      const staticWaveform = window.waveformVisualizer;
+      const staticWaveform = getWaveformVisualizer();
       if (staticWaveform) {
         staticWaveform.currentColor = addedNote.color;
         staticWaveform.generateWaveform();

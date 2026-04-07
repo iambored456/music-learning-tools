@@ -7,6 +7,7 @@
 
 import { createModulationMarker, MODULATION_RATIOS } from '../../rhythm/modulationMapping.js';
 import type {
+  AppState,
   AnacrusisCache,
   CanvasSpaceColumn,
   MacrobeatBoundaryStyle,
@@ -27,13 +28,13 @@ import type { ColumnMap } from '../../services/columnMapService.js';
  */
 export interface RhythmActionCallbacks {
   /** Get column map for coordinate conversions */
-  getColumnMap?: (state: any) => ColumnMap;
+  getColumnMap?: (state: AppState) => ColumnMap;
   /** Convert visual column to time index */
-  visualToTimeIndex?: (state: any, visualIndex: number, groupings: MacrobeatGrouping[]) => number | null;
+  visualToTimeIndex?: (state: AppState, visualIndex: number, groupings: MacrobeatGrouping[]) => number | null;
   /** Convert time index to visual column */
-  timeIndexToVisualColumn?: (state: any, timeIndex: number, groupings: MacrobeatGrouping[]) => number | null;
+  timeIndexToVisualColumn?: (state: AppState, timeIndex: number, groupings: MacrobeatGrouping[]) => number | null;
   /** Get time boundary after a macrobeat */
-  getTimeBoundaryAfterMacrobeat?: (state: any, index: number, groupings: MacrobeatGrouping[]) => number;
+  getTimeBoundaryAfterMacrobeat?: (state: AppState, index: number, groupings: MacrobeatGrouping[]) => number;
   /** Logger function */
   log?: (level: 'debug' | 'info' | 'warn' | 'error', context: string, message: string, data?: unknown, category?: string) => void;
 }
@@ -61,9 +62,9 @@ type BoundaryStyleArray = MacrobeatBoundaryStyle[];
  */
 function recomputeTonicColumns(
   state: { tonicSignGroups?: TonicSignGroups },
-  getColumnMap: (state: any) => ColumnMap
+  getColumnMap: (state: AppState) => ColumnMap
 ): void {
-  const map = getColumnMap(state);
+  const map = getColumnMap(state as AppState);
   const tonicStartByUuid = new Map<string, number>();
 
   map.entries.forEach(entry => {

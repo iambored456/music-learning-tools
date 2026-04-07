@@ -13,20 +13,21 @@ import { getPlacedTonicSigns, getMacrobeatInfo } from '@state/selectors.ts';
 import SynthEngine from './initAudio.ts';
 import domCache from './domCache.ts';
 import logger from '@utils/logger.ts';
-import DrumPlayheadRenderer from '@components/canvas/drumGrid/drumPlayheadRenderer.js';
+import DrumPlayheadRenderer from '@components/canvas/drumGrid/drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import { getTonicSpanColumnIndices } from '@utils/tonicColumnUtils.ts';
 import { drawPulsingColumnHighlight } from '@utils/pulsingPlayhead.ts';
-import { getSixteenthStampPlaybackData } from '@/rhythm/sixteenthStampPlacements.js';
-import { getSixteenthStampScheduleEvents } from '@/rhythm/scheduleSixteenthStamps.js';
-import { getSixteenthThreeStampPlaybackData } from '@/rhythm/sixteenthThreeStampPlacements.js';
-import { getSixteenthThreeStampScheduleEvents } from '@/rhythm/scheduleSixteenthThreeStamps.js';
-import { getTripletStampPlaybackData } from '@/rhythm/tripletStampPlacements.js';
-import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js';
+import { getSixteenthStampPlaybackData } from '@/rhythm/sixteenthStampPlacements.ts';
+import { getSixteenthStampScheduleEvents } from '@/rhythm/scheduleSixteenthStamps.ts';
+import { getSixteenthThreeStampPlaybackData } from '@/rhythm/sixteenthThreeStampPlacements.ts';
+import { getSixteenthThreeStampScheduleEvents } from '@/rhythm/scheduleSixteenthThreeStamps.ts';
+import { getTripletStampPlaybackData } from '@/rhythm/tripletStampPlacements.ts';
+import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.ts';
 import { getColumnStartX, getColumnWidth, getCanvasWidth, getMacrobeatHighlightRectForCanvasColumn } from '@services/playheadModel.ts';
 import { timeToCanvas } from '@services/columnMapService.ts';
 import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 import { getSharedDrumManager } from '@services/transport/drumManager.ts';
+import { invokeInitAudioHandler } from '@services/runtimeGlobals.ts';
 
 logger.moduleLoaded('EngineTransport', 'general');
 
@@ -262,8 +263,9 @@ const TransportService = {
 
       // Reuse app-level audio init lifecycle to avoid duplicate Tone.start() races.
       audioInit: async () => {
-        if (typeof window.initAudio === 'function') {
-          await window.initAudio();
+        const initAudio = invokeInitAudioHandler();
+        if (initAudio) {
+          await initAudio;
           return;
         }
         await Tone.start();

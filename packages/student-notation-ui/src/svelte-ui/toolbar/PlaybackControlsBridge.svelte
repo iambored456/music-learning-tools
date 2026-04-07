@@ -5,16 +5,14 @@
    * This component attaches reactive event handlers to existing DOM buttons.
    * It's a bridge pattern that allows Svelte reactivity while keeping
    * the existing HTML structure intact.
-   *
-   * This replaces: src/components/toolbar/initializers/playbackInitializer.ts
-   *
+
    * Usage: Mount this component anywhere - it finds buttons by ID and attaches handlers.
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
   import TransportService from '@services/initTransport.ts';
-  import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.js';
-  import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.js';
+  import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.ts';
+  import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.ts';
   import playIconUrl from '../../../public/assets/icons/play.svg?url';
   import pauseIconUrl from '../../../public/assets/icons/pause.svg?url';
 
@@ -143,7 +141,6 @@
     updateLoopButton();
     updateHistoryButtons();
 
-    if ((window as any).__initDebug) console.log('[Svelte] PlaybackControlsBridge mounted');
   });
 
   onDestroy(() => {
@@ -155,7 +152,6 @@
     undoBtn?.removeEventListener('click', handleUndo);
     redoBtn?.removeEventListener('click', handleRedo);
 
-    if ((window as any).__initDebug) console.log('[Svelte] PlaybackControlsBridge unmounted');
   });
 </script>
 

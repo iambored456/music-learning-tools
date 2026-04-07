@@ -2,13 +2,16 @@
 // Deprecated: replaced by the Svelte 5 ADSREnvelope component.
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import { logAdsrFlow } from '@utils/adsrDebug.ts';
 import ui from './adsrUI.ts';
 import type { ADSRElements } from './adsrUI.ts';
 import { initInteractions } from './adsrInteractions.ts';
 import { drawTempoGridlines, drawEnvelope, applyTheme } from './adsrRender.ts';
 import { initPlayheadManager } from './adsrPlayhead.ts';
 import GlobalService from '@services/globalService.ts';
+import {
+  getAnimationEffectsManager,
+  getWaveformVisualizer
+} from '@services/runtimeGlobals.ts';
 
 export const BASE_ADSR_TIME_SECONDS = 2.5;
 
@@ -249,12 +252,12 @@ class AdsrComponent {
     const timeToX = (time: number) => (time / this.getCurrentMaxTime()) * this.width;
 
     let tremoloMultiplier = 1.0;
-    const animationManager = window.animationEffectsManager;
+    const animationManager = getAnimationEffectsManager();
     if (animationManager?.shouldTremoloBeRunning?.()) {
-      tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier(this.currentColor);
+      tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier?.(this.currentColor) ?? 1.0;
     }
 
-    const originalAmplitude = window.waveformVisualizer?.calculatedAmplitude ?? 1.0;
+    const originalAmplitude = getWaveformVisualizer()?.calculatedAmplitude ?? 1.0;
     const normalizedAmplitude = originalAmplitude * tremoloMultiplier;
 
     logger.debug('AdsrComponent', '[ADSR] Amplitude calculation', {
@@ -301,23 +304,18 @@ class AdsrComponent {
     if (!currentTimbre) {return;}
 
     let tremoloMultiplier = 1.0;
-    const animationManager = window.animationEffectsManager;
+    const animationManager = getAnimationEffectsManager();
     if (animationManager?.shouldTremoloBeRunning?.()) {
-      tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier(this.currentColor);
+      tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier?.(this.currentColor) ?? 1.0;
     }
 
-    const originalAmplitude = window.waveformVisualizer?.calculatedAmplitude || 1.0;
+    const originalAmplitude = getWaveformVisualizer()?.calculatedAmplitude || 1.0;
     const normalizedAmplitude = originalAmplitude * tremoloMultiplier;
     const maxSustainPercent = normalizedAmplitude * 100;
 
     if (this.sustain > normalizedAmplitude) {
       const nextAdsr = { ...currentTimbre.adsr, sustain: normalizedAmplitude };
       store.setADSR(this.currentColor, nextAdsr);
-      logAdsrFlow('adsrComponent:clampSustain', {
-        color: this.currentColor,
-        adsr: nextAdsr,
-        normalizedAmplitude
-      });
       this.sustain = normalizedAmplitude;
     }
 

@@ -55,19 +55,17 @@ jobs:
       - name: Validate app/package boundaries
         run: pnpm run check:architecture
 
-      - name: Build hub bundle
-        run: pnpm --filter hub run build
+      - name: Build Pages site
+        run: pnpm run build:pages
         env:
           NODE_ENV: production
           BASE_URL: /${{ github.event.repository.name }}/
-
-      - name: Assemble Pages output
-        run: node scripts/assemble-pages.js
+          SKIP_PREVIEW_CAPTURE: 'true'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ./docs
 
   deploy:
     environment:

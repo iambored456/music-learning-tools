@@ -1,39 +1,101 @@
 /**
- * Annotation types for Music Learning Tools
+ * Annotation types for Music Learning Tools.
  *
- * Annotations are user-drawn markings on the canvas
- * (e.g., freehand lines, highlights, text).
+ * These model the persisted and transient annotation shapes used by Student Notation.
  */
 
-// Currently using a flexible type until the annotation system is fully defined
-export type Annotation = any;
-
-/**
- * Base annotation interface (for future expansion)
- */
-export interface BaseAnnotation {
-  id: string;
-  type: string;
-  createdAt: number;
-  color?: string;
+export interface AnnotationGridPoint {
+  col: number;
+  row: number;
 }
 
-/**
- * Freehand drawing annotation
- */
-export interface FreehandAnnotation extends BaseAnnotation {
-  type: 'freehand';
-  points: Array<{ x: number; y: number }>;
-  strokeWidth: number;
-}
-
-/**
- * Text annotation
- */
-export interface TextAnnotation extends BaseAnnotation {
-  type: 'text';
+export interface AnnotationCanvasPoint {
   x: number;
   y: number;
-  text: string;
-  fontSize: number;
 }
+
+export type AnnotationLineStyle = 'solid' | 'dashed-big' | 'dashed-small' | 'dotted';
+export type AnnotationArrowheadStyle = 'filled' | 'filled-arrow' | 'unfilled' | 'unfilled-arrow' | 'circle' | 'none';
+export type AnnotationPathTool = 'marker' | 'highlighter';
+export type AnnotationType = 'arrow' | 'text' | AnnotationPathTool;
+
+export interface ArrowAnnotationSettings {
+  lineStyle: AnnotationLineStyle;
+  strokeWeight: number;
+  startArrowhead: AnnotationArrowheadStyle;
+  endArrowhead: AnnotationArrowheadStyle;
+  arrowheadSize: number;
+}
+
+export interface TextAnnotationSettings {
+  color: string;
+  size: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  background: boolean;
+  superscript: boolean;
+  subscript: boolean;
+}
+
+export interface PathAnnotationSettings {
+  color: string;
+  size: number;
+}
+
+export interface BaseAnnotation {
+  type: AnnotationType;
+}
+
+export interface ArrowAnnotation extends BaseAnnotation {
+  type: 'arrow';
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
+  settings: ArrowAnnotationSettings;
+}
+
+export interface TextAnnotation extends BaseAnnotation {
+  type: 'text';
+  col: number;
+  row: number;
+  widthCols: number;
+  heightRows: number;
+  text: string;
+  settings: TextAnnotationSettings;
+}
+
+export interface PathAnnotation extends BaseAnnotation {
+  type: AnnotationPathTool;
+  path: AnnotationGridPoint[];
+  settings: PathAnnotationSettings;
+}
+
+/**
+ * Persisted annotations stored in application state.
+ */
+export type Annotation = ArrowAnnotation | TextAnnotation | PathAnnotation;
+
+/**
+ * Transient annotation preview used during in-progress drawing operations.
+ */
+export interface TextPreviewAnnotation {
+  type: 'text';
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
+}
+
+/**
+ * Transient lasso path used during in-progress selection.
+ * This is not persisted in AppState.annotations.
+ */
+export interface LassoAnnotation {
+  type: 'lasso';
+  path: AnnotationCanvasPoint[];
+}
+
+export type TempAnnotation = Annotation | TextPreviewAnnotation | LassoAnnotation;
+export type SelectableAnnotation = ArrowAnnotation | TextAnnotation;

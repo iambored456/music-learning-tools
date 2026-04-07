@@ -1,0 +1,540 @@
+<script lang="ts">
+  import { onDestroy } from 'svelte';
+  import LessonProgress from './LessonProgress.svelte';
+  import PitchLesson11Scene from './PitchLesson11Scene.svelte';
+  import {
+    cancelLessonAvatarSpeech,
+    disposeLessonAvatar,
+    pauseLessonAvatar,
+    resumeLessonAvatar,
+    setLessonAvatarVolume,
+  } from './lessonAvatar';
+  import { getLessonDefinition } from './lessons';
+
+  export let lessonCode: string;
+
+  const portalHref = '#/portal';
+  const homeIconHref = new URL('../../grand-frequency-staff-ui/src/assets/home-icon.svg', import.meta.url).href;
+  const volumeIconHref = new URL('../../student-notation-ui/public/assets/icons/volume.svg', import.meta.url).href;
+  const playIconHref = new URL('../../student-notation-ui/public/assets/icons/play.svg', import.meta.url).href;
+  const pauseIconHref = new URL('../../student-notation-ui/public/assets/icons/pause.svg', import.meta.url).href;
+
+  let volumeOpen = false;
+  let volume = 72;
+  let isPlaying = true;
+  let currentStep = 1;
+  let lastLessonCode = '';
+
+  $: lesson = getLessonDefinition(lessonCode);
+  $: totalSteps = lesson?.sections.length ?? 0;
+  $: currentSection = lesson ? lesson.sections[currentStep - 1] : null;
+  $: isShellOnlyCanvas = lesson?.canvasLayout === 'shell-only';
+  $: hasCustomScene = lesson?.code === '1.1';
+  $: if (lesson && lesson.code !== lastLessonCode) {
+    lastLessonCode = lesson.code;
+    currentStep = 1;
+    volumeOpen = false;
+    isPlaying = true;
+  }
+  $: setLessonAvatarVolume(volume);
+
+  function togglePlayback(): void {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      resumeLessonAvatar();
+    } else {
+      pauseLessonAvatar();
+    }
+  }
+
+  function selectStep(step: number): void {
+    if (!lesson) return;
+    currentStep = Math.max(1, Math.min(step, lesson.sections.length));
+  }
+
+  function goToPreviousStep(): void {
+    selectStep(currentStep - 1);
+  }
+
+  function goToNextStep(): void {
+    selectStep(currentStep + 1);
+  }
+
+  $: if (lessonCode) {
+    cancelLessonAvatarSpeech();
+  }
+
+  onDestroy(() => {
+    disposeLessonAvatar();
+  });
+</script>
+
+<div class="amt-app lesson-canvas-app">
+  <header class="canvas-toolbar app-card">
+    <div class="canvas-toolbar-actions">
+      <a class="home-link" href={portalHref} aria-label="Back to lesson portal" title="Back to lesson portal">
+        <img src={homeIconHref} alt="" class="home-link-icon" />
+      </a>
+
+      <div class="volume-control">
+        <button
+          class="canvas-icon-button"
+          type="button"
+          aria-expanded={volumeOpen}
+          aria-controls="lesson-volume-slider"
+          aria-label="Open volume control"
+          onclick={() => {
+            volumeOpen = !volumeOpen;
+          }}
+        >
+          <img src={volumeIconHref} alt="" class="canvas-icon-image" />
+        </button>
+
+        {#if volumeOpen}
+          <div id="lesson-volume-slider" class="volume-slider-panel">
+            <label class="sr-only" for="lesson-volume-range">Lesson volume</label>
+            <input id="lesson-volume-range" type="range" min="0" max="100" bind:value={volume} />
+          </div>
+        {/if}
+      </div>
+
+      <button
+        class="canvas-icon-button"
+        type="button"
+        aria-pressed={!isPlaying}
+        aria-label={isPlaying ? 'Pause lesson playback' : 'Resume lesson playback'}
+        onclick={togglePlayback}
+      >
+        <img src={isPlaying ? pauseIconHref : playIconHref} alt="" class="canvas-icon-image" />
+      </button>
+    </div>
+
+    {#if lesson}
+      <div class="canvas-toolbar-meta">
+        <div class="canvas-toolbar-title-card">
+          {#if isShellOnlyCanvas}
+            <h1 class="canvas-toolbar-title-text">{lesson.code} - {lesson.title}</h1>
+          {:else}
+            <p class="canvas-toolbar-title-text">{lesson.code} - {lesson.title}</p>
+          {/if}
+        </div>
+
+        <div class="canvas-toolbar-progress">
+          <LessonProgress steps={lesson.sections} currentStep={currentStep} onSelectStep={selectStep} />
+        </div>
+      </div>
+    {/if}
+  </header>
+
+  {#if lesson && hasCustomScene}
+    <PitchLesson11Scene {lesson} {currentStep} {isPlaying} {volume} />
+  {:else if lesson && !isShellOnlyCanvas}
+    <section class="canvas-title-card app-card">
+      <p class="canvas-title-kicker">Lesson {lesson.code} | {lesson.trail.join(' / ')}</p>
+      <h1>{lesson.title}</h1>
+      <p class="canvas-title-copy">{lesson.body}</p>
+    </section>
+
+    <section class="canvas-stage-card app-card">
+      <div class="canvas-stage-header">
+        <p class="canvas-stage-kicker">Current subsection</p>
+        <h2>{currentSection?.label}</h2>
+        <p>{currentSection?.description}</p>
+      </div>
+
+      <div class={`canvas-stage-surface ${isPlaying ? '' : 'is-paused'}`} aria-live="polite">
+        <div class="canvas-stage-surface-copy">
+          <p class="canvas-stage-note">Shared lesson canvas surface</p>
+          <p>
+            This area is where lesson-specific animation, avatar timing, and interactive components
+            will mount for Lesson {lesson.code}.
+          </p>
+          <p>
+            Transport state is currently <strong>{isPlaying ? 'playing' : 'paused'}</strong> at
+            volume <strong>{volume}%</strong>.
+          </p>
+        </div>
+
+        {#if !isPlaying}
+          <div class="canvas-paused-overlay">
+            <strong>Lesson paused</strong>
+            <span>Future scene components should suspend timers, speech, and animation here.</span>
+          </div>
+        {/if}
+      </div>
+
+      <div class="canvas-stage-footer">
+        <button
+          class="canvas-nav-button"
+          type="button"
+          disabled={currentStep <= 1}
+          onclick={goToPreviousStep}
+        >
+          Previous subsection
+        </button>
+
+        <button
+          class="canvas-nav-button canvas-nav-button--primary"
+          type="button"
+          disabled={currentStep >= totalSteps}
+          onclick={goToNextStep}
+        >
+          Next subsection
+        </button>
+      </div>
+    </section>
+  {:else if !lesson}
+    <section class="canvas-stage-card app-card">
+      <div class="canvas-stage-header">
+        <p class="canvas-stage-kicker">Lesson unavailable</p>
+        <h1>Lesson not found</h1>
+        <p>This lesson route does not match a lesson currently registered in the portal.</p>
+      </div>
+      <div class="canvas-stage-footer">
+        <a class="canvas-nav-button canvas-nav-button--primary canvas-nav-link" href={portalHref}>
+          Return to Lesson Portal
+        </a>
+      </div>
+    </section>
+  {/if}
+</div>
+
+<style>
+  .lesson-canvas-app {
+    gap: 1rem;
+  }
+
+  .app-card {
+    border: 1px solid rgba(102, 75, 40, 0.18);
+    border-radius: 22px;
+    box-shadow: var(--amt-shadow);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(248, 241, 229, 0.86));
+  }
+
+  .canvas-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.9rem;
+    align-items: center;
+    padding: 0.9rem 1rem;
+  }
+
+  .canvas-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .canvas-toolbar-progress {
+    min-width: 0;
+  }
+
+  .canvas-toolbar-meta {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.8rem;
+  }
+
+  .canvas-toolbar-title-card {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.62rem 0.9rem;
+    border-radius: 14px;
+    border: 1px solid rgba(84, 65, 39, 0.14);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: 0 10px 22px rgba(39, 28, 18, 0.08);
+  }
+
+  .canvas-toolbar-title-text {
+    min-width: 0;
+    margin: 0;
+    font-size: 1.02rem;
+    line-height: 1.15;
+    color: #1f241f;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .canvas-icon-button {
+    width: 2.35rem;
+    height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid rgba(84, 65, 39, 0.14);
+    background: rgba(255, 255, 255, 0.78);
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .canvas-icon-button:hover,
+  .canvas-icon-button:focus-visible {
+    border-color: rgba(47, 141, 131, 0.42);
+    background: rgba(47, 141, 131, 0.14);
+  }
+
+  .canvas-icon-button:active {
+    transform: translateY(1px);
+  }
+
+  .canvas-icon-image {
+    width: 1rem;
+    height: 1rem;
+    display: block;
+    filter: sepia(9%) saturate(655%) hue-rotate(122deg) brightness(92%) contrast(90%);
+  }
+
+  .volume-control {
+    position: relative;
+  }
+
+  .volume-slider-panel {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 0;
+    width: 11rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 14px;
+    border: 1px solid rgba(84, 65, 39, 0.14);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 36px rgba(39, 28, 18, 0.12);
+    z-index: 2;
+  }
+
+  .volume-slider-panel input {
+    width: 100%;
+    margin: 0;
+  }
+
+  .canvas-title-card {
+    padding: 1rem 1.1rem;
+  }
+
+  .canvas-title-kicker,
+  .canvas-stage-kicker {
+    margin: 0 0 0.35rem;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amt-muted);
+  }
+
+  .canvas-title-card h1,
+  .canvas-stage-header h2,
+  .canvas-stage-header h1 {
+    margin: 0;
+    line-height: 1.05;
+    color: #1f241f;
+  }
+
+  .canvas-title-card h1 {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+  }
+
+  .canvas-stage-header h2,
+  .canvas-stage-header h1 {
+    font-size: clamp(1.35rem, 3vw, 2rem);
+  }
+
+  .canvas-title-copy,
+  .canvas-stage-header p,
+  .canvas-stage-surface-copy p {
+    margin: 0;
+    color: #3f4641;
+    line-height: 1.5;
+  }
+
+  .canvas-title-card,
+  .canvas-stage-card {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .canvas-stage-card {
+    padding: 1rem 1.1rem;
+  }
+
+  .canvas-stage-header {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .canvas-stage-surface {
+    position: relative;
+    min-height: 20rem;
+    display: grid;
+    place-items: center;
+    padding: 1.2rem;
+    border-radius: 18px;
+    border: 1px dashed rgba(84, 65, 39, 0.2);
+    background:
+      radial-gradient(440px 220px at 12% 0%, rgba(201, 90, 77, 0.1), transparent 65%),
+      radial-gradient(420px 220px at 100% 10%, rgba(47, 141, 131, 0.1), transparent 64%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(249, 244, 235, 0.92));
+    overflow: hidden;
+  }
+
+  .canvas-stage-surface.is-paused {
+    opacity: 0.95;
+  }
+
+  .canvas-stage-surface-copy {
+    max-width: 44rem;
+    display: grid;
+    gap: 0.6rem;
+    text-align: center;
+  }
+
+  .canvas-stage-note {
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amt-muted);
+  }
+
+  .canvas-paused-overlay {
+    position: absolute;
+    inset: auto 1rem 1rem auto;
+    max-width: 20rem;
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 14px;
+    border: 1px solid rgba(201, 90, 77, 0.26);
+    background: rgba(255, 248, 246, 0.94);
+    box-shadow: 0 16px 32px rgba(39, 28, 18, 0.1);
+  }
+
+  .canvas-paused-overlay strong {
+    color: #9a3f36;
+  }
+
+  .canvas-paused-overlay span {
+    color: #5f5550;
+    line-height: 1.45;
+  }
+
+  .canvas-stage-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.65rem;
+  }
+
+  .canvas-nav-button,
+  .canvas-nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.6rem;
+    padding: 0.65rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid rgba(84, 65, 39, 0.14);
+    background: rgba(255, 255, 255, 0.82);
+    color: #31413a;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .canvas-nav-button:hover:not(:disabled),
+  .canvas-nav-button:focus-visible,
+  .canvas-nav-link:hover,
+  .canvas-nav-link:focus-visible {
+    border-color: rgba(47, 141, 131, 0.42);
+    background: rgba(47, 141, 131, 0.14);
+  }
+
+  .canvas-nav-button--primary,
+  .canvas-nav-link {
+    background: rgba(47, 141, 131, 0.14);
+    color: #17463f;
+  }
+
+  .canvas-nav-button:active:not(:disabled),
+  .canvas-nav-link:active {
+    transform: translateY(1px);
+  }
+
+  .canvas-nav-button:disabled {
+    opacity: 0.48;
+    cursor: default;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 900px) {
+    .canvas-toolbar {
+      grid-template-columns: 1fr;
+    }
+
+    .canvas-toolbar-meta {
+      justify-content: flex-start;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .app-card {
+      border-radius: 18px;
+    }
+
+    .canvas-toolbar,
+    .canvas-title-card,
+    .canvas-stage-card {
+      padding: 0.85rem;
+    }
+
+    .canvas-toolbar-meta {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .canvas-toolbar-title-card {
+      max-width: 100%;
+    }
+
+    .canvas-toolbar-progress {
+      overflow-x: auto;
+    }
+
+    .canvas-stage-surface {
+      min-height: 16rem;
+      padding: 1rem;
+    }
+
+    .canvas-stage-footer {
+      justify-content: stretch;
+    }
+
+    .canvas-nav-button,
+    .canvas-nav-link {
+      flex: 1 1 100%;
+    }
+  }
+</style>

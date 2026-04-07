@@ -84,9 +84,23 @@ export {
 // Annotation types
 export {
   type Annotation,
+  type AnnotationArrowheadStyle,
+  type AnnotationCanvasPoint,
+  type AnnotationGridPoint,
+  type AnnotationLineStyle,
+  type AnnotationPathTool,
+  type AnnotationType,
   type BaseAnnotation,
-  type FreehandAnnotation,
+  type ArrowAnnotation,
+  type ArrowAnnotationSettings,
+  type LassoAnnotation,
+  type PathAnnotation,
+  type PathAnnotationSettings,
+  type SelectableAnnotation,
+  type TempAnnotation,
   type TextAnnotation,
+  type TextAnnotationSettings,
+  type TextPreviewAnnotation,
 } from './annotations.js';
 
 // Event types

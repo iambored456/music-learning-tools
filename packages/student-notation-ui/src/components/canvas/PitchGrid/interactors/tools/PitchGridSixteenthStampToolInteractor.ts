@@ -1,12 +1,11 @@
 import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
-import { placeSixteenthStamp } from '@/rhythm/sixteenthStampPlacements.js';
-import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
+import { placeSixteenthStamp } from '@/rhythm/sixteenthStampPlacements.ts';
+import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.ts';
 import { hitTestAnySixteenthStampShape } from '@utils/sixteenthStampHitTest.ts';
-import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import { isStampLayoutDebugEnabled, logStampLayout } from '@utils/stampLayoutDebug.ts';
-import type { SixteenthStampPlacement } from '@app-types/state.js';
+import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
+import type { SixteenthStampPlacement } from '@mlt/types';
 
 interface DraggedStampShape {
   type: 'diamond' | 'oval';
@@ -94,65 +93,19 @@ export class PitchGridSixteenthStampToolInteractor {
     }
 
     const { color, shape } = selectedNote;
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('sixteenth:place-attempt', {
-        rowIndex: opts.rowIndex,
-        colIndex: opts.colIndex,
-        alignedCol,
-        selectedStampId: selectedStamp.id,
-        color,
-        shape,
-        historyIndexBefore: store.state.historyIndex,
-        historyLengthBefore: store.state.history.length
-      });
-    }
     const placement = placeSixteenthStamp(selectedStamp.id, alignedCol, opts.rowIndex, color);
     if (!placement) {
-      if (isStampLayoutDebugEnabled()) {
-        logStampLayout('sixteenth:place-blocked', {
-          rowIndex: opts.rowIndex,
-          colIndex: opts.colIndex,
-          alignedCol,
-          selectedStampId: selectedStamp.id
-        });
-      }
       return { handled: true, activePreviewPitches: [] };
-    }
-
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('sixteenth:placed', {
-        placementId: placement.id,
-        startColumn: placement.startColumn,
-        endColumn: placement.endColumn,
-        row: placement.row,
-        historyIndexPreRecord: store.state.historyIndex,
-        historyLengthPreRecord: store.state.history.length
-      });
     }
 
     const pitch = opts.getPitchForRow(opts.rowIndex);
     if (pitch) {
       rhythmPlaybackService.playRhythmPattern(selectedStamp.id, pitch, color, shape, placement);
       store.recordState();
-      if (isStampLayoutDebugEnabled()) {
-        logStampLayout('sixteenth:recordState-after-playback', {
-          placementId: placement.id,
-          pitch,
-          historyIndexAfter: store.state.historyIndex,
-          historyLengthAfter: store.state.history.length
-        });
-      }
       return { handled: true, activePreviewPitches: [] };
     }
 
     store.recordState();
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('sixteenth:recordState-no-pitch', {
-        placementId: placement.id,
-        historyIndexAfter: store.state.historyIndex,
-        historyLengthAfter: store.state.history.length
-      });
-    }
     return { handled: true, activePreviewPitches: [] };
   }
 

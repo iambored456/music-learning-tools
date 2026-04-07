@@ -78,43 +78,6 @@ class CartesianSliderController {
     }
 
     try {
-      // DEBUG: Detailed width debugging
-      if (effectType === 'delay') {
-        setTimeout(() => {
-          console.group('[Effects Width Debug]');
-
-          const positionContainer = document.querySelector('.position-controls-container') as HTMLElement;
-          const effectsBox = document.querySelector('.effects-content-box') as HTMLElement;
-          const effectsPanel = document.getElementById('effects-panel') as HTMLElement;
-          const effectsContent = document.querySelector('.preset-effects-content') as HTMLElement;
-          const effectsControls = document.querySelector('.preset-effects-controls') as HTMLElement;
-
-          const logWidth = (name: string, el: HTMLElement | null) => {
-            if (!el) {
-              console.log(`${name}: NOT FOUND`);
-              return;
-            }
-            const computed = getComputedStyle(el);
-            const rect = el.getBoundingClientRect();
-            console.log(`${name}:`, {
-              actualWidth: rect.width,
-              computedWidth: computed.width,
-              flex: `${computed.flexGrow} ${computed.flexShrink} ${computed.flexBasis}`,
-              minWidth: computed.minWidth,
-              maxWidth: computed.maxWidth
-            });
-          };
-
-          logWidth('position-controls-container', positionContainer);
-          logWidth('effects-content-box', effectsBox);
-          logWidth('effects-panel', effectsPanel);
-          logWidth('preset-effects-content', effectsContent);
-          logWidth('preset-effects-controls', effectsControls);
-
-          console.groupEnd();
-        }, 100);
-      }
-
       const [width, height] = this.getSliderComponentSize(container);
       const slider = new CartesianSlider(container, {
         size: [width, height],

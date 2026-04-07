@@ -31,22 +31,9 @@ import EffectsCartesianSlider from './audio/EffectsCartesianSlider.svelte';
 import NotificationModal from './ui/NotificationModal.svelte';
 import ZoomIndicator from './ui/ZoomIndicator.svelte';
 
-const shouldInitDebug = (): boolean => {
-  if (typeof window === 'undefined') {return false;}
-  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
-  if (override === true) {return true;}
-  if (override === false) {return false;}
-  return false;
-};
+const shouldInitDebug = (): boolean => false;
 
-const initDebug = (message: string, data?: unknown): void => {
-  if (!shouldInitDebug()) {return;}
-  if (data === undefined) {
-    console.log(`[SvelteMount] ${message}`);
-    return;
-  }
-  console.log(`[SvelteMount] ${message}`, data);
-};
+const initDebug = (_message: string, _data?: unknown): void => {};
 
 let filterConfigInitialized = false;
 
@@ -186,9 +173,6 @@ export function mountSvelteComponents(): void {
       });
 
       mountedComponents.push({ target: placeholder, component });
-      if (shouldInitDebug()) {
-        console.log(`[Svelte] Mounted: ${componentName}`);
-      }
       initDebug('mount:done', componentName);
     } catch (error) {
       console.error(`[Svelte] Failed to mount ${componentName}:`, error);

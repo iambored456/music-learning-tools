@@ -5,8 +5,8 @@
  */
 
 import columnMapService from './columnMapService.ts';
-import { createCoordinateMapping, type CoordinateMapping } from '../rhythm/modulationMapping.js';
-import type { AppState, ModulationMarker } from '@app-types/state.js';
+import { createCoordinateMapping, type CoordinateMapping } from '../rhythm/modulationMapping.ts';
+import type { AppState, ModulationMarker } from '@mlt/types';
 
 /**
  * Pixel position information for a column
@@ -231,7 +231,7 @@ export function registerStoreHooks(store: any): void {
 export default pixelMapService;
 
 // ============================================================================
-// Public API Functions - rendererUtils-compatible
+// Public API functions aligned with rendererUtils naming.
 // ============================================================================
 
 /**

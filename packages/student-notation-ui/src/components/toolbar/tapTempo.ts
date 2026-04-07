@@ -1,7 +1,7 @@
 // js/components/Toolbar/tapTempo.js
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import tempoVisualizer from './tempoVisualizer.js';
+import tempoVisualizer from './tempoVisualizer.ts';
 
 type TapType = 'eighth' | 'quarter' | 'dottedQuarter';
 

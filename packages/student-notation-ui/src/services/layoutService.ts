@@ -1,8 +1,7 @@
 // js/services/layoutService.ts
 //
 // NOTE: This file has been partially refactored. Helper functions have been
-// extracted to sub-modules in ./layout/. The LayoutService object remains
-// here for backwards compatibility.
+// extracted to sub-modules in ./layout/.
 //
 // Sub-modules:
 // - ./layout/types.ts - Type definitions
@@ -13,30 +12,44 @@
 import store from '@state/initStore.ts';
 import { getColumnX as getColumnXFromPixelMap, getTotalPixelWidth } from './pixelMapService.ts';
 import logger from '@utils/logger.ts';
-import { isStampLayoutDebugEnabled, logStampLayout } from '@utils/stampLayoutDebug.ts';
 import {
   DEFAULT_SCROLL_POSITION, GRID_WIDTH_RATIO,  BASE_DRUM_ROW_HEIGHT,
   DRUM_HEIGHT_SCALE_FACTOR, DRUM_ROW_COUNT,
   RESIZE_DEBOUNCE_DELAY,
-  SIDE_COLUMN_WIDTH,
   BASE_ABSTRACT_UNIT
 } from '@/core/constants.ts';
-import { calculateColumnWidths, getCanvasWidth as getCanvasWidthFromColumns } from './columnsLayout.ts';
+import { getLegendColumnWidthUnitsForCellHeight, getLegendTotalWidthPx } from '@utils/legendSizing.ts';
+import { getCanvasColumnWidths, getTotalCanvasWidth } from '@services/columnMapService.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import { buildSpanLadder, DEFAULT_MIN_VIEWPORT_ROWS, getSpan, normalizeRange, setBottomEndpoint, setTopEndpoint, shiftRangeBy, zoomRangeOnSpanLadder } from '@utils/pitchViewport.ts';
-import { calculateZoomToFitRowCount as calculateZoomToFitRowCountShared } from '@mlt/pitch-viewport';
-import type { PitchRange } from '@app-types/state.js';
+import type { PitchRange } from '@mlt/types';
 
 // Import from extracted modules
 import {
-  getDevicePixelRatio as getDevicePixelRatioFromModule,
-  resizeCanvasForPixelRatio as resizeCanvasForPixelRatioFromModule,
-  getPitchGridContainerHeight as getPitchGridContainerHeightFromModule
+  getDevicePixelRatio,
+  resizeCanvasForPixelRatio,
+  getPitchGridContainerHeight
 } from './layout/canvasDimensions.ts';
 import {
   easeInOutCubic
 } from './layout/viewportCalculations.ts';
 import type { ViewportInfo } from './layout/types.ts';
+import { initLayoutDOMElements } from './layout/domElements.ts';
+import {
+  createLayoutDiagnostics,
+  getLogicalCanvasWidthOrNull,
+  parseDatasetNumber,
+  roundDebugValue
+} from './layout/layoutDiagnostics.ts';
+import {
+  calculateZoomToFitRowCount,
+  getHorizontalScrollbarBlockSize,
+  getMinimumCellHeightForViewportCoverage,
+  getPitchViewportCoverageMetrics,
+  quantizeWithHysteresis,
+  rangeFromCenterAndSpan,
+  resolveZoomAnimationDuration
+} from './layout/pitchRangeState.ts';
 
 
 
@@ -84,11 +97,11 @@ let isZooming = false;
 let pitchGridNotReadyLogged = false;
 let beatLineWidthWarningShown = false;
 let hasResolvedInitialLayout = false;
-let lastViewportDebugLogAt = 0;
 let deferredPitchResizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let postFramePitchHeightSyncFrame: number | null = null;
 let pitchContainerResizeObserver: ResizeObserver | null = null;
 let pitchContainerResizeSyncFrame: number | null = null;
+let pitchCoverageRecalcFrame: number | null = null;
 let lastObservedPitchContainerHeight: number | null = null;
 let pitchRangeAnimationFrame: number | null = null;
 let pitchRangeAnimationToken = 0;
@@ -111,21 +124,6 @@ let lockedButtonGridHeight: number | null = null;
 const ENABLE_ZOOM_ANIMATION = false;
 const ENABLE_LAYOUT_DIAGNOSTICS = false;
 
-function getPitchGridContainerHeight(): number {
-  // "pitch-grid-container" is the pitch *viewport container* (its height determines how much of the gamut is visible).
-  const pitchGridContainer = document.getElementById('pitch-grid-container');
-  const fallbackViewport = viewportHeight || window.innerHeight || 0;
-  const height = pitchGridContainer?.clientHeight || (fallbackViewport ? fallbackViewport * 0.7 : 0);
-  return height;
-}
-
-function calculateZoomToFitRowCount(containerHeight: number, rowCount: number): number {
-  return calculateZoomToFitRowCountShared(containerHeight, rowCount, {
-    baseUnit: BASE_ABSTRACT_UNIT,
-    paddingRows: 0
-  });
-}
-
 function getNormalizedPitchRange(): PitchRange {
   const totalRanks = store.state.fullRowData.length;
   const maxIndex = Math.max(0, totalRanks - 1);
@@ -133,83 +131,58 @@ function getNormalizedPitchRange(): PitchRange {
   return normalizeRange(current, totalRanks, DEFAULT_MIN_VIEWPORT_ROWS);
 }
 
-function rangeFromCenterAndSpan(
-  center: number,
-  span: number,
-  totalRanks: number
-): PitchRange {
-  const maxIndex = Math.max(0, totalRanks - 1);
-  const normalizedSpan = Math.max(
-    DEFAULT_MIN_VIEWPORT_ROWS,
-    Math.min(totalRanks, Math.round(span))
-  );
-  const half = (normalizedSpan - 1) / 2;
 
-  let topIndex = Math.round(center - half);
-  let bottomIndex = topIndex + normalizedSpan - 1;
+const layoutDiagnostics = createLayoutDiagnostics({
+  enableDiagnostics: ENABLE_LAYOUT_DIAGNOSTICS,
+  getNormalizedPitchRange,
+  getSpan,
+  getMinimumCellHeightForViewportCoverage,
+  getState: () => store.state
+});
+const {
+  logGridSeamSnapshot,
+  logLayoutFlowSnapshot,
+  logLayoutSizingSnapshot
+} = layoutDiagnostics;
 
-  if (topIndex < 0) {
-    bottomIndex += -topIndex;
-    topIndex = 0;
-  }
-  if (bottomIndex > maxIndex) {
-    const overshoot = bottomIndex - maxIndex;
-    topIndex -= overshoot;
-    bottomIndex = maxIndex;
+function schedulePitchCoverageLayoutRecalc(
+  pitchGridContainer: HTMLElement,
+  reason: string,
+  extra: Record<string, unknown> = {}
+): void {
+  if (isZooming || pitchCoverageRecalcFrame !== null) {
+    return;
   }
 
-  topIndex = Math.max(0, Math.min(maxIndex, topIndex));
-  bottomIndex = Math.max(topIndex, Math.min(maxIndex, bottomIndex));
-
-  return normalizeRange(
-    { topIndex, bottomIndex },
-    totalRanks,
-    DEFAULT_MIN_VIEWPORT_ROWS
-  );
-}
-
-function quantizeWithHysteresis(
-  rawValue: number,
-  previousValue: number | null,
-  hysteresisPx: number
-): number {
-  const rounded = Math.round(rawValue);
-  if (previousValue === null || !Number.isFinite(previousValue)) {
-    return rounded;
-  }
-  if (Math.abs(rawValue - previousValue) <= Math.max(0, hysteresisPx)) {
-    return Math.round(previousValue);
-  }
-  return rounded;
-}
-
-function getMinimumCellHeightForViewportCoverage(containerHeight: number, rowCount: number): number {
-  if (!Number.isFinite(containerHeight) || containerHeight <= 0) {
-    return 1;
-  }
-  const normalizedRowCount = Math.max(1, Math.round(rowCount));
-  // Row centers are spaced at half-unit intervals; to avoid a visible bottom strip after
-  // integer quantization we require (rowCount + 1) * halfUnit >= containerHeight.
-  const minimum = (2 * containerHeight) / (normalizedRowCount + 1);
-  return Math.max(1, Math.ceil(minimum));
-}
-
-function resolveZoomAnimationDuration(requestedDurationMs: number, source: string): number {
-  if (!ENABLE_ZOOM_ANIMATION) {
-    return 0;
-  }
-  if (source === 'wheel') {
-    return 0;
-  }
-  return Math.max(0, Math.round(requestedDurationMs));
-}
-
-function getHorizontalScrollbarBlockSize(container: HTMLElement | null): number {
-  if (!container) {
-    return 0;
-  }
-  const scrollbarBlockSize = container.offsetHeight - container.clientHeight;
-  return Math.max(0, Number.isFinite(scrollbarBlockSize) ? scrollbarBlockSize : 0);
+  pitchCoverageRecalcFrame = requestAnimationFrame(() => {
+    pitchCoverageRecalcFrame = null;
+    if (isZooming) {
+      return;
+    }
+    const latestSettledHeight = pitchGridContainer.clientHeight || 0;
+    const latestCoverageMetrics = getPitchViewportCoverageMetrics({
+      containerHeight: latestSettledHeight,
+      cellHeight: Number.isFinite(store.state.cellHeight) && (store.state.cellHeight ?? 0) > 0
+        ? (store.state.cellHeight as number)
+        : null,
+      pitchRange: getNormalizedPitchRange(),
+      totalRanks: store.state.fullRowData.length
+    });
+    if ((latestCoverageMetrics?.underCoveragePx ?? 0) <= 0.75) {
+      return;
+    }
+    setLayoutTrigger('recalc:pitch-container-coverage', {
+      reason,
+      settledHeight: roundDebugValue(latestSettledHeight),
+      coveredBottomEdgePx: roundDebugValue(latestCoverageMetrics?.coveredBottomEdgePx ?? null),
+      coverageGapPx: roundDebugValue(latestCoverageMetrics?.coverageGapPx ?? null),
+      underCoveragePx: roundDebugValue(latestCoverageMetrics?.underCoveragePx ?? null),
+      rowCount: latestCoverageMetrics?.rowCount ?? null,
+      cellHeight: latestCoverageMetrics?.cellHeight ?? null,
+      ...extra
+    });
+    recalcAndApplyLayout();
+  });
 }
 
 function cancelPitchRangeAnimation(): void {
@@ -224,6 +197,10 @@ function cancelPitchRangeAnimation(): void {
   if (pitchContainerResizeSyncFrame !== null) {
     cancelAnimationFrame(pitchContainerResizeSyncFrame);
     pitchContainerResizeSyncFrame = null;
+  }
+  if (pitchCoverageRecalcFrame !== null) {
+    cancelAnimationFrame(pitchCoverageRecalcFrame);
+    pitchCoverageRecalcFrame = null;
   }
   pitchRangeAnimationToken += 1;
   isZooming = false;
@@ -290,12 +267,6 @@ function animatePitchRangeTo(targetRange: PitchRange, durationMs: number, source
   const startCenter = (startRange.topIndex + startRange.bottomIndex) / 2;
   const targetCenter = (normalizedTarget.topIndex + normalizedTarget.bottomIndex) / 2;
   const isZoomOut = targetSpan >= startSpan;
-
-  const easeInOutCubic = (t: number): number => {
-    return t < 0.5
-      ? 4 * t * t * t
-      : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  };
 
   const step = () => {
     if (token !== pitchRangeAnimationToken) {return;}
@@ -367,106 +338,10 @@ function animatePitchRangeTo(targetRange: PitchRange, durationMs: number, source
 }
 
 function isViewportDebugEnabled(): boolean {
-  // Be defensive: in some contexts `localStorage` access can throw (privacy modes, file://, etc).
-  // We want `window.__SN_DEBUG_VIEWPORT = true` to work even if storage/query parsing fails.
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_VIEWPORT?: boolean };
-    if (Boolean(win.__SN_DEBUG_VIEWPORT)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const byQueryParam = new URLSearchParams(window.location.search).get('debugViewport') === '1';
-    if (byQueryParam) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    return localStorage.getItem('sn:debugViewport') === '1';
-  } catch {
-    return false;
-  }
+  return false;
 }
 
-let _didAnnounceViewportDebug = false;
-function logViewportDebug(message: string, data: Record<string, unknown>): void {
-  if (!isViewportDebugEnabled()) {return;}
-  try {
-    const now = performance?.now?.() ?? Date.now();
-    if (now - lastViewportDebugLogAt < 500) {return;}
-    lastViewportDebugLogAt = now;
-    _didAnnounceViewportDebug = true;
-    void message;
-    void data;
-  } catch {
-    // Never let debug logging break layout.
-  }
-}
-
-function isGridSeamDebugEnabled(): boolean {
-  if (!ENABLE_LAYOUT_DIAGNOSTICS) {
-    return false;
-  }
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_GRID_SEAM?: boolean };
-    if (Boolean(win.__SN_DEBUG_GRID_SEAM)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const byQueryParam = new URLSearchParams(window.location.search).get('debugGridSeam') === '1';
-    if (byQueryParam) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    return localStorage.getItem('sn:debugGridSeam') === '1';
-  } catch {
-    return false;
-  }
-}
-
-function roundDebugValue(value: number | null): number | null {
-  if (value === null || !Number.isFinite(value)) {
-    return null;
-  }
-  return Math.round(value * 100) / 100;
-}
-
-function parseDatasetNumber(value: string | undefined): number | null {
-  if (typeof value !== 'string' || value.trim() === '') {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function getLogicalCanvasWidthOrNull(canvasElement: HTMLCanvasElement | null): number | null {
-  if (!canvasElement) {
-    return null;
-  }
-  const fromDataset = parseDatasetNumber(canvasElement.dataset['logicalWidth']);
-  if (fromDataset !== null && fromDataset > 0) {
-    return fromDataset;
-  }
-  const rectWidth = canvasElement.getBoundingClientRect().width;
-  if (Number.isFinite(rectWidth) && rectWidth > 0) {
-    return rectWidth;
-  }
-  return canvasElement.clientWidth > 0 ? canvasElement.clientWidth : null;
-}
+function logViewportDebug(_message: string, _data: Record<string, unknown>): void {}
 
 function syncPitchCanvasHeightsToContainer(
   reason: string,
@@ -474,21 +349,11 @@ function syncPitchCanvasHeightsToContainer(
 ): boolean {
   const pitchGridContainer = document.getElementById('pitch-grid-container');
   if (!pitchGridContainer) {
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('layout:syncPitchCanvasHeights:skip-no-container', { reason, extra });
-    }
     return false;
   }
 
   const settledHeight = pitchGridContainer.clientHeight || 0;
   if (settledHeight <= 0) {
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('layout:syncPitchCanvasHeights:skip-zero-height', {
-        reason,
-        extra,
-        settledHeight
-      });
-    }
     return false;
   }
 
@@ -500,6 +365,16 @@ function syncPitchCanvasHeightsToContainer(
   const currentPitchLogicalHeight = parseDatasetNumber(canvas?.dataset['logicalHeight']);
   const currentLeftLegendLogicalHeight = parseDatasetNumber(legendLeftCanvas?.dataset['logicalHeight']);
   const currentRightLegendLogicalHeight = parseDatasetNumber(legendRightCanvas?.dataset['logicalHeight']);
+  const coverageMetrics = getPitchViewportCoverageMetrics({
+    containerHeight: settledHeight,
+    cellHeight: Number.isFinite(store.state.cellHeight) && (store.state.cellHeight ?? 0) > 0
+      ? (store.state.cellHeight as number)
+      : null,
+    pitchRange: getNormalizedPitchRange(),
+    totalRanks: store.state.fullRowData.length
+  });
+  const shouldRecalculateForCoverage = !isZooming
+    && (coverageMetrics?.underCoveragePx ?? 0) > 0.75;
 
   const pitchInSync = currentPitchLogicalHeight !== null && Math.abs(currentPitchLogicalHeight - settledHeight) <= 0.5;
   const leftInSync = legendLeftCanvas === null
@@ -508,32 +383,10 @@ function syncPitchCanvasHeightsToContainer(
     || (currentRightLegendLogicalHeight !== null && Math.abs(currentRightLegendLogicalHeight - settledHeight) <= 0.5);
 
   if (pitchInSync && leftInSync && rightInSync) {
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('layout:syncPitchCanvasHeights:already-in-sync', {
-        reason,
-        settledHeight,
-        currentPitchLogicalHeight,
-        currentLeftLegendLogicalHeight,
-        currentRightLegendLogicalHeight,
-        extra
-      });
+    if (shouldRecalculateForCoverage) {
+      schedulePitchCoverageLayoutRecalc(pitchGridContainer, reason, extra);
     }
     return false;
-  }
-
-  if (isStampLayoutDebugEnabled()) {
-    logStampLayout('layout:syncPitchCanvasHeights:apply', {
-      reason,
-      settledHeight,
-      notationWidth,
-      leftLegendWidth,
-      rightLegendWidth,
-      pixelRatio,
-      currentPitchLogicalHeight,
-      currentLeftLegendLogicalHeight,
-      currentRightLegendLogicalHeight,
-      extra
-    });
   }
 
   const pitchCanvasTargets = [
@@ -561,18 +414,18 @@ function syncPitchCanvasHeightsToContainer(
     currentPitchLogicalHeight,
     currentLeftLegendLogicalHeight,
     currentRightLegendLogicalHeight,
+    coverageMetrics,
+    shouldRecalculateForCoverage,
     ...extra
   });
+
+  if (shouldRecalculateForCoverage) {
+    schedulePitchCoverageLayoutRecalc(pitchGridContainer, reason, extra);
+  }
 
   document.dispatchEvent(new CustomEvent('canvasResized', {
     detail: { source: `layoutService-${reason}` }
   }));
-
-  if (isStampLayoutDebugEnabled()) {
-    logStampLayout('layout:syncPitchCanvasHeights:canvasResized-dispatch', {
-      source: `layoutService-${reason}`
-    });
-  }
 
   return true;
 }
@@ -581,13 +434,6 @@ function schedulePitchContainerHeightSync(
   reason: string,
   extra: Record<string, unknown> = {}
 ): void {
-  if (isStampLayoutDebugEnabled()) {
-    logStampLayout('layout:schedulePitchContainerHeightSync', {
-      reason,
-      extra,
-      hadPendingFrame: pitchContainerResizeSyncFrame !== null
-    });
-  }
   if (pitchContainerResizeSyncFrame !== null) {
     cancelAnimationFrame(pitchContainerResizeSyncFrame);
   }
@@ -626,15 +472,6 @@ function setupPitchContainerResizeObserver(): void {
 
     const previousHeight = lastObservedPitchContainerHeight;
     lastObservedPitchContainerHeight = nextHeight;
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('layout:pitch-container-resize-observer', {
-        nextHeight: roundDebugValue(nextHeight),
-        previousHeight: roundDebugValue(previousHeight),
-        delta: roundDebugValue(
-          previousHeight === null ? null : nextHeight - previousHeight
-        )
-      });
-    }
     schedulePitchContainerHeightSync('container-resize-observer', {
       observedHeight: roundDebugValue(nextHeight),
       previousObservedHeight: roundDebugValue(previousHeight)
@@ -642,529 +479,10 @@ function setupPitchContainerResizeObserver(): void {
   });
   pitchContainerResizeObserver.observe(pitchGridContainer);
 }
-
-function getElementMetrics(element: HTMLElement | null): Record<string, number | null> | null {
-  if (!element) {
-    return null;
-  }
-  const rect = element.getBoundingClientRect();
-  return {
-    clientWidth: element.clientWidth,
-    clientHeight: element.clientHeight,
-    offsetWidth: element.offsetWidth,
-    offsetHeight: element.offsetHeight,
-    scrollWidth: element.scrollWidth,
-    scrollHeight: element.scrollHeight,
-    rectWidth: roundDebugValue(rect.width),
-    rectHeight: roundDebugValue(rect.height)
-  };
-}
-
-function getCanvasMetrics(canvasElement: HTMLCanvasElement | null): Record<string, number | null> | null {
-  if (!canvasElement) {
-    return null;
-  }
-  const baseMetrics = getElementMetrics(canvasElement);
-  return {
-    ...baseMetrics,
-    logicalWidth: parseDatasetNumber(canvasElement.dataset['logicalWidth']),
-    logicalHeight: parseDatasetNumber(canvasElement.dataset['logicalHeight']),
-    bufferWidth: canvasElement.width,
-    bufferHeight: canvasElement.height
-  };
-}
-
-function isLayoutSizingDebugEnabled(): boolean {
-  if (!ENABLE_LAYOUT_DIAGNOSTICS) {
-    return false;
-  }
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_LAYOUT_SIZING?: boolean };
-    if (Boolean(win.__SN_DEBUG_LAYOUT_SIZING)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const byQueryParam = new URLSearchParams(window.location.search).get('debugLayoutSizing') === '1';
-    if (byQueryParam) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    if (localStorage.getItem('sn:debugLayoutSizing') === '1') {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  return false;
-}
-
-function logLayoutSizingSnapshot(stage: string, extra: Record<string, unknown> = {}): void {
-  if (!isLayoutSizingDebugEnabled()) {return;}
-
-  try {
-    const appContainer = document.getElementById('app-container');
-    const toolbar = document.getElementById('toolbar');
-    const canvasContainer = document.getElementById('canvas-container');
-    const canvasContent = document.getElementById('canvas-content');
-    const gridsWrapper = document.getElementById('grids-wrapper');
-    const buttonGrid = document.getElementById('button-grid');
-    const buttonMiddleCell = document.querySelector<HTMLElement>('.button-grid-middle-cell');
-    const pitchGridWrapperEl = document.getElementById('pitch-grid-wrapper');
-    const pitchGridContainer = document.getElementById('pitch-grid-container');
-    const drumGridWrapperEl = document.getElementById('drum-grid-wrapper');
-    const drumMiddleCell = document.querySelector<HTMLElement>('.drum-grid-middle-cell');
-    const drumCanvasWrapper = document.getElementById('drum-canvas-wrapper');
-
-    const notation = document.getElementById('notation-grid') as HTMLCanvasElement | null;
-    const legendLeft = document.getElementById('legend-left-canvas') as HTMLCanvasElement | null;
-    const legendRight = document.getElementById('legend-right-canvas') as HTMLCanvasElement | null;
-    const drumGridCanvas = document.getElementById('drum-grid') as HTMLCanvasElement | null;
-
-    const gridsWrapperScrollbarBlockSize = gridsWrapper
-      ? Math.max(0, gridsWrapper.offsetHeight - gridsWrapper.clientHeight)
-      : null;
-
-    const payload = {
-      stage,
-      window: {
-        innerWidth: window.innerWidth,
-        innerHeight: window.innerHeight,
-        dpr: window.devicePixelRatio ?? 1
-      },
-      containers: {
-        appContainer: getElementMetrics(appContainer),
-        toolbar: getElementMetrics(toolbar),
-        canvasContainer: getElementMetrics(canvasContainer),
-        canvasContent: getElementMetrics(canvasContent),
-        gridsWrapper: getElementMetrics(gridsWrapper),
-        gridsWrapperScrollbarBlockSize,
-        buttonGrid: getElementMetrics(buttonGrid),
-        buttonMiddleCell: getElementMetrics(buttonMiddleCell),
-        pitchGridWrapper: getElementMetrics(pitchGridWrapperEl),
-        pitchGridContainer: getElementMetrics(pitchGridContainer),
-        drumGridWrapper: getElementMetrics(drumGridWrapperEl),
-        drumMiddleCell: getElementMetrics(drumMiddleCell),
-        drumCanvasWrapper: getElementMetrics(drumCanvasWrapper)
-      },
-      canvases: {
-        notation: getCanvasMetrics(notation),
-        legendLeft: getCanvasMetrics(legendLeft),
-        legendRight: getCanvasMetrics(legendRight),
-        drumGrid: getCanvasMetrics(drumGridCanvas)
-      },
-      overflow: {
-        gridsWrapperOverflowX: gridsWrapper ? window.getComputedStyle(gridsWrapper).overflowX : null,
-        gridsWrapperOverflowY: gridsWrapper ? window.getComputedStyle(gridsWrapper).overflowY : null,
-        pitchGridContainerOverflowX: pitchGridContainer ? window.getComputedStyle(pitchGridContainer).overflowX : null,
-        pitchGridContainerOverflowY: pitchGridContainer ? window.getComputedStyle(pitchGridContainer).overflowY : null,
-        drumGridWrapperOverflowX: drumGridWrapperEl ? window.getComputedStyle(drumGridWrapperEl).overflowX : null,
-        drumGridWrapperOverflowY: drumGridWrapperEl ? window.getComputedStyle(drumGridWrapperEl).overflowY : null
-      },
-      ...extra
-    };
-
-    console.log(`[SN:layout-sizing] ${stage}`, payload);
-  } catch (error) {
-    console.warn('[SN:layout-sizing] logging failed', error);
-  }
-}
-
-let lastGridSeamDebugLogAt = 0;
-function logGridSeamSnapshot(stage: string, extra: Record<string, unknown> = {}): void {
-  if (!isGridSeamDebugEnabled()) {return;}
-
-  try {
-    const pitchContainer = document.getElementById('pitch-grid-container');
-    const gridsWrapper = document.getElementById('grids-wrapper');
-    const buttonMiddleCell = document.querySelector<HTMLElement>('.button-grid-middle-cell');
-    const drumMiddleCell = document.querySelector<HTMLElement>('.drum-grid-middle-cell');
-
-    const notation = document.getElementById('notation-grid') as HTMLCanvasElement | null;
-    const legendLeft = document.getElementById('legend-left-canvas') as HTMLCanvasElement | null;
-    const legendRight = document.getElementById('legend-right-canvas') as HTMLCanvasElement | null;
-
-    if (!pitchContainer || !notation || !legendRight) {
-      console.log(`[SN:grid-seam] ${stage}`, {
-        ...extra,
-        missing: {
-          pitchContainer: !pitchContainer,
-          notation: !notation,
-          legendRight: !legendRight
-        }
-      });
-      return;
-    }
-
-    const containerRect = pitchContainer.getBoundingClientRect();
-    const notationRect = notation.getBoundingClientRect();
-    const legendRightRect = legendRight.getBoundingClientRect();
-
-    const seamGapPx = legendRightRect.left - notationRect.right;
-    const seamFromContainerPx = (legendRightRect.left - containerRect.left) - ((notationRect.left - containerRect.left) + notationRect.width);
-
-    const legendLeftLogicalWidth = parseDatasetNumber(legendLeft?.dataset['logicalWidth']);
-    const notationLogicalWidth = parseDatasetNumber(notation.dataset['logicalWidth']);
-    const legendRightLogicalWidth = parseDatasetNumber(legendRight.dataset['logicalWidth']);
-
-    const logicalSpan = (legendLeftLogicalWidth ?? 0) + (notationLogicalWidth ?? 0) + (legendRightLogicalWidth ?? 0);
-    const containerClientWidth = pitchContainer.clientWidth;
-    const containerSlackPx = logicalSpan > 0 ? containerClientWidth - logicalSpan : null;
-    const normalizedRange = getNormalizedPitchRange();
-    const rowCount = Math.max(1, getSpan(normalizedRange));
-    const cellHeight = Number.isFinite(store.state.cellHeight) && (store.state.cellHeight ?? 0) > 0
-      ? (store.state.cellHeight as number)
-      : null;
-    const halfUnit = cellHeight !== null ? cellHeight / 2 : null;
-    const coveragePx = halfUnit !== null ? ((rowCount + 1) * halfUnit) : null;
-    const coverageGapPx = coveragePx !== null ? (pitchContainer.clientHeight - coveragePx) : null;
-    const minimumCellHeightForCoverage = getMinimumCellHeightForViewportCoverage(pitchContainer.clientHeight, rowCount);
-    const underCoveragePx = coverageGapPx !== null ? Math.max(0, coverageGapPx) : null;
-    const startRow = store.state.fullRowData[normalizedRange.topIndex];
-    const endRow = store.state.fullRowData[normalizedRange.bottomIndex];
-
-    const now = performance?.now?.() ?? Date.now();
-    const severeMismatch = Math.abs(seamGapPx) > 0.75 || (containerSlackPx !== null && Math.abs(containerSlackPx) > 0.75);
-    if (!severeMismatch && now - lastGridSeamDebugLogAt < 120) {
-      return;
-    }
-    lastGridSeamDebugLogAt = now;
-
-    const payload = {
-      stage,
-      seamGapPx: roundDebugValue(seamGapPx),
-      seamFromContainerPx: roundDebugValue(seamFromContainerPx),
-      containerSlackPx: roundDebugValue(containerSlackPx),
-      widths: {
-        containerClient: containerClientWidth,
-        containerRect: roundDebugValue(containerRect.width),
-        notationRect: roundDebugValue(notationRect.width),
-        legendRightRect: roundDebugValue(legendRightRect.width),
-        buttonMiddleRect: roundDebugValue(buttonMiddleCell?.getBoundingClientRect().width ?? null),
-        drumMiddleRect: roundDebugValue(drumMiddleCell?.getBoundingClientRect().width ?? null)
-      },
-      logicalWidths: {
-        legendLeft: legendLeftLogicalWidth,
-        notation: notationLogicalWidth,
-        legendRight: legendRightLogicalWidth
-      },
-      scroll: {
-        gridsWrapperScrollLeft: gridsWrapper?.scrollLeft ?? null,
-        gridsWrapperClientWidth: gridsWrapper?.clientWidth ?? null,
-        gridsWrapperScrollWidth: gridsWrapper?.scrollWidth ?? null
-      },
-      verticalCoverage: {
-        containerHeight: pitchContainer.clientHeight,
-        rowCount,
-        cellHeight: cellHeight ?? null,
-        minimumCellHeightForCoverage,
-        halfUnit: halfUnit !== null ? roundDebugValue(halfUnit) : null,
-        coveragePx: coveragePx !== null ? roundDebugValue(coveragePx) : null,
-        coverageGapPx: coverageGapPx !== null ? roundDebugValue(coverageGapPx) : null,
-        underCoveragePx: underCoveragePx !== null ? roundDebugValue(underCoveragePx) : null,
-        isUnderCovered: underCoveragePx !== null ? underCoveragePx > 0.75 : null,
-        topIndex: normalizedRange.topIndex,
-        bottomIndex: normalizedRange.bottomIndex,
-        topRow: startRow ? { pitch: startRow.pitch, column: startRow.column, isBoundary: Boolean((startRow as any).isBoundary) } : null,
-        bottomRow: endRow ? { pitch: endRow.pitch, column: endRow.column, isBoundary: Boolean((endRow as any).isBoundary) } : null
-      },
-      dpr: window.devicePixelRatio ?? 1,
-      ...extra
-    };
-
-    if (severeMismatch) {
-      console.warn(`[SN:grid-seam] ${stage}`, payload);
-    } else {
-      console.log(`[SN:grid-seam] ${stage}`, payload);
-    }
-  } catch (error) {
-    console.warn('[SN:grid-seam] logging failed', error);
-  }
-}
-
 function setLayoutTrigger(source: string, meta: Record<string, unknown> = {}): void {
   lastLayoutTriggerSource = source;
   lastLayoutTriggerMeta = meta;
-  if (isStampLayoutDebugEnabled()) {
-    logStampLayout('layout:set-trigger', { source, meta }, { includeSnapshot: false });
-  }
 }
-
-function isLayoutFlowDebugEnabled(): boolean {
-  if (!ENABLE_LAYOUT_DIAGNOSTICS) {
-    return false;
-  }
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_LAYOUT_FLOW?: boolean };
-    if (Boolean(win.__SN_DEBUG_LAYOUT_FLOW)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const byQueryParam = new URLSearchParams(window.location.search).get('debugLayoutFlow') === '1';
-    if (byQueryParam) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    return localStorage.getItem('sn:debugLayoutFlow') === '1';
-  } catch {
-    return false;
-  }
-}
-
-let lastLayoutFlowLogAt = 0;
-function logLayoutFlowSnapshot(stage: string, data: Record<string, unknown>): void {
-  if (!isLayoutFlowDebugEnabled()) {return;}
-
-  try {
-    const now = performance?.now?.() ?? Date.now();
-    if (now - lastLayoutFlowLogAt < 60) {return;}
-    lastLayoutFlowLogAt = now;
-    console.log(`[SN:layout-flow] ${stage}`, data);
-  } catch {
-    // Never let debug logging break layout.
-  }
-}
-
-
-function getDevicePixelRatio() {
-
-
-  const ratio = window?.devicePixelRatio ?? 1;
-
-
-  if (!Number.isFinite(ratio) || ratio <= 0) {
-
-
-    return 1;
-
-
-  }
-
-
-  return ratio;
-
-
-}
-
-
-
-
-
-function resizeCanvasForPixelRatio(
-  canvasElement: HTMLCanvasElement | null,
-  logicalWidth: number | undefined,
-  logicalHeight: number | undefined,
-  pixelRatio: number,
-  existingContext?: CanvasRenderingContext2D | null
-) {
-
-
-  if (!canvasElement) {
-
-
-    return false;
-
-
-  }
-
-
-  const normalizedRatio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-
-
-  canvasElement.dataset['pixelRatio'] = `${normalizedRatio}`;
-
-
-
-
-
-  let resized = false;
-
-
-
-
-
-  if (typeof logicalWidth === 'number') {
-
-
-    const targetWidth = Math.max(1, Math.round(logicalWidth * normalizedRatio));
-
-
-    if (Math.abs(canvasElement.width - targetWidth) > 0.5) {
-
-
-      canvasElement.width = targetWidth;
-
-
-      resized = true;
-
-
-    }
-
-
-    canvasElement.style.width = `${logicalWidth}px`;
-
-
-    canvasElement.dataset['logicalWidth'] = `${logicalWidth}`;
-
-
-  }
-
-
-
-
-
-  if (typeof logicalHeight === 'number') {
-
-
-    const targetHeight = Math.max(1, Math.round(logicalHeight * normalizedRatio));
-
-
-    if (Math.abs(canvasElement.height - targetHeight) > 0.5) {
-
-
-      canvasElement.height = targetHeight;
-
-
-      resized = true;
-
-
-    }
-
-
-    canvasElement.style.height = `${logicalHeight}px`;
-    canvasElement.dataset['logicalHeight'] = `${logicalHeight}`;
-  }
-
-
-
-
-
-  if (resized) {
-
-
-    const ctxToScale = existingContext || canvasElement.getContext('2d');
-
-
-    if (ctxToScale) {
-
-
-      ctxToScale.setTransform(normalizedRatio, 0, 0, normalizedRatio, 0, 0);
-
-
-    }
-
-
-  }
-
-
-
-
-
-  return resized;
-
-
-}
-
-
-
-
-
-function initDOMElements() {
-
-
-  // gridContainer = document.getElementById('grid-container');  // Unused variable
-
-
-  pitchGridWrapper = document.getElementById('pitch-grid-wrapper');
-
-
-  canvas = document.getElementById('notation-grid') as HTMLCanvasElement | null;
-
-
-  legendLeftCanvas = document.getElementById('legend-left-canvas') as HTMLCanvasElement | null;
-
-
-  legendRightCanvas = document.getElementById('legend-right-canvas') as HTMLCanvasElement | null;
-
-
-  drumGridWrapper = document.getElementById('drum-grid-wrapper');
-
-
-  drumCanvas = document.getElementById('drum-grid') as HTMLCanvasElement | null;
-
-
-  drumPlayheadCanvas = document.getElementById('drum-playhead-canvas') as HTMLCanvasElement | null;
-
-
-  playheadCanvas = document.getElementById('playhead-canvas') as HTMLCanvasElement | null;
-
-
-  hoverCanvas = document.getElementById('hover-canvas') as HTMLCanvasElement | null;
-
-
-  drumHoverCanvas = document.getElementById('drum-hover-canvas') as HTMLCanvasElement | null;
-
-
-
-  buttonGridWrapper = document.getElementById('button-grid');
-
-
-
-
-
-  const canvasContainer = document.getElementById('canvas-container');
-
-
-
-
-
-  if (!pitchGridWrapper || !canvas || !canvasContainer) {
-
-
-    return {};
-
-
-  }
-
-
-
-
-
-  ctx = canvas.getContext('2d');
-
-
-  drumCtx = drumCanvas?.getContext('2d') || null;
-
-
-  const legendLeftCtx = legendLeftCanvas?.getContext('2d') || null;
-
-
-  const legendRightCtx = legendRightCanvas?.getContext('2d') || null;
-
-
-  return { ctx, drumCtx, legendLeftCtx, legendRightCtx, canvasContainer };
-
-
-}
-
-
-
 
 
 function markInitialLayoutReady(): void {
@@ -1321,7 +639,7 @@ function recalcAndApplyLayout() {
   // but this pass must stay internally consistent to avoid legend/canvas gaps.
   const passCellWidth = newCellWidth;
 
-  const newColumnWidths = calculateColumnWidths(store.state);
+  const newColumnWidths = getCanvasColumnWidths(store.state);
   store.setLayoutConfig({
     columnWidths: newColumnWidths
   });
@@ -1355,8 +673,8 @@ function recalcAndApplyLayout() {
   const finalMusicalWidth = hasModulation ? modulatedMusicalWidth : musicalCanvasWidth;
 
   // After Phase 8: Add legend widths to musical width to get total grid width
-  const leftLegendWidthUnits = SIDE_COLUMN_WIDTH * 2 * passCellWidth;
-  const rightLegendWidthUnits = SIDE_COLUMN_WIDTH * 2 * passCellWidth;
+  const leftLegendWidthUnits = getLegendTotalWidthPx(passCellWidth, newCellHeight);
+  const rightLegendWidthUnits = getLegendTotalWidthPx(passCellWidth, newCellHeight);
   const totalCanvasWidthPx = Math.round(finalMusicalWidth + leftLegendWidthUnits + rightLegendWidthUnits);
 
   const pixelRatio = getDevicePixelRatio();
@@ -1611,7 +929,7 @@ function recalcAndApplyLayout() {
     // Calculate left legend width (first 2 columns)
 
 
-    const leftCellWidth = SIDE_COLUMN_WIDTH * 2 * passCellWidth;
+    const leftCellWidth = getLegendTotalWidthPx(passCellWidth, newCellHeight);
 
 
 
@@ -1620,7 +938,7 @@ function recalcAndApplyLayout() {
     // Calculate right legend width (last 2 columns)
 
 
-    const rightCellWidth = SIDE_COLUMN_WIDTH * 2 * passCellWidth;
+    const rightCellWidth = getLegendTotalWidthPx(passCellWidth, newCellHeight);
 
 
 
@@ -2087,8 +1405,8 @@ function recalcAndApplyLayout() {
   }
 
   // Legend columns are fixed width (not in newColumnWidths after Phase 8)
-  const leftLegendWidthPx = Math.round(SIDE_COLUMN_WIDTH * 2 * passCellWidth);
-  const rightLegendWidthPx = Math.round(SIDE_COLUMN_WIDTH * 2 * passCellWidth);
+  const leftLegendWidthPx = Math.round(getLegendTotalWidthPx(passCellWidth, newCellHeight));
+  const rightLegendWidthPx = Math.round(getLegendTotalWidthPx(passCellWidth, newCellHeight));
 
   // Musical canvas width is already calculated above as finalMusicalWidth
   const musicalCanvasWidthPx = Math.round(finalMusicalWidth);
@@ -2461,7 +1779,21 @@ const LayoutService = {
   init() {
 
 
-    const { ctx, drumCtx, legendLeftCtx, legendRightCtx } = initDOMElements();
+    const dom = initLayoutDOMElements();
+    pitchGridWrapper = dom.pitchGridWrapper;
+    canvas = dom.canvas;
+    legendLeftCanvas = dom.legendLeftCanvas;
+    legendRightCanvas = dom.legendRightCanvas;
+    drumGridWrapper = dom.drumGridWrapper;
+    drumCanvas = dom.drumCanvas;
+    drumPlayheadCanvas = dom.drumPlayheadCanvas;
+    playheadCanvas = dom.playheadCanvas;
+    hoverCanvas = dom.hoverCanvas;
+    drumHoverCanvas = dom.drumHoverCanvas;
+    buttonGridWrapper = dom.buttonGridWrapper;
+    ctx = dom.ctx;
+    drumCtx = dom.drumCtx;
+    const { legendLeftCtx, legendRightCtx } = dom;
     setupPitchContainerResizeObserver();
 
 
@@ -2556,50 +1888,10 @@ const LayoutService = {
    * Range-authoritative vertical viewport:
    * - `pitchRange` endpoints define the visible vertical span (inclusive gamut indices).
    * - ZoomLevel is derived to fit that span into the viewport container height.
-   *
-   * Compatibility note:
-   * `setZoomLevel()` is retained for legacy call sites; it approximates the requested zoom
-   * by adjusting the pitch viewport span while keeping center stable (best-effort).
    */
-  setZoomLevel(newZoom: number) {
-    const zoom = Number.isFinite(newZoom) && newZoom > 0 ? newZoom : 1.0;
-    const gridsWrapper = document.getElementById('grids-wrapper');
-    const horizontalScrollbarBlockSize = getHorizontalScrollbarBlockSize(gridsWrapper);
-    const containerHeight = getPitchGridContainerHeight() + horizontalScrollbarBlockSize;
-    const totalRanks = store.state.fullRowData.length;
-    const maxIndex = Math.max(0, totalRanks - 1);
-
-    if (!totalRanks || totalRanks <= 0) {return;}
-
-    const desiredSpanRaw = (2 * containerHeight) / (zoom * BASE_ABSTRACT_UNIT);
-    // Inverse of calculateZoomToFitRowCount(): zoom fits `span` halfUnits into the container.
-    const desiredSpan = Math.max(
-      DEFAULT_MIN_VIEWPORT_ROWS,
-      Math.min(totalRanks, Math.round(desiredSpanRaw))
-    );
-
-    const current = getNormalizedPitchRange();
-    const center = (current.topIndex + current.bottomIndex) / 2;
-    const half = (desiredSpan - 1) / 2;
-    let topIndex = Math.round(center - half);
-    let bottomIndex = topIndex + desiredSpan - 1;
-
-    if (topIndex < 0) {
-      bottomIndex += -topIndex;
-      topIndex = 0;
-    }
-    if (bottomIndex > maxIndex) {
-      const overshoot = bottomIndex - maxIndex;
-      topIndex -= overshoot;
-      bottomIndex = maxIndex;
-    }
-
-    applyPitchRange({ topIndex, bottomIndex }, 'setZoomLevel');
-  },
-
   setPitchViewportRange(range: PitchRange, options: { animateMs?: number; source?: string } = {}) {
     const source = options.source ?? 'setPitchViewportRange';
-    const durationMs = resolveZoomAnimationDuration(options.animateMs ?? 0, source);
+    const durationMs = resolveZoomAnimationDuration(options.animateMs ?? 0, source, ENABLE_ZOOM_ANIMATION);
     if (durationMs > 0) {
       animatePitchRangeTo(range, durationMs, source);
       return;
@@ -2724,7 +2016,7 @@ const LayoutService = {
     const targetSpan = getSpan(target);
 
     const source = payload?.source ?? 'unknown';
-    const durationMs = resolveZoomAnimationDuration(280, source);
+    const durationMs = resolveZoomAnimationDuration(280, source, ENABLE_ZOOM_ANIMATION);
 
     logger.debug('LayoutService', `[Zoom] Range zoom in (span ${currentSpan} -> ${targetSpan})`, {
       source,
@@ -2758,7 +2050,7 @@ const LayoutService = {
     const targetSpan = getSpan(target);
 
     const source = payload?.source ?? 'unknown';
-    const durationMs = resolveZoomAnimationDuration(280, source);
+    const durationMs = resolveZoomAnimationDuration(280, source, ENABLE_ZOOM_ANIMATION);
 
     logger.debug('LayoutService', `[Zoom] Range zoom out (span ${currentSpan} -> ${targetSpan})`, {
       source,
@@ -2783,7 +2075,7 @@ const LayoutService = {
     const maxIndex = Math.max(0, totalRanks - 1);
 
     const source = payload?.source ?? 'unknown';
-    const durationMs = resolveZoomAnimationDuration(320, source);
+    const durationMs = resolveZoomAnimationDuration(320, source, ENABLE_ZOOM_ANIMATION);
     if (durationMs > 0) {
       animatePitchRangeTo({ topIndex: 0, bottomIndex: maxIndex }, durationMs, `resetZoom:${source}`);
       return;
@@ -3003,32 +2295,33 @@ const LayoutService = {
 
     const scrollOffset = startRank * halfUnit;
 
-    // Viewport/canvas debug (disabled by default).
-    // Enable via:
-    // - `localStorage.setItem('sn:debugViewport','1')` or
-    // - `window.__SN_DEBUG_VIEWPORT = true`
-    //
     // When the legend canvases are a different height than the pitch container, the legend renderer can
-    // appear to have "extra rows"/blank space at the bottom even though the row-range math is correct.
+    // appear to have extra rows or blank space at the bottom even though the row-range math is correct.
     const leftLegend = document.getElementById('legend-left-canvas') as HTMLCanvasElement | null;
     const rightLegend = document.getElementById('legend-right-canvas') as HTMLCanvasElement | null;
     const ratio = halfUnit ? (containerHeight / halfUnit) : 0;
     const rowCount = Math.max(1, (bottomIndex - startRank) + 1);
     const coveragePx = rowCount * halfUnit;
+    const cellEdgeCoveragePx = (rowCount + 1) * halfUnit;
     const startRow = store.state.fullRowData[startRank];
     const endRow = store.state.fullRowData[bottomIndex];
     const atTopGamutEdge = startRank <= 0;
     const atBottomGamutEdge = bottomIndex >= maxIndex;
 
     logViewportDebug('getViewportInfo', {
+      zoomLevel: currentZoomLevel,
+      legendColumnWidthUnits: getLegendColumnWidthUnitsForCellHeight(cellHeight),
       containerHeight,
       containerRectHeight: pitchGridContainer?.getBoundingClientRect?.().height,
+      cellWidth: store.state.cellWidth,
       cellHeight,
       halfUnit,
       ratio,
       rowCount,
       coveragePx,
       coverageGapPx: containerHeight - coveragePx,
+      cellEdgeCoveragePx,
+      cellEdgeCoverageGapPx: containerHeight - cellEdgeCoveragePx,
       totalRanks,
       pitchRange,
       startRank,
@@ -3113,11 +2406,7 @@ const LayoutService = {
 
 
   getCanvasWidth() {
-
-
-    return getCanvasWidthFromColumns(store.state.columnWidths, store.state.cellWidth);
-
-
+    return getTotalCanvasWidth(store.state) * store.state.cellWidth;
   },
 
 
@@ -3187,13 +2476,6 @@ const LayoutService = {
 
 
     setLayoutTrigger('api:recalculateLayout');
-    if (isStampLayoutDebugEnabled()) {
-      const stack = (new Error().stack || '')
-        .split('\n')
-        .slice(2, 8)
-        .map(line => line.trim());
-      logStampLayout('layout:api:recalculateLayout', { stack });
-    }
     recalcAndApplyLayout();
 
 
@@ -3207,13 +2489,6 @@ const LayoutService = {
 
 
     setLayoutTrigger('api:reflow');
-    if (isStampLayoutDebugEnabled()) {
-      const stack = (new Error().stack || '')
-        .split('\n')
-        .slice(2, 8)
-        .map(line => line.trim());
-      logStampLayout('layout:api:reflow', { stack });
-    }
     recalcAndApplyLayout();
 
 

@@ -11,8 +11,10 @@
  */
 
 import { getPlacedTonicSigns } from '@state/selectors.ts';
-import { SIDE_COLUMN_WIDTH, BEAT_COLUMN_WIDTH } from '@/core/constants.ts';
-import type { AppState } from '@app-types/state.js';
+import { BEAT_COLUMN_WIDTH } from '@/core/constants.ts';
+import type { StoreInstance } from '@mlt/student-notation-engine';
+import type { AppState } from '@mlt/types';
+import { getLegendColumnWidthUnitsForCellHeight } from '@utils/legendSizing.ts';
 
 /**
  * Complete metadata for a single column
@@ -75,6 +77,7 @@ interface CacheKey {
   macrobeatGroupings: number[];
   tonicSignsHash: string;
   macrobeatBoundaryStyles: string[];
+  legendWidthUnits: number;
 }
 
 /**
@@ -120,7 +123,8 @@ class ColumnMapService {
     return {
       macrobeatGroupings: [...state.macrobeatGroupings],
       tonicSignsHash,
-      macrobeatBoundaryStyles: [...state.macrobeatBoundaryStyles]
+      macrobeatBoundaryStyles: [...state.macrobeatBoundaryStyles],
+      legendWidthUnits: getLegendColumnWidthUnitsForCellHeight(state.cellHeight)
     };
   }
 
@@ -132,6 +136,7 @@ class ColumnMapService {
 
     return (
       this.cacheKey.tonicSignsHash === newKey.tonicSignsHash &&
+      this.cacheKey.legendWidthUnits === newKey.legendWidthUnits &&
       JSON.stringify(this.cacheKey.macrobeatGroupings) === JSON.stringify(newKey.macrobeatGroupings) &&
       JSON.stringify(this.cacheKey.macrobeatBoundaryStyles) === JSON.stringify(newKey.macrobeatBoundaryStyles)
     );
@@ -144,6 +149,7 @@ class ColumnMapService {
     const { macrobeatGroupings, macrobeatBoundaryStyles } = state;
     const tonicSigns = getPlacedTonicSigns(state);
     const sortedTonics = [...tonicSigns].sort((a, b) => a.preMacrobeatIndex - b.preMacrobeatIndex);
+    const legendWidthUnits = getLegendColumnWidthUnitsForCellHeight(state.cellHeight);
 
     const entries: ColumnEntry[] = [];
     const macrobeatBoundaries: MacrobeatBoundary[] = [];
@@ -205,7 +211,7 @@ class ColumnMapService {
         canvasIndex: null,
         timeIndex: null,
         type: 'legend-left',
-        widthMultiplier: SIDE_COLUMN_WIDTH,
+        widthMultiplier: legendWidthUnits,
         xOffsetUnmodulated: xOffset,
         macrobeatIndex: null,
         beatInMacrobeat: null,
@@ -215,7 +221,7 @@ class ColumnMapService {
         tonicSignUuid: null
       });
       visualIndex++;
-      xOffset += SIDE_COLUMN_WIDTH;
+      xOffset += legendWidthUnits;
     }
 
     // Tonics before first macrobeat (preMacrobeatIndex = -1)
@@ -268,7 +274,7 @@ class ColumnMapService {
         canvasIndex: null,
         timeIndex: null,
         type: 'legend-right',
-        widthMultiplier: SIDE_COLUMN_WIDTH,
+        widthMultiplier: legendWidthUnits,
         xOffsetUnmodulated: xOffset,
         macrobeatIndex: null,
         beatInMacrobeat: null,
@@ -278,7 +284,7 @@ class ColumnMapService {
         tonicSignUuid: null
       });
       visualIndex++;
-      xOffset += SIDE_COLUMN_WIDTH;
+      xOffset += legendWidthUnits;
     }
 
     // Build lookup maps for O(1) conversions
@@ -331,7 +337,7 @@ const columnMapService = new ColumnMapService();
 // Set up cache invalidation on state changes
 // Note: Store event hooks will be registered after store is initialized
 // This prevents circular dependency issues
-export function registerStoreHooks(store: any): void {
+export function registerStoreHooks(store: Pick<StoreInstance, 'on'>): void {
   // Invalidate on any rhythm structure change
   store.on('rhythmStructureChanged', () => {
     columnMapService.invalidate();

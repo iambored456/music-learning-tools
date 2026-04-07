@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700;800&display=swap');
 
 :root {
   --amt-bg-cream: #f4eee1;
@@ -12,6 +12,12 @@
   --amt-accent-coral: #cc5b44;
   --amt-accent-olive: #9a8c33;
   --amt-shadow: 0 24px 56px rgba(37, 27, 18, 0.16);
+  --amt-font-family:
+    'Atkinson Hyperlegible Next',
+    'Atkinson Hyperlegible Next Variable',
+    'Atkinson Hyperlegible',
+    'Segoe UI',
+    sans-serif;
 }
 
 *,
@@ -27,13 +33,26 @@ body {
 }
 
 body {
-  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  font-family: var(--amt-font-family);
   color: var(--amt-text);
   background:
     radial-gradient(920px 520px at 8% -10%, rgba(197, 123, 47, 0.26), transparent 58%),
     radial-gradient(860px 540px at 100% 0%, rgba(47, 141, 131, 0.2), transparent 60%),
     radial-gradient(900px 580px at 50% 120%, rgba(204, 91, 68, 0.14), transparent 62%),
     linear-gradient(160deg, #ece4d2 0%, var(--amt-bg-cream) 52%, #efe8d9 100%);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 #app {
@@ -50,32 +69,21 @@ body {
 
 .hero,
 .planner-shell,
-.palette-panel,
-.outline-panel {
+.app-card {
   border: 1px solid rgba(102, 75, 40, 0.18);
   border-radius: 22px;
   box-shadow: var(--amt-shadow);
 }
 
 .hero {
-  display: grid;
-  gap: 0.7rem;
+  display: block;
+  position: relative;
   padding: 1.2rem 1.25rem;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(250, 243, 231, 0.85));
 }
 
-.eyebrow {
+h1 {
   margin: 0;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--amt-muted);
-  font-size: 0.74rem;
-}
-
-h1,
-.planner-header h2 {
-  margin: 0;
-  font-family: 'Fraunces', serif;
   line-height: 1.05;
 }
 
@@ -84,175 +92,67 @@ h1 {
 }
 
 .subtitle,
-.planner-subtitle,
-.palette-intro p,
-.outline-copy,
-.palette-item p {
+.outline-copy {
   margin: 0;
   color: #3f4641;
 }
 
-.hub-link {
-  justify-self: start;
-  text-decoration: none;
-  color: #0f4e4a;
-  font-weight: 700;
-  border-bottom: 2px solid rgba(15, 78, 74, 0.25);
+.hero-copy {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0;
+  padding-left: 3.25rem;
 }
 
-.hub-link:hover,
-.hub-link:focus-visible {
-  border-bottom-color: #0f4e4a;
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid rgba(84, 65, 39, 0.14);
+  background: rgba(255, 255, 255, 0.78);
+  color: #31413a;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.home-link--corner {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+}
+
+.home-link:hover,
+.home-link:focus-visible {
+  border-color: rgba(47, 141, 131, 0.42);
+  background: rgba(47, 141, 131, 0.14);
+}
+
+.home-link:active {
+  transform: translateY(1px);
+}
+
+.home-link-icon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  filter: sepia(9%) saturate(655%) hue-rotate(122deg) brightness(92%) contrast(90%);
 }
 
 .planner-shell {
-  display: grid;
-  gap: 1rem;
   padding: 1.05rem;
   background: linear-gradient(155deg, rgba(255, 255, 255, 0.68), rgba(246, 239, 227, 0.84));
 }
 
-.planner-header {
+.planner-outline-list {
   display: grid;
-  gap: 0.42rem;
-  padding: 0.2rem 0.2rem 0;
-}
-
-.workspace-kicker,
-.outline-kicker {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--amt-muted);
-}
-
-.planner-header h2 {
-  font-size: clamp(1.5rem, 3vw, 2.2rem);
-}
-
-.planner-layout {
-  display: grid;
-  grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
-
-.palette-panel,
-.outline-panel {
-  background: var(--amt-bg-soft);
-  padding: 1rem;
-}
-
-.palette-panel {
-  display: grid;
-  gap: 1rem;
-}
-
-.palette-intro {
-  display: grid;
-  gap: 0.38rem;
-}
-
-.palette-intro h3,
-.palette-group h4 {
-  margin: 0;
-  font-family: 'Fraunces', serif;
-}
-
-.palette-groups {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.palette-group {
-  display: grid;
-  gap: 0.58rem;
-}
-
-.palette-group h4 {
-  font-size: 1rem;
-  color: #28322b;
-}
-
-.palette-items {
-  display: grid;
-  gap: 0.52rem;
-}
-
-.palette-item {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.78rem 0.82rem;
-  border-radius: 16px;
-  border: 1px solid rgba(84, 65, 39, 0.14);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.palette-item-topline {
-  display: flex;
-  align-items: center;
-}
-
-.palette-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.18rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #17322d;
-  background: rgba(47, 141, 131, 0.16);
-  border: 1px solid rgba(47, 141, 131, 0.24);
-}
-
-.palette-item.row-type-lesson .palette-pill {
-  color: #7d4b17;
-  background: rgba(197, 123, 47, 0.16);
-  border-color: rgba(197, 123, 47, 0.26);
-}
-
-.palette-item.row-type-unit .palette-pill,
-.palette-item.row-type-section .palette-pill {
-  color: #145952;
-  background: rgba(47, 141, 131, 0.15);
-  border-color: rgba(47, 141, 131, 0.24);
-}
-
-.palette-item.row-type-concept .palette-pill {
-  color: #12475a;
-  background: rgba(55, 123, 165, 0.15);
-  border-color: rgba(55, 123, 165, 0.22);
-}
-
-.palette-item.row-type-exercise .palette-pill {
-  color: #7a3f18;
-  background: rgba(204, 91, 68, 0.14);
-  border-color: rgba(204, 91, 68, 0.24);
-}
-
-.palette-item.row-type-note .palette-pill {
-  color: #5e5517;
-  background: rgba(154, 140, 51, 0.14);
-  border-color: rgba(154, 140, 51, 0.22);
-}
-
-.outline-panel {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.outline-panel-header {
-  display: grid;
-  gap: 0.36rem;
-}
-
-.outline-copy {
-  max-width: 62ch;
+  gap: 0.95rem;
 }
 
 a:focus-visible,
@@ -262,8 +162,8 @@ button:focus-visible {
 }
 
 @media (max-width: 900px) {
-  .planner-layout {
-    grid-template-columns: 1fr;
+  .hero-copy {
+    padding-left: 3rem;
   }
 }
 
@@ -273,19 +173,21 @@ button:focus-visible {
   }
 
   .hero,
-  .planner-shell,
-  .palette-panel,
-  .outline-panel {
+  .planner-shell {
     border-radius: 18px;
   }
 
   .hero,
-  .palette-panel,
-  .outline-panel {
-    padding: 0.95rem;
-  }
-
   .planner-shell {
     padding: 0.85rem;
+  }
+
+  .home-link--corner {
+    top: 0.82rem;
+    left: 0.82rem;
+  }
+
+  .hero-copy {
+    padding-left: 2.85rem;
   }
 }

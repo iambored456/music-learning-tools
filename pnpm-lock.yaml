@@ -235,6 +235,16 @@ importers:
         version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
   packages/amateur-music-theory-ui:
+    dependencies:
+      '@mlt/pitch-data':
+        specifier: workspace:*
+        version: link:../pitch-data
+      '@mlt/talking-avatar':
+        specifier: workspace:*
+        version: link:../talking-avatar
+      '@mlt/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
     devDependencies:
       svelte:
         specifier: ^5.46.1

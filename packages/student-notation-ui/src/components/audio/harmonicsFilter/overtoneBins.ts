@@ -13,6 +13,7 @@ import * as Tone from 'tone';
 import store from '@state/initStore.ts';
 import { HARMONIC_BINS } from '@/core/constants.ts';
 import SynthEngine from '@services/initAudio.ts';
+import { getWaveformVisualizer } from '@services/runtimeGlobals.ts';
 import { hexToRgba, shadeHexColor } from '@utils/colorUtils.ts';
 import logger from '@utils/logger.ts';
 import phaseIcon0 from '../../../../public/assets/tabicons/phaseButton_0.svg?raw';
@@ -113,7 +114,7 @@ function drawFilterOverlay() {
 
   const filterSettings = store.state.timbres[currentColor]?.filter as FilterSettings | undefined;
 
-  // Fix: Default enabled to true if undefined (handles legacy state or missing property)
+  // Default enabled to true if undefined (handles missing property state)
   const isFilterEnabled = filterSettings && (filterSettings.enabled !== false);
 
   if (filterSettings && isFilterEnabled) {
@@ -337,8 +338,9 @@ function handleBinPointerEvent(e: PointerEvent, binIndex: number | null = null) 
     }
 
     // Update static waveform in real-time during dragging (including zero)
-    if (window.waveformVisualizer?.generateWaveform) {
-      window.waveformVisualizer.generateWaveform();
+    const waveformVisualizer = getWaveformVisualizer();
+    if (waveformVisualizer?.generateWaveform) {
+      waveformVisualizer.generateWaveform();
     }
 
     // DEBUG: Log zero coefficient updates
@@ -376,8 +378,9 @@ function handleBinPointerEvent(e: PointerEvent, binIndex: number | null = null) 
     }
 
     // Update static waveform in real-time during dragging
-    if (window.waveformVisualizer?.generateWaveform) {
-      window.waveformVisualizer.generateWaveform();
+    const waveformVisualizer = getWaveformVisualizer();
+    if (waveformVisualizer?.generateWaveform) {
+      waveformVisualizer.generateWaveform();
     }
 
     // DEBUG: Log coefficient updates
@@ -612,8 +615,9 @@ export function initOvertoneBins() {
       phases = newPhases;
 
       // Start transition animation before updating store
-      if (window.waveformVisualizer?.startPhaseTransition) {
-        window.waveformVisualizer.startPhaseTransition(oldPhases, newPhases, i);
+      const waveformVisualizer = getWaveformVisualizer();
+      if (waveformVisualizer?.startPhaseTransition) {
+        waveformVisualizer.startPhaseTransition(oldPhases, newPhases, i);
       }
 
       // Update store (but don't trigger immediate waveform regeneration due to transition guard)
@@ -678,7 +682,7 @@ export function initOvertoneBins() {
       window.removeEventListener('pointerup', stopDrag);
       isDraggingBin = false; // Disable snap-to-zero
       recordOvertoneBinsDebug('log', '[SNAP-TO-ZERO] Drag ended - isDraggingBin = false');
-      const waveformAvailable = !!window.waveformVisualizer?.generateWaveform;
+      const waveformAvailable = !!getWaveformVisualizer()?.generateWaveform;
       recordOvertoneBinsDebug('log', '[OvertoneBins] stopDrag invoked', {
         waveformAvailable,
         hasChanges: typeof handleBinPointerEvent === 'function'
@@ -693,7 +697,7 @@ export function initOvertoneBins() {
       if (waveformAvailable) {
         setTimeout(() => {
           recordOvertoneBinsDebug('log', '[OvertoneBins] Generating static waveform after drag');
-          window.waveformVisualizer?.generateWaveform?.();
+          getWaveformVisualizer()?.generateWaveform?.();
         }, 0);
       } else {
         logger.warn('OvertoneBins', 'Static waveform visualizer not ready when drag ended', null, 'audio');

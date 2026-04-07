@@ -14,7 +14,7 @@
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
   import PrintService from '@services/printService.ts';
-  import type { PrintOptions } from '@app-types/state.js';
+  import type { PrintOptions } from '@mlt/types';
 
   const CANVAS_FRAME_PADDING = 16;
 
@@ -625,7 +625,6 @@
       resizeObserver.observe(canvasWrapper);
     }
 
-    if ((window as any).__initDebug) console.log('[Svelte] PrintPreviewBridge mounted');
   });
 
   onDestroy(() => {
@@ -651,7 +650,6 @@
     // Disconnect resize observer
     resizeObserver?.disconnect();
 
-    if ((window as any).__initDebug) console.log('[Svelte] PrintPreviewBridge unmounted');
   });
 </script>
 

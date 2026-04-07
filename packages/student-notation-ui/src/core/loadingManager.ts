@@ -179,20 +179,6 @@ class LoadingManager {
   }
 
   /**
-   * Alias for setStatus (for backward compatibility).
-   */
-  updateStatus(status: string): void {
-    this.setStatus(status);
-  }
-
-  /**
-   * Alias for completeLoading (for backward compatibility).
-   */
-  async complete(): Promise<void> {
-    this.completeLoading();
-  }
-
-  /**
    * Preload an icon and cache its URL.
    */
   async preloadIcon(name: string): Promise<string> {

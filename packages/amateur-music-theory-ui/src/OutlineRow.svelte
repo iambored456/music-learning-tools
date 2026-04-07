@@ -4,31 +4,61 @@
 
   export let row: OutlineRow;
   export let depth = 0;
+  let isExpanded = false;
+
+  function getRowLabel(currentRow: OutlineRow): string {
+    const baseLabel = rowTypeLabels[currentRow.type];
+    return currentRow.code ? `${baseLabel} ${currentRow.code}` : baseLabel;
+  }
+
+  function isCollapsible(currentRow: OutlineRow): boolean {
+    return (currentRow.type === 'course' || currentRow.type === 'strand') && Boolean(currentRow.children?.length);
+  }
+
+  function isLessonLink(currentRow: OutlineRow): boolean {
+    return currentRow.type === 'lesson' && Boolean(currentRow.code);
+  }
 </script>
 
 <div class="outline-row-node" style={`--outline-depth:${depth};`}>
   <article class={`outline-row-card row-type-${row.type}`}>
     <div class="outline-row-topline">
-      <span class="outline-row-type">{rowTypeLabels[row.type]}</span>
-      {#if row.meta}
-        <span class="outline-row-meta">{row.meta}</span>
+      <span class="outline-row-type">{getRowLabel(row)}</span>
+      {#if isCollapsible(row)}
+        <button
+          class="outline-row-toggle"
+          type="button"
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? `Collapse ${row.title}` : `Expand ${row.title}`}
+          aria-controls={`children-${row.id}`}
+          onclick={() => {
+            isExpanded = !isExpanded;
+          }}
+        >
+          <span class={`outline-row-chevron ${isExpanded ? 'is-expanded' : ''}`} aria-hidden="true"></span>
+        </button>
+      {:else if isLessonLink(row)}
+        <a
+          class="outline-row-open"
+          href={`#/lesson/${row.code}`}
+          aria-label={`Open Lesson ${row.code}: ${row.title}`}
+        >
+          Open
+        </a>
       {/if}
     </div>
 
     <h3>{row.title}</h3>
     <p>{row.body}</p>
-
-    {#if row.placeholders?.length}
-      <div class="outline-row-placeholders">
-        {#each row.placeholders as placeholder}
-          <span>{placeholder}</span>
-        {/each}
-      </div>
-    {/if}
   </article>
 
-  {#if row.children?.length}
-    <div class="outline-row-children" role="list" aria-label={`${row.title} child rows`}>
+  {#if row.children?.length && (!isCollapsible(row) || isExpanded)}
+    <div
+      id={`children-${row.id}`}
+      class="outline-row-children"
+      role="list"
+      aria-label={`${row.title} child rows`}
+    >
       {#each row.children as child (child.id)}
         <div class="outline-row-child" role="listitem">
           <svelte:self row={child} depth={depth + 1} />
@@ -58,6 +88,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
     gap: 0.52rem;
   }
 
@@ -76,15 +107,8 @@
     border: 1px solid rgba(47, 141, 131, 0.26);
   }
 
-  .outline-row-meta {
-    color: #5c625d;
-    font-size: 0.76rem;
-    font-weight: 700;
-  }
-
   .outline-row-card h3 {
     margin: 0;
-    font-family: 'Fraunces', serif;
     font-size: 1.08rem;
     line-height: 1.05;
     color: #1e2620;
@@ -96,19 +120,71 @@
     line-height: 1.45;
   }
 
-  .outline-row-placeholders {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.46rem;
+  .outline-row-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(30, 41, 50, 0.14);
+    background: rgba(255, 255, 255, 0.78);
+    color: #475048;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
   }
 
-  .outline-row-placeholders span {
-    padding: 0.24rem 0.54rem;
+  .outline-row-toggle:hover,
+  .outline-row-toggle:focus-visible {
+    background: rgba(47, 141, 131, 0.14);
+    border-color: rgba(47, 141, 131, 0.28);
+    color: #17322d;
+  }
+
+  .outline-row-chevron {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translateY(-1px);
+    transition: transform 0.15s ease;
+  }
+
+  .outline-row-chevron.is-expanded {
+    transform: rotate(-135deg) translateY(-1px);
+  }
+
+  .outline-row-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.22rem 0.68rem;
     border-radius: 999px;
+    border: 1px solid rgba(47, 141, 131, 0.22);
+    background: rgba(47, 141, 131, 0.14);
+    color: #17463f;
     font-size: 0.74rem;
-    color: #475048;
-    background: rgba(30, 41, 50, 0.06);
-    border: 1px dashed rgba(30, 41, 50, 0.18);
+    font-weight: 800;
+    text-decoration: none;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .outline-row-open:hover,
+  .outline-row-open:focus-visible {
+    border-color: rgba(47, 141, 131, 0.4);
+    background: rgba(47, 141, 131, 0.22);
+    transform: translateY(-1px);
   }
 
   .outline-row-children {
@@ -143,33 +219,29 @@
     background: rgba(95, 102, 95, 0.3);
   }
 
-  .row-type-lesson {
+  .row-type-course {
     background: linear-gradient(145deg, rgba(255, 251, 243, 0.96), rgba(248, 239, 221, 0.92));
     border-color: rgba(197, 123, 47, 0.26);
   }
 
-  .row-type-lesson .outline-row-type {
+  .row-type-course .outline-row-type {
     color: #7d4b17;
     background: rgba(197, 123, 47, 0.16);
     border-color: rgba(197, 123, 47, 0.28);
   }
 
-  .row-type-unit {
+  .row-type-strand {
     background: linear-gradient(145deg, rgba(247, 252, 251, 0.94), rgba(236, 248, 245, 0.9));
     border-color: rgba(47, 141, 131, 0.24);
   }
 
-  .row-type-section {
-    background: rgba(255, 255, 255, 0.86);
+  .row-type-strand .outline-row-type {
+    color: #145952;
+    background: rgba(47, 141, 131, 0.15);
+    border-color: rgba(47, 141, 131, 0.24);
   }
 
-  .row-type-concept .outline-row-type {
-    color: #12475a;
-    background: rgba(55, 123, 165, 0.15);
-    border-color: rgba(55, 123, 165, 0.26);
-  }
-
-  .row-type-exercise .outline-row-type {
+  .row-type-lesson .outline-row-type {
     color: #7a3f18;
     background: rgba(204, 91, 68, 0.14);
     border-color: rgba(204, 91, 68, 0.26);

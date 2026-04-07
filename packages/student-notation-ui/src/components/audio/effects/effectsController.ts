@@ -31,7 +31,7 @@ interface DialEntry {
 class EffectsController {
   private currentEffect: string | null = null;
   private effectControlsContainer: HTMLElement | null = null;
-  private effectButtons: NodeListOf<HTMLElement> = [] as any;
+  private effectButtons: HTMLElement[] = [];
   private dials: DialEntry[] = [];
   private currentColor: string | null = null;
   private isDialInteractionActive = false;
@@ -70,7 +70,7 @@ class EffectsController {
     logger.initStart('Effects Controller');
 
     this.effectControlsContainer = document.getElementById('effect-controls');
-    this.effectButtons = document.querySelectorAll('.effect-button[data-effect]');
+    this.effectButtons = Array.from(document.querySelectorAll<HTMLElement>('.effect-button[data-effect]'));
 
     // Effect buttons are optional - position controls use this controller's API directly
     if (this.effectButtons.length > 0) {
@@ -142,7 +142,7 @@ class EffectsController {
     if (!controlsContainer) {return;}
 
     Object.entries(config.controls).forEach(([key, control]) => {
-      const effectParams = this.currentColor ? (effectsCoordinator as any).getEffectParameters?.(this.currentColor, effectType) : null;
+      const effectParams = this.currentColor ? effectsCoordinator.getEffectParameters(this.currentColor, effectType) : null;
       const currentValue = effectParams?.[key] ?? control.default ?? 0;
 
       const sliderContainer = document.createElement('div');
@@ -294,7 +294,7 @@ class EffectsController {
     this.lastPreviewAt[effectType] = now;
 
     // Avoid piling previews on top of active transport playback
-    const { isPlaying, isPaused } = store.state as any;
+    const { isPlaying, isPaused } = store.state;
     if (isPlaying && !isPaused) {return;}
 
     const noteId = `effect-preview-${effectType}`;
@@ -324,7 +324,7 @@ class EffectsController {
     this.holdPreviews[effectType] = { pitches, root, color, noteId };
 
     // Do not layer previews over active playback
-    const { isPlaying, isPaused } = store.state as any;
+    const { isPlaying, isPaused } = store.state;
     if (isPlaying && !isPaused) {return;}
 
     // For delay effect, ensure the delay instance exists in the audio chain before triggering preview

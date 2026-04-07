@@ -2,6 +2,10 @@
 import store from '@state/initStore.ts';
 import { hexToRgba } from '@utils/colorUtils.ts';
 import logger from '@utils/logger.ts';
+import {
+  getAnimationEffectsManager,
+  getSynthEngine as getRuntimeSynthEngine
+} from '@services/runtimeGlobals.ts';
 
 interface WaveformAnalyser {
   getValue(): Float32Array;
@@ -23,13 +27,11 @@ interface AnimationEffectsManagerLike {
   vibratoCanvasEffect?: VibratoEffect;
 }
 
-const getSynthEngine = (): SynthEngineWithAnalyser | null => {
-  return (window as { synthEngine?: SynthEngineWithAnalyser }).synthEngine ?? null;
-};
+const getSynthEngine = (): SynthEngineWithAnalyser | null =>
+  (getRuntimeSynthEngine() as SynthEngineWithAnalyser | null) ?? null;
 
-const getAnimationManager = (): AnimationEffectsManagerLike | null => {
-  return (window as { animationEffectsManager?: AnimationEffectsManagerLike }).animationEffectsManager ?? null;
-};
+const getAnimationManager = (): AnimationEffectsManagerLike | null =>
+  (getAnimationEffectsManager() as AnimationEffectsManagerLike | undefined) ?? null;
 
 logger.moduleLoaded('DynamicWaveformVisualizer');
 

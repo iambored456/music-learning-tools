@@ -11,8 +11,7 @@
       "@services/*": ["./src/services/*"],
       "@state/*": ["./src/state/*"],
       "@utils/*": ["./src/utils/*"],
-      "@data/*": ["./src/data/*"],
-      "@app-types/*": ["./types/*"]
+      "@data/*": ["./src/data/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "types/**/*.ts", "types/**/*.d.ts"],

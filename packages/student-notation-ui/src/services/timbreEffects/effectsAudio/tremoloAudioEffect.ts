@@ -26,8 +26,8 @@ interface Voice {
  * [PERF:SHARED-LFO] Tremolo modulation is now handled by shared per-color LFOs
  * in synthEngine.ts, not per-voice. applyToVoice() calls voice._setTremolo() which
  * is a no-op — the actual modulation happens via shared LFO → tremoloGain.gain.
- * This class still stores settings and is called by audioEffectsManager for
- * backwards compatibility, but the real work happens in synthEngine.updateSharedTremolo().
+ * This class stores the current tremolo settings while synthEngine.updateSharedTremolo()
+ * applies the live modulation.
  */
 class TremoloAudioEffect {
   private currentSettings = new Map<string, TremoloSettings>();

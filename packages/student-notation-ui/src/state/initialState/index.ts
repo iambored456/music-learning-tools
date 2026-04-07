@@ -1,8 +1,8 @@
 // js/state/initialState/index.ts
-import { getInitialRhythmState } from './rhythm.js';
-import { getInitialTimbresState } from './timbres.js';
-import { fullRowData as masterRowData } from '../pitchData.js';
-import type { AppState } from '@app-types/state.js';
+import { getInitialRhythmState } from './rhythm.ts';
+import { getInitialTimbresState } from './timbres.ts';
+import { fullRowData as masterRowData } from '../pitchData.ts';
+import type { AppState } from '@mlt/types';
 
 function resolvePitchRangeFromToneNotes(topToneNote: string, bottomToneNote: string) {
   const topIndex = masterRowData.findIndex(row => row.toneNote === topToneNote);

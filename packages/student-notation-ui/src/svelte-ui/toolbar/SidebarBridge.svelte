@@ -3,8 +3,6 @@
    * SidebarBridge - Headless Svelte component
    *
    * This component manages sidebar, volume popup, and various toggle controls.
-   *
-   * This replaces: src/components/toolbar/initializers/sidebarInitializer.ts
    */
   import { onMount, onDestroy } from 'svelte';
   import { initLocalDrumSampleChoices } from '@components/canvas/drumGrid/drumGridInteractor.ts';
@@ -294,8 +292,6 @@
   }
 
   async function handleTakeToSingingTrainer(): Promise<void> {
-    console.log('[Svelte] Take to Singing Trainer clicked');
-
     // Check if there are any notes to export
     if (!hasPitchNotes()) {
       showHandoffNotification(
@@ -323,8 +319,6 @@
     const validation = validateForExport(snapshot);
 
     if (!validation.isValid) {
-      console.warn('[Svelte] Handoff validation failed', validation.details);
-
       // Format conflicts for display
       const conflictMessages: string[] = [];
       for (const conflict of validation.details.conflicts) {
@@ -346,7 +340,6 @@
     // Validation passed - write to handoff slot
     try {
       const handoffId = await writeHandoffSlot(snapshot);
-      console.log('[Svelte] Handoff slot written', handoffId);
 
       // Navigate to Singing Trainer
       navigateToSingingTrainer(handoffId);
@@ -473,7 +466,6 @@
       });
     }
 
-    if ((window as any).__initDebug) console.log('[Svelte] SidebarBridge mounted');
   });
 
   onDestroy(() => {
@@ -502,7 +494,6 @@
     leftLegendToggleBtn?.removeEventListener('click', handleLeftLegendToggle);
     rightLegendToggleBtn?.removeEventListener('click', handleRightLegendToggle);
 
-    if ((window as any).__initDebug) console.log('[Svelte] SidebarBridge unmounted');
   });
 </script>
 

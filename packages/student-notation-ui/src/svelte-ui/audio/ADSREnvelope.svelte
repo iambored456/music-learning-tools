@@ -1,8 +1,11 @@
 <script lang="ts">
   import store from '@state/initStore.ts';
   import logger from '@utils/logger.ts';
-  import { logAdsrFlow } from '@utils/adsrDebug.ts';
   import { applyTheme, drawEnvelope, drawTempoGridlines } from '@components/audio/adsr/adsrRender.ts';
+  import {
+    getAnimationEffectsManager,
+    getWaveformVisualizer
+  } from '@services/runtimeGlobals.ts';
 
   const BASE_ADSR_TIME_SECONDS = 2.5;
   const MIN_STAGE_GAP = 0.01;
@@ -81,12 +84,12 @@
 
   function getNormalizedAmplitude(color: string): number {
     let tremoloMultiplier = 1.0;
-    const animationManager = window.animationEffectsManager;
+    const animationManager = getAnimationEffectsManager();
     if (animationManager?.shouldTremoloBeRunning?.()) {
-      tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier(color);
+      tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier?.(color) ?? 1.0;
     }
 
-    const originalAmplitude = window.waveformVisualizer?.calculatedAmplitude ?? 1.0;
+    const originalAmplitude = getWaveformVisualizer()?.calculatedAmplitude ?? 1.0;
     return originalAmplitude * tremoloMultiplier;
   }
 
@@ -99,11 +102,6 @@
     if (timbreAdsr.sustain - normalizedAmplitude > SUSTAIN_EPSILON) {
       const nextAdsr = { ...timbreAdsr, sustain: normalizedAmplitude };
       store.setADSR(currentColor, nextAdsr);
-      logAdsrFlow('adsrEnvelope:clampSustain', {
-        color: currentColor,
-        adsr: nextAdsr,
-        normalizedAmplitude
-      });
       return nextAdsr;
     }
 
@@ -160,10 +158,6 @@
     };
 
     store.setADSR(currentColor, nextAdsr);
-    logAdsrFlow('adsrEnvelope:updateADSRFromAbsoluteTimes', {
-      color: currentColor,
-      adsr: nextAdsr
-    });
   }
 
   function updateControls(): void {
@@ -381,7 +375,7 @@
       let percent = 100 - (y / rect.height) * 100;
       percent = Math.max(0, Math.min(100, percent));
 
-      const normalizedAmplitude = window.waveformVisualizer?.getNormalizedAmplitude?.() || 1.0;
+      const normalizedAmplitude = getWaveformVisualizer()?.getNormalizedAmplitude?.() || 1.0;
       const maxSustainPercent = normalizedAmplitude * 100;
       percent = Math.min(percent, maxSustainPercent);
 
@@ -390,10 +384,6 @@
 
       const nextAdsr = { ...timbre.adsr, sustain: percent / 100 };
       store.setADSR(currentColor, nextAdsr);
-      logAdsrFlow('adsrEnvelope:sustainSlider', {
-        color: currentColor,
-        adsr: nextAdsr
-      });
     };
 
     const handleSustainPointerDown = (event: PointerEvent): void => {
@@ -480,7 +470,7 @@
           break;
         case 'decay-sustain-node': {
           currentTimes.d = timeValue;
-          const normalizedAmplitude = window.waveformVisualizer?.getNormalizedAmplitude?.() || 1.0;
+          const normalizedAmplitude = getWaveformVisualizer()?.getNormalizedAmplitude?.() || 1.0;
           nextSustain = Math.min(yPercent, normalizedAmplitude);
           break;
         }
@@ -498,10 +488,6 @@
           sustain: nextSustain
         };
         store.setADSR(currentColor, nextAdsr);
-        logAdsrFlow('adsrEnvelope:nodeDragSustain', {
-          color: currentColor,
-          adsr: nextAdsr
-        });
       }
 
       updateADSRFromAbsoluteTimes(currentTimes);

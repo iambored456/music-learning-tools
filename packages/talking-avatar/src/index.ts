@@ -152,6 +152,10 @@ export function createTalkingAvatarController(
       narrator.setVoiceURI(uri);
     },
 
+    setVolume(volume: number): void {
+      narrator.setVolume(volume);
+    },
+
     dispose(): void {
       narrator.dispose();
       actor.dispose();

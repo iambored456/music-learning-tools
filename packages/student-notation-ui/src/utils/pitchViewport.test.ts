@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { PitchRange } from '@app-types/state.js';
+import type { PitchRange } from '@mlt/types';
 import {
   clampToGamut,
   getAdaptiveZoomStep,

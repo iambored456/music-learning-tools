@@ -1,7 +1,7 @@
 // js/components/ADSR/adsrInteractions.ts
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import { logAdsrFlow } from '@utils/adsrDebug.ts';
+import { getWaveformVisualizer } from '@services/runtimeGlobals.ts';
 import { BASE_ADSR_TIME_SECONDS } from './adsrComponent.ts';
 import type { ADSRElements } from './adsrUI.ts';
 
@@ -59,10 +59,6 @@ function updateADSRFromAbsoluteTimes(newTimes: AbsoluteTimes, component: ADSRCom
   };
 
   store.setADSR(component.currentColor, nextAdsr);
-  logAdsrFlow('adsrInteractions:updateADSRFromAbsoluteTimes', {
-    color: component.currentColor,
-    adsr: nextAdsr
-  });
 }
 
 function initSustainSlider(elements: ADSRElements, component: ADSRComponent): void {
@@ -76,7 +72,7 @@ function initSustainSlider(elements: ADSRElements, component: ADSRComponent): vo
     percent = Math.max(0, Math.min(100, percent));
 
     // Constrain sustain to normalized amplitude
-    const normalizedAmplitude = (window as any).waveformVisualizer?.getNormalizedAmplitude() || 1.0;
+    const normalizedAmplitude = getWaveformVisualizer()?.getNormalizedAmplitude?.() || 1.0;
     const maxSustainPercent = normalizedAmplitude * 100;
     percent = Math.min(percent, maxSustainPercent);
 
@@ -84,10 +80,6 @@ function initSustainSlider(elements: ADSRElements, component: ADSRComponent): vo
     if (!currentTimbre) {return;}
     const nextAdsr = { ...currentTimbre.adsr, sustain: percent / 100 };
     store.setADSR(component.currentColor, nextAdsr);
-    logAdsrFlow('adsrInteractions:sustainSlider', {
-      color: component.currentColor,
-      adsr: nextAdsr
-    });
   };
 
   const startDrag = (e: PointerEvent): void => {
@@ -185,7 +177,7 @@ function initNodeDragging(elements: ADSRElements, component: ADSRComponent): voi
       case 'decay-sustain-node': {
         currentTimes.d = timeVal;
         // Get normalized amplitude to constrain sustain level
-        const normalizedAmplitude = (window as any).waveformVisualizer?.getNormalizedAmplitude() || 1.0;
+        const normalizedAmplitude = getWaveformVisualizer()?.getNormalizedAmplitude?.() || 1.0;
         sustain = Math.min(yPercent, normalizedAmplitude); // Constrain sustain to normalized amplitude
         break;
       }
@@ -201,10 +193,6 @@ function initNodeDragging(elements: ADSRElements, component: ADSRComponent): voi
     if (sustain !== oldSustain) {
       const nextAdsr = { attack, decay, release, sustain };
       store.setADSR(component.currentColor, nextAdsr);
-      logAdsrFlow('adsrInteractions:nodeDragSustain', {
-        color: component.currentColor,
-        adsr: nextAdsr
-      });
     }
 
     updateADSRFromAbsoluteTimes(currentTimes, component);

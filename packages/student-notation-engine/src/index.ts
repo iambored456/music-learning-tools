@@ -2,29 +2,31 @@
  * @mlt/student-notation-engine
  *
  * Framework-agnostic engine for Student Notation.
- * Provides canvas rendering, audio playback, and state management
+ * Provides composable state, audio, transport, canvas, and utility primitives
  * without any DOM dependencies.
  *
  * Usage:
  *
  * ```typescript
- * import { createEngineController } from '@mlt/student-notation-engine';
+ * import {
+ *   createStore,
+ *   createSynthEngine,
+ *   createTimeMapCalculator
+ * } from '@mlt/student-notation-engine';
  *
- * const engine = createEngineController();
- *
- * engine.init({
- *   pitchGridContext: canvas.getContext('2d'),
- *   drumGridContext: drumCanvas.getContext('2d'),
+ * const store = createStore();
+ * const synthEngine = createSynthEngine({
+ *   timbres: store.state.timbres,
  * });
  *
- * // Use the public API
- * engine.setTool('note');
- * engine.insertNote(40, 0, 4);
- * engine.play();
+ * const timeMap = createTimeMapCalculator({
+ *   getMacrobeatInfo: (index) => ({ startColumn: index * 2, endColumn: index * 2 + 1 }),
+ *   getPlacedTonicSigns: () => [],
+ *   getTonicSpanColumnIndices: () => [],
+ * });
  *
- * // Subscribe to events
- * engine.on('noteAdded', (note) => {
- *   console.log('Note added:', note);
+ * store.on('notesChanged', () => {
+ *   timeMap.calculate(store.state);
  * });
  * ```
  */
@@ -79,20 +81,6 @@ export type {
   // Coordinates
   CanvasSpaceColumn,
 } from '@mlt/types';
-
-// Controller API
-export {
-  createEngineController,
-  createLessonMode,
-  type EngineController,
-  type EngineConfig,
-  type LessonModeAPI,
-  type SelectionItem,
-  type HighlightTarget,
-  type ActionEvent,
-  type ActionHandler,
-  type EventCallback,
-} from './controller.js';
 
 // State module
 export {

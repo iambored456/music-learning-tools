@@ -29,32 +29,109 @@ import { eraseAnnotationsAtPoint } from '@services/annotation/annotationEraser.t
 import { computeConvexHullForSelectedItems, computeLassoSelection, removeFromLassoSelectionAtPoint } from '@services/annotation/annotationLassoSelection.ts';
 import { applyLassoSelectionDrag } from '@services/annotation/annotationSelectionDrag.ts';
 import { renderArrowAnnotation } from '@services/annotation/annotationArrowRenderer.ts';
+import { getDrawToolsController } from '@services/runtimeGlobals.ts';
+import type { ToolName, ToolSettings } from '@components/draw/drawToolsController.ts';
+import type {
+  Annotation as StoredAnnotation,
+  ArrowAnnotation,
+  LassoAnnotation,
+  PathAnnotation,
+  SelectableAnnotation,
+  TempAnnotation,
+  TextAnnotation,
+  TextAnnotationSettings,
+  TextPreviewAnnotation,
+} from '@mlt/types';
+import type {
+  CanvasPoint,
+  FlexiblePoint,
+  GridPoint,
+  ResizeHandle
+} from '@services/annotation/types.ts';
 
 logger.moduleLoaded('AnnotationService', 'annotation');
+
+type TextToolSettings = TextAnnotationSettings;
+type ArrowDragOffset = { startCol: number; startRow: number; endCol: number; endRow: number };
+type TextDragOffset = { col: number; row: number };
+type AnnotationDragOffset = ArrowDragOffset | TextDragOffset;
+type TextResizeStartBounds = {
+  col: number;
+  row: number;
+  widthCols: number;
+  heightRows: number;
+  mouseCol: number;
+  mouseRow: number;
+};
+
+function isArrowDragOffset(offset: AnnotationDragOffset): offset is ArrowDragOffset {
+  return 'startCol' in offset;
+}
+
+function isTextDragOffset(offset: AnnotationDragOffset): offset is TextDragOffset {
+  return 'col' in offset;
+}
+
+function isArrowAnnotation(annotation: TempAnnotation | SelectableAnnotation | null): annotation is ArrowAnnotation {
+  return annotation?.type === 'arrow';
+}
+
+function isTextPreviewAnnotation(annotation: TempAnnotation | null): annotation is TextPreviewAnnotation {
+  return annotation?.type === 'text' && 'startCol' in annotation;
+}
+
+function isPathAnnotation(annotation: TempAnnotation | null): annotation is PathAnnotation {
+  return annotation?.type === 'marker' || annotation?.type === 'highlighter';
+}
+
+function isLassoAnnotation(annotation: TempAnnotation | null): annotation is LassoAnnotation {
+  return annotation?.type === 'lasso';
+}
 
 class AnnotationService {
   canvas!: HTMLCanvasElement;
   ctx!: CanvasRenderingContext2D;
-  currentTool: string | null;
-  toolSettings: any;
+  currentTool: ToolName;
+  toolSettings: ToolSettings | null;
   tempEraserMode: boolean;
   isDrawing: boolean;
-  currentPath: Array<{ x?: number; y?: number; col?: number; row?: number }>;
-  startPoint: { x?: number; y?: number; col?: number; row?: number } | null;
-  tempAnnotation: any;
-  selectedAnnotation: any;
-  hoverAnnotation: any;
+  currentPath: FlexiblePoint[];
+  startPoint: FlexiblePoint | null;
+  tempAnnotation: TempAnnotation | null;
+  selectedAnnotation: SelectableAnnotation | null;
+  hoverAnnotation: SelectableAnnotation | null;
   eraserCursor: { x: number; y: number } | null;
   isDragging: boolean;
-  dragOffset: any;
+  dragOffset: AnnotationDragOffset | null;
   isResizing: boolean;
-  resizeHandle: string | null;
-  resizeStartBounds: any;
+  resizeHandle: ResizeHandle | null;
+  resizeStartBounds: TextResizeStartBounds | null;
   isDraggingSelection: boolean;
-  selectionDragStart: { col: number; row: number } | null;
-  selectionDragTotal: { col: number; row: number } | null;
+  selectionDragStart: GridPoint | null;
+  selectionDragTotal: GridPoint | null;
   lastPointerPosition: { clientX: number; clientY: number } | null;
   initialDragStartRank: number | null;
+  private initialized = false;
+  private readonly scrollSyncTargets = new Set<HTMLElement>();
+  private readonly handleAnnotationsChanged = (): void => {
+    this.selectedAnnotation = null;
+    this.render();
+  };
+  private readonly handleStoreScrollByUnits = (direction?: number): void => {
+    if (typeof direction !== 'number') {return;}
+    this.handleSelectionScroll(direction);
+  };
+  private readonly handleMouseDownBound = this.handleMouseDown.bind(this);
+  private readonly handleMouseMoveBound = this.handleMouseMove.bind(this);
+  private readonly handleMouseUpBound = this.handleMouseUp.bind(this);
+  private readonly handleMouseLeaveBound = this.handleMouseLeave.bind(this);
+  private readonly handleDoubleClickBound = this.handleDoubleClick.bind(this);
+  private readonly handleWheelBound = this.handleWheel.bind(this);
+  private readonly handleScrollBound = this.handleScroll.bind(this);
+  private readonly handleKeyDownBound = this.handleKeyDown.bind(this);
+  private readonly handleContextMenuBound = (event: MouseEvent): void => {
+    event.preventDefault();
+  };
 
   constructor() {
     this.toolSettings = null;
@@ -96,43 +173,80 @@ class AnnotationService {
       return;
     }
 
+    if (this.initialized && this.canvas === canvas) {
+      return;
+    }
+    if (this.initialized) {
+      this.dispose();
+    }
+
     this.canvas = canvas;
     this.ctx = ctx;
     this.setupEventListeners();
 
     // Listen to store changes for undo/redo support
-    store.on('annotationsChanged', () => {
-      this.selectedAnnotation = null;
-      this.render();
-    });
+    store.on('annotationsChanged', this.handleAnnotationsChanged);
 
     // Listen to scroll events to keep lasso selection in sync with grid
-    store.on('scrollByUnits', (direction?: number) => {
-      if (typeof direction !== 'number') {return;}
-      this.handleSelectionScroll(direction);
-    });
+    store.on('scrollByUnits', this.handleStoreScrollByUnits);
 
+    this.initialized = true;
     logger.initSuccess('AnnotationService');
   }
 
   setupEventListeners() {
-    this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-    this.canvas.addEventListener('mouseleave', this.handleMouseLeave.bind(this));
-    this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+    this.canvas.addEventListener('mousedown', this.handleMouseDownBound);
+    this.canvas.addEventListener('mousemove', this.handleMouseMoveBound);
+    this.canvas.addEventListener('mouseup', this.handleMouseUpBound);
+    this.canvas.addEventListener('mouseleave', this.handleMouseLeaveBound);
+    this.canvas.addEventListener('dblclick', this.handleDoubleClickBound);
     // Keep dragged lasso selections aligned when the user scrolls during a drag
-    this.canvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: true });
-    this.canvas.addEventListener('contextmenu', (event: MouseEvent) => event.preventDefault()); // Prevent context menu
+    this.canvas.addEventListener('wheel', this.handleWheelBound, { passive: true });
+    this.canvas.addEventListener('contextmenu', this.handleContextMenuBound);
     // Also listen to scroll + wheel on likely containers so dragging stays aligned when scrolling
     this.registerScrollSyncTarget(document.getElementById('pitch-grid-wrapper'));
     this.registerScrollSyncTarget(document.getElementById('canvas-container'));
     // Fallback: global scroll (e.g., if wrapper not found)
-    window.addEventListener('scroll', this.handleScroll.bind(this), { passive: true });
-    window.addEventListener('wheel', this.handleWheel.bind(this), { passive: true });
+    window.addEventListener('scroll', this.handleScrollBound, { passive: true });
+    window.addEventListener('wheel', this.handleWheelBound, { passive: true });
 
     // Add keyboard listener for delete/backspace
-    document.addEventListener('keydown', this.handleKeyDown.bind(this));
+    document.addEventListener('keydown', this.handleKeyDownBound);
+  }
+
+  private removeEventListeners(): void {
+    if (!this.canvas) {
+      return;
+    }
+
+    this.canvas.removeEventListener('mousedown', this.handleMouseDownBound);
+    this.canvas.removeEventListener('mousemove', this.handleMouseMoveBound);
+    this.canvas.removeEventListener('mouseup', this.handleMouseUpBound);
+    this.canvas.removeEventListener('mouseleave', this.handleMouseLeaveBound);
+    this.canvas.removeEventListener('dblclick', this.handleDoubleClickBound);
+    this.canvas.removeEventListener('wheel', this.handleWheelBound);
+    this.canvas.removeEventListener('contextmenu', this.handleContextMenuBound);
+
+    this.scrollSyncTargets.forEach(target => {
+      target.removeEventListener('wheel', this.handleWheelBound);
+      target.removeEventListener('scroll', this.handleScrollBound);
+    });
+    this.scrollSyncTargets.clear();
+
+    window.removeEventListener('scroll', this.handleScrollBound);
+    window.removeEventListener('wheel', this.handleWheelBound);
+    document.removeEventListener('keydown', this.handleKeyDownBound);
+  }
+
+  dispose(): void {
+    if (!this.initialized) {
+      return;
+    }
+
+    this.removeEventListeners();
+    store.off('annotationsChanged', this.handleAnnotationsChanged);
+    store.off('scrollByUnits', this.handleStoreScrollByUnits);
+    this.initialized = false;
   }
 
   handleKeyDown(e: KeyboardEvent) {
@@ -230,7 +344,19 @@ class AnnotationService {
     };
   }
 
-  setTool(toolName: string | null, settings: any) {
+  getTempAnnotation(): TempAnnotation | null {
+    return this.tempAnnotation;
+  }
+
+  getSelectedAnnotation(): SelectableAnnotation | null {
+    return this.selectedAnnotation;
+  }
+
+  getHoverAnnotation(): SelectableAnnotation | null {
+    return this.hoverAnnotation;
+  }
+
+  setTool(toolName: ToolName, settings: ToolSettings | null) {
     this.currentTool = toolName;
     this.toolSettings = settings;
 
@@ -482,15 +608,16 @@ class AnnotationService {
     }
 
     // Handle dragging selected annotation
-    if (this.isDragging && this.selectedAnnotation) {
-      if (this.selectedAnnotation.type === 'arrow') {
-        this.selectedAnnotation.startCol = gridCoords.col - this.dragOffset.startCol;
-        this.selectedAnnotation.startRow = gridCoords.row - this.dragOffset.startRow;
-        this.selectedAnnotation.endCol = gridCoords.col - this.dragOffset.endCol;
-        this.selectedAnnotation.endRow = gridCoords.row - this.dragOffset.endRow;
-      } else if (this.selectedAnnotation.type === 'text') {
-        this.selectedAnnotation.col = gridCoords.col - this.dragOffset.col;
-        this.selectedAnnotation.row = gridCoords.row - this.dragOffset.row;
+    const dragOffset = this.dragOffset;
+    if (this.isDragging && this.selectedAnnotation && dragOffset) {
+      if (this.selectedAnnotation.type === 'arrow' && isArrowDragOffset(dragOffset)) {
+        this.selectedAnnotation.startCol = gridCoords.col - dragOffset.startCol;
+        this.selectedAnnotation.startRow = gridCoords.row - dragOffset.startRow;
+        this.selectedAnnotation.endCol = gridCoords.col - dragOffset.endCol;
+        this.selectedAnnotation.endRow = gridCoords.row - dragOffset.endRow;
+      } else if (this.selectedAnnotation.type === 'text' && isTextDragOffset(dragOffset)) {
+        this.selectedAnnotation.col = gridCoords.col - dragOffset.col;
+        this.selectedAnnotation.row = gridCoords.row - dragOffset.row;
       }
       this.render();
       return;
@@ -502,33 +629,38 @@ class AnnotationService {
       return;
     }
 
-    if (!this.tempAnnotation) {return;}
+    const tempAnnotation = this.tempAnnotation;
+    if (!tempAnnotation) {return;}
 
     switch (this.currentTool) {
       case 'arrow':
-        this.tempAnnotation.endCol = gridCoords.col;
-        this.tempAnnotation.endRow = gridCoords.row;
+        if (!isArrowAnnotation(tempAnnotation)) {return;}
+        tempAnnotation.endCol = gridCoords.col;
+        tempAnnotation.endRow = gridCoords.row;
         this.render();
         break;
       case 'text':
-        this.tempAnnotation.endCol = gridCoords.col;
-        this.tempAnnotation.endRow = gridCoords.row;
+        if (!isTextPreviewAnnotation(tempAnnotation)) {return;}
+        tempAnnotation.endCol = gridCoords.col;
+        tempAnnotation.endRow = gridCoords.row;
         this.render();
         break;
       case 'marker':
       case 'highlighter':
+        if (!isPathAnnotation(tempAnnotation)) {return;}
         // Interpolate points for smooth continuous path
-        if (this.tempAnnotation.path.length > 0) {
-          const lastPoint = this.tempAnnotation.path[this.tempAnnotation.path.length - 1];
+        if (tempAnnotation.path.length > 0) {
+          const lastPoint = tempAnnotation.path[tempAnnotation.path.length - 1];
           const interpolated = this.interpolatePoints(lastPoint, gridCoords);
-          this.tempAnnotation.path.push(...interpolated);
+          tempAnnotation.path.push(...interpolated);
         } else {
-          this.tempAnnotation.path.push(gridCoords);
+          tempAnnotation.path.push(gridCoords);
         }
         this.render();
         break;
       case 'lasso':
-        this.tempAnnotation.path.push({ x: canvasX, y: canvasY }); // Lasso still uses pixels for now
+        if (!isLassoAnnotation(tempAnnotation)) {return;}
+        tempAnnotation.path.push({ x: canvasX, y: canvasY });
         this.render();
         break;
     }
@@ -574,10 +706,11 @@ class AnnotationService {
       return;
     }
 
-    if (this.tempAnnotation) {
+    const tempAnnotation = this.tempAnnotation;
+    if (tempAnnotation) {
       // Handle text tool - open text input after drag or click
-      if (this.currentTool === 'text') {
-        const { startCol, startRow, endCol, endRow } = this.tempAnnotation;
+      if (this.currentTool === 'text' && isTextPreviewAnnotation(tempAnnotation)) {
+        const { startCol, startRow, endCol, endRow } = tempAnnotation;
         const widthCols = Math.abs(endCol - startCol);
         const heightRows = Math.abs(endRow - startRow);
         const col = Math.min(startCol, endCol);
@@ -602,12 +735,14 @@ class AnnotationService {
         // Process lasso selection
         this.handleLassoSelection(e.shiftKey);
       } else {
-        store.state.annotations.push(this.tempAnnotation);
-        // Auto-select arrows after placement
-        if (this.currentTool === 'arrow') {
-          this.selectedAnnotation = this.tempAnnotation;
+        if (isArrowAnnotation(tempAnnotation) || isPathAnnotation(tempAnnotation)) {
+          store.state.annotations.push(tempAnnotation);
+          // Auto-select arrows after placement
+          if (this.currentTool === 'arrow' && isArrowAnnotation(tempAnnotation)) {
+            this.selectedAnnotation = tempAnnotation;
+          }
+          store.recordState();
         }
-        store.recordState();
       }
       this.tempAnnotation = null;
       this.render();
@@ -640,9 +775,10 @@ class AnnotationService {
   }
 
   registerScrollSyncTarget(target: HTMLElement | null) {
-    if (!target) {return;}
-    target.addEventListener('wheel', this.handleWheel.bind(this), { passive: true });
-    target.addEventListener('scroll', this.handleScroll.bind(this), { passive: true });
+    if (!target || this.scrollSyncTargets.has(target)) {return;}
+    target.addEventListener('wheel', this.handleWheelBound, { passive: true });
+    target.addEventListener('scroll', this.handleScrollBound, { passive: true });
+    this.scrollSyncTargets.add(target);
   }
 
 	  applySelectionDrag(canvasX: number, canvasY: number) {
@@ -717,7 +853,7 @@ class AnnotationService {
     }
   }
 
-  editTextAnnotation(annotation: any) {
+  editTextAnnotation(annotation: TextAnnotation) {
     // Open text editor for existing annotation
     const { col, row, widthCols, heightRows, text, settings } = annotation;
 
@@ -739,7 +875,7 @@ class AnnotationService {
     widthCols: number,
     heightRows: number,
     existingText: string | null = null,
-    existingSettings: any = null
+    existingSettings: TextToolSettings | null = null
   ) {
     this.isDrawing = false;
 
@@ -756,7 +892,10 @@ class AnnotationService {
     const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible Next", Arial, sans-serif';
 
     // Use existing settings if editing, otherwise use current tool settings
-    const settings = existingSettings || this.toolSettings.text;
+    const settings = existingSettings || this.toolSettings?.text;
+    if (!settings) {
+      return;
+    }
 
     // Create text input overlay
     const input = document.createElement('div');
@@ -822,7 +961,7 @@ class AnnotationService {
       const text = input.textContent.trim();
       // Don't save if empty or just placeholder
       if (text && text !== 'Type here...') {
-        const annotation = {
+        const annotation: TextAnnotation = {
           type: 'text',
           col,
           row,
@@ -832,7 +971,7 @@ class AnnotationService {
           settings: { ...settings }
         };
         store.state.annotations.push(annotation);
-        this.selectedAnnotation = store.state.annotations[store.state.annotations.length - 1];
+        this.selectedAnnotation = annotation;
         store.recordState();
         this.render();
       }
@@ -870,11 +1009,11 @@ class AnnotationService {
   }
 
 	  handleLassoSelection(isAdditive = false) {
-	    if (!this.tempAnnotation?.path) {return;}
+	    if (!isLassoAnnotation(this.tempAnnotation)) {return;}
 
 	    const options = this.getRenderOptions();
 	    store.state.lassoSelection = computeLassoSelection({
-	      lassoPath: this.tempAnnotation.path as Array<{ x: number; y: number }>,
+	      lassoPath: this.tempAnnotation.path,
 	      state: store.state,
 	      renderOptions: options,
 	      isAdditive,
@@ -923,35 +1062,47 @@ class AnnotationService {
 	  }
 
   drawTempAnnotation() {
-    if (!this.tempAnnotation) {return;}
+    const tempAnnotation = this.tempAnnotation;
+    if (!tempAnnotation) {return;}
 
-    switch (this.tempAnnotation.type) {
+    switch (tempAnnotation.type) {
       case 'arrow':
-        this.drawArrow(this.tempAnnotation, true);
+        if (isArrowAnnotation(tempAnnotation)) {
+          this.drawArrow(tempAnnotation, true);
+        }
         break;
       case 'text':
-        this.drawTextBoxPreview(this.tempAnnotation);
+        if (isTextPreviewAnnotation(tempAnnotation)) {
+          this.drawTextBoxPreview(tempAnnotation);
+        }
         break;
       case 'marker':
-        this.drawPath(this.tempAnnotation, false);
+        if (isPathAnnotation(tempAnnotation)) {
+          this.drawPath(tempAnnotation, false);
+        }
         break;
       case 'highlighter':
-        this.drawPath(this.tempAnnotation, true);
+        if (isPathAnnotation(tempAnnotation)) {
+          this.drawPath(tempAnnotation, true);
+        }
         break;
       case 'lasso':
-        this.drawLassoPath(this.tempAnnotation);
+        if (isLassoAnnotation(tempAnnotation)) {
+          this.drawLassoPath(tempAnnotation);
+        }
         break;
     }
   }
 
-  drawTextBoxPreview(annotation: any) {
-    const { startX, startY, endX, endY } = annotation;
+  drawTextBoxPreview(annotation: TextPreviewAnnotation) {
+    const start = this.gridToCanvas(annotation.startCol, annotation.startRow);
+    const end = this.gridToCanvas(annotation.endCol, annotation.endRow);
     const ctx = this.ctx;
 
-    const x = Math.min(startX, endX);
-    const y = Math.min(startY, endY);
-    const width = Math.abs(endX - startX);
-    const height = Math.abs(endY - startY);
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const width = Math.abs(end.x - start.x);
+    const height = Math.abs(end.y - start.y);
 
     ctx.save();
     ctx.strokeStyle = 'rgba(74, 144, 226, 0.6)';
@@ -960,7 +1111,7 @@ class AnnotationService {
     ctx.strokeRect(x, y, width, height);
 
     // Draw background preview if enabled
-    if (this.toolSettings.text.background) {
+    if (this.toolSettings?.text.background) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       ctx.fillRect(x, y, width, height);
     }
@@ -973,10 +1124,17 @@ class AnnotationService {
     PitchGridController.render();
   }
 
-	  drawArrow(annotation: any, isTemp = false, isSelected = false, isHovered = false) {
+	  drawArrow(annotation: ArrowAnnotation, isTemp = false, isSelected = false, isHovered = false) {
+    const options = this.getRenderOptions();
 	    renderArrowAnnotation({
 	      ctx: this.ctx,
-	      annotation,
+	      annotation: {
+          ...annotation,
+          startX: getColumnX(annotation.startCol, options),
+          startY: getRowY(annotation.startRow, options),
+          endX: getColumnX(annotation.endCol, options),
+          endY: getRowY(annotation.endRow, options)
+        },
 	      isTemp,
 	      isSelected,
 	      isHovered,
@@ -1022,9 +1180,15 @@ class AnnotationService {
     return wrappedLines;
   }
 
-  drawText(annotation: any, isSelected = false, isHovered = false) {
-    const { x, y, text, settings } = annotation;
+  drawText(annotation: TextAnnotation, isSelected = false, isHovered = false) {
+    const { text, settings } = annotation;
     const ctx = this.ctx;
+    const origin = this.gridToCanvas(annotation.col, annotation.row);
+    const extent = this.gridToCanvas(annotation.col + annotation.widthCols, annotation.row + annotation.heightRows);
+    const x = origin.x;
+    const y = origin.y;
+    const maxWidth = extent.x - origin.x;
+    const totalHeight = extent.y - origin.y;
 
     ctx.save();
 
@@ -1038,10 +1202,6 @@ class AnnotationService {
 
 
     const lineHeight = parseInt(fontSizeValue) * 1.2;
-
-    // Use stored dimensions from the text box
-    const maxWidth = annotation.width || 0;
-    const totalHeight = annotation.height || 0;
 
     // Wrap text to fit within the box width
     const padding = settings.background ? 16 : 8; // Match input padding
@@ -1093,7 +1253,7 @@ class AnnotationService {
     x: number,
     y: number,
     fontSize: number,
-    settings: any,
+    settings: TextToolSettings,
     fontFamily: string
   ) {
     // If entire text is superscript or subscript from toolbar settings, render accordingly
@@ -1280,9 +1440,10 @@ class AnnotationService {
     ctx.restore();
   }
 
-  drawPath(annotation: any, isHighlighter: boolean) {
+  drawPath(annotation: PathAnnotation, isHighlighter: boolean) {
     const { path, settings } = annotation;
     const ctx = this.ctx;
+    const options = this.getRenderOptions();
 
     if (path.length < 2) {return;}
 
@@ -1300,17 +1461,17 @@ class AnnotationService {
     ctx.lineJoin = 'round';
 
     ctx.beginPath();
-    ctx.moveTo(path[0].x, path[0].y);
+    ctx.moveTo(getColumnX(path[0].col, options), getRowY(path[0].row, options));
 
     for (let i = 1; i < path.length; i++) {
-      ctx.lineTo(path[i].x, path[i].y);
+      ctx.lineTo(getColumnX(path[i].col, options), getRowY(path[i].row, options));
     }
 
     ctx.stroke();
     ctx.restore();
   }
 
-  drawLassoPath(annotation: any) {
+  drawLassoPath(annotation: LassoAnnotation) {
     const { path } = annotation;
     const ctx = this.ctx;
 
@@ -1339,7 +1500,7 @@ class AnnotationService {
     if (typeof size === 'number') {
       return size;
     }
-    // Handle legacy string sizes
+    // Handle string-based sizes
     switch (size) {
       case 'small': return 2;
       case 'medium': return 4;
@@ -1445,7 +1606,7 @@ class AnnotationService {
     }
   }
 
-  getResizeHandleAt(x: number, y: number, annotation: any): string | null {
+  getResizeHandleAt(x: number, y: number, annotation: TextAnnotation): ResizeHandle | null {
     if (annotation?.type !== 'text') {return null;}
 
     const handleSize = 8;
@@ -1461,7 +1622,7 @@ class AnnotationService {
     const textWidth = endX - ax;
     const textHeight = endY - ay;
 
-    const handles = [
+    const handles: Array<{ pos: ResizeHandle; x: number; y: number }> = [
       { pos: 'nw', x: ax, y: ay },
       { pos: 'n', x: ax + textWidth / 2, y: ay },
       { pos: 'ne', x: ax + textWidth, y: ay },
@@ -1482,7 +1643,7 @@ class AnnotationService {
     return null;
   }
 
-	  getAnnotationAt(x: number, y: number): any | null {
+	  getAnnotationAt(x: number, y: number): SelectableAnnotation | null {
     const hitRadius = 10;
 
     // Check in reverse order (top to bottom)
@@ -1490,9 +1651,14 @@ class AnnotationService {
       const annotation = store.state.annotations[i];
 
 	      if (annotation.type === 'arrow') {
+        const options = this.getRenderOptions();
+        const startX = getColumnX(annotation.startCol, options);
+        const startY = getRowY(annotation.startRow, options);
+        const endX = getColumnX(annotation.endCol, options);
+        const endY = getRowY(annotation.endRow, options);
 	        const dist = distanceToLineSegment(x, y,
-	          annotation.startX, annotation.startY,
-	          annotation.endX, annotation.endY);
+	          startX, startY,
+	          endX, endY);
 	        if (dist < hitRadius) {
 	          return annotation;
 	        }
@@ -1532,30 +1698,27 @@ class AnnotationService {
     this.ctx.restore();
   }
 
-  loadAnnotationSettings(annotation: any) {
+  loadAnnotationSettings(annotation: SelectableAnnotation) {
     // Load settings from selected annotation into the toolbar
-    if (annotation.type === 'arrow' && window.drawToolsController) {
-      const settings = annotation.settings;
-      window.drawToolsController.settings.arrow = { ...settings };
-      // Re-render the arrow toolbar to reflect loaded settings
-      window.drawToolsController.renderArrowOptions();
-    } else if (annotation.type === 'text' && window.drawToolsController) {
-      const settings = annotation.settings;
-      window.drawToolsController.settings.text = { ...settings };
-      // Re-render the text toolbar to reflect loaded settings
-      window.drawToolsController.renderTextOptions();
+    const drawToolsController = getDrawToolsController();
+    if (annotation.type === 'arrow' && drawToolsController) {
+      drawToolsController.applyArrowSettings(annotation.settings);
+    } else if (annotation.type === 'text' && drawToolsController) {
+      drawToolsController.applyTextSettings(annotation.settings);
     }
   }
 
   applyCurrentSettingsToSelected() {
     // Apply current toolbar settings to selected annotation
     if (!this.selectedAnnotation) {return;}
+    const toolSettings = this.toolSettings;
+    if (!toolSettings) {return;}
 
-    if (this.selectedAnnotation.type === 'arrow' && this.toolSettings.arrow) {
-      this.selectedAnnotation.settings = { ...this.toolSettings.arrow };
+    if (this.selectedAnnotation.type === 'arrow' && toolSettings.arrow) {
+      this.selectedAnnotation.settings = { ...toolSettings.arrow };
       this.render();
-    } else if (this.selectedAnnotation.type === 'text' && this.toolSettings.text) {
-      this.selectedAnnotation.settings = { ...this.toolSettings.text };
+    } else if (this.selectedAnnotation.type === 'text' && toolSettings.text) {
+      this.selectedAnnotation.settings = { ...toolSettings.text };
       this.render();
     }
   }
@@ -1605,11 +1768,11 @@ class AnnotationService {
 	    this.eraseAtPoint(x, y);
 	  }
 
-  getAnnotations() {
-    return store.state.annotations;
+  getAnnotations(): StoredAnnotation[] {
+    return store.state.annotations as StoredAnnotation[];
   }
 
-  loadAnnotations(annotations: any) {
+  loadAnnotations(annotations: StoredAnnotation[] | null | undefined) {
     store.state.annotations = annotations || [];
     this.render();
   }

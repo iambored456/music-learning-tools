@@ -1,14 +1,15 @@
 // js/components/Canvas/PitchGrid/renderers/tripletStampRenderer.ts
-import { getTripletStampById, tripletCenterPercents } from '../../../../rhythm/tripletStamps.js';
-import { getRowY, getColumnX } from './rendererUtils.js';
+import { getTripletStampById, tripletCenterPercents } from '../../../../rhythm/tripletStamps.ts';
+import { getRowY, getColumnX } from './rendererUtils.ts';
 import store from '@state/initStore.ts';
 import logger from '../../../../utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { timeToCanvas } from '../../../../services/columnMapService.ts';
+import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
-import type { TripletStampPlacement } from '@app-types/state.js';
-import type { TripletStamp } from '../../../../rhythm/tripletStamps.js';
-import type { ModulationMarker } from '@app-types/state.js';
+import type { TripletStampPlacement } from '@mlt/types';
+import type { TripletStamp } from '../../../../rhythm/tripletStamps.ts';
+import type { ModulationMarker } from '@mlt/types';
 
 interface TripletStampRenderOptions {
   columnWidths: number[];
@@ -26,8 +27,7 @@ interface AnimationEffectsManager {
 }
 
 const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
-  const effectsWindow = window as Window & { animationEffectsManager?: AnimationEffectsManager };
-  return effectsWindow.animationEffectsManager;
+  return getRuntimeAnimationEffectsManager() as AnimationEffectsManager | undefined;
 };
 
 /**

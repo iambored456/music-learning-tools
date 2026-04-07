@@ -20,6 +20,11 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
+  "dependencies": {
+    "@mlt/pitch-data": "workspace:*",
+    "@mlt/ui-components": "workspace:*",
+    "@mlt/talking-avatar": "workspace:*"
+  },
   "peerDependencies": {
     "svelte": "^5.0.0"
   },

@@ -5,7 +5,7 @@ import VibratoCanvasEffect from './vibratoCanvasEffect.ts';
 import TremoloWaveformEffect from './tremoloWaveformEffect.ts';
 import EnvelopeFillEffect from './envelopeFillEffect.ts';
 import DelayADSREffect from './delayADSREffect.ts';
-import type { AnimatableNote } from '@app-types/state.js';
+import type { AnimatableNote } from '@mlt/types';
 
 logger.moduleLoaded('AnimationEffectsManager');
 
@@ -257,7 +257,7 @@ class AnimationEffectsManager {
   }
 
   /**
-     * Delegation methods for backward compatibility
+     * Accessors shared by renderers and UI components.
      */
   getVibratoYOffset(color?: string): number {
     return this.vibratoEffect.getVibratoYOffset(color);
@@ -332,4 +332,3 @@ class AnimationEffectsManager {
 // Create and export singleton
 const animationEffectsManager = new AnimationEffectsManager();
 export default animationEffectsManager;
-

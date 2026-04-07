@@ -1,6 +1,7 @@
 // js/components/ADSR/adsrRender.ts
 import store from '@state/initStore.ts';
 import { hexToRgba, shadeHexColor } from '@utils/colorUtils.ts';
+import { getEffectsCoordinator } from '@services/runtimeGlobals.ts';
 
 interface Point {
   x: number;
@@ -89,8 +90,9 @@ export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement,
 
   // Get delay parameters from effectsCoordinator
   let delayParams: EffectParams = { time: 0, feedback: 0 };
-  if (window.effectsCoordinator) {
-    delayParams = window.effectsCoordinator.getEffectParameters(colorKey, 'delay');
+  const effectsCoordinator = getEffectsCoordinator();
+  if (effectsCoordinator?.getEffectParameters) {
+    delayParams = effectsCoordinator.getEffectParameters(colorKey, 'delay');
   }
 
   // Clear canvas for new frame

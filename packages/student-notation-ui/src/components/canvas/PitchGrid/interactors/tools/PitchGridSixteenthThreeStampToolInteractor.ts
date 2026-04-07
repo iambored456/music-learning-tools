@@ -1,14 +1,13 @@
 import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
-import { placeSixteenthThreeStamp } from '@/rhythm/sixteenthThreeStampPlacements.js';
-import { getNearestSixteenthThreeStampSnapTarget } from '@/rhythm/sixteenthThreeStampSnap.js';
-import SixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.js';
+import { placeSixteenthThreeStamp } from '@/rhythm/sixteenthThreeStampPlacements.ts';
+import { getNearestSixteenthThreeStampSnapTarget } from '@/rhythm/sixteenthThreeStampSnap.ts';
+import SixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.ts';
 import { hitTestAnySixteenthThreeStampShape } from '@utils/sixteenthThreeStampHitTest.ts';
-import { getColumnFromX, getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
+import { getColumnFromX, getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { timeToCanvas } from '@services/columnMapService.ts';
-import { isStampLayoutDebugEnabled, logStampLayout } from '@utils/stampLayoutDebug.ts';
-import type { SixteenthThreeStampPlacement } from '@app-types/state.js';
+import type { SixteenthThreeStampPlacement } from '@mlt/types';
 
 interface DraggedStampShape {
   type: 'diamond' | 'oval';
@@ -106,68 +105,19 @@ export class PitchGridSixteenthThreeStampToolInteractor {
     }
 
     const { color, shape } = selectedNote;
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('sixteenthThree:place-attempt', {
-        rowIndex: opts.rowIndex,
-        colIndex: opts.colIndex,
-        startTimeIndex,
-        pointerCanvasCol,
-        snappedCanvasCol: snapTarget.startCanvasCol,
-        selectedStampId: selectedStamp.id,
-        color,
-        shape,
-        historyIndexBefore: store.state.historyIndex,
-        historyLengthBefore: store.state.history.length
-      });
-    }
     const placement = placeSixteenthThreeStamp(selectedStamp.id, startTimeIndex, opts.rowIndex, color);
     if (!placement) {
-      if (isStampLayoutDebugEnabled()) {
-        logStampLayout('sixteenthThree:place-blocked', {
-          rowIndex: opts.rowIndex,
-          colIndex: opts.colIndex,
-          startTimeIndex,
-          pointerCanvasCol,
-          snappedCanvasCol: snapTarget.startCanvasCol,
-          selectedStampId: selectedStamp.id
-        });
-      }
       return { handled: true, activePreviewPitches: [] };
-    }
-
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('sixteenthThree:placed', {
-        placementId: placement.id,
-        startTimeIndex: placement.startTimeIndex,
-        row: placement.row,
-        historyIndexPreRecord: store.state.historyIndex,
-        historyLengthPreRecord: store.state.history.length
-      });
     }
 
     const pitch = opts.getPitchForRow(opts.rowIndex);
     if (pitch) {
       rhythmPlaybackService.playThreeRhythmPattern?.(selectedStamp.id, pitch, color, shape, placement);
       store.recordState();
-      if (isStampLayoutDebugEnabled()) {
-        logStampLayout('sixteenthThree:recordState-after-playback', {
-          placementId: placement.id,
-          pitch,
-          historyIndexAfter: store.state.historyIndex,
-          historyLengthAfter: store.state.history.length
-        });
-      }
       return { handled: true, activePreviewPitches: [] };
     }
 
     store.recordState();
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('sixteenthThree:recordState-no-pitch', {
-        placementId: placement.id,
-        historyIndexAfter: store.state.historyIndex,
-        historyLengthAfter: store.state.history.length
-      });
-    }
     return { handled: true, activePreviewPitches: [] };
   }
 

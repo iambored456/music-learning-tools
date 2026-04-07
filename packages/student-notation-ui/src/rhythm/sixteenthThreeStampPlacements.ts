@@ -1,8 +1,8 @@
 // js/rhythm/sixteenthThreeStampPlacements.ts
-import { getSixteenthThreeStampById } from './sixteenthThreeStamps.js';
+import { getSixteenthThreeStampById } from './sixteenthThreeStamps.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import type { SixteenthThreeStampPlaybackData, SixteenthThreeStampPlacement } from '@app-types/state.js';
+import type { SixteenthThreeStampPlaybackData, SixteenthThreeStampPlacement } from '@mlt/types';
 
 logger.moduleLoaded('SixteenthThreeStampPlacements', 'stamps');
 

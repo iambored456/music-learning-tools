@@ -2,11 +2,11 @@
 import { shouldDrawVerticalLineAtColumn, isTonicColumn } from '../../../utils/tonicColumnUtils.ts';
 import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { renderModulationMarkers } from '@components/canvas/PitchGrid/renderers/modulationRenderer.ts';
-import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
+import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo } from '@state/selectors.ts';
-import type { AppState, MacrobeatBoundaryStyle, ModulationMarker, PlacedNote, TonicSign } from '@app-types/state.js';
+import type { AppState, MacrobeatBoundaryStyle, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
 
 const DEFAULT_ANACRUSIS_COLORS = {
   stroke: '#c7cfd8',

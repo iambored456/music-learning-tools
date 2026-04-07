@@ -68,6 +68,7 @@ const resolveBaseUrl = () => {
 };
 
 const pagesBaseUrl = resolveBaseUrl();
+const skipPreviewCapture = ['1', 'true', 'yes'].includes((process.env.SKIP_PREVIEW_CAPTURE ?? '').toLowerCase());
 console.log(`Using BASE_URL=${pagesBaseUrl}`);
 
 const spawnOptions = {
@@ -99,12 +100,16 @@ const runPnpmStep = (label, args, env = {}) => {
   }
 };
 
-// Build once with root base so capture-previews can resolve routes from hub/dist.
-runPnpmStep('Building hub for preview capture (BASE_URL=/)...', ['--filter', 'hub', 'run', 'build'], {
-  BASE_URL: '/',
-});
+if (!skipPreviewCapture) {
+  // Build once with root base so capture-previews can resolve routes from hub/dist.
+  runPnpmStep('Building hub for preview capture (BASE_URL=/)...', ['--filter', 'hub', 'run', 'build'], {
+    BASE_URL: '/',
+  });
 
-runPnpmStep('Refreshing hub preview screenshots...', ['-w', 'capture:previews']);
+  runPnpmStep('Refreshing hub preview screenshots...', ['-w', 'capture:previews']);
+} else {
+  console.log('Skipping preview capture because SKIP_PREVIEW_CAPTURE is enabled.');
+}
 
 runPnpmStep(`Building hub for Pages output (BASE_URL=${pagesBaseUrl})...`, ['--filter', 'hub', 'run', 'build'], {
   BASE_URL: pagesBaseUrl,

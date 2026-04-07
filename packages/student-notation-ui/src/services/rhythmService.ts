@@ -1,7 +1,7 @@
 // js/services/rhythmService.ts
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
-import { getColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
+import { getColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 
 type BoundaryStyle = 'solid' | 'dashed' | 'dotted' | null | undefined;
 

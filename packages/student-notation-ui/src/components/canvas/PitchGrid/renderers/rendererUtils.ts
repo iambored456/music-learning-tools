@@ -1,9 +1,9 @@
 // js/components/Canvas/PitchGrid/renderers/rendererUtils.ts
 import pitchGridViewportService from '../../../../services/pitchGridViewportService.ts';
-import { createCoordinateMapping } from '../../../../rhythm/modulationMapping.js';
-import pixelMapService from '../../../../services/pixelMapService.ts';
+import { createCoordinateMapping } from '@/rhythm/modulationMapping.ts';
+import pixelMapService from '@services/pixelMapService.ts';
 import store from '@state/initStore.ts';
-import type { AppState, ModulationMarker } from '@app-types/state.js';
+import type { ModulationMarker } from '@mlt/types';
 
 /**
  * COORDINATE SYSTEM NOTE:
@@ -13,9 +13,9 @@ import type { AppState, ModulationMarker } from '@app-types/state.js';
  * - columnWidths represents canvas-space columns only (no legends)
  */
 
-type RendererOptions = Partial<AppState> & {
-  columnWidths: number[];  // Canvas-space column widths (musical columns only, no legends)
-  musicalColumnWidths?: number[];  // DEPRECATED: Will be removed, use columnWidths instead
+export type RendererOptions = {
+  columnWidths?: number[];  // Canvas-space column widths (musical columns only, no legends)
+  musicalColumnWidths?: number[];  // Additional canvas-space width data accepted by some grid callers
   cellWidth: number;
   cellHeight: number;
   tempoModulationMarkers?: ModulationMarker[];
@@ -69,7 +69,11 @@ function getCoordinateMapping(options: RendererOptions): CoordinateMapping {
   }
 
   const baseMicrobeatPx = options.baseMicrobeatPx ?? options.cellWidth ?? 40;
-  cachedCoordinateMapping = createCoordinateMapping(options.tempoModulationMarkers || [], baseMicrobeatPx, options as AppState);
+  cachedCoordinateMapping = createCoordinateMapping(
+    options.tempoModulationMarkers || [],
+    baseMicrobeatPx,
+    store.state
+  );
   lastMappingHash = currentHash;
 
   return cachedCoordinateMapping;
@@ -107,7 +111,7 @@ export function getColumnX(index: number, options: RendererOptions): number {
     cellWidth: options.cellWidth,
     tempoModulationMarkers: options.tempoModulationMarkers,
     baseMicrobeatPx: options.baseMicrobeatPx,
-    columnWidths: options.columnWidths,
+    columnWidths: options.columnWidths ?? state.columnWidths,
     state: state
   };
 
@@ -220,7 +224,7 @@ export function getColumnFromX(canvasX: number, options: RendererOptions): numbe
     cellWidth: options.cellWidth,
     tempoModulationMarkers: options.tempoModulationMarkers,
     baseMicrobeatPx: options.baseMicrobeatPx,
-    columnWidths: options.columnWidths,
+    columnWidths: options.columnWidths ?? state.columnWidths,
     state: state
   };
 

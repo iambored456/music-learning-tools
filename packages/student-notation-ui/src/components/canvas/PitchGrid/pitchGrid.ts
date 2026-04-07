@@ -1,13 +1,13 @@
 // js/components/canvas/pitchGrid/pitchGrid.ts
 import store from '@state/initStore.ts';
 import CanvasContextService from '@services/canvasContextService.ts';
-import { drawPitchGrid } from './renderers/pitchGridRenderer.js';
-import { renderRhythmUI } from '@components/canvas/macrobeatTools/rhythmUI.js';
-import { renderTimeSignatureDisplay } from '@components/canvas/macrobeatTools/timeSignatureDisplay.js';
+import { drawPitchGrid } from './renderers/pitchGridRenderer.ts';
+import { renderRhythmUI } from '@components/canvas/macrobeatTools/rhythmUI.ts';
+import { renderTimeSignatureDisplay } from '@components/canvas/macrobeatTools/timeSignatureDisplay.ts';
 import { getPitchNotes, getPlacedTonicSigns } from '@state/selectors.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import logger from '@utils/logger.ts';
-import type { AppState, PlacedNote, TonicSign } from '@app-types/state.js';
+import type { AppState, PlacedNote, TonicSign } from '@mlt/types';
 
 logger.moduleLoaded('PitchGridController', 'grid');
 

@@ -1,9 +1,8 @@
 // js/services/gridCoordsService.ts
 import store from '@state/initStore.ts';
 import pitchGridViewportService from './pitchGridViewportService.ts';
-import { getColumnFromX } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import type { CanvasSpaceColumn } from '@app-types/state.js';
-import { createCanvasSpaceColumn } from '@utils/coordinateTypes.ts';
+import { getColumnFromX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
+import type { CanvasSpaceColumn } from '@mlt/types';
 
 /**
  * COORDINATE SYSTEM NOTE:
@@ -24,7 +23,7 @@ const GridCoordsService = {
 
     // Handle case where cellWidth might be zero during initial load
     if (cellWidth === 0) {
-      return createCanvasSpaceColumn(0);
+      return 0 as CanvasSpaceColumn;
     }
 
     // Use the proper inverse conversion that handles modulation
@@ -42,7 +41,7 @@ const GridCoordsService = {
     const fractionalColumn = getColumnFromX(x, renderOptions);
     const canvasSpaceColumn = Math.floor(fractionalColumn);
 
-    return createCanvasSpaceColumn(canvasSpaceColumn);
+    return canvasSpaceColumn as CanvasSpaceColumn;
   },
 
   getPitchRowIndex(y: number): number {

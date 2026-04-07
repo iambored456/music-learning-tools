@@ -1,40 +1,11 @@
 // js/components/canvas/PitchGrid/interactors/PitchGridRightClickEraserInteractor.ts
 import store from '@state/initStore.ts';
 import domCache from '@services/domCache.ts';
-import type { CanvasSpaceColumn } from '@app-types/state.js';
+import type { CanvasSpaceColumn } from '@mlt/types';
 
 type AnnotationServiceLike = {
   eraseAtPoint: (canvasX: number, canvasY: number) => boolean;
 };
-
-function isRightClickEraserDebugEnabled(): boolean {
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_RCLICK_ERASE?: boolean };
-    if (Boolean(win.__SN_DEBUG_RCLICK_ERASE)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    return localStorage.getItem('sn:debugRightClickErase') === '1';
-  } catch {
-    return false;
-  }
-}
-
-function logRightClickEraser(phase: string, data: Record<string, unknown>): void {
-  if (!isRightClickEraserDebugEnabled()) {
-    return;
-  }
-
-  try {
-    console.debug(`[RightClickEraser] ${phase}`, data);
-  } catch {
-    // ignore
-  }
-}
 
 export class PitchGridRightClickEraserInteractor {
   private isActive = false;
@@ -97,11 +68,6 @@ export class PitchGridRightClickEraserInteractor {
       store.recordState();
     }
 
-    logRightClickEraser('mouseup', {
-      actionTaken: this.actionTaken,
-      restoredTool: this.previousTool
-    });
-
     this.isActive = false;
     this.actionTaken = false;
 
@@ -144,18 +110,5 @@ export class PitchGridRightClickEraserInteractor {
 
     const passErased = noteErased || tonicErased || sixteenthErased || threeStampErased || tripletErased || annotationErased;
     this.actionTaken = this.actionTaken || passErased;
-
-    logRightClickEraser(phase, {
-      colIndex,
-      rowIndex,
-      noteErased,
-      tonicErased,
-      sixteenthErased,
-      tripletErased,
-      annotationErased,
-      passErased,
-      previousActionTaken,
-      actionTaken: this.actionTaken
-    });
   }
 }

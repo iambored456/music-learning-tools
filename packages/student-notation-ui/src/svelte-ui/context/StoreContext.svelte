@@ -21,9 +21,6 @@
   /**
    * StoreContext - Reactive store wrapper for Svelte components
    *
-   * This replaces the imperative subscriptions in:
-   * - src/bootstrap/state/initStateSubscriptions.ts
-   *
    * Provides reactive access to store state and automatic subscription cleanup.
    * Child components can access the store via getStoreContext().
    */
@@ -32,7 +29,7 @@
   import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
   import SynthEngine from '@services/initAudio.ts';
   import PitchGridController from '@components/canvas/PitchGrid/pitchGrid.ts';
-  import DrumGridController from '@components/canvas/drumGrid/drumGrid.js';
+  import DrumGridController from '@components/canvas/drumGrid/drumGrid.ts';
   import logger from '@utils/logger.ts';
 
   interface Props {

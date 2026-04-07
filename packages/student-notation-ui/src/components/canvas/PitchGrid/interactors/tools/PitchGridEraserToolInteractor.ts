@@ -1,7 +1,7 @@
 import store from '@state/initStore.ts';
-import { removeSixteenthStampsInEraserArea } from '@/rhythm/sixteenthStampPlacements.js';
-import { eraseTripletStampGroups } from '@/rhythm/tripletStampPlacements.js';
-import type { CanvasSpaceColumn } from '@app-types/state.js';
+import { removeSixteenthStampsInEraserArea } from '@/rhythm/sixteenthStampPlacements.ts';
+import { eraseTripletStampGroups } from '@/rhythm/tripletStampPlacements.ts';
+import type { CanvasSpaceColumn } from '@mlt/types';
 
 export class PitchGridEraserToolInteractor {
   handleMouseDown(colIndex: number, rowIndex: number): { handled: boolean; shouldStartDrag: boolean } {

@@ -1,6 +1,7 @@
 // js/services/timbreEffects/effectsAnimation/vibratoCanvasEffect.ts
 import BaseAnimationEffect from './baseAnimationEffect.ts';
 import logger from '@utils/logger.ts';
+import { getAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 
 logger.moduleLoaded('VibratoCanvasEffect');
 
@@ -103,7 +104,8 @@ class VibratoCanvasEffect extends BaseAnimationEffect<VibratoAnimationState, Vib
     }
 
     // Check if animation should be running - if not, return static value
-    if (window.animationEffectsManager && !window.animationEffectsManager.shouldVibratoBeRunning()) {
+    const animationManager = getAnimationEffectsManager();
+    if (animationManager && !animationManager.shouldVibratoBeRunning?.()) {
       return 0; // Animation stopped - return to static position
     }
 

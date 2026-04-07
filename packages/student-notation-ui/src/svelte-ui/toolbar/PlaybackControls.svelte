@@ -2,15 +2,12 @@
   /**
    * PlaybackControls - Svelte 5 component for playback control buttons
    *
-   * This replaces the imperative code in:
-   * - src/components/toolbar/initializers/playbackInitializer.ts
-   *
    * It subscribes to the store and provides play/pause/stop functionality.
    */
   import store from '@state/initStore.ts';
   import TransportService from '@services/initTransport.ts';
-  import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.js';
-  import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.js';
+  import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.ts';
+  import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.ts';
   import { getIconPath } from '@utils/assetPaths.ts';
 
   // Reactive state using Svelte 5 runes

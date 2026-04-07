@@ -1,12 +1,12 @@
 // js/services/rhythmPlaybackService.ts
 import * as Tone from 'tone';
-import { getSixteenthStampScheduleEvents } from '@/rhythm/scheduleSixteenthStamps.js';
-import { getSixteenthThreeStampScheduleEvents } from '@/rhythm/scheduleSixteenthThreeStamps.js';
-import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.js';
+import { getSixteenthStampScheduleEvents } from '@/rhythm/scheduleSixteenthStamps.ts';
+import { getSixteenthThreeStampScheduleEvents } from '@/rhythm/scheduleSixteenthThreeStamps.ts';
+import { getTripletStampScheduleEvents } from '@/rhythm/scheduleTripletStamps.ts';
 import store from '@state/initStore.ts';
-import SynthEngine from './initAudio.js';
+import SynthEngine from './initAudio.ts';
 import logger from '@utils/logger.ts';
-import type { SixteenthStampPlacement, SixteenthThreeStampPlacement, TripletStampPlacement } from '@app-types/state.js';
+import type { SixteenthStampPlacement, SixteenthThreeStampPlacement, TripletStampPlacement } from '@mlt/types';
 import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 
 logger.moduleLoaded('RhythmPlaybackService');
@@ -106,9 +106,6 @@ class RhythmPlaybackService {
     this.isInitialized = true;
 
     logger.info('RhythmPlaybackService', 'Initialized');
-
-    // Make service globally accessible for debugging
-    (window as { rhythmPlaybackService?: RhythmPlaybackService }).rhythmPlaybackService = this;
   }
 
   /**

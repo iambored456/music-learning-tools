@@ -207,26 +207,51 @@ export function getPitchClass(pitchWithOctave: string): string {
  * Get line style for a pitch class.
  * Used for horizontal grid lines.
  */
+const REFERENCE_CELL_HEIGHT = 12;
+const BASE_DEFAULT_LINE_WIDTH = 1;
+const BASE_E_LINE_WIDTH = 1;
+const BASE_DASH_LENGTH = 5;
 const BASE_C_LINE_WIDTH = 3.33;
-const EMPHASIZED_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.5;
-const G_ROW_FILL_ALPHA = 0.42;
+const G_ROW_FILL_ALPHA = 0.28;
 
-export function getLineStyleFromPitchClass(pitchClass: string): LineStyle {
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function scaleLineMetric(
+  cellHeight: number,
+  baseMetric: number,
+  minMetric: number,
+  maxMetric: number
+): number {
+  const scaled = (cellHeight / REFERENCE_CELL_HEIGHT) * baseMetric;
+  return clamp(scaled, minMetric, maxMetric);
+}
+
+export function getLineStyleFromPitchClass(
+  pitchClass: string,
+  cellHeight: number = REFERENCE_CELL_HEIGHT
+): LineStyle {
+  const defaultLineWidth = scaleLineMetric(cellHeight, BASE_DEFAULT_LINE_WIDTH, 0.75, 1.6);
+  const cLineWidth = scaleLineMetric(cellHeight, BASE_C_LINE_WIDTH, 2.4, 4.2);
+  const eLineWidth = scaleLineMetric(cellHeight, BASE_E_LINE_WIDTH, 0.75, 1.35);
+  const dashUnit = scaleLineMetric(cellHeight, BASE_DASH_LENGTH, 3.5, 8);
+
   switch (pitchClass) {
     case 'C':
-      return { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [], color: '#adb5bd' };
+      return { lineWidth: cLineWidth, dash: [], color: '#adb5bd' };
     case 'E':
-      return { lineWidth: EMPHASIZED_LINE_WIDTH, dash: [5, 5], color: '#adb5bd' };
+      return { lineWidth: eLineWidth, dash: [dashUnit, dashUnit], color: '#adb5bd' };
     case 'G':
-      return { lineWidth: 1, dash: [], color: `rgba(222, 226, 230, ${G_ROW_FILL_ALPHA})` };
+      return { lineWidth: defaultLineWidth, dash: [], color: `rgba(173, 181, 189, ${G_ROW_FILL_ALPHA})` };
     case 'B':
     case 'A':
     case 'F':
     case 'Eb/Db':
     case 'Db/C#':
-      return { lineWidth: 1, dash: [], color: '#ced4da' };
+      return { lineWidth: defaultLineWidth, dash: [], color: '#ced4da' };
     default:
-      return { lineWidth: 1, dash: [], color: '#ced4da' };
+      return { lineWidth: defaultLineWidth, dash: [], color: '#ced4da' };
   }
 }
 

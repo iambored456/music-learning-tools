@@ -21,7 +21,7 @@
  */
 import * as Tone from 'tone';
 import { configureAudioContext } from '@mlt/student-notation-engine';
-import store, { fullRowData, registerColumnMapCallbacks } from '@state/initStore.ts';
+import store, { fullRowData } from '@state/initStore.ts';
 import LayoutService from '@services/layoutService.ts';
 import PitchGridController from '@components/canvas/PitchGrid/pitchGrid.ts';
 import SynthEngine from '@services/initAudio.ts';
@@ -31,32 +31,30 @@ import { initDeviceProfileService } from '@services/deviceProfileService.ts';
 import domCache from '@services/domCache.ts';
 import logger from '@utils/logger.ts';
 import { PRESETS } from '@services/presetData.ts';
+import {
+  clearInitAudioHandler,
+  getDrumGridRenderer,
+  invokeInitAudioHandler,
+  setInitAudioHandler,
+  setInitStartTime
+} from '@services/runtimeGlobals.ts';
 import loadingManager from './loadingManager.ts';
-import { enableStateMutationDetection, snapshotState, checkForMutations } from '@utils/stateMutationGuard.ts';
-// NOTE: effectsController.js handles UI dials and lives in @components/audio/Effects/
+import { getTrebleClefPresetRange, isFullGamutRange } from '@/core/pitchRangePresets.ts';
+import { registerColumnMapBridge, registerPixelMapBridge } from '@/core/registerMappingHooks.ts';
+// NOTE: effectsController handles UI dials and lives in @components/audio/effects/
 // All effects logic has been moved to @services/timbreEffects/ architecture
 
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
-import columnMapService, { registerStoreHooks as registerColumnMapHooks } from '@services/columnMapService.ts';
-import { registerStoreHooks as registerPixelMapHooks } from '@services/pixelMapService.ts';
 
-
-
-// Zoom System Components
-
-
-// Modulation Testing (keep for advanced debugging)
-import ModulationTest from '@/rhythm/modulationTest.js';
 import { initAudioComponents } from '@/bootstrap/audio/initAudioComponents.ts';
 import { initCanvasServices } from '@/bootstrap/canvas/initCanvasServices.ts';
 import { initDrawSystem } from '@/bootstrap/draw/initDrawSystem.ts';
 import { initInputAndDiagnostics } from '@/bootstrap/input/initInputAndDiagnostics.ts';
-import toolbar from '@components/toolbar/toolbar.ts';
 import { mountSvelteComponents, unmountSvelteComponents } from '@/svelte-ui/index.ts';
-import rhythmUI from '@components/canvas/macrobeatTools/rhythmUI.js';
-import sixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
-import tripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.js';
-import sixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.js';
+import rhythmUI from '@components/canvas/macrobeatTools/rhythmUI.ts';
+import sixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.ts';
+import tripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.ts';
+import sixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.ts';
 
 interface ComponentReadiness {
   domCache: boolean;
@@ -73,9 +71,6 @@ interface ComponentReadiness {
 
 declare global {
   interface Window {
-    initAudio?: () => Promise<void>;
-    initStartTime?: number;
-    ModulationTest?: typeof ModulationTest;
     TONE_DEBUG_CLASS?: string;
   }
 }
@@ -89,22 +84,7 @@ const disableToneClassDebugLogging = (): void => {
 
 disableToneClassDebugLogging();
 
-const shouldInitDebug = (): boolean => {
-  if (typeof window === 'undefined') {return false;}
-  const override = (window as Window & { __initDebug?: boolean }).__initDebug;
-  return override === true;
-};
-
-const initT0 = performance.now();
-const initDebug = (message: string, data?: unknown): void => {
-  if (!shouldInitDebug()) {return;}
-  const elapsed = `+${(performance.now() - initT0).toFixed(0)}ms`;
-  if (data === undefined) {
-    console.log(`[Init] ${elapsed} ${message}`);
-    return;
-  }
-  console.log(`[Init] ${elapsed} ${message}`, data);
-};
+const initDebug = (_message: string, _data?: unknown): void => {};
 
 
 let isInitialized = false;
@@ -129,15 +109,15 @@ function applyStartupVoicePresets(): void {
   const voiceColors = Object.keys(store.state.timbres ?? {});
   voiceColors.forEach((color) => {
     const presetName = STARTUP_PRESET_BY_COLOR[color] ?? 'sine';
-    const preset = (PRESETS as Record<string, unknown>)[presetName];
+    const preset = PRESETS[presetName];
     if (!preset) {
       return;
     }
-    store.applyPreset(color, preset as any);
+    store.applyPreset(color, preset);
     applied[color] = presetName;
   });
 
-  logger.info('Main.js', 'Startup voice presets activated', {
+  logger.info('Main', 'Startup voice presets activated', {
     voiceCount: voiceColors.length,
     mapping: applied
   });
@@ -148,7 +128,7 @@ function setupAudioHandlers(): void {
   audioInitPromise = null;
   userInteractionReceived = false;
 
-  window.initAudio = async (): Promise<void> => {
+  setInitAudioHandler(async (): Promise<void> => {
     if (audioInitialized) {return;}
     if (audioInitPromise) {return audioInitPromise;} // Return existing promise to prevent multiple attempts
 
@@ -157,23 +137,23 @@ function setupAudioHandlers(): void {
         // Only start if the context is not already running
         if (Tone.context.state !== 'running') {
           await Tone.start();
-          logger.info('Main.js', 'AudioContext started successfully');
+          logger.info('Main', 'AudioContext started successfully');
         }
         audioInitialized = true;
       } catch (e) {
-        logger.error('Main.js', 'Could not start AudioContext', e);
+        logger.error('Main', 'Could not start AudioContext', e);
         audioInitPromise = null; // Reset promise on failure so it can be retried
         throw e;
       }
     })();
 
     return audioInitPromise;
-  };
+  });
 
   const initAudioOnInteraction = (): void => {
     if (!userInteractionReceived) {
       userInteractionReceived = true;
-      window.initAudio?.().catch(e => logger.warn('Main.js', 'Failed to initialize audio after user interaction', e, 'initialization'));
+      invokeInitAudioHandler()?.catch(e => logger.warn('Main', 'Failed to initialize audio after user interaction', e, 'initialization'));
       // Remove listeners after first interaction
       document.removeEventListener('click', initAudioOnInteraction, true);
       document.removeEventListener('keydown', initAudioOnInteraction, true);
@@ -196,9 +176,7 @@ function setupAudioHandlers(): void {
   cleanupFns.push(() => document.removeEventListener('keydown', initAudioOnInteraction, true));
   cleanupFns.push(() => document.removeEventListener('touchstart', initAudioOnInteraction, true));
   cleanupFns.push(() => window.removeEventListener('beforeunload', handleBeforeUnload));
-  cleanupFns.push(() => {
-    delete window.initAudio;
-  });
+  cleanupFns.push(() => clearInitAudioHandler());
 }
 
 // ? Component readiness tracking for initialization order safeguards
@@ -214,49 +192,6 @@ const componentReadiness: ComponentReadiness = {
   rhythmPlaybackService: false,
   initialized: false
 };
-
-const TREBLE_CLEF_PRESET_TONES = {
-  // Matches the Treble preset in `src/components/clefWheels/clefRangeController.ts`.
-  top: 'G5',
-  // This is a Tone.js/SPN note name (matches `PitchRowData.toneNote` in `src/state/pitchData.ts`).
-  // Note: This preset intentionally does not include the visual-only boundary rows at the ends of the full gamut.
-  bottom: 'C4'
-};
-
-interface TonePreset { top: string | null; bottom: string | null }
-
-function resolveRangeFromToneNotes(preset: TonePreset | null | undefined) {
-  if (!preset?.top || !preset?.bottom) {
-    return null;
-  }
-
-  const topIndex = fullRowData.findIndex(row => row.toneNote === preset.top);
-  const bottomIndex = fullRowData.findIndex(row => row.toneNote === preset.bottom);
-
-  if (topIndex === -1 || bottomIndex === -1) {
-    logger.warn('Main.js', 'Failed to resolve preset range from tone notes', preset);
-    return null;
-  }
-
-  return {
-    topIndex: Math.min(topIndex, bottomIndex),
-    bottomIndex: Math.max(topIndex, bottomIndex)
-  };
-}
-
-function getTrebleClefPresetRange() {
-  return resolveRangeFromToneNotes(TREBLE_CLEF_PRESET_TONES);
-}
-
-function isFullGamutRange(range: { topIndex?: number; bottomIndex?: number } | null | undefined): boolean {
-  if (!range) {
-    return true;
-  }
-  const maxIndex = Math.max(0, fullRowData.length - 1);
-  const topIndex = typeof range.topIndex === 'number' ? range.topIndex : 0;
-  const bottomIndex = typeof range.bottomIndex === 'number' ? range.bottomIndex : maxIndex;
-  return topIndex <= 0 && bottomIndex >= maxIndex;
-}
 
 function markComponentReady(componentName: keyof ComponentReadiness) {
   componentReadiness[componentName] = true;
@@ -291,8 +226,8 @@ function resetComponentReadiness(): void {
 }
 
 async function startStudentNotation(): Promise<void> {
-  window.initStartTime = Date.now();
-  logger.info('Main.js', 'Initialization triggered');
+  setInitStartTime(Date.now());
+  logger.info('Main', 'Initialization triggered');
   logger.section('STARTING INITIALIZATION');
   // Starting initialization sequence
   // Weighted loading tasks — heavier phases get higher weight so the progress
@@ -349,7 +284,7 @@ async function startStudentNotation(): Promise<void> {
       delete (window as Window & { __clearStage1Progress?: () => void }).__clearStage1Progress;
     }
     loadingManager.init();
-    loadingManager.updateStatus('Loading application...');
+    loadingManager.setStatus('Loading application...');
     loadingPhases.forEach(([name, weight]) => loadingManager.registerTask(name, weight));
     initDebug(`registered ${loadingPhases.length} loading phases (total weight ${loadingPhases.reduce((s, [, w]) => s + w, 0)})`);
     // Immediately claim credit for the pre-JS loading phase so the bar advances past Stage 1
@@ -370,27 +305,22 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Setup ──────────────────────────────────────────────
     initDebug('phase:detect-device START');
-    loadingManager.updateStatus('Detecting device...');
+    loadingManager.setStatus('Detecting device...');
     await loadingManager.nextFrame();
     initDeviceProfileService();
     loadingManager.completeTask('detect-device');
     initDebug('phase:detect-device DONE');
 
     initDebug('phase:configure-audio-ctx START');
-    loadingManager.updateStatus('Configuring audio context...');
+    loadingManager.setStatus('Configuring audio context...');
     await loadingManager.nextFrame();
     configureAudioContext({ latencyHint: 'playback', lookAhead: 0.1 });
-    logger.info('Main.js', 'AudioContext configured with latencyHint: playback');
+    logger.info('Main', 'AudioContext configured with latencyHint: playback');
     loadingManager.completeTask('configure-audio-ctx');
     initDebug('phase:configure-audio-ctx DONE');
 
-    // Enable state mutation detection in development mode
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      enableStateMutationDetection();
-    }
-
     initDebug('phase:dom-cache START');
-    loadingManager.updateStatus('Caching DOM elements...');
+    loadingManager.setStatus('Caching DOM elements...');
     await loadingManager.nextFrame();
     domCache.init();
     markComponentReady('domCache');
@@ -406,7 +336,7 @@ async function startStudentNotation(): Promise<void> {
       if (appContainer) {
         const events: ('click' | 'keydown' | 'touchstart')[] = ['click', 'keydown', 'touchstart'];
         const handleGesture = () => {
-          void window.initAudio?.();
+          void invokeInitAudioHandler();
         };
         events.forEach(eventType => {
           appContainer.addEventListener(eventType, handleGesture, { once: true });
@@ -417,22 +347,21 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Core state ─────────────────────────────────────────
     initDebug('phase:voice-presets START');
-    loadingManager.updateStatus('Activating voice presets...');
+    loadingManager.setStatus('Activating voice presets...');
     await loadingManager.nextFrame();
     applyStartupVoicePresets();
-    snapshotState(store.state);
     loadingManager.completeTask('voice-presets');
     initDebug('phase:voice-presets DONE');
 
     initDebug('phase:pitch-range START');
-    loadingManager.updateStatus('Resolving pitch range...');
+    loadingManager.setStatus('Resolving pitch range...');
     await loadingManager.nextFrame();
-    const treblePresetRange = getTrebleClefPresetRange();
+    const treblePresetRange = getTrebleClefPresetRange(fullRowData);
     const fullGamutFallback = {
       topIndex: 0,
       bottomIndex: fullRowData.length - 1
     };
-    const preferredPitchRange = isFullGamutRange(store.state.pitchRange)
+    const preferredPitchRange = isFullGamutRange(store.state.pitchRange, fullRowData.length)
       ? (treblePresetRange ?? store.state.pitchRange ?? fullGamutFallback)
       : (store.state.pitchRange ?? fullGamutFallback);
     const initialPitchRange = preferredPitchRange;
@@ -448,7 +377,7 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Canvas & layout ────────────────────────────────────
     initDebug('phase:canvas-contexts START');
-    loadingManager.updateStatus('Resolving canvas contexts...');
+    loadingManager.setStatus('Resolving canvas contexts...');
     await loadingManager.nextFrame();
     initCanvasServices();
     markComponentReady('layoutService');
@@ -457,14 +386,14 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:canvas-contexts DONE');
 
     initDebug('phase:grid-manager START');
-    loadingManager.updateStatus('Initializing grid manager...');
+    loadingManager.setStatus('Initializing grid manager...');
     await loadingManager.nextFrame();
     loadingManager.completeTask('grid-manager');
     initDebug('phase:grid-manager DONE');
     await loadingManager.nextFrame();
 
     initDebug('phase:layout-ready START (awaiting LayoutService.waitForInitialLayout)');
-    loadingManager.updateStatus('Calculating layout dimensions...');
+    loadingManager.setStatus('Calculating layout dimensions...');
     await LayoutService.waitForInitialLayout();
     loadingManager.completeTask('layout-ready');
     initDebug('phase:layout-ready DONE');
@@ -472,7 +401,7 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Audio engine ───────────────────────────────────────
     initDebug('phase:audio-chain START');
-    loadingManager.updateStatus('Building audio signal chain...');
+    loadingManager.setStatus('Building audio signal chain...');
     await loadingManager.nextFrame();
     SynthEngine.init();
     markComponentReady('synthEngine');
@@ -480,13 +409,13 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:audio-chain DONE');
 
     initDebug('phase:synth-voices START');
-    loadingManager.updateStatus('Initializing synth voices...');
+    loadingManager.setStatus('Initializing synth voices...');
     await loadingManager.nextFrame();
     loadingManager.completeTask('synth-voices');
     initDebug('phase:synth-voices DONE');
 
     initDebug('phase:audio-events START');
-    loadingManager.updateStatus('Wiring audio event handlers...');
+    loadingManager.setStatus('Wiring audio event handlers...');
     await loadingManager.nextFrame();
     loadingManager.completeTask('audio-events');
     initDebug('phase:audio-events DONE');
@@ -494,17 +423,17 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Playback ───────────────────────────────────────────
     initDebug('phase:rhythm-playback START');
-    loadingManager.updateStatus('Preparing rhythm playback...');
+    loadingManager.setStatus('Preparing rhythm playback...');
     await loadingManager.nextFrame();
     rhythmPlaybackService.initialize().catch(err => {
-      logger.warn('Main.js', 'RhythmPlaybackService initialization deferred (needs user interaction)', err, 'initialization');
+      logger.warn('Main', 'RhythmPlaybackService initialization deferred (needs user interaction)', err, 'initialization');
     });
     markComponentReady('rhythmPlaybackService');
     loadingManager.completeTask('rhythm-playback');
     initDebug('phase:rhythm-playback DONE');
 
     initDebug('phase:transport-service START');
-    loadingManager.updateStatus('Configuring transport scheduler...');
+    loadingManager.setStatus('Configuring transport scheduler...');
     await loadingManager.nextFrame();
     TransportService.init();
     markComponentReady('transportService');
@@ -514,53 +443,36 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Input & state wiring ───────────────────────────────
     initDebug('phase:input-handlers START');
-    loadingManager.updateStatus('Registering keyboard handlers...');
+    loadingManager.setStatus('Registering keyboard handlers...');
     await loadingManager.nextFrame();
     initInputAndDiagnostics();
     loadingManager.completeTask('input-handlers');
     initDebug('phase:input-handlers DONE');
 
     initDebug('phase:column-map-hooks START');
-    loadingManager.updateStatus('Syncing column map service...');
+    loadingManager.setStatus('Syncing column map service...');
     await loadingManager.nextFrame();
-    registerColumnMapHooks(store);
-    registerColumnMapCallbacks({
-      getColumnMap: (state) => columnMapService.getColumnMap(state),
-      visualToTimeIndex: (state, visualIndex) => {
-        const map = columnMapService.getColumnMap(state);
-        return map.visualToTime.get(visualIndex) ?? null;
-      },
-      timeIndexToVisualColumn: (state, timeIndex) => {
-        const map = columnMapService.getColumnMap(state);
-        return map.timeToVisual.get(timeIndex) ?? null;
-      },
-      getTimeBoundaryAfterMacrobeat: (state, index) => {
-        const map = columnMapService.getColumnMap(state);
-        const boundary = map.macrobeatBoundaries.find(b => b.macrobeatIndex === index);
-        return boundary ? boundary.timeColumn + 1 : 0;
-      }
-    });
+    registerColumnMapBridge(store);
     loadingManager.completeTask('column-map-hooks');
     initDebug('phase:column-map-hooks DONE');
 
     initDebug('phase:pixel-map-hooks START');
-    loadingManager.updateStatus('Syncing pixel map service...');
+    loadingManager.setStatus('Syncing pixel map service...');
     await loadingManager.nextFrame();
-    registerPixelMapHooks(store);
+    registerPixelMapBridge(store);
     loadingManager.completeTask('pixel-map-hooks');
     initDebug('phase:pixel-map-hooks DONE');
     await loadingManager.nextFrame();
 
     // ── UI mounting ────────────────────────────────────────
     initDebug('phase:mount-toolbar START');
-    loadingManager.updateStatus('Preparing toolbar...');
+    loadingManager.setStatus('Preparing toolbar...');
     await loadingManager.nextFrame();
-    toolbar.init();
     loadingManager.completeTask('mount-toolbar');
     initDebug('phase:mount-toolbar DONE');
 
     initDebug('phase:mount-svelte START');
-    loadingManager.updateStatus('Mounting interface components...');
+    loadingManager.setStatus('Mounting interface components...');
     await loadingManager.nextFrame();
     mountSvelteComponents();
     markComponentReady('uiComponents');
@@ -572,11 +484,11 @@ async function startStudentNotation(): Promise<void> {
     await waitForComponent('uiComponents');
 
     initDebug('phase:audio-components START');
-    loadingManager.updateStatus('Mounting envelope editor...');
+    loadingManager.setStatus('Mounting envelope editor...');
     await loadingManager.nextFrame();
     initAudioComponents({
       onStep: (status) => {
-        loadingManager.updateStatus(status);
+        loadingManager.setStatus(status);
       }
     });
     loadingManager.completeTask('mount-envelope');
@@ -604,19 +516,16 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:effects-controls DONE');
     await loadingManager.nextFrame();
 
-    // Check for unauthorized state mutations after audio components
-    checkForMutations(store.state, 'audio-components-initialization');
-
     // ── State subscriptions & rhythm ───────────────────────
     initDebug('phase:rhythm-tools START');
-    loadingManager.updateStatus('Initializing rhythm tools...');
+    loadingManager.setStatus('Initializing rhythm tools...');
     rhythmUI.init();
     void (rhythmPlaybackService.initialize?.() ?? rhythmPlaybackService.init?.());
     loadingManager.completeTask('rhythm-tools');
     initDebug('phase:rhythm-tools DONE');
 
     initDebug('phase:stamp-toolbars START');
-    loadingManager.updateStatus('Loading stamp toolbars...');
+    loadingManager.setStatus('Loading stamp toolbars...');
     sixteenthStampsToolbar.init();
     sixteenthThreeStampsToolbar.init();
     tripletStampsToolbar.init();
@@ -624,13 +533,14 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:stamp-toolbars DONE');
 
     initDebug('phase:draw-tools START');
-    loadingManager.updateStatus('Initializing draw tools...');
-    initDrawSystem();
+    loadingManager.setStatus('Initializing draw tools...');
+    const drawSystem = initDrawSystem();
+    cleanupFns.push(() => drawSystem.dispose());
     await waitForComponent('audioComponents');
     const renderAll = () => {
       try {
         PitchGridController.render();
-        const DrumGridController = (window as any).DrumGridController;
+        const DrumGridController = getDrumGridRenderer();
         if (DrumGridController?.render) {
           DrumGridController.render();
         }
@@ -645,7 +555,7 @@ async function startStudentNotation(): Promise<void> {
 
     // ── Render & finalize ──────────────────────────────────
     initDebug('phase:initial-render START');
-    loadingManager.updateStatus('Rendering workspace...');
+    loadingManager.setStatus('Rendering workspace...');
     store.setSelectedTool('note');
     store.setSelectedNote('circle', '#4a90e2');
     renderAll();
@@ -656,15 +566,15 @@ async function startStudentNotation(): Promise<void> {
 
     initDebug('phase:finalize START');
     markComponentReady('initialized');
-    loadingManager.updateStatus('Ready!');
+    loadingManager.setStatus('Ready!');
     loadingManager.completeTask('finalize');
     initDebug('phase:finalize DONE');
     await loadingManager.nextFrame();
 
     if (store.isColdStart) {
-      const treblePresetRange = getTrebleClefPresetRange();
+      const treblePresetRange = getTrebleClefPresetRange(fullRowData);
       if (!treblePresetRange) {
-        logger.warn('Main.js', 'Treble Clef preset range could not be resolved during cold start');
+        logger.warn('Main', 'Treble Clef preset range could not be resolved during cold start');
       } else {
         const currentRange = store.state.pitchRange;
         const alreadyTreble = currentRange
@@ -677,13 +587,10 @@ async function startStudentNotation(): Promise<void> {
     }
 
     initDebug('all phases complete — removing loading screen');
-    await loadingManager.complete();
+    await loadingManager.completeLoading();
     initDebug('loading screen removed — app ready');
     // Kick off local drum sample loading AFTER the loading screen is gone.
     // Calling this earlier (at module-eval time) triggers a Vite dev-server full-reload.
-
-    // Initialize modulation testing (keep for advanced debugging)
-    window.ModulationTest = ModulationTest;
 
     // Log viewport info after initialization (currently disabled)
     // setTimeout(() => {
@@ -693,8 +600,8 @@ async function startStudentNotation(): Promise<void> {
     // }, 1000);
 
   } catch (error) {
-    logger.error('Main.js', 'Initialization failed', error, 'initialization');
-    logger.error('Main.js', 'Component readiness snapshot at failure', { ...componentReadiness }, 'initialization');
+    logger.error('Main', 'Initialization failed', error, 'initialization');
+    logger.error('Main', 'Component readiness snapshot at failure', { ...componentReadiness }, 'initialization');
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     loadingManager.showError(normalizedError);
 
@@ -741,7 +648,7 @@ export function teardownStudentNotation(): void {
   try {
     unmountSvelteComponents();
   } catch (error) {
-    logger.warn('Main.js', 'Failed to unmount Svelte components', error, 'cleanup');
+    logger.warn('Main', 'Failed to unmount Svelte components', error, 'cleanup');
   }
 
   if (typeof SynthEngine.teardown === 'function') {

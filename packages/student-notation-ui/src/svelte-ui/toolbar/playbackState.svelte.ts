@@ -7,19 +7,14 @@
  * Usage from Svelte:
  *   import { playbackState, playbackActions } from './playbackState';
  *
- *   // Access state
- *   $effect(() => {
- *     console.log('Playing:', playbackState.isPlaying);
- *   });
- *
  *   // Call actions
  *   playbackActions.play();
  */
 
 import store from '@state/initStore.ts';
 import TransportService from '@services/initTransport.ts';
-import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.js';
-import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.js';
+import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.ts';
+import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.ts';
 
 // Create reactive state object
 export const playbackState = $state({

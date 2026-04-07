@@ -25,6 +25,8 @@ export type NarratorCallbacks = {
 export type Narrator = {
   /** Speak text, returns promise that resolves when done */
   speak(textOrHtml: string, opts?: SpeakOptions): Promise<void>;
+  /** Set default speech volume for current and future utterances */
+  setVolume(volume: number): void;
   /** Cancel current speech */
   cancel(): void;
   /** Pause speech */
@@ -53,6 +55,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
   const { callbacks, debug } = opts;
 
   let currentVoiceURI: string | undefined;
+  let currentVolume = DEFAULT_SPEAK_OPTIONS.volume;
   let speaking = false;
   let cancelled = false;
   let currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -150,6 +153,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
       chunking: opts?.chunking ?? DEFAULT_SPEAK_OPTIONS.chunking,
       preSpeakWaveMs: opts?.preSpeakWaveMs ?? DEFAULT_SPEAK_OPTIONS.preSpeakWaveMs,
     };
+    currentVolume = mergedOpts.volume;
 
     // Strip HTML and get clean text
     const cleanText = stripHtml(textOrHtml);
@@ -193,7 +197,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
           lang: mergedOpts.lang,
           rate: mergedOpts.rate,
           pitch: mergedOpts.pitch,
-          volume: mergedOpts.volume,
+          volume: currentVolume,
         });
       }
     } finally {
@@ -224,6 +228,16 @@ export function createNarrator(opts: NarratorOptions): Narrator {
     currentVoiceURI = uri;
   };
 
+  const setVolume = (volume: number) => {
+    const normalizedVolume = Number.isFinite(volume)
+      ? Math.max(0, Math.min(1, volume))
+      : DEFAULT_SPEAK_OPTIONS.volume;
+    currentVolume = normalizedVolume;
+    if (currentUtterance) {
+      currentUtterance.volume = normalizedVolume;
+    }
+  };
+
   const isSpeaking = (): boolean => speaking;
 
   const dispose = () => {
@@ -237,6 +251,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
     resume,
     listVoices,
     setVoiceURI,
+    setVolume,
     isSpeaking,
     dispose,
   };

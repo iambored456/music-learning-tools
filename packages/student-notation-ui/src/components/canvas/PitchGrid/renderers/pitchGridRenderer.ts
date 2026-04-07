@@ -1,65 +1,27 @@
 // js/components/Canvas/PitchGrid/renderers/pitchGridRenderer.ts
 import store from '@state/initStore.ts';
-import { drawHorizontalLines, drawVerticalLines } from './gridLines.js';
-import { drawLegendsToSeparateCanvases } from './legend.js';
-import { drawSingleColumnOvalNote, drawTwoColumnOvalNote, drawTonicShape } from './notes.js';
-import { getRowY, getVisibleRowRange } from './rendererUtils.js';
-import { renderSixteenthStamps } from './sixteenthStampRenderer.js';
-import { renderSixteenthThreeStamps } from './sixteenthThreeStampRenderer.js';
-import { renderTripletStamps } from './tripletStampRenderer.js';
-import { renderModulationMarkers } from './modulationRenderer.js';
-import { renderAnnotations } from './annotationRenderer.js';
+import { drawHorizontalLines, drawVerticalLines } from './gridLines.ts';
+import { drawLegendsToSeparateCanvases } from './legend.ts';
+import { drawSingleColumnOvalNote, drawTwoColumnOvalNote, drawTonicShape } from './notes.ts';
+import { getRowY, getVisibleRowRange } from './rendererUtils.ts';
+import { renderSixteenthStamps } from './sixteenthStampRenderer.ts';
+import { renderSixteenthThreeStamps } from './sixteenthThreeStampRenderer.ts';
+import { renderTripletStamps } from './tripletStampRenderer.ts';
+import { renderModulationMarkers } from './modulationRenderer.ts';
+import { renderAnnotations } from './annotationRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import { assertRowIntegrity } from '@utils/rowCoordinates.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import CanvasContextService from '@services/canvasContextService.ts';
-import type { AppState, PlacedNote, TonicSign } from '@app-types/state.js';
+import type { AppState, PlacedNote, TonicSign } from '@mlt/types';
 
 const isDev = import.meta.env.DEV;
 
-let lastViewportDebugLogAt = 0;
 function isViewportDebugEnabled(): boolean {
-  // Be defensive: in some contexts `localStorage` access can throw (privacy modes, file://, etc).
-  // We want `window.__SN_DEBUG_VIEWPORT = true` to work even if storage/query parsing fails.
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_VIEWPORT?: boolean };
-    if (Boolean(win.__SN_DEBUG_VIEWPORT)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const byQueryParam = new URLSearchParams(window.location.search).get('debugViewport') === '1';
-    if (byQueryParam) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    return localStorage.getItem('sn:debugViewport') === '1';
-  } catch {
-    return false;
-  }
+  return false;
 }
 
-let _didAnnounceViewportDebug = false;
-function logViewportDebug(message: string, data: Record<string, unknown>): void {
-  if (!isViewportDebugEnabled()) {return;}
-  try {
-    const now = performance?.now?.() ?? Date.now();
-    if (now - lastViewportDebugLogAt < 500) {return;}
-    lastViewportDebugLogAt = now;
-    _didAnnounceViewportDebug = true;
-    void message;
-    void data;
-  } catch {
-    // Never let debug logging break rendering.
-  }
-}
+function logViewportDebug(_message: string, _data: Record<string, unknown>): void {}
 
 type PitchGridRenderOptions = {
   placedNotes: PlacedNote[];

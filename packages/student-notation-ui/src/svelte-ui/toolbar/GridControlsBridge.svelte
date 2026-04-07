@@ -4,8 +4,6 @@
    *
    * This component attaches event handlers to grid control buttons
    * (zoom in/out, macrobeat increase/decrease).
-   *
-   * This replaces: src/components/toolbar/initializers/gridControlsInitializer.ts
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
@@ -58,7 +56,6 @@
     increaseBtn?.addEventListener('click', handleIncreaseMacrobeat);
     decreaseBtn?.addEventListener('click', handleDecreaseMacrobeat);
 
-    if ((window as any).__initDebug) console.log('[Svelte] GridControlsBridge mounted');
   });
 
   onDestroy(() => {
@@ -68,7 +65,6 @@
     increaseBtn?.removeEventListener('click', handleIncreaseMacrobeat);
     decreaseBtn?.removeEventListener('click', handleDecreaseMacrobeat);
 
-    if ((window as any).__initDebug) console.log('[Svelte] GridControlsBridge unmounted');
   });
 </script>
 

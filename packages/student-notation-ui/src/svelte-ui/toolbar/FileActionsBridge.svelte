@@ -5,15 +5,20 @@
    * This component attaches event handlers to existing file action buttons.
    * It's a bridge pattern that allows Svelte to manage file operations while
    * keeping the existing HTML structure intact.
-   *
-   * This replaces: src/components/toolbar/initializers/fileActionsInitializer.ts
-   *
+
    * Usage: Mount this component anywhere - it finds buttons by ID and attaches handlers.
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
+  import TransportService from '@services/initTransport.ts';
+  import SynthEngine from '@services/initAudio.ts';
   import logger from '@utils/logger.ts';
-  import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
+  import {
+    applyImportedStudentNotationData,
+    generateStudentNotationFilename,
+    parseImportedStudentNotationData,
+    serializeStudentNotationScoreFile,
+  } from '@services/studentNotationScoreFile.ts';
 
   // DOM element references
   let saveAsBtn: HTMLElement | null = null;
@@ -21,19 +26,11 @@
   let printBtn: HTMLElement | null = null;
   let resetBtn: HTMLElement | null = null;
 
-  // Helper functions
-  function generateDateBasedFilename(): string {
-    const now = new Date();
-    const month = now.toLocaleDateString('en-US', { month: 'long' });
-    const day = now.getDate();
-    return `SN-score-${month}${day}.csv`;
-  }
-
   async function saveWithPicker(blob: Blob): Promise<void> {
     try {
       const options = {
-        suggestedName: generateDateBasedFilename(),
-        types: [{ description: 'Student Notation CSV File', accept: { 'text/csv': ['.csv'] } }]
+        suggestedName: generateStudentNotationFilename(),
+        types: [{ description: 'Student Notation Score File', accept: { 'application/json': ['.json'] } }]
       };
       const handle = await (window as any).showSaveFilePicker(options);
       const writable = await handle.createWritable();
@@ -50,27 +47,17 @@
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', generateDateBasedFilename());
+    link.setAttribute('download', generateStudentNotationFilename());
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
 
-  function getScoreAsCSV(): string {
-    return store.state.placedNotes.map((note: PlacedNote) => {
-      return [
-        note.row, note.startColumnIndex, note.endColumnIndex,
-        note.color, note.shape, note.tonicNumber || '',
-        note.isDrum, note.drumTrack || ''
-      ].join(',');
-    }).join('\n');
-  }
-
   // Event handlers
   async function handleSaveAs() {
-    const csvData = getScoreAsCSV();
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const scoreData = serializeStudentNotationScoreFile(store.state);
+    const blob = new Blob([scoreData], { type: 'application/json;charset=utf-8;' });
     if ((window as any).showSaveFilePicker) {
       await saveWithPicker(blob);
     } else {
@@ -81,7 +68,7 @@
   function handleImport() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv,.txt';
+    input.accept = '.json';
     input.onchange = (e: Event) => {
       const target = e.target as HTMLInputElement;
       const file = target.files?.[0];
@@ -90,71 +77,14 @@
       const reader = new FileReader();
       reader.onload = (readerEvent: ProgressEvent<FileReader>) => {
         const content = readerEvent.target?.result as string;
-        if (!content) {
-          logger.warn('FileActionsBridge', 'Imported file was empty', null, 'toolbar');
-          return;
+        try {
+          const imported = parseImportedStudentNotationData(content);
+          TransportService.stop();
+          SynthEngine.hardStopAllSound();
+          applyImportedStudentNotationData(store, imported);
+        } catch (error) {
+          logger.warn('FileActionsBridge', 'Import failed', error, 'toolbar');
         }
-
-        const allowedShapes = new Set(['circle', 'oval', 'diamond']);
-        const importedNotes: Partial<PlacedNote>[] = [];
-
-        content.split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0)
-          .forEach(line => {
-            const parts = line.split(',');
-            if (parts.length < 7) {
-              logger.warn('FileActionsBridge', 'Skipping invalid note row', { line }, 'toolbar');
-              return;
-            }
-
-            const row = Number.parseInt(parts[0] ?? '', 10);
-            const startColumnIndex = Number.parseInt(parts[1] ?? '', 10);
-            const endColumnIndex = Number.parseInt(parts[2] ?? '', 10);
-            const color = (parts[3] ?? '').trim();
-            const rawShape = (parts[4] ?? '').trim().toLowerCase();
-            const tonicNumber = parts[5] ? Number.parseInt(parts[5], 10) : null;
-            const isDrum = (parts[6] ?? '').trim().toLowerCase() === 'true';
-            const drumTrackValue = parts[7] ? Number.parseInt(parts[7], 10) : null;
-            const parsedDrumTrack = typeof drumTrackValue === 'number' && Number.isFinite(drumTrackValue)
-              ? drumTrackValue
-              : undefined;
-
-            if (!color) {
-              logger.warn('FileActionsBridge', 'Skipping note with missing color', { line }, 'toolbar');
-              return;
-            }
-            if (!Number.isFinite(row) || !Number.isFinite(startColumnIndex) || !Number.isFinite(endColumnIndex)) {
-              logger.warn('FileActionsBridge', 'Skipping note with invalid coordinates', { line }, 'toolbar');
-              return;
-            }
-
-            const shape = allowedShapes.has(rawShape)
-              ? (rawShape as 'circle' | 'oval' | 'diamond')
-              : 'circle';
-
-            if (!allowedShapes.has(rawShape)) {
-              logger.warn('FileActionsBridge', `Unknown shape "${rawShape}", defaulting to circle`, null, 'toolbar');
-            }
-
-            importedNotes.push({
-              row,
-              startColumnIndex: startColumnIndex as CanvasSpaceColumn,
-              endColumnIndex: endColumnIndex as CanvasSpaceColumn,
-              color,
-              shape,
-              tonicNumber,
-              isDrum,
-              drumTrack: parsedDrumTrack
-            });
-          });
-
-        if (importedNotes.length === 0) {
-          logger.warn('FileActionsBridge', 'No valid notes found in imported file', null, 'toolbar');
-          return;
-        }
-
-        store.loadNotes(importedNotes);
       };
       reader.readAsText(file);
     };
@@ -172,6 +102,8 @@
     }
   }
 
+  const handleSaveAsClick = () => void handleSaveAs();
+
   onMount(() => {
     // Find existing DOM elements
     saveAsBtn = document.getElementById('save-as-button');
@@ -180,22 +112,20 @@
     resetBtn = document.getElementById('reset-canvas-button');
 
     // Attach event listeners
-    saveAsBtn?.addEventListener('click', () => void handleSaveAs());
+    saveAsBtn?.addEventListener('click', handleSaveAsClick);
     importBtn?.addEventListener('click', handleImport);
     printBtn?.addEventListener('click', handlePrint);
     resetBtn?.addEventListener('click', handleReset);
 
-    if ((window as any).__initDebug) console.log('[Svelte] FileActionsBridge mounted');
   });
 
   onDestroy(() => {
     // Remove event listeners
-    saveAsBtn?.removeEventListener('click', () => void handleSaveAs());
+    saveAsBtn?.removeEventListener('click', handleSaveAsClick);
     importBtn?.removeEventListener('click', handleImport);
     printBtn?.removeEventListener('click', handlePrint);
     resetBtn?.removeEventListener('click', handleReset);
 
-    if ((window as any).__initDebug) console.log('[Svelte] FileActionsBridge unmounted');
   });
 </script>
 

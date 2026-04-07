@@ -1,4 +1,4 @@
-import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.js';
+import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.ts';
 import { createHexDiamondBase, renderSixteenthStampRowSVG, svgPathFromPoints } from '@utils/sharedDiamondStampSvg.ts';
 
 export interface SixteenthStampShape {

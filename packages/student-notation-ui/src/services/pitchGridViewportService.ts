@@ -1,13 +1,14 @@
-// js/services/pitchGridViewportService.ts
-//
-// Transitional facade for pitch-grid viewport concerns (scroll/zoom/visible-range).
-// This starts as a proxy to LayoutService so consumers can migrate off the LayoutService god-object
-// before we physically move the underlying implementation.
+import LayoutService from '@services/layoutService.ts';
+import type { PitchRange } from '@mlt/types';
 
-import LayoutService from './layoutService.js';
-import type { PitchRange } from '@app-types/state.js';
+interface PitchGridViewportService {
+  getViewportInfo: typeof LayoutService.getViewportInfo;
+  setViewportTopIndex(topIndex: number): void;
+  setViewportBottomIndex(bottomIndex: number): void;
+  setPitchViewportRange(range: PitchRange, options?: { animateMs?: number; source?: string }): void;
+}
 
-const pitchGridViewportService = {
+const pitchGridViewportService: PitchGridViewportService = {
   getViewportInfo: () => LayoutService.getViewportInfo(),
 
   setViewportTopIndex(topIndex: number): void {

@@ -7,8 +7,7 @@
     <p class="eyebrow">Quinn Fleming's</p>
     <h1>Amateur Music Learning Tools</h1>
     <p class="subhead">
-      Explore interactive apps for hearing, seeing, and learning how music works - without needing
-      to read standard music notation.
+      Learn how music works - without needing to read Western standard music notation.
     </p>
   </header>
 

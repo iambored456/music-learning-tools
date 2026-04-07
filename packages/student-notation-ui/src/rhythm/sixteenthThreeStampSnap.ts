@@ -1,5 +1,5 @@
 import { timeToCanvas } from '@services/columnMapService.ts';
-import type { AppState } from '@app-types/state.js';
+import type { AppState } from '@mlt/types';
 
 const THREE_STAMP_SPAN = 1.5;
 const EPSILON = 1e-9;

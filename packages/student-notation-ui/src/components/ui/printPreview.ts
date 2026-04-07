@@ -1,7 +1,7 @@
 // js/components/UI/printPreview.ts
 import store from '@state/initStore.ts';
 import PrintService from '@services/printService.ts';
-import type { PrintOptions } from '@app-types/state.js';
+import type { PrintOptions } from '@mlt/types';
 
 const CANVAS_FRAME_PADDING = 16;
 

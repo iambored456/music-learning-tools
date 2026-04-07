@@ -1,7 +1,6 @@
 // js/components/Rhythm/stampToolbars/sixteenthStampsToolbar.js
 import { SIXTEENTH_STAMPS } from '@/rhythm/sixteenthStamps.ts';
 import { defaultSixteenthStampRenderer } from '@utils/sixteenthStampRenderer.ts';
-import { registerSixteenthStampLayoutDebug } from '@utils/sixteenthStampLayoutDebug.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 
@@ -18,7 +17,6 @@ const SixteenthStampsToolbar = {
   updateSixteenthStampColors: (_color: string) => {},
 
   init() {
-    registerSixteenthStampLayoutDebug();
     this.render();
     this.bindEvents();
     logger.info('SixteenthStampsToolbar', 'Sixteenth stamps toolbar initialized', null, 'stamps');
@@ -61,7 +59,6 @@ const SixteenthStampsToolbar = {
 
     container.appendChild(grid);
     this.setInitialSelection(this.selectedSixteenthStampId);
-    window.logSixteenthStampLayoutComparison?.();
   },
 
   createSixteenthStampButton(stamp: SixteenthStamp) {

@@ -4,13 +4,11 @@
    *
    * This component manages tempo slider, DraggableNumber tempo inputs,
    * preset buttons, and tempo visualization.
-   *
-   * This replaces: src/components/toolbar/initializers/audioControlsInitializer.ts
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
   import DraggableNumber from '@components/ui/draggableNumber.ts';
-  import tempoVisualizer from '@components/toolbar/tempoVisualizer.js';
+  import tempoVisualizer from '@components/toolbar/tempoVisualizer.ts';
   import logger from '@utils/logger.ts';
   import { PRESETS } from '@services/presetData.ts';
 

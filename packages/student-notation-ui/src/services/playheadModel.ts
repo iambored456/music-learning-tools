@@ -8,7 +8,7 @@
 import store from '@state/initStore.ts';
 import pixelMapService from '@services/pixelMapService.ts';
 import columnMapService from '@services/columnMapService.ts';
-import type { AppState } from '@app-types/state.js';
+import type { AppState } from '@mlt/types';
 
 let cachedTimeMap: number[] = [];
 let cachedMusicalEndTime = 0;
@@ -49,7 +49,7 @@ function getPixelOptions(): { cellWidth: number; tempoModulationMarkers?: AppSta
 export function updatePlayheadModel({
   timeMap = [],
   musicalEndTime = 0,
-  // columnWidths/cellWidth kept for backward compatibility; geometry is derived from store + pixelMapService.
+  // Geometry is derived from store + pixelMapService.
   columnWidths: _columnWidths = [],
   cellWidth: _cellWidth = 0
 }: {

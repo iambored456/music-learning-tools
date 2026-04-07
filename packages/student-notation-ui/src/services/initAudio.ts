@@ -10,6 +10,10 @@ import { createSynthEngine, type SynthEngineInstance } from '@mlt/student-notati
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/overtoneBins.ts';
+import {
+  getAudioEffectsManager,
+  registerSynthEngine
+} from '@services/runtimeGlobals.ts';
 
 logger.moduleLoaded('EngineAudio', 'general');
 
@@ -36,16 +40,16 @@ const SynthEngine = {
       },
 
       // Inject the effects manager - always provide wrapper, check at call time
-      // (window.audioEffectsManager is set by initAudioComponents which runs AFTER this)
+      // Runtime registration happens in initAudioComponents which runs after this service boots.
       effectsManager: {
         applySynthEffects: (synth: any, color: string, masterGain: any) => {
-          window.audioEffectsManager?.applySynthEffects(synth, color, masterGain);
+          getAudioEffectsManager()?.applySynthEffects?.(synth, color, masterGain);
         },
         applyEffectsToVoice: (voice: any, color: string) => {
-          window.audioEffectsManager?.applyEffectsToVoice(voice, color);
+          getAudioEffectsManager()?.applyEffectsToVoice?.(voice, color);
         },
         flushPlaybackTails: (colors?: string[]) => {
-          window.audioEffectsManager?.flushPlaybackTails(colors);
+          getAudioEffectsManager()?.flushPlaybackTails?.(colors);
         }
       },
 
@@ -96,8 +100,7 @@ const SynthEngine = {
       this.setVolume(dB);
     });
 
-    // Expose on window for compatibility
-    window.synthEngine = this;
+    registerSynthEngine(this);
 
     logger.info('EngineAudio', 'Initialization complete', null, 'audio');
   },

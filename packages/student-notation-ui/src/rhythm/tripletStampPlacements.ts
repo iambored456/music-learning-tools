@@ -1,11 +1,11 @@
 // js/rhythm/tripletStampPlacements.ts
-import { getTripletStampById, GROUP_WIDTH_CELLS } from './tripletStamps.js';
+import { getTripletStampById, GROUP_WIDTH_CELLS } from './tripletStamps.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { type TonicSign } from '@utils/tonicColumnUtils.ts';
 import { getPlacedTonicSigns } from '@state/selectors.ts';
 import { canvasToTime, timeToCanvas } from '../services/columnMapService.ts';
-import type { TripletStampPlaybackData, TripletStampPlacement } from '@app-types/state.js';
+import type { TripletStampPlaybackData, TripletStampPlacement } from '@mlt/types';
 
 logger.moduleLoaded('TripletStampPlacements', 'triplets');
 

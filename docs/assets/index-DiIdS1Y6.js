@@ -1,0 +1,1 @@
+const A=100;function s(E){return 440*Math.pow(2,(E-69)/12)}const o=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"],S=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];function M(E,_=!1){const n=Math.round(E),t=(n%12+12)%12,T=Math.floor(n/12)-1;return`${(_?S:o)[t]}${T}`}function N(E){return(Math.round(E)%12+12)%12}export{A as C,M as a,s as b,N as m};

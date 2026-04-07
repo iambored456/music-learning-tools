@@ -1,6 +1,10 @@
 // js/services/timbreEffects/effectsAnimation/tremoloWaveformEffect.ts
 import BaseAnimationEffect from './baseAnimationEffect.ts';
 import logger from '@utils/logger.ts';
+import {
+  getAnimationEffectsManager,
+  getWaveformVisualizer
+} from '@services/runtimeGlobals.ts';
 
 logger.moduleLoaded('TremoloWaveformEffect');
 
@@ -146,12 +150,13 @@ class TremoloWaveformEffect extends BaseAnimationEffect<TremoloAnimationState, T
     }
 
     // Check if animation should be running - if not, return static value
-    if (window.animationEffectsManager && !window.animationEffectsManager.shouldTremoloBeRunning()) {
+    const animationManager = getAnimationEffectsManager();
+    if (animationManager && !animationManager.shouldTremoloBeRunning?.()) {
       return 1.0; // Animation stopped - return to static value
     }
 
     // Get original waveform amplitude (the pre-tremolo reference)
-    const originalAmplitude = window.waveformVisualizer?.calculatedAmplitude ?? 1.0;
+    const originalAmplitude = getWaveformVisualizer()?.calculatedAmplitude ?? 1.0;
 
     // Calculate tremolo effect with corrected span direction
     const oscillation = Math.sin(animation.phase); // -1 to +1

@@ -1,7 +1,7 @@
 // js/services/printService.ts
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import type { PrintOptions } from '@app-types/state.js';
+import type { PrintOptions } from '@mlt/types';
 
 type SnapshotKey = `${boolean}-${boolean}`;
 const buttonGridSnapshots: Partial<Record<SnapshotKey, HTMLCanvasElement | null>> = {};

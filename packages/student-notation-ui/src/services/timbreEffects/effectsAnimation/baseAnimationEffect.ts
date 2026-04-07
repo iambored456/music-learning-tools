@@ -1,7 +1,8 @@
 // js/services/timbreEffects/effectsAnimation/baseAnimationEffect.ts
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import type { AnimatableNote } from '@app-types/state.js';
+import { getAnimationEffectsManager } from '@services/runtimeGlobals.ts';
+import type { AnimatableNote } from '@mlt/types';
 
 type AnimationEffectType = 'vibrato' | 'tremolo' | 'delay' | 'reverb';
 
@@ -296,7 +297,7 @@ abstract class BaseAnimationEffect<
   }
 
   private requestAnimationStateUpdate(): void {
-    window.animationEffectsManager?.updateAnimationState();
+    getAnimationEffectsManager()?.updateAnimationState?.();
   }
 }
 

@@ -88,13 +88,66 @@ const FILLED_INTERVAL_BORDER_INTERVALS = new Set<number>([
   (FILLED_INTERVAL + 1) % 12,
 ]);
 
+const REFERENCE_CELL_HEIGHT = 12;
+const BASE_DEFAULT_LINE_WIDTH = 1;
+const BASE_E_LINE_WIDTH = 1;
+const BASE_DASH_LENGTH = 5;
 const BASE_C_LINE_WIDTH = 3.33;
-const TONIC_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.9;
-const EMPHASIZED_DASHED_LINE_WIDTH = BASE_C_LINE_WIDTH * 1.5;
-const LINE_STYLE_EMPHASIZED_SOLID = { lineWidth: TONIC_LINE_WIDTH, dash: [] as number[], color: '#adb5bd' };
-const LINE_STYLE_EMPHASIZED_DASHED = { lineWidth: EMPHASIZED_DASHED_LINE_WIDTH, dash: [5, 5], color: '#adb5bd' };
-const LINE_STYLE_DEFAULT = { lineWidth: 1, dash: [] as number[], color: '#ced4da' };
-const LINE_STYLE_FILLED = { lineWidth: 1, dash: [] as number[], color: 'rgba(222, 226, 230, 0.24)' };
+const G_ROW_FILL_COLOR = 'rgba(173, 181, 189, 0.28)';
+let lastHorizontalGridMetricsSignature = '';
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function scaleLineMetric(
+  cellHeight: number,
+  baseMetric: number,
+  minMetric: number,
+  maxMetric: number
+): number {
+  const scaled = (cellHeight / REFERENCE_CELL_HEIGHT) * baseMetric;
+  return clamp(scaled, minMetric, maxMetric);
+}
+
+function getScaledDashPattern(cellHeight: number): number[] {
+  const dashUnit = scaleLineMetric(cellHeight, BASE_DASH_LENGTH, 3.5, 8);
+  return [dashUnit, dashUnit];
+}
+
+function roundMetric(value: number, precision = 2): number {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function logHorizontalGridMetrics(ctx: CanvasRenderingContext2D, cellHeight: number): void {
+  if (typeof window === 'undefined') return;
+
+  const defaultLineWidth = scaleLineMetric(cellHeight, BASE_DEFAULT_LINE_WIDTH, 0.75, 1.6);
+  const cLineWidth = scaleLineMetric(cellHeight, BASE_C_LINE_WIDTH, 2.4, 4.2);
+  const eLineWidth = scaleLineMetric(cellHeight, BASE_E_LINE_WIDTH, 0.75, 1.35);
+  const dashPattern = getScaledDashPattern(cellHeight);
+  const deviceScale = typeof ctx.getTransform === 'function' ? ctx.getTransform().a : 1;
+  const metrics = {
+    legendCellHeightPx: roundMetric(cellHeight),
+    cLineThicknessPx: roundMetric(cLineWidth),
+    eDashThicknessPx: roundMetric(eLineWidth),
+    eDashPatternPx: dashPattern.map((value) => roundMetric(value)),
+    gSpaceFillHeightPx: roundMetric(cellHeight),
+    defaultLineThicknessPx: roundMetric(defaultLineWidth),
+    cToLegendRatio: roundMetric(cLineWidth / cellHeight, 3),
+    eToLegendRatio: roundMetric(eLineWidth / cellHeight, 3),
+    defaultToLegendRatio: roundMetric(defaultLineWidth / cellHeight, 3),
+    deviceScale: roundMetric(deviceScale, 3),
+    legacyStudentNotationCLinePx: 3.33,
+    legacyStudentNotationELinePx: 1,
+  };
+  const signature = JSON.stringify(metrics);
+  if (signature === lastHorizontalGridMetricsSignature) return;
+
+  lastHorizontalGridMetricsSignature = signature;
+  console.log('[PitchGrid] Horizontal line metrics', metrics);
+}
 
 function normalizePitchClass(value: number): number {
   const rounded = Math.round(value);
@@ -150,25 +203,34 @@ function resolveRowPitchClass(row: PitchRowData): number | null {
   return parsePitchClassFromPitchString(row.pitch);
 }
 
-function getLineStyleFromInterval(intervalFromReference: number): {
+function getLineStyleFromInterval(intervalFromReference: number, cellHeight: number): {
   lineWidth: number;
   dash: number[];
   color: string;
   fillRow: boolean;
 } {
+  const defaultLineWidth = scaleLineMetric(cellHeight, BASE_DEFAULT_LINE_WIDTH, 0.75, 1.6);
+  const cLineWidth = scaleLineMetric(cellHeight, BASE_C_LINE_WIDTH, 2.4, 4.2);
+  const eLineWidth = scaleLineMetric(cellHeight, BASE_E_LINE_WIDTH, 0.75, 1.35);
+
   if (intervalFromReference === EMPHASIZED_SOLID_INTERVAL) {
-    return { ...LINE_STYLE_EMPHASIZED_SOLID, fillRow: false };
+    return { lineWidth: cLineWidth, dash: [], color: '#adb5bd', fillRow: false };
   }
 
   if (intervalFromReference === EMPHASIZED_DASHED_INTERVAL) {
-    return { ...LINE_STYLE_EMPHASIZED_DASHED, fillRow: false };
+    return {
+      lineWidth: eLineWidth,
+      dash: getScaledDashPattern(cellHeight),
+      color: '#adb5bd',
+      fillRow: false,
+    };
   }
 
   if (intervalFromReference === FILLED_INTERVAL) {
-    return { ...LINE_STYLE_FILLED, fillRow: true };
+    return { lineWidth: defaultLineWidth, dash: [], color: G_ROW_FILL_COLOR, fillRow: true };
   }
 
-  return { ...LINE_STYLE_DEFAULT, fillRow: false };
+  return { lineWidth: defaultLineWidth, dash: [], color: '#ced4da', fillRow: false };
 }
 
 /**
@@ -197,6 +259,8 @@ export function drawHorizontalLines(
       : 0
   );
 
+  logHorizontalGridMetrics(ctx, cellHeight);
+
   for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
     const row = fullRowData[rowIndex];
     if (!row) continue;
@@ -216,7 +280,7 @@ export function drawHorizontalLines(
     if (SKIPPED_INTERVALS_FROM_REFERENCE.has(intervalFromReference)) continue;
     if (FILLED_INTERVAL_BORDER_INTERVALS.has(intervalFromReference)) continue;
 
-    const style = getLineStyleFromInterval(intervalFromReference);
+    const style = getLineStyleFromInterval(intervalFromReference, cellHeight);
 
     if (style.fillRow) {
       // Fill row style (legacy "G" behavior), now rotated relative to reference pitch class.

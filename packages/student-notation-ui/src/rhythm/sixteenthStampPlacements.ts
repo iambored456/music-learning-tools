@@ -1,8 +1,8 @@
 // js/rhythm/sixteenthStampPlacements.ts
-import { getSixteenthStampById } from './sixteenthStamps.js';
+import { getSixteenthStampById } from './sixteenthStamps.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
-import type { CanvasSpaceColumn, SixteenthStampPlaybackData, SixteenthStampPlacement } from '@app-types/state.js';
+import type { CanvasSpaceColumn, SixteenthStampPlaybackData, SixteenthStampPlacement } from '@mlt/types';
 
 logger.moduleLoaded('SixteenthStampPlacements', 'stamps');
 

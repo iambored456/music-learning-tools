@@ -2,7 +2,8 @@
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import * as Tone from 'tone';
-import type { AnimatableNote, TimbreState } from '@app-types/state.js';
+import { getAnimationEffectsManager } from '@services/runtimeGlobals.ts';
+import type { AnimatableNote, TimbreState } from '@mlt/types';
 
 logger.moduleLoaded('EnvelopeFillEffect');
 
@@ -56,7 +57,7 @@ class EnvelopeFillEffect {
       logger.debug('EnvelopeFillEffect', `Started fill animation for note ${noteId}`, null, 'animation');
 
       // Trigger animation manager to update state and start loop if needed
-      window.animationEffectsManager?.updateAnimationState();
+      getAnimationEffectsManager()?.updateAnimationState?.();
     });
 
     // Subscribe to note release events to begin release phase
@@ -82,7 +83,7 @@ class EnvelopeFillEffect {
       this.activeFills.clear();
 
       // Trigger animation state update to stop animation loop
-      window.animationEffectsManager?.updateAnimationState();
+      getAnimationEffectsManager()?.updateAnimationState?.();
 
       // Trigger one final canvas redraw to clear the fill visuals
       store.emit('animationUpdate', {
@@ -147,7 +148,7 @@ class EnvelopeFillEffect {
 
           // Check if we should stop animation loop
           if (this.activeFills.size === 0) {
-            window.animationEffectsManager?.updateAnimationState();
+            getAnimationEffectsManager()?.updateAnimationState?.();
           }
         }
       }
@@ -179,4 +180,3 @@ class EnvelopeFillEffect {
 }
 
 export default EnvelopeFillEffect;
-

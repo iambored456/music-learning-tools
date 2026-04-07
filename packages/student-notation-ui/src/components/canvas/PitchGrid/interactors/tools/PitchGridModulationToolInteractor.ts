@@ -1,8 +1,8 @@
 import store from '@state/initStore.ts';
-import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.js';
-import { getModulationMarkerCursor, hitTestModulationMarker } from '../../renderers/modulationRenderer.js';
+import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.ts';
+import { getModulationMarkerCursor, hitTestModulationMarker } from '../../renderers/modulationRenderer.ts';
 import logger from '@utils/logger.ts';
-import type { ModulationMarker } from '@app-types/state.js';
+import type { ModulationMarker } from '@mlt/types';
 
 interface MeasureBoundary {
   measureIndex: number;

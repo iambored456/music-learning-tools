@@ -13,7 +13,7 @@ import {
   type ColumnMap
 } from '@mlt/student-notation-engine';
 
-import type { AppState, MacrobeatGrouping } from '@app-types/state.js';
+import type { AppState, MacrobeatGrouping } from '@mlt/types';
 import logger from '@utils/logger.ts';
 
 logger.moduleLoaded('EngineStore', 'general');
@@ -192,8 +192,8 @@ const store: StoreInstance = createStore({
   }
 });
 
-// Re-export fullRowData for backward compatibility
+// Re-export pitch rows alongside the store for shared consumers.
 export { fullRowData };
 
-// Export the store as default for backward compatibility
+// Default store export for app consumers.
 export default store;

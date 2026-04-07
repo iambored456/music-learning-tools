@@ -1,8 +1,22 @@
 // js/components/Canvas/PitchGrid/renderers/annotationRenderer.ts
 import store from '@state/initStore.ts';
 import annotationService from '../../../../services/annotationService.ts';
-import { getColumnX, getRowY } from './rendererUtils.js';
-import type { ModulationMarker } from '@app-types/state.js';
+import { getColumnX, getRowY } from './rendererUtils.ts';
+import type {
+  Annotation,
+  AnnotationArrowheadStyle,
+  AnnotationCanvasPoint,
+  AnnotationGridPoint,
+  AnnotationLineStyle,
+  ArrowAnnotation,
+  LassoAnnotation,
+  ModulationMarker,
+  PathAnnotation,
+  TempAnnotation,
+  TextAnnotation,
+  TextAnnotationSettings,
+  TextPreviewAnnotation,
+} from '@mlt/types';
 
 interface AnnotationOptions {
   cellWidth: number;
@@ -12,88 +26,12 @@ interface AnnotationOptions {
   tempoModulationMarkers?: ModulationMarker[];
 }
 
-interface Point { x: number; y: number }
-interface GridPoint { col: number; row: number }
-
-type AnnotationType = 'arrow' | 'text' | 'marker' | 'highlighter' | 'lasso';
-
-interface BaseAnnotation {
-  type: AnnotationType;
-  color?: string;
-}
-
-type ArrowheadStyle = 'filled' | 'filled-arrow' | 'unfilled' | 'unfilled-arrow' | 'circle' | 'none' | string;
-
-interface ArrowSettings {
-  strokeWeight: number;
-  lineStyle: 'solid' | 'dashed-big' | 'dashed-small' | 'dotted';
-  arrowheadSize?: number;
-  startArrowhead?: ArrowheadStyle;
-  endArrowhead?: ArrowheadStyle;
-}
-
-interface ArrowAnnotation extends BaseAnnotation {
-  type: 'arrow';
-  startCol: number;
-  startRow: number;
-  endCol: number;
-  endRow: number;
-  settings: ArrowSettings;
-}
-
-interface TextSettings {
-  size: number;
-  background?: boolean;
-  color: string;
-  italic?: boolean;
-  bold?: boolean;
-  superscript?: boolean;
-  subscript?: boolean;
-  underline?: boolean;
-}
-
-interface TextAnnotation extends BaseAnnotation {
-  type: 'text';
-  col: number;
-  row: number;
-  widthCols: number;
-  heightRows: number;
-  text: string;
-  settings: TextSettings;
-}
-
-interface TextPreviewAnnotation {
-  type: 'text';
-  startCol: number;
-  startRow: number;
-  endCol: number;
-  endRow: number;
-}
-
-type PathSize = number | 'small' | 'medium' | 'large';
-
-interface PathSettings {
-  color: string;
-  size: PathSize;
-}
-
-interface PathAnnotation extends BaseAnnotation {
-  type: 'marker' | 'highlighter';
-  path: GridPoint[];
-  settings: PathSettings;
-}
-
-interface LassoAnnotation extends BaseAnnotation {
-  type: 'lasso';
-  path: Point[];
-}
-
 interface UnknownAnnotation { type?: string }
 
-type AnyAnnotation = ArrowAnnotation | TextAnnotation | PathAnnotation | LassoAnnotation | UnknownAnnotation;
-type TempAnnotation = AnyAnnotation | TextPreviewAnnotation;
+type RenderableAnnotation = Annotation | UnknownAnnotation;
+type RenderableTempAnnotation = TempAnnotation | UnknownAnnotation;
 
-function isArrowAnnotation(annotation: TempAnnotation | null | undefined): annotation is ArrowAnnotation {
+function isArrowAnnotation(annotation: RenderableTempAnnotation | null | undefined): annotation is ArrowAnnotation {
   if (annotation?.type !== 'arrow') {return false;}
   const candidate = annotation as Partial<ArrowAnnotation>;
   const settings = candidate.settings;
@@ -106,7 +44,7 @@ function isArrowAnnotation(annotation: TempAnnotation | null | undefined): annot
     typeof settings.lineStyle === 'string';
 }
 
-function isTextAnnotation(annotation: TempAnnotation | null | undefined): annotation is TextAnnotation {
+function isTextAnnotation(annotation: RenderableTempAnnotation | null | undefined): annotation is TextAnnotation {
   if (annotation?.type !== 'text') {return false;}
   const candidate = annotation as Partial<TextAnnotation>;
   const settings = candidate.settings;
@@ -120,7 +58,7 @@ function isTextAnnotation(annotation: TempAnnotation | null | undefined): annota
     typeof settings.color === 'string';
 }
 
-function isTextPreviewAnnotation(annotation: TempAnnotation | null | undefined): annotation is TextPreviewAnnotation {
+function isTextPreviewAnnotation(annotation: RenderableTempAnnotation | null | undefined): annotation is TextPreviewAnnotation {
   if (annotation?.type !== 'text') {return false;}
   const preview = annotation as Partial<TextPreviewAnnotation>;
   const hasFinalCols = typeof (annotation as Partial<TextAnnotation>).col === 'number';
@@ -131,18 +69,17 @@ function isTextPreviewAnnotation(annotation: TempAnnotation | null | undefined):
     !hasFinalCols;
 }
 
-function isPathAnnotation(annotation: TempAnnotation | null | undefined): annotation is PathAnnotation {
+function isPathAnnotation(annotation: RenderableTempAnnotation | null | undefined): annotation is PathAnnotation {
   if (!annotation || (annotation.type !== 'marker' && annotation.type !== 'highlighter')) {return false;}
   const candidate = annotation as Partial<PathAnnotation>;
   const settings = candidate.settings;
   return Array.isArray(candidate.path) &&
     !!settings &&
     typeof settings.color === 'string' &&
-    (typeof settings.size === 'number' ||
-      settings.size === 'small' || settings.size === 'medium' || settings.size === 'large');
+    typeof settings.size === 'number';
 }
 
-function isLassoAnnotation(annotation: TempAnnotation | null | undefined): annotation is LassoAnnotation {
+function isLassoAnnotation(annotation: RenderableTempAnnotation | null | undefined): annotation is LassoAnnotation {
   return annotation?.type === 'lasso' && Array.isArray((annotation as LassoAnnotation).path);
 }
 
@@ -152,12 +89,12 @@ function isLassoAnnotation(annotation: TempAnnotation | null | undefined): annot
  */
 export function renderAnnotations(ctx: CanvasRenderingContext2D, options: AnnotationOptions): void {
   // Get annotations from store
-  const annotations = store.state.annotations as AnyAnnotation[];
-  const tempAnnotation = (annotationService as any).tempAnnotation as TempAnnotation | null;
+  const annotations = store.state.annotations as RenderableAnnotation[];
+  const tempAnnotation = annotationService.getTempAnnotation() as RenderableTempAnnotation | null;
 
   // Get selected and hover annotations from service
-  const selectedAnnotation = (annotationService as any).selectedAnnotation as AnyAnnotation | null;
-  const hoverAnnotation = (annotationService as any).hoverAnnotation as AnyAnnotation | null;
+  const selectedAnnotation = annotationService.getSelectedAnnotation() as RenderableAnnotation | null;
+  const hoverAnnotation = annotationService.getHoverAnnotation() as RenderableAnnotation | null;
 
   // Render saved annotations
   if (annotations && annotations.length > 0) {
@@ -221,7 +158,7 @@ export function renderAnnotations(ctx: CanvasRenderingContext2D, options: Annota
   if (lassoSelection?.isActive && Array.isArray(lassoSelection.convexHull)) {
     // Update convex hull position before rendering (handles scrolling/viewport changes)
     annotationService.updateLassoConvexHull();
-    drawConvexHull(ctx, lassoSelection.convexHull as Point[]);
+    drawConvexHull(ctx, lassoSelection.convexHull as AnnotationCanvasPoint[]);
   }
 }
 
@@ -235,8 +172,8 @@ function drawArrow(ctx: CanvasRenderingContext2D, annotation: ArrowAnnotation, i
   const endY = getRowY(endRow, options);
 
   ctx.save();
-  ctx.strokeStyle = annotation.color || '#000000';
-  ctx.lineWidth = getSizeValue(settings.strokeWeight);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = settings.strokeWeight;
   ctx.setLineDash(getLineDash(settings.lineStyle));
 
   // Calculate angle and arrowhead size
@@ -280,7 +217,7 @@ function drawArrow(ctx: CanvasRenderingContext2D, annotation: ArrowAnnotation, i
   // Draw selection/hover highlight
   if (isSelected || isHovered) {
     ctx.strokeStyle = isSelected ? 'rgba(74, 144, 226, 0.6)' : 'rgba(74, 144, 226, 0.3)';
-    ctx.lineWidth = getSizeValue(settings.strokeWeight) + 4;
+    ctx.lineWidth = settings.strokeWeight + 4;
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(startX, startY);
@@ -291,7 +228,14 @@ function drawArrow(ctx: CanvasRenderingContext2D, annotation: ArrowAnnotation, i
   ctx.restore();
 }
 
-function drawArrowhead(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, type: ArrowheadStyle, size: number): void {
+function drawArrowhead(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  type: AnnotationArrowheadStyle,
+  size: number
+): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -393,7 +337,7 @@ function wrapText(
   text: string,
   maxWidth: number,
   fontSize: number,
-  settings: TextSettings,
+  settings: TextAnnotationSettings,
   fontFamily: string
 ): string[] {
   ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${fontSize}px ${fontFamily}`;
@@ -436,7 +380,7 @@ function drawTextWithFormatting(
   x: number,
   y: number,
   fontSize: number,
-  settings: TextSettings,
+  settings: TextAnnotationSettings,
   fontFamily: string
 ): void {
   // If entire text is superscript or subscript from toolbar settings
@@ -628,7 +572,7 @@ function drawPath(ctx: CanvasRenderingContext2D, annotation: PathAnnotation, opt
   if (!path || path.length < 2) {return;}
 
   // Convert grid coordinates to canvas pixels
-  const canvasPath = path.map((point: GridPoint) => ({
+  const canvasPath = path.map((point: AnnotationGridPoint) => ({
     x: getColumnX(point.col, options),
     y: getRowY(point.row, options)
   }));
@@ -640,7 +584,7 @@ function drawPath(ctx: CanvasRenderingContext2D, annotation: PathAnnotation, opt
   }
 
   ctx.strokeStyle = settings.color;
-  ctx.lineWidth = typeof settings.size === 'number' ? settings.size : getSizeValue(settings.size);
+  ctx.lineWidth = settings.size;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
@@ -662,18 +606,7 @@ function drawPath(ctx: CanvasRenderingContext2D, annotation: PathAnnotation, opt
   ctx.restore();
 }
 
-function getSizeValue(size: PathSize | undefined): number {
-  if (typeof size === 'number') {return size;}
-
-  switch (size) {
-    case 'small': return 2;
-    case 'medium': return 4;
-    case 'large': return 6;
-    default: return 4;
-  }
-}
-
-function getLineDash(style: string | undefined): number[] {
+function getLineDash(style: AnnotationLineStyle | undefined): number[] {
   switch (style) {
     case 'solid': return [];
     case 'dashed-big': return [10, 5];
@@ -719,7 +652,7 @@ function drawLassoPath(ctx: CanvasRenderingContext2D, annotation: LassoAnnotatio
 /**
  * Draw the convex hull around selected items (dashed border)
  */
-function drawConvexHull(ctx: CanvasRenderingContext2D, hull: Point[]): void {
+function drawConvexHull(ctx: CanvasRenderingContext2D, hull: AnnotationCanvasPoint[]): void {
   if (!hull || hull.length < 3) {return;}
   const firstPoint = hull[0];
   if (!firstPoint) {return;}

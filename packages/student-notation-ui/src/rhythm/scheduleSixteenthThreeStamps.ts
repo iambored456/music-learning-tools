@@ -1,7 +1,7 @@
 // js/rhythm/scheduleSixteenthThreeStamps.ts
-import { getSixteenthThreeStampById } from './sixteenthThreeStamps.js';
+import { getSixteenthThreeStampById } from './sixteenthThreeStamps.ts';
 import logger from '@utils/logger.ts';
-import type { SixteenthThreeStampPlacement } from '@app-types/state.js';
+import type { SixteenthThreeStampPlacement } from '@mlt/types';
 
 logger.moduleLoaded('SixteenthThreeStampScheduler', 'stamps');
 

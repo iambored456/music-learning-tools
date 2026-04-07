@@ -1,11 +1,20 @@
+import type { AnnotationArrowheadStyle, ArrowAnnotation } from '@mlt/types';
+
+type RenderedArrowAnnotation = ArrowAnnotation & {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+};
+
 export function renderArrowAnnotation(params: {
   ctx: CanvasRenderingContext2D;
-  annotation: any;
+  annotation: RenderedArrowAnnotation;
   isTemp?: boolean;
   isSelected?: boolean;
   isHovered?: boolean;
-  getStrokeWidth: (strokeWeight: any) => number;
-  getLineDash: (lineStyle: any) => number[];
+  getStrokeWidth: (strokeWeight: number) => number;
+  getLineDash: (lineStyle: ArrowAnnotation['settings']['lineStyle']) => number[];
 }): void {
   const { ctx, annotation, isTemp = false, isSelected = false, isHovered = false, getStrokeWidth, getLineDash } = params;
   const { startX, startY, endX, endY, settings } = annotation;
@@ -79,7 +88,7 @@ function renderArrowhead(params: {
   x: number;
   y: number;
   angle: number;
-  type: string;
+  type: AnnotationArrowheadStyle;
   size: number;
 }): void {
   const { ctx, x, y, angle, type, size } = params;
@@ -119,4 +128,3 @@ function renderArrowhead(params: {
 
   ctx.restore();
 }
-

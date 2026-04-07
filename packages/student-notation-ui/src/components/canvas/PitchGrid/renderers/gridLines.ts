@@ -1,10 +1,10 @@
 // js/components/Canvas/PitchGrid/renderers/gridLines.ts
-import { getColumnX, getRowY, getPitchClass, getLineStyleFromPitchClass } from './rendererUtils.js';
+import { getColumnX, getRowY, getPitchClass, getLineStyleFromPitchClass } from './rendererUtils.ts';
 import { shouldDrawVerticalLineAtColumn, isTonicColumn } from '../../../../utils/tonicColumnUtils.ts';
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
-import type { AppState } from '@app-types/state.js';
+import type { AppState } from '@mlt/types';
 
 type PlacedTonicSigns = ReturnType<typeof getPlacedTonicSigns>;
 

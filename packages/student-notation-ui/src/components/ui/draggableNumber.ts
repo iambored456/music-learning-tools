@@ -9,7 +9,7 @@
   - Lightweight styling via inline styles (override with CSS if you like)
 
   Usage
-    import DraggableNumber from './draggableNumber.js'
+    import DraggableNumber from './draggableNumber.ts'
     const num = new DraggableNumber('#target', {
       size: [60, 30], value: 0, min: 0, max: 20000, step: 1,
       decimalPlaces: 2,

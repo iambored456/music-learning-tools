@@ -5,6 +5,10 @@ import { hexToRgba } from '@utils/colorUtils.ts';
 import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/overtoneBins.ts';
 import DynamicWaveformVisualizer from '../dynamicWaveform/dynamicWaveformVisualizer.ts';
 import logger from '@utils/logger.ts';
+import {
+  getAnimationEffectsManager,
+  registerWaveformVisualizer
+} from '@services/runtimeGlobals.ts';
 
 interface NoteChangedPayload {
   newNote?: {
@@ -12,17 +16,11 @@ interface NoteChangedPayload {
   };
 }
 
-interface AnimationEffectsManagerLike {
-  getADSRTremoloAmplitudeMultiplier?: (color: string) => number;
-}
-
 const MAX_SAMPLES = 512;
 const STANDARD_DEGREES = 360;
 const EXTENDED_DEGREES = 480;
 
-const getAnimationManager = (): AnimationEffectsManagerLike | undefined => {
-  return (window as Window & { animationEffectsManager?: AnimationEffectsManagerLike }).animationEffectsManager;
-};
+const getAnimationManager = () => getAnimationEffectsManager();
 
 logger.moduleLoaded('StaticWaveformVisualizer');
 
@@ -530,7 +528,7 @@ class StaticWaveformVisualizer {
 }
 
 const waveformVisualizer = new StaticWaveformVisualizer();
-window.waveformVisualizer = waveformVisualizer;
+registerWaveformVisualizer(waveformVisualizer);
 
 export function initWaveformVisualizer(): boolean {
   return waveformVisualizer.initialize();

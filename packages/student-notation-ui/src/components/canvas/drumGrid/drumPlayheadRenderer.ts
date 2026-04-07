@@ -1,12 +1,10 @@
 // js/components/canvas/drumGrid/drumPlayheadRenderer.js
 import store from '@state/initStore.ts';
 import * as Tone from 'tone';
-import logger from '@utils/logger.ts';
 import {
   getTimeMapReference,
   getColumnStartX,
   getColumnWidth,
-  getCachedMusicalEndTime,
   getMacrobeatHighlightRectForCanvasColumn
 } from '@services/playheadModel.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
@@ -14,6 +12,8 @@ import { drawPulsingColumnHighlight } from '@utils/pulsingPlayhead.ts';
 
 type AnimationPhase = 'scaleUp' | 'scaleDown';
 interface PopAnimation { startTime: number; phase: AnimationPhase }
+
+import { getDrumGridRenderer } from '@services/runtimeGlobals.ts';
 
 class DrumPlayheadRenderer {
   private canvas: HTMLCanvasElement | null = null;
@@ -23,7 +23,6 @@ class DrumPlayheadRenderer {
   private _lastColumnProgress = 0;
   private _lastColumnStartX = 0;
   private _lastColumnWidth = 0;
-  private _lastDebugLogTime = 0;
 
   private activeAnimations = new Map<string, PopAnimation>();
   private popDuration = { scaleUp: 100, scaleDown: 300 };
@@ -81,7 +80,7 @@ class DrumPlayheadRenderer {
   }
 
   private invalidateTimeMap() {
-    // Kept for compatibility; playheadModel keeps timing in sync.
+    // playheadModel keeps timing in sync.
   }
 
   private startRendering() {
@@ -138,7 +137,6 @@ class DrumPlayheadRenderer {
       this.ctx.shadowBlur = 0;
     }
 
-    this.debugPlayhead(Tone.Transport.seconds, xPos);
     this.animationFrameId = requestAnimationFrame(() => this.render());
   }
 
@@ -174,55 +172,13 @@ class DrumPlayheadRenderer {
     return null;
   }
 
-  private debugPlayhead(currentTime: number, xPos: number) {
-    if (!(window as any).__DEBUG_PLAYHEAD_SYNC__) {
-      return;
-    }
-
-    const now = performance.now();
-    if (now - this._lastDebugLogTime < 250) {
-      return;
-    }
-    this._lastDebugLogTime = now;
-
-    const timeMap = getTimeMapReference();
-    const colIndex = this._lastColumnIndex;
-    const drumStartTime = Array.isArray(timeMap) && colIndex !== null && colIndex >= 0 ? timeMap[colIndex] : undefined;
-    const drumEndTime = Array.isArray(timeMap) && colIndex !== null && colIndex + 1 < timeMap.length ? timeMap[colIndex + 1] : undefined;
-    const drumTimelineEnd = Array.isArray(timeMap) ? (timeMap[timeMap.length - 1] ?? 0) : 0;
-    const transportTimelineEnd = getCachedMusicalEndTime();
-
-    const info = {
-      transportSeconds: Number(currentTime.toFixed(3)),
-      drumX: Number((xPos ?? 0).toFixed(2)),
-      columnIndex: colIndex,
-      columnProgress: Number(this._lastColumnProgress.toFixed(3)),
-      drumStartTime: Number(drumStartTime?.toFixed(3) ?? NaN),
-      transportStartTime: Number(drumStartTime?.toFixed(3) ?? NaN),
-      startDelta: 0,
-      drumEndTime: Number(drumEndTime?.toFixed(3) ?? NaN),
-      transportEndTime: Number(drumEndTime?.toFixed(3) ?? NaN),
-      endDelta: 0,
-      drumTimelineEnd: Number(drumTimelineEnd.toFixed(3)),
-      transportTimelineEnd: Number((transportTimelineEnd ?? 0).toFixed(3)),
-      timelineDelta: Number((drumTimelineEnd - (transportTimelineEnd ?? 0)).toFixed(3)),
-      toneLoopStart: Number(Number((Tone.Transport.loopStart as any) ?? 0).toFixed(3)),
-      toneLoopEnd: Number(Number((Tone.Transport.loopEnd as any) ?? 0).toFixed(3)),
-      storeLooping: store.state.isLooping
-    };
-
-    logger.debug('DrumPlayheadRenderer', 'Playhead diagnostics', info, 'canvas');
-  }
-
   triggerNotePop(colIndex: number, drumTrack: string | number) {
     const key = `${colIndex}-${drumTrack}`;
     this.activeAnimations.set(key, {
       startTime: performance.now(),
       phase: 'scaleUp'
     });
-    if ((window as any).drumGridRenderer) {
-      (window as any).drumGridRenderer.render();
-    }
+    getDrumGridRenderer()?.render();
   }
 
   getAnimationScale(colIndex: number, drumTrack: string | number) {

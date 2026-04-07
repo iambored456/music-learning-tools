@@ -26,8 +26,8 @@ interface Voice {
  * [PERF:SHARED-LFO] Vibrato modulation is now handled by shared per-color LFOs
  * in synthEngine.ts, not per-voice. applyToVoice() calls voice._setVibrato() which
  * is a no-op — the actual modulation happens via shared LFO → oscillator.detune.
- * This class still stores settings and is called by audioEffectsManager for
- * backwards compatibility, but the real work happens in synthEngine.updateSharedVibrato().
+ * This class stores effect settings while synthEngine.updateSharedVibrato()
+ * applies the shared modulation.
  */
 class VibratoAudioEffect {
   private currentSettings = new Map<string, VibratoSettings>();

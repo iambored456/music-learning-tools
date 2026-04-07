@@ -1,6 +1,7 @@
 ﻿// js/services/timbreEffects/effectsAudio/delayAudioEffect.ts
 import * as Tone from 'tone';
 import logger from '@utils/logger.ts';
+import { getSynthEngine } from '@services/runtimeGlobals.ts';
 
 logger.moduleLoaded('DelayAudioEffect');
 
@@ -22,8 +23,6 @@ interface Voice {
   };
   isDisposed?: () => boolean;
 }
-
-const getSynthEngine = () => (window as { synthEngine?: { updateSynthForColor?: (color: string) => void } }).synthEngine;
 
 class DelayAudioEffect {
   private currentSettings = new Map<string, DelaySettings>();

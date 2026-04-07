@@ -5,87 +5,20 @@
 // Historically these were referred to as "legend" columns/canvases, but semantically they
 // behave like the Y-axis of a graph: pitch -> Y, time -> X.
 import store from '@state/initStore.ts'; // <-- UPDATED PATH
-import { getColumnX, getRowY } from './rendererUtils.js';
+import { getColumnX, getRowY } from './rendererUtils.ts';
 import { Scale, Note } from 'tonal';
 import { getPlacedTonicSigns } from '@state/selectors.ts';
 import logger from '@utils/logger.ts';
-import { SIDE_COLUMN_WIDTH } from '../../../../core/constants.ts';
 import { getCanvasPixelRatio, getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
-import type { PitchRowData } from '@app-types/state.js';
+import type { PitchRowData } from '@mlt/types';
+import { getLegendColumnWidthUnitsForCellHeight, getLegendTotalWidthPx } from '@utils/legendSizing.ts';
+import {
+  getLegendFontDeclaration,
+  resolveLegendTextLayout,
+  snapToDevicePixel
+} from './legendTextRendering.ts';
 
 type ExtendedPitchRow = PitchRowData & { isDummy?: boolean };
-
-let lastLegendViewportDebugLogAt = 0;
-let lastFocusColoursDebugSignature = '';
-let lastFocusColoursDebugAt = 0;
-
-function shouldDebugFocusColours(): boolean {
-  try {
-    const win = globalThis as typeof globalThis & { __focusColoursDebug?: boolean };
-    return win.__focusColoursDebug !== false;
-  } catch {
-    return true;
-  }
-}
-
-function logFocusColoursDebug(message: string, data: Record<string, unknown>): void {
-  if (!shouldDebugFocusColours()) {return;}
-  try {
-    const now = performance?.now?.() ?? Date.now();
-    const signature = `${message}:${JSON.stringify(data)}`;
-    if (signature === lastFocusColoursDebugSignature && (now - lastFocusColoursDebugAt) < 250) {
-      return;
-    }
-    lastFocusColoursDebugSignature = signature;
-    lastFocusColoursDebugAt = now;
-    console.log(`[FocusColours][Legend] ${message}`, data);
-  } catch {
-    // Never let debug logging break rendering.
-  }
-}
-
-function isViewportDebugEnabled(): boolean {
-  // Be defensive: in some contexts `localStorage` access can throw (privacy modes, file://, etc).
-  // We want `window.__SN_DEBUG_VIEWPORT = true` to work even if storage/query parsing fails.
-  try {
-    const win = globalThis as typeof globalThis & { __SN_DEBUG_VIEWPORT?: boolean };
-    if (Boolean(win.__SN_DEBUG_VIEWPORT)) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const byQueryParam = new URLSearchParams(window.location.search).get('debugViewport') === '1';
-    if (byQueryParam) {
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    return localStorage.getItem('sn:debugViewport') === '1';
-  } catch {
-    return false;
-  }
-}
-
-let _didAnnounceViewportDebug = false;
-function logLegendViewportDebug(message: string, data: Record<string, unknown>): void {
-  if (!isViewportDebugEnabled()) {return;}
-  try {
-    const now = performance?.now?.() ?? Date.now();
-    if (now - lastLegendViewportDebugLogAt < 500) {return;}
-    lastLegendViewportDebugLogAt = now;
-    _didAnnounceViewportDebug = true;
-    void message;
-    void data;
-  } catch {
-    // Never let debug logging break rendering.
-  }
-}
 
 interface LegendOptions {
   fullRowData: ExtendedPitchRow[];
@@ -94,6 +27,7 @@ interface LegendOptions {
   cellHeight: number;
   colorMode?: string;
   showOctaveLabels?: boolean;
+  zoomLevel?: number;
 }
 
 // Import MODE_NAMES for modal scale support
@@ -104,18 +38,57 @@ function stripOctaveSuffix(label: string): string {
   return withoutOctave.length > 0 ? withoutOctave : label;
 }
 
-function snapToDevicePixel(value: number, pixelRatio: number): number {
-  if (!Number.isFinite(pixelRatio) || pixelRatio <= 0) {
-    return value;
-  }
-  return Math.round(value * pixelRatio) / pixelRatio;
+function splitLegendLabel(label: string): { body: string; octave: string } {
+  const octaveMatch = label.match(/\d+$/);
+  const octave = octaveMatch?.[0] ?? '';
+  return {
+    body: octave ? label.slice(0, -octave.length) : label,
+    octave
+  };
 }
 
-function getLegendFontSize(cellWidth: number, cellHeight: number, labelLength: number, pixelRatio: number): number {
-  const baseFontSize = Math.max(10, Math.min(cellWidth * 1.2, cellHeight * 1.2));
-  const sizeMultiplier = labelLength <= 3 ? 1 : 0.7;
-  const resolutionBoost = pixelRatio <= 1 ? 1.08 : 1;
-  return snapToDevicePixel(baseFontSize * sizeMultiplier * resolutionBoost, pixelRatio);
+function drawLegendText(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  textX: number,
+  textY: number,
+  textAlpha: string,
+  pixelRatio: number,
+  options: {
+    font: string;
+    regime: 'fill' | 'halo';
+    outlineOffsetPx: number;
+  }
+): void {
+  if (textAlpha === '00') {
+    return;
+  }
+
+  ctx.font = options.font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (options.regime === 'halo') {
+    const offset = options.outlineOffsetPx;
+    const haloOffsets = [
+      [-offset, -offset],
+      [offset, -offset],
+      [-offset, offset],
+      [offset, offset]
+    ] as const;
+
+    ctx.fillStyle = `#212529${textAlpha}`;
+    for (const [offsetX, offsetY] of haloOffsets) {
+      ctx.fillText(
+        label,
+        snapToDevicePixel(textX + offsetX, pixelRatio),
+        snapToDevicePixel(textY + offsetY, pixelRatio)
+      );
+    }
+  }
+
+  ctx.fillStyle = `#ffffff${textAlpha}`;
+  ctx.fillText(label, textX, textY);
 }
 
 // Helper function to extract tonic note from pitch at given row
@@ -249,12 +222,6 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
 
     focusScale = Array.from(allNotes);
     focusSet = buildFocusSet(focusScale);
-    logFocusColoursDebug('drawLegends focus set built', {
-      tonicCount,
-      focusScale,
-      focusSetSize: focusSet.size,
-      showFrequencyLabels
-    });
   }
 
 
@@ -318,7 +285,7 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
     const xStart = getColumnX(startCol, options);
     // Legend columns have fixed width (not in columnWidths after Step 1)
     // Total legend width, split 50/50 between columns A and B
-    const totalLegendWidth = SIDE_COLUMN_WIDTH * 2 * cellWidth;
+    const totalLegendWidth = getLegendTotalWidthPx(cellWidth, cellHeight);
     const colWidthsPx = [totalLegendWidth / 2, totalLegendWidth / 2];
     let cumulativeX = xStart;
     const pixelRatio = getCanvasPixelRatio(ctx.canvas);
@@ -362,22 +329,20 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
           ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
           ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
 
-          const finalFontSize = getLegendFontSize(cellWidth, cellHeight, pitchToDraw.length, pixelRatio);
-
-          ctx.font = `bold ${finalFontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
+          const textLayout = resolveLegendTextLayout(ctx, pitchToDraw, {
+            cellHeight,
+            colWidth,
+            pixelRatio
+          });
 
           const textX = snap(cumulativeX + colWidth / 2);
           const textY = snap(y);
 
-          ctx.strokeStyle = `#212529${textAlpha}`;
-          ctx.lineWidth = Math.max(1.2, 2.5 / pixelRatio);
-          ctx.lineJoin = 'round';
-          ctx.strokeText(pitchToDraw, textX, textY);
-
-          ctx.fillStyle = `#ffffff${textAlpha}`;
-          ctx.fillText(pitchToDraw, textX, textY);
+          drawLegendText(ctx, pitchToDraw, textX, textY, textAlpha, pixelRatio, {
+            font: textLayout.font,
+            regime: textLayout.regime,
+            outlineOffsetPx: textLayout.outlineOffsetPx
+          });
 
           if (focusColours && focusSet.size > 0) {
             totalCount += 1;
@@ -389,15 +354,6 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
     });
 
     if (focusColours && focusSet.size > 0) {
-      logFocusColoursDebug('drawLegends column summary', {
-        side: startCol === 0 ? 'left' : 'right',
-        tonicCount,
-        focusSetSize: focusSet.size,
-        focusScale,
-        totalLabels: totalCount,
-        filteredLabels: filteredCount,
-        showFrequencyLabels
-      });
       logger.debug('LegendRenderer', 'Focus filter summary', {
         side: startCol === 0 ? 'left' : 'right',
         startCol,
@@ -432,77 +388,9 @@ export function drawLegendsToSeparateCanvases(
   const showOctaveLabels = options.showOctaveLabels ?? true;
   const finalizeLabel = (value: string): string => showOctaveLabels ? value : stripOctaveSuffix(value);
 
-  // Debug the relationship between canvas height and the viewport row math.
-  // If `canvasHeight - (getRowY(endRow)+halfUnit)` is positive while we're mid-gamut, the legend canvas
-  // is likely taller than the pitch container (e.g., missed resize), which will appear as a blank band.
   const logCoverage = (ctx: CanvasRenderingContext2D, side: 'left' | 'right'): void => {
-    if (!isViewportDebugEnabled()) {return;}
-    const halfUnit = cellHeight / 2;
-    const canvasHeight = getLogicalCanvasHeight(ctx.canvas);
-    const yEnd = getRowY(endRow, options);
-    const bottomEdge = yEnd + halfUnit;
-    const containerHeight = document.getElementById('pitch-grid-container')?.clientHeight ?? null;
-
-    const totalRows = fullRowData.length;
-    const atTopGamutEdge = startRow <= 0;
-    const atBottomGamutEdge = endRow >= totalRows - 1;
-
-    const pickRowSummary = (rowIndex: number | null): Record<string, unknown> | null => {
-      if (rowIndex === null) {return null;}
-      const row = fullRowData[rowIndex];
-      if (!row) {return { rowIndex, exists: false };}
-      return { rowIndex, pitch: row.pitch, column: row.column, isBoundary: Boolean((row as any).isBoundary) };
-    };
-
-    const findFirstLastByColumn = (col: 'A' | 'B'): { first: number | null; last: number | null } => {
-      let first: number | null = null;
-      let last: number | null = null;
-      for (let i = startRow; i <= endRow; i++) {
-        const row = fullRowData[i];
-        if (!row || (row as any).isDummy) {continue;}
-        if (row.column !== col) {continue;}
-        if (first === null) {first = i;}
-        last = i;
-      }
-      return { first, last };
-    };
-
-    const byA = findFirstLastByColumn('A');
-    const byB = findFirstLastByColumn('B');
-
-    const rowCoverage = (rowIndex: number | null): Record<string, unknown> | null => {
-      if (rowIndex === null) {return null;}
-      const y = getRowY(rowIndex, options);
-      return {
-        rowIndex,
-        y,
-        topEdge: y - halfUnit,
-        bottomEdge: y + halfUnit,
-        gapCanvasMinusBottomEdge: canvasHeight - (y + halfUnit)
-      };
-    };
-
-    logLegendViewportDebug('legendCoverage', {
-      side,
-      startRow,
-      endRow,
-      atTopGamutEdge,
-      atBottomGamutEdge,
-      cellHeight,
-      halfUnit,
-      yEnd,
-      bottomEdge,
-      canvasHeight,
-      gapCanvasMinusBottomEdge: canvasHeight - bottomEdge,
-      containerHeight,
-      gapCanvasMinusContainer: typeof containerHeight === 'number' ? (canvasHeight - containerHeight) : null,
-      startRowSummary: pickRowSummary(startRow),
-      endRowSummary: pickRowSummary(endRow),
-      firstLastA: { ...byA, firstSummary: pickRowSummary(byA.first), lastSummary: pickRowSummary(byA.last) },
-      firstLastB: { ...byB, firstSummary: pickRowSummary(byB.first), lastSummary: pickRowSummary(byB.last) },
-      aLastCoverage: rowCoverage(byA.last),
-      bLastCoverage: rowCoverage(byB.last)
-    });
+    void ctx;
+    void side;
   };
 
   // Focus colours logic - union of all tonic scales
@@ -534,12 +422,6 @@ export function drawLegendsToSeparateCanvases(
     logger.debug('LegendRenderer', 'Focus Colours combined scale', { focusScale }, 'grid');
 
     focusSet = buildFocusSet(focusScale);
-    logFocusColoursDebug('drawLegendsToSeparateCanvases focus set built', {
-      tonicCount,
-      focusScale,
-      focusSetSize: focusSet.size,
-      showFrequencyLabels
-    });
   }
 
   const processLabel = (
@@ -609,7 +491,7 @@ export function drawLegendsToSeparateCanvases(
   ): void {
     // After Phase 8: Legend columns have fixed width, split 50/50 between A and B
     // Total legend width for both columns combined
-    const totalLegendWidth = SIDE_COLUMN_WIDTH * 2 * cellWidth;
+    const totalLegendWidth = getLegendTotalWidthPx(cellWidth, cellHeight);
     const colWidthsPx = [totalLegendWidth / 2, totalLegendWidth / 2];
     const pixelRatio = getCanvasPixelRatio(ctx.canvas);
     const snap = (value: number): number => snapToDevicePixel(value, pixelRatio);
@@ -653,6 +535,12 @@ export function drawLegendsToSeparateCanvases(
             ? '00'
             : (focusColours && focusSet.size > 0 && !isFocused ? '00' : 'FF');
 
+          const textLayout = resolveLegendTextLayout(ctx, pitchToDraw, {
+            cellHeight,
+            colWidth,
+            pixelRatio
+          });
+
           if (focusColours && focusSet.size > 0) {
             totalCount += 1;
             if (!isFocused) {filteredCount += 1;}
@@ -661,37 +549,20 @@ export function drawLegendsToSeparateCanvases(
           ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
           ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
 
-          const finalFontSize = getLegendFontSize(cellWidth, cellHeight, pitchToDraw.length, pixelRatio);
-
-          ctx.font = `bold ${finalFontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-
           const textX = snap(cumulativeX + colWidth / 2);
           const textY = snap(y);
 
-          ctx.strokeStyle = `#212529${textAlpha}`;
-          ctx.lineWidth = Math.max(1.2, 2.5 / pixelRatio);
-          ctx.lineJoin = 'round';
-          ctx.strokeText(pitchToDraw, textX, textY);
-
-          ctx.fillStyle = `#ffffff${textAlpha}`;
-          ctx.fillText(pitchToDraw, textX, textY);
+          drawLegendText(ctx, pitchToDraw, textX, textY, textAlpha, pixelRatio, {
+            font: textLayout.font,
+            regime: textLayout.regime,
+            outlineOffsetPx: textLayout.outlineOffsetPx
+          });
         }
       }
       cumulativeX += colWidth;
     });
 
     if (focusColours && focusSet.size > 0) {
-      logFocusColoursDebug('drawLegendsToSeparateCanvases column summary', {
-        side: startCol === 0 ? 'left' : 'right',
-        tonicCount,
-        focusSetSize: focusSet.size,
-        focusScale,
-        totalLabels: totalCount,
-        filteredLabels: filteredCount,
-        showFrequencyLabels
-      });
       logger.debug('LegendRenderer', 'Focus filter summary (separate)', {
         side: startCol === 0 ? 'left' : 'right',
         startCol,
@@ -705,7 +576,6 @@ export function drawLegendsToSeparateCanvases(
   // Draw left legend if context is available
   if (leftCtx) {
     clearLegend(leftCtx);
-    logCoverage(leftCtx, 'left');
     drawSingleLegend(leftCtx, 0, ['B', 'A'] as const, focusScale);
   }
 
@@ -713,7 +583,6 @@ export function drawLegendsToSeparateCanvases(
   if (rightCtx) {
     // Right legend starts after all musical columns
     clearLegend(rightCtx);
-    logCoverage(rightCtx, 'right');
     drawSingleLegend(rightCtx, columnWidths.length, ['A', 'B'] as const, focusScale);
   }
 }

@@ -5,8 +5,12 @@ import GridCoordsService from '@services/gridCoordsService.ts';
 import { drawDrumShape, type VolumeIconState } from './drumGridRenderer.ts';
 import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { isPlayableColumn } from '@services/columnMapService.ts';
-import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
+import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
+import {
+  getDrumVolumeNode,
+  invokeInitAudioHandler
+} from '@services/runtimeGlobals.ts';
 import {
   getDrumSampleSet,
   listDrumMachines,
@@ -115,21 +119,7 @@ let activeSamplePreviewAudio: HTMLAudioElement | null = null;
 let localDrumSampleChoicesPromise: Promise<void> | null = null;
 let localDrumSampleChoicesLoaded = false;
 
-function shouldLogDrumVolumeDebug(): boolean {
-  return typeof window !== 'undefined'
-    && (window as Window & { __drumVolumeDebug?: boolean }).__drumVolumeDebug === true;
-}
-
-function logDrumVolumeDebug(message: string, payload?: Record<string, unknown>): void {
-  if (!shouldLogDrumVolumeDebug()) {
-    return;
-  }
-  if (payload) {
-    console.debug(`[DrumVolumeDebug] ${message}`, payload);
-    return;
-  }
-  console.debug(`[DrumVolumeDebug] ${message}`);
-}
+function logDrumVolumeDebug(_message: string, _payload?: Record<string, unknown>): void {}
 
 function describeEventTarget(target: EventTarget | null): Record<string, unknown> {
   if (!(target instanceof Element)) {
@@ -217,232 +207,10 @@ const drumSampleChoicesByCategory = new Map<
   DrumSamplePickerCategory,
   Map<string, DrumSampleChoice[]>
 >();
-type DrumSampleLevelMetrics = {
-  peakDbfs: number;
-  rmsDbfs: number;
-  crestDb: number;
-  durationSeconds: number;
-  sampleRate: number;
-  channelCount: number;
-  frameCount: number;
-};
-const drumSampleLevelMetricsByUrl = new Map<string, DrumSampleLevelMetrics>();
-const drumSampleLevelAnalysisInFlight = new Map<string, Promise<DrumSampleLevelMetrics | null>>();
-let drumSampleAnalysisContext: AudioContext | null = null;
 
 for (const category of DRUM_SAMPLE_PICKER_CATEGORY_ORDER) {
   drumSampleChoicesByCategory.set(category, new Map());
 }
-
-function toDbfs(amplitude: number): number {
-  if (amplitude <= 0) {
-    return Number.NEGATIVE_INFINITY;
-  }
-  return 20 * Math.log10(amplitude);
-}
-
-function getDrumSampleAnalysisContext(): AudioContext | null {
-  type WindowWithWebkitAudioContext = Window & {
-    webkitAudioContext?: typeof AudioContext;
-  };
-  const AudioContextCtor = window.AudioContext || (window as WindowWithWebkitAudioContext).webkitAudioContext;
-  if (!AudioContextCtor) {
-    return null;
-  }
-  if (!drumSampleAnalysisContext) {
-    drumSampleAnalysisContext = new AudioContextCtor();
-  }
-  return drumSampleAnalysisContext;
-}
-
-async function analyzeDrumSampleLevel(choice: DrumSampleChoice): Promise<DrumSampleLevelMetrics | null> {
-  const cached = drumSampleLevelMetricsByUrl.get(choice.url);
-  if (cached) {
-    return cached;
-  }
-
-  const inFlight = drumSampleLevelAnalysisInFlight.get(choice.url);
-  if (inFlight) {
-    return await inFlight;
-  }
-
-  const analysisPromise = (async () => {
-    const context = getDrumSampleAnalysisContext();
-    if (!context) {
-      console.warn('[DrumSampleLevel] WebAudio unavailable; cannot decode sample for level analysis.');
-      return null;
-    }
-
-    try {
-      const response = await fetch(choice.url);
-      const sourceBuffer = await response.arrayBuffer();
-      const decoded = await context.decodeAudioData(sourceBuffer.slice(0));
-
-      let peak = 0;
-      let sumSquares = 0;
-      let sampleCount = 0;
-
-      for (let channelIndex = 0; channelIndex < decoded.numberOfChannels; channelIndex += 1) {
-        const data = decoded.getChannelData(channelIndex);
-        sampleCount += data.length;
-
-        for (let i = 0; i < data.length; i += 1) {
-          const sample = data[i] ?? 0;
-          const absSample = Math.abs(sample);
-          if (absSample > peak) {
-            peak = absSample;
-          }
-          sumSquares += sample * sample;
-        }
-      }
-
-      const rms = sampleCount > 0 ? Math.sqrt(sumSquares / sampleCount) : 0;
-      const peakDbfs = toDbfs(peak);
-      const rmsDbfs = toDbfs(rms);
-      const crestDb = peak > 0 && rms > 0 ? 20 * Math.log10(peak / rms) : 0;
-
-      const metrics: DrumSampleLevelMetrics = {
-        peakDbfs,
-        rmsDbfs,
-        crestDb,
-        durationSeconds: decoded.duration,
-        sampleRate: decoded.sampleRate,
-        channelCount: decoded.numberOfChannels,
-        frameCount: decoded.length
-      };
-
-      drumSampleLevelMetricsByUrl.set(choice.url, metrics);
-      return metrics;
-    } catch (error) {
-      console.warn('[DrumSampleLevel] Failed to analyze sample', {
-        sampleLabel: choice.label,
-        sampleUrl: choice.url,
-        error
-      });
-      return null;
-    } finally {
-      drumSampleLevelAnalysisInFlight.delete(choice.url);
-    }
-  })();
-
-  drumSampleLevelAnalysisInFlight.set(choice.url, analysisPromise);
-  return await analysisPromise;
-}
-
-function formatDbForLog(value: number): number | string {
-  if (!Number.isFinite(value)) {
-    return '-Infinity';
-  }
-  return Number(value.toFixed(2));
-}
-
-async function logPreviewSampleLevel(choice: DrumSampleChoice): Promise<void> {
-  const metrics = await analyzeDrumSampleLevel(choice);
-  if (!metrics) {return;}
-
-  const cachedMetrics = Array.from(drumSampleLevelMetricsByUrl.values())
-    .map((item) => item.rmsDbfs)
-    .filter(Number.isFinite);
-  const loudestRmsDbfs = cachedMetrics.length ? Math.max(...cachedMetrics) : metrics.rmsDbfs;
-  const deltaToLoudestDb = metrics.rmsDbfs - loudestRmsDbfs;
-
-  console.log('[DrumSampleLevel] Preview sample metrics', {
-    sampleLabel: choice.label,
-    machineLabel: getMachineLabel(choice.machineId, choice.machineLabel),
-    sampleUrl: choice.url,
-    peakDbfs: formatDbForLog(metrics.peakDbfs),
-    rmsDbfs: formatDbForLog(metrics.rmsDbfs),
-    crestDb: formatDbForLog(metrics.crestDb),
-    durationSeconds: Number(metrics.durationSeconds.toFixed(3)),
-    deltaToLoudestAnalyzedRmsDb: formatDbForLog(deltaToLoudestDb)
-  });
-}
-
-async function logAllDrumSampleLevels(): Promise<void> {
-  const choices = drumSampleChoiceByUrl.size
-    ? Array.from(drumSampleChoiceByUrl.values())
-    : [...remoteSampleChoices];
-  if (!choices.length) {
-    console.warn('[DrumSampleLevel] No drum samples available to analyze yet.');
-    return;
-  }
-
-  console.log('[DrumSampleLevel] Starting full sample analysis', { sampleCount: choices.length });
-
-  const rows: Array<{
-    sampleLabel: string;
-    machineLabel: string;
-    pickerCategory: DrumSamplePickerCategory;
-    suggestedLayer: DrumTrack;
-    peakDbfs: number | string;
-    rmsDbfs: number | string;
-    crestDb: number | string;
-    durationSeconds: number;
-    deltaToLoudestRmsDb: number | string;
-  }> = [];
-
-  let loudestRmsDbfs = Number.NEGATIVE_INFINITY;
-  const metricsByChoice = new Map<DrumSampleChoice, DrumSampleLevelMetrics>();
-
-  for (const choice of choices) {
-    const metrics = await analyzeDrumSampleLevel(choice);
-    if (!metrics) {
-      continue;
-    }
-    metricsByChoice.set(choice, metrics);
-    if (metrics.rmsDbfs > loudestRmsDbfs) {
-      loudestRmsDbfs = metrics.rmsDbfs;
-    }
-  }
-
-  for (const choice of choices) {
-    const metrics = metricsByChoice.get(choice);
-    if (!metrics) {
-      continue;
-    }
-    const deltaToLoudestRmsDb = metrics.rmsDbfs - loudestRmsDbfs;
-    rows.push({
-      sampleLabel: choice.label,
-      machineLabel: getMachineLabel(choice.machineId, choice.machineLabel),
-      pickerCategory: choice.pickerCategory,
-      suggestedLayer: choice.suggestedLayer,
-      peakDbfs: formatDbForLog(metrics.peakDbfs),
-      rmsDbfs: formatDbForLog(metrics.rmsDbfs),
-      crestDb: formatDbForLog(metrics.crestDb),
-      durationSeconds: Number(metrics.durationSeconds.toFixed(3)),
-      deltaToLoudestRmsDb: formatDbForLog(deltaToLoudestRmsDb)
-    });
-  }
-
-  rows.sort((a, b) => {
-    const aValue = typeof a.rmsDbfs === 'number' ? a.rmsDbfs : Number.NEGATIVE_INFINITY;
-    const bValue = typeof b.rmsDbfs === 'number' ? b.rmsDbfs : Number.NEGATIVE_INFINITY;
-    return bValue - aValue;
-  });
-
-  console.table(rows);
-
-  const numericRmsValues = rows
-    .map((row) => row.rmsDbfs)
-    .filter((value): value is number => typeof value === 'number');
-
-  if (!numericRmsValues.length) {
-    console.log('[DrumSampleLevel] Analysis completed without numeric RMS values.');
-    return;
-  }
-
-  const quietestRmsDbfs = Math.min(...numericRmsValues);
-  const spreadDb = loudestRmsDbfs - quietestRmsDbfs;
-
-  console.log('[DrumSampleLevel] Analysis summary', {
-    analyzedSampleCount: numericRmsValues.length,
-    loudestRmsDbfs: formatDbForLog(loudestRmsDbfs),
-    quietestRmsDbfs: formatDbForLog(quietestRmsDbfs),
-    rmsSpreadDb: formatDbForLog(spreadDb)
-  });
-}
-
-(window as any).debugDrumSampleLevels = logAllDrumSampleLevels;
 
 function formatSampleLabelFromUrl(sampleUrl: string): string {
   const filename = sampleUrl.split('/').pop() ?? sampleUrl;
@@ -566,7 +334,7 @@ const triggerDrumHit = (drumTrack: DrumTrack, timeOffsetSeconds = 0): void => {
     if (!ensureDrumPlayersReady()) {return;}
     triggerDrum(drumTrack, Tone.now() + timeOffsetSeconds);
   };
-  const initPromise = (window as any).initAudio?.();
+  const initPromise = invokeInitAudioHandler();
   if (initPromise && typeof (initPromise as Promise<void>).then === 'function') {
     void (initPromise as Promise<void>).then(play).catch(() => {});
     return;
@@ -800,8 +568,6 @@ function closeDrumLayerSampleModal(): void {
 }
 
 function playDrumSamplePreview(choice: DrumSampleChoice): void {
-  void logPreviewSampleLevel(choice);
-
   const play = () => {
     if (activeSamplePreviewAudio) {
       activeSamplePreviewAudio.pause();
@@ -812,13 +578,6 @@ function playDrumSamplePreview(choice: DrumSampleChoice): void {
     const previewAudio = new Audio(choice.url);
     previewAudio.preload = 'auto';
     previewAudio.volume = 0.9;
-    const drumVolumeNode = (window as any).drumVolumeNode;
-    console.log('[DrumSampleLevel] Preview playback settings', {
-      sampleLabel: choice.label,
-      sampleUrl: choice.url,
-      previewElementVolume: previewAudio.volume,
-      drumVolumeNodeDb: drumVolumeNode?.volume?.value ?? null
-    });
     previewAudio.addEventListener('ended', () => {
       if (activeSamplePreviewAudio === previewAudio) {
         activeSamplePreviewAudio = null;
@@ -828,7 +587,7 @@ function playDrumSamplePreview(choice: DrumSampleChoice): void {
     void previewAudio.play().catch(() => {});
   };
 
-  const initPromise = (window as any).initAudio?.();
+  const initPromise = invokeInitAudioHandler();
   if (initPromise && typeof (initPromise as Promise<void>).then === 'function') {
     void (initPromise as Promise<void>).then(play).catch(() => {});
     return;
@@ -1387,7 +1146,7 @@ function createVolumeSlider(): void {
       const previousDrumVolume = drumVolume;
       drumVolume = Number(target.value) / 100;
 
-      const drumVolumeNode = (window as any).drumVolumeNode;
+      const drumVolumeNode = getDrumVolumeNode();
       const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
       drumVolumeSliderInputCount += 1;
       if (drumVolumeNode?.volume) {
@@ -1522,15 +1281,13 @@ function createVolumeSlider(): void {
   logDrumVolumeDebug('bound document click listener for slider dismissal', { initCall });
 }
 
-export function getDrumVolume(): number {
+function getDrumVolume(): number {
   return drumVolume;
 }
 
 export function getVolumeIconState(): VolumeIconState {
   return volumeIconState;
 }
-
-(window as any).getDrumVolume = getDrumVolume;
 
 export function initDrumGridInteraction(): void {
   const drumCanvas = document.getElementById(DRUM_CANVAS_ID) as HTMLCanvasElement | null;

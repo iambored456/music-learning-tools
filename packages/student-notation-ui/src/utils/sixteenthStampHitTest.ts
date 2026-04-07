@@ -7,8 +7,8 @@
  */
 
 import { getSixteenthStampById } from '@/rhythm/sixteenthStamps.ts';
-import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import type { SixteenthStampPlacement as StateSixteenthStampPlacement } from '@app-types/state.js';
+import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
+import type { SixteenthStampPlacement as StateSixteenthStampPlacement } from '@mlt/types';
 
 export type SixteenthStampPlacement = StateSixteenthStampPlacement;
 

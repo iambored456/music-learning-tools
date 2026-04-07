@@ -16,6 +16,7 @@ import {
   type DrumManagerInstance
 } from '@mlt/student-notation-engine';
 import SynthEngine from '@services/initAudio.ts';
+import { registerDrumVolumeNode } from '@services/runtimeGlobals.ts';
 
 type DrumTrack = 'H' | 'M' | 'L';
 
@@ -40,7 +41,7 @@ function createEngineDrumManager(
 function syncWindowDrumVolumeNode(manager: DrumManagerInstance): void {
   const volumeNode = manager.getVolumeNode();
   if (volumeNode) {
-    (window as any).drumVolumeNode = volumeNode;
+    registerDrumVolumeNode(volumeNode);
   }
 }
 

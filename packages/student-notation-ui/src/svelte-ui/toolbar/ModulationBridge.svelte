@@ -4,14 +4,12 @@
    *
    * This component attaches event handlers to modulation control buttons
    * (2:3, 3:2, and clear modulation markers).
-   *
-   * This replaces: src/components/toolbar/initializers/modulationInitializer.ts
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
-  import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.js';
+  import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.ts';
   import logger from '@utils/logger.ts';
-  import type { ModulationRatio } from '@app-types/state.js';
+  import type { ModulationRatio } from '@mlt/types';
 
   // DOM element references
   let modulation23Btn: HTMLElement | null = null;
@@ -128,7 +126,6 @@
     updateClearButton();
 
     logger.info('ModulationBridge', 'Modulation controls initialized', null, 'ui');
-    if ((window as any).__initDebug) console.log('[Svelte] ModulationBridge mounted');
   });
 
   onDestroy(() => {
@@ -137,7 +134,6 @@
     modulation32Btn?.removeEventListener('click', handle32Click);
     modulationClearBtn?.removeEventListener('click', handleClearClick);
 
-    if ((window as any).__initDebug) console.log('[Svelte] ModulationBridge unmounted');
   });
 </script>
 

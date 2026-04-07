@@ -1,6 +1,6 @@
 // js/rhythm/modulationMapping.ts
 import { getMacrobeatInfo } from '@state/selectors.ts';
-import type { AppState, CanvasSpaceColumn, ModulationMarker, ModulationRatio } from '@app-types/state.js';
+import type { AppState, CanvasSpaceColumn, ModulationMarker, ModulationRatio } from '@mlt/types';
 
 type MarkerWithColumn = Omit<ModulationMarker, 'columnIndex'> & { columnIndex: CanvasSpaceColumn };
 
@@ -276,8 +276,8 @@ export function createCoordinateMapping(markers: ModulationMarker[], baseMicrobe
     },
 
     /**
-     * Converts microbeat index to canvas x position
-     * NOTE: This method is deprecated - getColumnX in rendererUtils now handles modulation directly
+     * Placeholder required by the coordinate-mapping interface used by debug tooling.
+     * Column-based renderers handle the real pixel conversion path.
      * @param {number} microbeatIndex - The microbeat index
      * @returns {number} Canvas x position
      */
@@ -287,8 +287,8 @@ export function createCoordinateMapping(markers: ModulationMarker[], baseMicrobe
     },
 
     /**
-     * Converts canvas x position to microbeat index
-     * NOTE: This method is deprecated - coordinate conversion now handled by getColumnFromX
+     * Placeholder required by the coordinate-mapping interface used by debug tooling.
+     * Column-based renderers handle the real inverse conversion path.
      * @param {number} canvasX - Canvas x position
      * @returns {number} Microbeat index
      */
@@ -298,8 +298,7 @@ export function createCoordinateMapping(markers: ModulationMarker[], baseMicrobe
     },
 
     /**
-     * Gets the segment containing a given canvas x position
-     * NOTE: This method is deprecated - not used in new column-based approach
+     * Placeholder segment lookup for debug tooling.
      * @param {number} canvasX - Canvas x position
      * @returns {Object|null} Segment object or null if not found
      */
@@ -308,8 +307,7 @@ export function createCoordinateMapping(markers: ModulationMarker[], baseMicrobe
     },
 
     /**
-     * Gets all ghost grid positions for a segment based on actual grid structure
-     * NOTE: This method is deprecated - ghost grid now handled differently
+     * Placeholder ghost-grid accessor for debug tooling.
      * @param {Object} segment - Segment object
      * @param {Object} options - Render options with grid structure
      * @returns {Array} Array of x positions for ghost grid lines
@@ -324,28 +322,24 @@ export function createCoordinateMapping(markers: ModulationMarker[], baseMicrobe
 }
 
 /**
- * Converts canvas x to time in seconds for audio scheduling
- * NOTE: This function is deprecated and may need to be rewritten for column-based approach
+ * Placeholder conversion used only by older modulation debug helpers.
  * @param {number} canvasX - Canvas x position
  * @param {Object} coordinateMapping - Result from createCoordinateMapping
  * @param {number} baseMicrobeatDuration - Base duration per microbeat in seconds
  * @returns {number} Time in seconds
  */
 export function canvasXToSeconds(_canvasX: number, _coordinateMapping: CoordinateMapping, _baseMicrobeatDuration: number): number {
-  // TODO: Reimplement for column-based modulation
   return 0;
 }
 
 /**
- * Converts time in seconds to canvas x position
- * NOTE: This function is deprecated and may need to be rewritten for column-based approach
+ * Placeholder conversion used only by older modulation debug helpers.
  * @param {number} seconds - Time in seconds
  * @param {Object} coordinateMapping - Result from createCoordinateMapping
  * @param {number} baseMicrobeatDuration - Base duration per microbeat in seconds
  * @returns {number} Canvas x position
  */
 export function secondsToCanvasX(_seconds: number, _coordinateMapping: CoordinateMapping, _baseMicrobeatDuration: number): number {
-  // TODO: Reimplement for column-based modulation
   return 0;
 }
 

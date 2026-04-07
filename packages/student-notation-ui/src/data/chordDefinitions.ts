@@ -47,8 +47,7 @@ export const ADVANCED_CHORD_SHAPES: HarmonyChordShapes = {
 };
 
 /**
- * Combined chord shapes for backward compatibility.
- * Merges basic and advanced shapes.
+ * Combined chord shapes used by the harmony UI.
  */
 export const CHORD_SHAPES: HarmonyChordShapes = {
   ...BASIC_CHORD_SHAPES,

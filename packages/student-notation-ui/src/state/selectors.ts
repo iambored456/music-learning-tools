@@ -1,8 +1,8 @@
 // js/state/selectors.ts
 import { Note } from 'tonal';
 import columnMapService from '../services/columnMapService.ts';
-import { fullRowData as masterRowData } from './pitchData.js';
-import type { AppState, TonicSign, PlacedNote } from '@app-types/state.js';
+import { fullRowData as masterRowData } from './pitchData.ts';
+import type { AppState, TonicSign, PlacedNote } from '@mlt/types';
 
 const MODE_NAMES = ['major', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'minor', 'locrian'];
 

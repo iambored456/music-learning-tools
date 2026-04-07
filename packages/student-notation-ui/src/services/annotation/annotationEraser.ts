@@ -1,12 +1,14 @@
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { distanceToLineSegment } from './annotationGeometry.ts';
+import type { Annotation } from '@mlt/types';
+import type { RendererOptions } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 
 export function eraseAnnotationsAtPoint(params: {
   x: number;
   y: number;
-  annotations: any[];
-  getRenderOptions: () => any;
-}): { nextAnnotations: any[]; changed: boolean } {
+  annotations: Annotation[];
+  getRenderOptions: () => RendererOptions;
+}): { nextAnnotations: Annotation[]; changed: boolean } {
   const { x, y, annotations, getRenderOptions } = params;
   const eraseRadius = 10;
   let changed = false;
@@ -56,4 +58,3 @@ export function eraseAnnotationsAtPoint(params: {
 
   return { nextAnnotations, changed };
 }
-

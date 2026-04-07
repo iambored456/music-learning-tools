@@ -4,8 +4,6 @@
    *
    * This is a large component that handles tool selection, chord/interval buttons,
    * degree display toggles, and various UI state management.
-   *
-   * This replaces: src/components/toolbar/initializers/toolSelectorInitializer.ts
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
@@ -14,6 +12,7 @@
   import notificationSystem from '@components/ui/notificationSystem.ts';
   import clefRangeController from '@components/clefWheels/clefRangeController.ts';
   import logger from '@utils/logger.ts';
+  import { initToolSubtabState } from './toolSubtabState.ts';
   import {
     BASIC_CHORD_SHAPES,
     ADVANCED_CHORD_SHAPES,
@@ -39,6 +38,7 @@
   // State
   let lastDegreeMode: Exclude<DegreeDisplayMode, 'off'> = 'diatonic';
   let previousMode: 'inversion' | 'position' = 'position';
+  let cleanupToolSubtabState: (() => void) | null = null;
 
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;
@@ -62,19 +62,7 @@
     return Object.keys(store.state.tonicSignGroups).length > 0;
   }
 
-  function shouldDebugFocusColours(): boolean {
-    if (typeof window === 'undefined') {return true;}
-    return (window as Window & { __focusColoursDebug?: boolean }).__focusColoursDebug !== false;
-  }
-
-  function debugFocusColours(message: string, data?: unknown): void {
-    if (!shouldDebugFocusColours()) {return;}
-    if (typeof data === 'undefined') {
-      console.log(`[FocusColours][SvelteUI] ${message}`);
-      return;
-    }
-    console.log(`[FocusColours][SvelteUI] ${message}`, data);
-  }
+  function debugFocusColours(_message: string, _data?: unknown): void {}
 
   function updateScaleModeToggleState(mode: DegreeDisplayMode = store.state.degreeDisplayMode): void {
     const scaleButton = degreeModeToggle?.querySelector<HTMLButtonElement>('[data-mode="diatonic"]');
@@ -348,6 +336,12 @@
     octaveToggleBtn.setAttribute('aria-pressed', showOctaveLabels ? 'true' : 'false');
   };
 
+  const syncFocusColoursUiState = (focusColoursEnabled: boolean): void => {
+    if (!focusColoursToggle) {return;}
+    focusColoursToggle.classList.toggle('active', focusColoursEnabled);
+    focusColoursToggle.setAttribute('aria-pressed', focusColoursEnabled ? 'true' : 'false');
+  };
+
   // Store event handlers
   function handleToolChanged({ newTool }: ToolChangedPayload = {}) {
     eraserBtn?.classList.remove('selected');
@@ -407,6 +401,21 @@
     if (!accidentalMode) return;
     sharpBtn?.classList.toggle('active', accidentalMode.sharp);
     flatBtn?.classList.toggle('active', accidentalMode.flat);
+  }
+
+  function handleFocusColoursChanged(focusColoursEnabled?: boolean): void {
+    if (typeof focusColoursEnabled !== 'boolean') {return;}
+    syncFocusColoursUiState(focusColoursEnabled);
+    debugFocusColours('focusColoursChanged event', { focusColoursEnabled });
+  }
+
+  function handlePitchTabChanged(tabId: string): void {
+    if (tabId === 'chords') {
+      updateChordPositionToggleState();
+    }
+    if (tabId === 'range') {
+      setTimeout(() => clefRangeController.refreshWheelVisuals(), 0);
+    }
   }
 
   onMount(() => {
@@ -596,99 +605,9 @@
       });
     }
 
-    // Pitch tab switching
-    const pitchTabButtons = document.querySelectorAll<HTMLButtonElement>('.pitch-tab-button');
-    const pitchTabPanels = document.querySelectorAll<HTMLElement>('.pitch-tab-panel');
-
-    pitchTabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetTab = button.dataset['pitchTab'];
-        if (!targetTab) return;
-
-        pitchTabButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-
-        pitchTabPanels.forEach(panel => panel.classList.remove('active'));
-        document.getElementById(`${targetTab}-panel`)?.classList.add('active');
-
-        localStorage.setItem('selectedPitchTab', targetTab);
-
-        if (targetTab === 'chords') updateChordPositionToggleState();
-        if (targetTab === 'range') setTimeout(() => clefRangeController.refreshWheelVisuals(), 0);
-      });
+    cleanupToolSubtabState = initToolSubtabState({
+      onPitchTabChanged: handlePitchTabChanged
     });
-
-    // Restore saved pitch tab
-    const savedPitchTab = localStorage.getItem('selectedPitchTab') || 'chords';
-    const savedPitchTabButton = document.querySelector<HTMLButtonElement>(`[data-pitch-tab="${savedPitchTab}"]`);
-    if (savedPitchTabButton) {
-      pitchTabButtons.forEach(btn => btn.classList.remove('active'));
-      pitchTabPanels.forEach(panel => panel.classList.remove('active'));
-      savedPitchTabButton.classList.add('active');
-      document.getElementById(`${savedPitchTab}-panel`)?.classList.add('active');
-    }
-
-    // Rhythm tab switching
-    const rhythmTabButtons = document.querySelectorAll<HTMLButtonElement>('.rhythm-stamp-tab-button');
-    const rhythmTabPanels = document.querySelectorAll<HTMLElement>('.rhythm-stamp-tab-panel');
-
-    rhythmTabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetTab = button.dataset['rhythmStampTab'];
-        if (!targetTab) return;
-
-        rhythmTabButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-
-        rhythmTabPanels.forEach(panel => panel.classList.remove('active'));
-        document.getElementById(`${targetTab}-stamps-panel`)?.classList.add('active');
-
-        localStorage.setItem('selectedRhythmStampTab', targetTab);
-      });
-    });
-
-    // Restore saved rhythm tab
-    const savedRhythmTab = localStorage.getItem('selectedRhythmStampTab') || localStorage.getItem('selectedRhythmTab');
-    const normalizedRhythmTab = savedRhythmTab === 'stamps'
-      ? 'sixteenth'
-      : savedRhythmTab === 'triplets'
-        ? 'triplet'
-        : savedRhythmTab === 'controls'
-          ? 'measures'
-          : (savedRhythmTab || 'sixteenth');
-    const savedRhythmTabButton = document.querySelector<HTMLButtonElement>(`[data-rhythm-stamp-tab="${normalizedRhythmTab}"]`);
-    if (savedRhythmTabButton) {
-      rhythmTabButtons.forEach(btn => btn.classList.remove('active'));
-      rhythmTabPanels.forEach(panel => panel.classList.remove('active'));
-      savedRhythmTabButton.classList.add('active');
-      document.getElementById(`${normalizedRhythmTab}-stamps-panel`)?.classList.add('active');
-    }
-
-    // Sixteenth sub-toggle (4 vs 3)
-    const sixteenthSubBtns = document.querySelectorAll<HTMLElement>('.sixteenth-sub-btn');
-    const fourContainer = document.getElementById('sixteenth-stamps-four-toolbar-container');
-    const threeContainer = document.getElementById('sixteenth-stamps-three-toolbar-container');
-
-    const applySixteenthSubSelection = (targetSub: string): void => {
-      sixteenthSubBtns.forEach(b => b.classList.toggle('active', b.dataset['sixteenthSub'] === targetSub));
-      if (fourContainer) fourContainer.style.display = targetSub === 'four' ? '' : 'none';
-      if (threeContainer) threeContainer.style.display = targetSub === 'three' ? '' : 'none';
-    };
-
-    sixteenthSubBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetSub = btn.dataset['sixteenthSub'];
-        if (!targetSub) return;
-
-        applySixteenthSubSelection(targetSub);
-
-        localStorage.setItem('selectedSixteenthSub', targetSub);
-      });
-    });
-
-    // Restore saved sixteenth sub-toggle
-    const savedSixteenthSub = localStorage.getItem('selectedSixteenthSub') || 'four';
-    applySixteenthSubSelection(savedSixteenthSub === 'three' ? 'three' : 'four');
 
     // Unified position toggle
     if (unifiedPositionToggle) {
@@ -791,12 +710,6 @@
       });
     }
 
-    const syncFocusColoursUiState = (focusColoursEnabled: boolean): void => {
-      if (!focusColoursToggle) {return;}
-      focusColoursToggle.classList.toggle('active', focusColoursEnabled);
-      focusColoursToggle.setAttribute('aria-pressed', focusColoursEnabled ? 'true' : 'false');
-    };
-
     if (focusColoursToggle) {
       focusColoursToggle.style.pointerEvents = 'auto';
       focusColoursToggle.addEventListener('pointerdown', () => {
@@ -831,11 +744,7 @@
     store.on('accidentalModeChanged', handleAccidentalModeChanged);
     store.on('frequencyLabelsChanged', syncFrequencyUiState);
     store.on('octaveLabelsChanged', syncOctaveUiState);
-    store.on('focusColoursChanged', (focusColoursEnabled?: boolean) => {
-      if (typeof focusColoursEnabled !== 'boolean') {return;}
-      syncFocusColoursUiState(focusColoursEnabled);
-      debugFocusColours('focusColoursChanged event', { focusColoursEnabled });
-    });
+    store.on('focusColoursChanged', handleFocusColoursChanged);
 
     // Initialize UI states
     syncFrequencyUiState(store.state.showFrequencyLabels);
@@ -862,11 +771,21 @@
     updateIntervalButtonSelection();
     updateChordPositionToggleState();
 
-    if ((window as any).__initDebug) console.log('[Svelte] ToolSelectorBridge mounted');
   });
 
   onDestroy(() => {
-    if ((window as any).__initDebug) console.log('[Svelte] ToolSelectorBridge unmounted');
+    cleanupToolSubtabState?.();
+    cleanupToolSubtabState = null;
+    store.off('chordPositionChanged', updateUnifiedToggleVisual);
+    store.off('intervalsInversionChanged', updateUnifiedToggleVisual);
+    store.off('toolChanged', handleToolChanged);
+    store.off('activeChordIntervalsChanged', handleActiveChordIntervalsChanged);
+    store.off('noteChanged', handleNoteChanged);
+    store.off('degreeDisplayModeChanged', handleDegreeDisplayModeChanged);
+    store.off('accidentalModeChanged', handleAccidentalModeChanged);
+    store.off('frequencyLabelsChanged', syncFrequencyUiState);
+    store.off('octaveLabelsChanged', syncOctaveUiState);
+    store.off('focusColoursChanged', handleFocusColoursChanged);
   });
 </script>
 

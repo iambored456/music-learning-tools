@@ -3,30 +3,32 @@
 import annotationService from '@services/annotationService.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
+import type {
+  AnnotationArrowheadStyle,
+  AnnotationLineStyle,
+  AppState,
+  ArrowAnnotationSettings,
+  PathAnnotationSettings,
+  TextAnnotationSettings
+} from '@mlt/types';
 
-type ToolName = 'arrow' | 'text' | 'marker' | 'highlighter' | 'lasso' | null;
+export type ToolName = 'arrow' | 'text' | 'marker' | 'highlighter' | 'lasso' | null;
 
-interface ToolSettings {
-  arrow: {
-    lineStyle: string;
-    strokeWeight: number;
-    startArrowhead: string;
-    endArrowhead: string;
-    arrowheadSize: number;
-  };
-  text: {
-    color: string;
-    size: number;
-    bold: boolean;
-    italic: boolean;
-    underline: boolean;
-    background: boolean;
-    superscript: boolean;
-    subscript: boolean;
-  };
-  marker: { color: string; size: number };
-  highlighter: { color: string; size: number };
+export interface ToolSettings {
+  arrow: ArrowAnnotationSettings;
+  text: TextAnnotationSettings;
+  marker: PathAnnotationSettings;
+  highlighter: PathAnnotationSettings;
   lasso: Record<string, never>;
+}
+
+export interface DrawToolsControllerRuntime {
+  initialize(): void;
+  getSettings(): ToolSettings;
+  applyArrowSettings(settings: Partial<ToolSettings['arrow']>): void;
+  applyTextSettings(settings: Partial<ToolSettings['text']>): void;
+  renderArrowOptions(): void;
+  renderTextOptions(): void;
 }
 
 interface OptionsContainers {
@@ -37,11 +39,22 @@ interface OptionsContainers {
   lasso: HTMLElement | null;
 }
 
+const VALID_ARROW_LINE_STYLES = ['solid', 'dashed-big', 'dashed-small', 'dotted'] as const satisfies readonly AnnotationLineStyle[];
+const VALID_ARROWHEAD_STYLES = ['filled', 'filled-arrow', 'unfilled', 'unfilled-arrow', 'circle', 'none'] as const satisfies readonly AnnotationArrowheadStyle[];
+
+function isAnnotationLineStyle(value: string): value is AnnotationLineStyle {
+  return VALID_ARROW_LINE_STYLES.includes(value as AnnotationLineStyle);
+}
+
+function isAnnotationArrowheadStyle(value: string): value is AnnotationArrowheadStyle {
+  return VALID_ARROWHEAD_STYLES.includes(value as AnnotationArrowheadStyle);
+}
+
 class DrawToolsController {
   private currentTool: ToolName = null;
-  private toolButtons: NodeListOf<HTMLElement> = [] as any;
-  private toolPanels: NodeListOf<HTMLElement> = [] as any;
-  private lastSelectedNote: any = null;
+  private toolButtons: HTMLElement[] = [];
+  private toolPanels: HTMLElement[] = [];
+  private lastSelectedNote: AppState['selectedNote'] | null = null;
   private optionsContainers: OptionsContainers = {
     arrow: null,
     text: null,
@@ -80,8 +93,8 @@ class DrawToolsController {
   };
 
   initialize() {
-    this.toolButtons = document.querySelectorAll('.draw-tool-button');
-    this.toolPanels = document.querySelectorAll('.draw-tool-panel');
+    this.toolButtons = Array.from(document.querySelectorAll<HTMLElement>('.draw-tool-button'));
+    this.toolPanels = Array.from(document.querySelectorAll<HTMLElement>('.draw-tool-panel'));
 
     this.optionsContainers = {
       arrow: document.getElementById('arrow-tool-options'),
@@ -101,7 +114,7 @@ class DrawToolsController {
     this.setupMainTabListeners();
     this.populateAllPanels();
 
-    store.on('noteChanged', ({ newNote }: { newNote?: any } = {}) => {
+    store.on<{ newNote?: AppState['selectedNote'] }>('noteChanged', ({ newNote } = {}) => {
       this.lastSelectedNote = newNote ?? null;
       if (this.currentTool) {
         this.deselectAllTools();
@@ -184,6 +197,34 @@ class DrawToolsController {
     store.state.selectedNote = { shape: 'circle', color: store.state.selectedNote?.color || '#4a90e2' };
   }
 
+  getSettings(): ToolSettings {
+    return this.settings;
+  }
+
+  applyArrowSettings(settings: Partial<ToolSettings['arrow']>): void {
+    this.settings.arrow = {
+      ...this.settings.arrow,
+      ...settings
+    };
+    this.renderArrowOptions();
+  }
+
+  applyTextSettings(settings: Partial<ToolSettings['text']>): void {
+    this.settings.text = {
+      ...this.settings.text,
+      ...settings
+    };
+    this.renderTextOptions();
+  }
+
+  renderArrowOptions(): void {
+    this.populateArrowOptions();
+  }
+
+  renderTextOptions(): void {
+    this.populateTextOptions();
+  }
+
   private populateAllPanels() {
     this.populateArrowOptions();
     this.populateTextOptions();
@@ -197,7 +238,7 @@ class DrawToolsController {
     const startHeadTrigger = container.querySelector<HTMLButtonElement>('#arrow-start-head-trigger');
     const endHeadTrigger = container.querySelector<HTMLButtonElement>('#arrow-end-head-trigger');
 
-    const getArrowheadIcon = (side: 'start' | 'end', type: string): string => {
+    const getArrowheadIcon = (side: 'start' | 'end', type: AnnotationArrowheadStyle): string => {
       if (type !== 'filled-arrow') {
         return `
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -221,7 +262,7 @@ class DrawToolsController {
       `;
     };
 
-    const renderHeadIcon = (trigger: HTMLButtonElement | null, side: 'start' | 'end', type: string) => {
+    const renderHeadIcon = (trigger: HTMLButtonElement | null, side: 'start' | 'end', type: AnnotationArrowheadStyle) => {
       if (!trigger) {return;}
       trigger.innerHTML = getArrowheadIcon(side, type);
     };
@@ -245,14 +286,14 @@ class DrawToolsController {
 
     const lineStyleButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-line-style]'));
     if (lineStyleButtons.length) {
-      const setActive = (style: string) => {
+      const setActive = (style: AnnotationLineStyle) => {
         lineStyleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['lineStyle'] === style));
       };
       setActive(this.settings.arrow.lineStyle);
       lineStyleButtons.forEach(btn => {
         btn.addEventListener('click', () => {
           const style = btn.dataset['lineStyle'];
-          if (!style) {return;}
+          if (!style || !isAnnotationLineStyle(style)) {return;}
           this.settings.arrow.lineStyle = style;
           setActive(style);
           annotationService.setTool('arrow', this.settings);
@@ -262,7 +303,7 @@ class DrawToolsController {
 
     const startButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-arrow-start]'));
     if (startButtons.length) {
-      const setActiveStart = (val: string) => {
+      const setActiveStart = (val: AnnotationArrowheadStyle) => {
         startButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['arrowStart'] === val));
         renderHeadIcon(startHeadTrigger, 'start', val);
       };
@@ -270,7 +311,7 @@ class DrawToolsController {
       startButtons.forEach(btn => {
         btn.addEventListener('click', () => {
           const val = btn.dataset['arrowStart'];
-          if (!val) {return;}
+          if (!val || !isAnnotationArrowheadStyle(val)) {return;}
           this.settings.arrow.startArrowhead = val;
           setActiveStart(val);
           annotationService.setTool('arrow', this.settings);
@@ -280,7 +321,7 @@ class DrawToolsController {
 
     const endButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-arrow-end]'));
     if (endButtons.length) {
-      const setActiveEnd = (val: string) => {
+      const setActiveEnd = (val: AnnotationArrowheadStyle) => {
         endButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['arrowEnd'] === val));
         renderHeadIcon(endHeadTrigger, 'end', val);
       };
@@ -288,7 +329,7 @@ class DrawToolsController {
       endButtons.forEach(btn => {
         btn.addEventListener('click', () => {
           const val = btn.dataset['arrowEnd'];
-          if (!val) {return;}
+          if (!val || !isAnnotationArrowheadStyle(val)) {return;}
           this.settings.arrow.endArrowhead = val;
           setActiveEnd(val);
           annotationService.setTool('arrow', this.settings);

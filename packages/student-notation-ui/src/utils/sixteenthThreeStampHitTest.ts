@@ -6,10 +6,10 @@
  */
 
 import { getSixteenthThreeStampById } from '@/rhythm/sixteenthThreeStamps.ts';
-import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
+import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { timeToCanvas } from '@services/columnMapService.ts';
 import store from '@state/initStore.ts';
-import type { SixteenthThreeStampPlacement as StateSixteenthThreeStampPlacement } from '@app-types/state.js';
+import type { SixteenthThreeStampPlacement as StateSixteenthThreeStampPlacement } from '@mlt/types';
 
 export type SixteenthThreeStampPlacement = StateSixteenthThreeStampPlacement;
 

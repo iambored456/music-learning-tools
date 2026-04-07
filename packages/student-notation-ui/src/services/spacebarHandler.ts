@@ -1,9 +1,9 @@
 // js/services/spacebarHandler.ts
 import store from '@state/initStore.ts';
-import SynthEngine from './initAudio.js';
-import GlobalService from './globalService.js';
+import SynthEngine from './initAudio.ts';
+import GlobalService from './globalService.ts';
 import { Note } from 'tonal';
-import type { PlacedNote } from '@app-types/state.js';
+import type { PlacedNote } from '@mlt/types';
 
 interface TriggeredNotes {
   pitches: string[];
@@ -38,7 +38,7 @@ function isKeyboardShortcutContextActive(): boolean {
 /**
  * Gets the pitch (toneNote) for a placed note.
  * Uses globalRow for pitch lookup since fullRowData contains the complete gamut.
- * Falls back to note.row for legacy notes that don't have globalRow set.
+ * Falls back to note.row when a note does not have globalRow set.
  *
  * See src/utils/rowCoordinates.ts for coordinate system documentation.
  */

@@ -1,13 +1,12 @@
 import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
-import { placeTripletStampGroup } from '@/rhythm/tripletStampPlacements.js';
-import TripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.js';
+import { placeTripletStampGroup } from '@/rhythm/tripletStampPlacements.ts';
+import TripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.ts';
 import { hitTestAnyTripletStampShape } from '@utils/tripletStampHitTest.ts';
 import { canvasToTime, timeToCanvas } from '@services/columnMapService.ts';
-import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.js';
-import { isStampLayoutDebugEnabled, logStampLayout } from '@utils/stampLayoutDebug.ts';
-import type { TripletStampPlacement } from '@app-types/state.js';
+import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
+import type { TripletStampPlacement } from '@mlt/types';
 
 interface DraggedTripletShape {
   type: 'tripletStamp';
@@ -78,51 +77,16 @@ export class PitchGridTripletStampToolInteractor {
       return { handled: true, activePreviewPitches: [] };
     }
 
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('triplet:place-attempt', {
-        rowIndex: opts.rowIndex,
-        colIndex: opts.colIndex,
-        startTimeIndex,
-        selectedTripletId: selectedTriplet.id,
-        color: store.state.selectedNote.color,
-        historyIndexBefore: store.state.historyIndex,
-        historyLengthBefore: store.state.history.length
-      });
-    }
     const placement = placeTripletStampGroup(selectedTriplet.id, startTimeIndex, opts.rowIndex, store.state.selectedNote.color);
-    if (!placement && isStampLayoutDebugEnabled()) {
-      logStampLayout('triplet:place-blocked', {
-        rowIndex: opts.rowIndex,
-        colIndex: opts.colIndex,
-        startTimeIndex,
-        selectedTripletId: selectedTriplet.id
-      });
-    }
 
     const pitch = opts.getPitchForRow(opts.rowIndex);
     if (pitch && placement) {
       rhythmPlaybackService.playTripletPattern(selectedTriplet.id, pitch, store.state.selectedNote.color, placement);
       store.recordState();
-      if (isStampLayoutDebugEnabled()) {
-        logStampLayout('triplet:recordState-after-playback', {
-          placementId: placement.id,
-          pitch,
-          historyIndexAfter: store.state.historyIndex,
-          historyLengthAfter: store.state.history.length
-        });
-      }
       return { handled: true, activePreviewPitches: [] };
     }
 
     store.recordState();
-    if (isStampLayoutDebugEnabled()) {
-      logStampLayout('triplet:recordState-no-placement-or-pitch', {
-        hasPlacement: Boolean(placement),
-        hasPitch: Boolean(pitch),
-        historyIndexAfter: store.state.historyIndex,
-        historyLengthAfter: store.state.history.length
-      });
-    }
     return { handled: true, activePreviewPitches: [] };
   }
 

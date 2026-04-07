@@ -1,10 +1,11 @@
 // js/components/canvas/drumGrid/drumGrid.js
 import store from '@state/initStore.ts';
 import CanvasContextService from '@services/canvasContextService.ts';
+import { registerDrumGridRenderer } from '@services/runtimeGlobals.ts';
 import { drawDrumGrid, type DrumGridRenderOptions } from './drumGridRenderer.ts';
 import { getDrumNotes, getPlacedTonicSigns } from '@state/selectors.ts';
-import { getVolumeIconState } from './drumGridInteractor.js';
-import DrumPlayheadRenderer from './drumPlayheadRenderer.js';
+import { getVolumeIconState } from './drumGridInteractor.ts';
+import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 
 function renderDrumGrid(): void {
   const ctx = CanvasContextService.getDrumContext();
@@ -70,7 +71,6 @@ const DrumGridController = {
   }
 };
 
-// Make globally accessible for interactor
-window.drumGridRenderer = DrumGridController;
+registerDrumGridRenderer(DrumGridController);
 
 export default DrumGridController;

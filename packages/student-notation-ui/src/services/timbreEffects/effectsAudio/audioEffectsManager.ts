@@ -1,6 +1,7 @@
 // js/services/timbreEffects/effectsAudio/audioEffectsManager.ts
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
+import { getSynthEngine } from '@services/runtimeGlobals.ts';
 import VibratoAudioEffect from './vibratoAudioEffect.ts';
 import TremoloAudioEffect from './tremoloAudioEffect.ts';
 import DelayAudioEffect from './delayAudioEffect.ts';
@@ -17,14 +18,14 @@ type VoiceParam =
   Parameters<VibratoAudioEffect['applyToVoice']>[0] &
   Parameters<TremoloAudioEffect['applyToVoice']>[0];
 
-interface ConnectableNode {
-  connect: (...args: any[]) => unknown;
-  disconnect?: () => void;
-}
+type DelayInputNode = Parameters<NonNullable<ReturnType<DelayAudioEffect['getEffectInstance']>>['connect']>[0];
 
-type SynthNode = ConnectableNode & { disconnect: () => void };
+type SynthNode = {
+  connect: (destination: unknown) => unknown;
+  disconnect: () => void;
+};
 
-type MasterGainNode = ConnectableNode;
+type MasterGainNode = DelayInputNode;
 
 interface AudioEffectChangeEvent {
   effectType: AudioEffectType;
@@ -33,14 +34,6 @@ interface AudioEffectChangeEvent {
   color: string;
   effectParams: Record<string, number>;
 }
-
-const getSynthEngine = () =>
-  (window as Window & {
-    synthEngine?: {
-      updateSynthForColor?: (color: string) => void;
-      getWaveformAnalyzer?: (color: string) => unknown;
-    };
-  }).synthEngine;
 
 class AudioEffectsManager {
   private readonly vibratoEffect = new VibratoAudioEffect();
@@ -114,27 +107,33 @@ class AudioEffectsManager {
       // Ignore errors on first disconnect
     }
 
-    // Build the effect chain: synth -> [delay] -> masterGain
-    let currentOutput: ConnectableNode = synth;
-
     if (delayInstance) {
       try {
-        currentOutput.connect(delayInstance);
-        currentOutput = delayInstance;
+        synth.connect(delayInstance);
+        delayInstance.connect(masterGain);
       } catch (e) {
         logger.error('AudioEffectsManager', 'Delay connection error', e, 'audio');
+        try {
+          synth.connect(masterGain);
+        } catch (innerError) {
+          logger.error('AudioEffectsManager', 'masterGain connection error', innerError, 'audio');
+        }
+      }
+    } else {
+      try {
+        synth.connect(masterGain);
+      } catch (e) {
+        logger.error('AudioEffectsManager', 'masterGain connection error', e, 'audio');
       }
     }
 
     try {
-      currentOutput.connect(masterGain);
-
       const analyzer = getSynthEngine()?.getWaveformAnalyzer?.(color);
       if (analyzer) {
         synth.connect(analyzer);
       }
     } catch (e) {
-      logger.error('AudioEffectsManager', 'masterGain connection error', e, 'audio');
+      logger.error('AudioEffectsManager', 'Waveform analyzer connection error', e, 'audio');
     }
   }
 

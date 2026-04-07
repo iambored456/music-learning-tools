@@ -13,27 +13,27 @@
  */
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
-import { visualToTimeIndex, timeIndexToVisualColumn } from '@services/columnMap.ts';
-import rhythmPlaybackService from '../../../../services/rhythmPlaybackService.ts';
+import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
-import pitchGridViewportService from '../../../../services/pitchGridViewportService.ts';
-import annotationService from '../../../../services/annotationService.ts';
-import { drawSingleColumnOvalNote, drawTwoColumnOvalNote } from '../renderers/notes.js';
-import { getRowY, getColumnFromX, getColumnX } from '../renderers/rendererUtils.js';
+import pitchGridViewportService from '@services/pitchGridViewportService.ts';
+import annotationService from '@services/annotationService.ts';
+import { getWaveformVisualizer } from '@services/runtimeGlobals.ts';
+import { drawSingleColumnOvalNote, drawTwoColumnOvalNote } from '../renderers/notes.ts';
+import { getRowY, getColumnFromX, getColumnX } from '../renderers/rendererUtils.ts';
 import GlobalService from '@services/globalService.ts';
-import { isNotePlayableAtColumn, isWithinTonicSpan } from '../../../../utils/tonicColumnUtils.ts';
+import { isNotePlayableAtColumn, isWithinTonicSpan } from '@utils/tonicColumnUtils.ts';
 import { setGhostNotePosition, clearGhostNotePosition } from '@services/spacebarHandler.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
-import { GROUP_WIDTH_CELLS } from '../../../../rhythm/tripletStamps.js';
-import { getNearestSixteenthThreeStampSnapTarget } from '../../../../rhythm/sixteenthThreeStampSnap.js';
-import { canvasToTime, timeToCanvas } from '../../../../services/columnMapService.ts';
-import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.js';
-import SixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.js';
-import TripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.js';
-import { renderSixteenthStampPreview } from '../renderers/sixteenthStampRenderer.js';
-import { renderSixteenthThreeStampPreview } from '../renderers/sixteenthThreeStampRenderer.js';
-import { renderTripletStampPreview } from '../renderers/tripletStampRenderer.js';
-import { getModulationDisplayText, getModulationColor } from '../../../../rhythm/modulationMapping.js';
+import { GROUP_WIDTH_CELLS } from '@/rhythm/tripletStamps.ts';
+import { getNearestSixteenthThreeStampSnapTarget } from '@/rhythm/sixteenthThreeStampSnap.ts';
+import { canvasToTime, timeToCanvas } from '@services/columnMapService.ts';
+import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.ts';
+import SixteenthThreeStampsToolbar from '@components/rhythm/stampToolbars/sixteenthThreeStampsToolbar.ts';
+import TripletStampsToolbar from '@components/rhythm/stampToolbars/tripletStampsToolbar.ts';
+import { renderSixteenthStampPreview } from '../renderers/sixteenthStampRenderer.ts';
+import { renderSixteenthThreeStampPreview } from '../renderers/sixteenthThreeStampRenderer.ts';
+import { renderTripletStampPreview } from '../renderers/tripletStampRenderer.ts';
+import { getModulationDisplayText, getModulationColor } from '@/rhythm/modulationMapping.ts';
 import { PitchGridModulationToolInteractor } from './tools/PitchGridModulationToolInteractor.ts';
 import { PitchGridNoteToolInteractor } from './tools/PitchGridNoteToolInteractor.ts';
 import { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolInteractor.ts';
@@ -49,7 +49,7 @@ import { getChordPitchesFromIntervals } from '@utils/chordPitchesFromIntervals.t
 import logger from '@utils/logger.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import { setStampHoverCursor, clearStampHoverCursor } from './cursorManager.ts';
-import type { CanvasSpaceColumn, PlacedNote } from '@app-types/state.js';
+import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
 
 // --- Interaction State ---
 let pitchHoverCtx: CanvasRenderingContext2D | null = null;
@@ -153,12 +153,9 @@ function getPitchForRow(rowIndex: number): string | null {
 // Convert a canvas-space column (no legends) to the nearest time-bearing canvas column
 // by stripping tonic/non-time columns using the column map helper.
 function getTimeAlignedCanvasColumn(canvasCol: number): number | null {
-  const visualIndex = canvasCol + 2; // account for left legends
-  const timeIndex = visualToTimeIndex(store.state, visualIndex);
+  const timeIndex = canvasToTime(canvasCol, store.state);
   if (timeIndex === null) {return null;}
-  const visualAligned = timeIndexToVisualColumn(store.state, timeIndex);
-  if (visualAligned === null) {return null;}
-  return Math.max(0, visualAligned - 2); // back to canvas-space
+  return timeToCanvas(timeIndex, store.state);
 }
 
 function getSixteenthThreeSnapTargetForX(actualX: number): { startTimeIndex: number; startCanvasCol: number } | null {
@@ -853,7 +850,7 @@ function handleGlobalMouseUp() {
       }
 
       // Stop dynamic waveform visualization when releasing note/chord previews.
-      const staticWaveform = window.waveformVisualizer;
+      const staticWaveform = getWaveformVisualizer();
       if (staticWaveform) {
         staticWaveform.stopLiveVisualization();
       }

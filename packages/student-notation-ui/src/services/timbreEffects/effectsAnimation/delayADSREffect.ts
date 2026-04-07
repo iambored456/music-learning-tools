@@ -69,8 +69,6 @@ class DelayADSREffect extends BaseAnimationEffect<DelayAnimationState, DelayEffe
         echoCount = Math.ceil(Math.log(AUDIBILITY_THRESHOLD) / Math.log(feedbackAmount));
       }
 
-      console.log(`[DelayADSR] ${color}: feedback=${feedbackAmount.toFixed(2)}, time=${delayTimeMs.toFixed(0)}ms, echoCount=${echoCount}`);
-
       const animationData: DelayAnimationState = {
         delayTime: delayTimeMs,
         feedback: feedbackAmount,
@@ -188,4 +186,3 @@ class DelayADSREffect extends BaseAnimationEffect<DelayAnimationState, DelayEffe
 }
 
 export default DelayADSREffect;
-

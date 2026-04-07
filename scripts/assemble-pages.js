@@ -10,7 +10,7 @@
  *   - singing-trainer/           (from hub multi-page build)
  *   - diatonic-compass/          (from hub multi-page build)
  *   - visual-metronome/          (from hub multi-page build)
- *   - amateur-music-theory/      (when it exists)
+ *   - amateur-music-theory/      (from hub multi-page build)
  */
 
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
@@ -47,11 +47,11 @@ if (existsSync(hubDist)) {
   console.warn('  Warning: apps/hub/dist not found, skipping hub');
 }
 
-const amtDist = join(rootDir, 'apps/amateur-music-theory/dist');
-if (existsSync(amtDist)) {
-  const amtTarget = join(distDir, 'amateur-music-theory');
-  cpSync(amtDist, amtTarget, { recursive: true });
-  console.log(`  Copied amateur-music-theory -> ${outputDirName}/amateur-music-theory/`);
+const standaloneAmtDist = join(rootDir, 'apps/amateur-music-theory/dist');
+if (existsSync(standaloneAmtDist)) {
+  console.log(
+    '  Skipped apps/amateur-music-theory/dist because the deployed amateur-music-theory/ route is owned by the hub build.',
+  );
 }
 
 console.log(`\nPages assembled in ${outputDirName}/`);

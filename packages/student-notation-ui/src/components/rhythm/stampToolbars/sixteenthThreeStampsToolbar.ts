@@ -1,7 +1,6 @@
 // js/components/Rhythm/stampToolbars/sixteenthThreeStampsToolbar.ts
 import { SIXTEENTH_THREE_STAMPS } from '@/rhythm/sixteenthThreeStamps.ts';
 import { defaultSixteenthThreeStampRenderer } from '@utils/sixteenthThreeStampRenderer.ts';
-import { registerSixteenthStampLayoutDebug } from '@utils/sixteenthStampLayoutDebug.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 
@@ -18,7 +17,6 @@ const SixteenthThreeStampsToolbar = {
   updateSixteenthThreeStampColors: (_color: string) => {},
 
   init() {
-    registerSixteenthStampLayoutDebug();
     this.render();
     this.bindEvents();
     logger.info('SixteenthThreeStampsToolbar', 'Three-sixteenth stamps toolbar initialized', null, 'stamps');
@@ -60,7 +58,6 @@ const SixteenthThreeStampsToolbar = {
 
     container.appendChild(grid);
     this.setInitialSelection(this.selectedSixteenthThreeStampId);
-    window.logSixteenthStampLayoutComparison?.();
   },
 
   createSixteenthThreeStampButton(stamp: SixteenthThreeStamp) {

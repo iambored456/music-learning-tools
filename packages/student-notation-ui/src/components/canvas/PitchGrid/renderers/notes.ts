@@ -3,7 +3,8 @@ import { getColumnX, getRowY, getCurrentCoordinateMapping } from './rendererUtil
 import TonalService from '@services/tonalService.ts';
 import store from '@state/initStore.ts';
 import columnMapService from '@services/columnMapService.ts';
-import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '@app-types/state.js';
+import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
+import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
 import {
   OVAL_NOTE_FONT_RATIO,
   FILLED_NOTE_FONT_RATIO,
@@ -13,7 +14,7 @@ import {
   TAIL_LINE_WIDTH_RATIO,
   MIN_TAIL_LINE_WIDTH,
   SHADOW_BLUR_RADIUS
-} from '../../../../core/constants.js';
+} from '@/core/constants.ts';
 
 const SHARP_SYMBOL = '\u266F';
 const FLAT_SYMBOL = '\u266D';
@@ -49,8 +50,7 @@ interface AnimationEffectsManager {
 }
 
 const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
-  const effectsWindow = window as Window & { animationEffectsManager?: AnimationEffectsManager };
-  return effectsWindow.animationEffectsManager;
+  return getRuntimeAnimationEffectsManager() as AnimationEffectsManager | undefined;
 };
 
 const getPlacedNotes = (): PlacedNote[] => store.state.placedNotes;
@@ -654,7 +654,7 @@ export function drawSingleColumnOvalNote(
     currentCellWidth = nextX - x;
   } else {
     // Notes use canvas-space indices, so they need canvas-space column width multipliers.
-    // `musicalColumnWidths` is legacy naming and may be present as an empty array (truthy);
+    // `musicalColumnWidths` is the persisted state name and may be present as an empty array (truthy);
     // only use it when populated, otherwise fall back to `columnWidths` to avoid 0-width (invisible) notes.
     const canvasColumnWidthMultipliers = (options.musicalColumnWidths && options.musicalColumnWidths.length > 0)
       ? options.musicalColumnWidths
