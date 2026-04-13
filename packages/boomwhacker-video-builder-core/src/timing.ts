@@ -72,7 +72,6 @@ export function deriveTimingModel(
           fractionOfBeat: 0,
           isBeatStart: true,
           isSubdivisionStart: true,
-          isDownbeat: orderedBeatPins[0]?.isDownbeat ?? false,
         },
       ],
       totalSlotCount: 0,
@@ -102,7 +101,6 @@ export function deriveTimingModel(
       slotCount,
       startSlotIndex: runningSlotIndex,
       endSlotIndex: runningSlotIndex + slotCount - 1,
-      isDownbeat: beatPin.isDownbeat,
     });
 
     for (let localSlotIndex = 0; localSlotIndex < slotCount; localSlotIndex += 1) {
@@ -114,7 +112,6 @@ export function deriveTimingModel(
         fractionOfBeat,
         isBeatStart: localSlotIndex === 0,
         isSubdivisionStart: localSlotIndex % 2 === 0,
-        isDownbeat: beatPin.isDownbeat && localSlotIndex === 0,
       });
     }
 
@@ -129,7 +126,6 @@ export function deriveTimingModel(
     fractionOfBeat: 1,
     isBeatStart: true,
     isSubdivisionStart: true,
-    isDownbeat: finalBeatPin.isDownbeat,
   });
 
   return {
@@ -149,8 +145,8 @@ export function deriveGuideLines(timing: DerivedTimingModel): DerivedGuideLine[]
       timeSec: span.startTimeSec,
       beatIndex: span.beatIndex,
       slotIndex: span.startSlotIndex,
-      kind: span.isDownbeat ? 'downbeat' : 'beat',
-      emphasis: span.isDownbeat ? 'solid' : 'dashed',
+      kind: 'beat',
+      emphasis: 'dashed',
     });
 
     for (let localSlotIndex = 2; localSlotIndex < span.slotCount; localSlotIndex += 2) {

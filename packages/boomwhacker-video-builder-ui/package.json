@@ -25,6 +25,7 @@
   "dependencies": {
     "@mlt/boomwhacker-video-builder-core": "workspace:*",
     "@mlt/font-atkinson": "workspace:*",
+    "@mlt/tempogram-toolbox-core": "workspace:*",
     "signalsmith-stretch": "^1.3.2"
   },
   "peerDependencies": {

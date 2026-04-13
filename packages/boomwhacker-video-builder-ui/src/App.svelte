@@ -30,6 +30,7 @@
     importAudioFile,
     type ImportedAudioAsset,
   } from './browser/audio.js';
+  import { detectBeatPinsFromAudioBuffer } from './browser/beatDetection.js';
   import {
     loadLocalProjectAudio,
     saveLocalProjectAudio,
@@ -51,9 +52,9 @@
     getHighwayJudgmentAreaWidthPx,
     getHighwayNoteLayout,
     getVisibleHighwayGuides,
-    shouldHighlightDownbeatGuide,
     shouldRenderGuideAsBeat,
   } from './highwayLayout.js';
+  import type { BeatDetectionProgress } from '@mlt/tempogram-toolbox-core';
 
   type NoteShape = BoomwhackerGridNote['shape'];
 
@@ -66,7 +67,7 @@
   const newModules = [
     'Audio ingest + waveform extraction',
     'Audio transposition to C with duration preserved',
-    'Beat-pin analysis and manual correction',
+    'Manual beat mapping and correction',
     'Beat-pin-to-slot timing derivation',
     'Deterministic browser export pipeline',
   ];
@@ -206,7 +207,6 @@
   };
 
   type AudioInputMode = 'setup-import' | 'reattach-project';
-  type BeatMapStartMode = 'tap' | 'auto';
   type TapEntryPhase = 'idle' | 'count-in' | 'capturing';
   type TapEntryPreviewPin = {
     id: string;
@@ -305,7 +305,6 @@
   let setupModalTitle = project.metadata.title;
   let setupModalTitleTouched = false;
   let setupModalGrouping: MacrobeatGrouping = project.grid.defaultMacrobeatGrouping;
-  let setupModalBeatMapMode: BeatMapStartMode = 'tap';
   let groupingModalSelection: MacrobeatGrouping = project.grid.defaultMacrobeatGrouping;
   let blankHighwayBpm = BLANK_HIGHWAY_DEFAULT_BPM;
   let blankHighwayBeatCount = BLANK_HIGHWAY_DEFAULT_BEAT_COUNT;
@@ -513,7 +512,6 @@
   function syncSetupModalState(sourceProject: BoomwhackerVideoBuilderProject = project): void {
     setupModalTitle = sourceProject.metadata.title;
     setupModalGrouping = sourceProject.grid.defaultMacrobeatGrouping;
-    setupModalBeatMapMode = 'tap';
     setupModalTitleTouched = false;
     pendingSetupAudioFile = null;
   }
@@ -731,7 +729,7 @@
     decodedAudioBuffer = asset.audioBuffer;
     playbackAudioBuffer = asset.audioBuffer;
     waveformPeaks = asset.waveform.peaks;
-    estimatedTempoBpm = estimateTempoFromBeatPins(project.beatMap.beatPins) ?? asset.beatAnalysis.estimatedTempoBpm;
+    estimatedTempoBpm = estimateTempoFromBeatPins(project.beatMap.beatPins);
     replaceAudioPreviewUrl(asset.audioPreviewUrl);
     await refreshPlaybackAudioPresentation();
   }
@@ -1223,6 +1221,18 @@
 
   function formatTempo(value: number | null): string {
     return value === null ? 'n/a' : `${value.toFixed(1)} BPM`;
+  }
+
+  function formatBeatDetectionBusyMessage(progress: BeatDetectionProgress): string {
+    const percent = Math.max(0, Math.min(100, Math.round(progress.progress * 100)));
+    const stageLabel = progress.stage === 'novelty'
+      ? 'Computing novelty curve'
+      : progress.stage === 'tempogram'
+        ? 'Computing Fourier tempogram'
+        : progress.stage === 'plp'
+          ? 'Computing PLP pulse curve'
+          : 'Picking beat peaks';
+    return `${stageLabel}... ${percent}%`;
   }
 
   function clampBlankHighwayBpm(value: number): number {
@@ -2435,14 +2445,7 @@
   }
 
   function normalizeBeatPins(beatPins: BeatPin[]): BeatPin[] {
-    const orderedBeatPins = [...beatPins].sort((left, right) => left.timeSec - right.timeSec);
-    if (orderedBeatPins.length > 0 && !orderedBeatPins.some((pin) => pin.isDownbeat)) {
-      orderedBeatPins[0] = {
-        ...orderedBeatPins[0],
-        isDownbeat: true,
-      };
-    }
-    return orderedBeatPins;
+    return [...beatPins].sort((left, right) => left.timeSec - right.timeSec);
   }
 
   function addBeatPinAtTime(timeSec: number): void {
@@ -2452,7 +2455,6 @@
       {
         id: nextBeatPinId,
         timeSec: Number(clampTimeSec(timeSec).toFixed(4)),
-        isDownbeat: project.beatMap.beatPins.length === 0,
         annotationIds: [],
       },
     ]);
@@ -2700,26 +2702,6 @@
     addBeatPinAtTime(ratio * durationSec);
   }
 
-  function toggleBeatPinDownbeat(beatPinId: string, checked: boolean): void {
-    const nextBeatPins = normalizeBeatPins(
-      project.beatMap.beatPins.map((beatPin) => ({
-        ...beatPin,
-        isDownbeat: beatPin.id === beatPinId ? checked : beatPin.isDownbeat,
-      })),
-    );
-
-    setProjectState(
-      touchProject({
-        ...project,
-        beatMap: {
-          beatPins: nextBeatPins,
-        },
-      }),
-      checked ? 'Marked beat pin as a downbeat.' : 'Removed downbeat marker.',
-      { recordHistory: true },
-    );
-  }
-
   function deleteBeatPin(beatPinId: string): void {
     const nextBeatPins = normalizeBeatPins(project.beatMap.beatPins.filter((beatPin) => beatPin.id !== beatPinId));
     setProjectState(
@@ -2769,7 +2751,6 @@
     const nextBeatPins = tappedTimes.map((timeSec, index) => ({
       id: `beat-tap-${index + 1}`,
       timeSec,
-      isDownbeat: index === 0,
       annotationIds: [],
     }));
 
@@ -2786,6 +2767,96 @@
       { recordHistory: true },
     );
     return true;
+  }
+
+  async function autoDetectBeatMap(): Promise<void> {
+    if (busyMessage) {
+      return;
+    }
+    if (tapEntryPhase !== 'idle') {
+      statusMessage = 'Finish or cancel tap entry before auto-detecting beats.';
+      return;
+    }
+    if (!decodedAudioBuffer) {
+      statusMessage = 'Upload audio before auto-detecting beats.';
+      return;
+    }
+
+    const historyEntry = createHistoryEntry();
+    busyMessage = 'Preparing audio for analysis...';
+    errorMessage = '';
+    const loggedProgressBuckets = new Map<BeatDetectionProgress['stage'], number>();
+    console.info('[BVB Beat Detect] Auto-detect requested from the Beats tab.', {
+      durationSec: decodedAudioBuffer.duration,
+      sampleRate: decodedAudioBuffer.sampleRate,
+      channelCount: decodedAudioBuffer.numberOfChannels,
+      sampleCount: decodedAudioBuffer.length,
+      existingBeatPinCount: project.beatMap.beatPins.length,
+    });
+
+    try {
+      const { beatPins, analysis } = await detectBeatPinsFromAudioBuffer(decodedAudioBuffer, {
+        onProgress: (progress) => {
+          busyMessage = formatBeatDetectionBusyMessage(progress);
+          const bucket = progress.progress >= 1 ? 10 : Math.floor(progress.progress * 10);
+          const lastBucket = loggedProgressBuckets.get(progress.stage);
+          if (lastBucket !== bucket) {
+            loggedProgressBuckets.set(progress.stage, bucket);
+            console.info('[BVB Beat Detect] Progress update.', {
+              stage: progress.stage,
+              progressPercent: Math.max(0, Math.min(100, Math.round(progress.progress * 100))),
+              message: formatBeatDetectionBusyMessage(progress),
+            });
+          }
+        },
+      });
+
+      if (beatPins.length < 2) {
+        console.warn('[BVB Beat Detect] Detection finished with too few beats.', {
+          beatPinCount: beatPins.length,
+          estimatedTempoBpm: analysis.estimatedTempoBpm,
+        });
+        statusMessage = 'Beat detection found fewer than two usable beats. Try tap entry instead.';
+        return;
+      }
+
+      const nextBeatPins = normalizeBeatPins(beatPins);
+      console.info('[BVB Beat Detect] Applying detected beat pins to project.', {
+        beatPinCount: nextBeatPins.length,
+        firstBeatSec: nextBeatPins[0]?.timeSec ?? null,
+        lastBeatSec: nextBeatPins[nextBeatPins.length - 1]?.timeSec ?? null,
+        estimatedTempoBpm: analysis.estimatedTempoBpm,
+      });
+      selectedBeatPinId = nextBeatPins[0]?.id ?? null;
+      clearTapBeatSequence();
+      resetPreviewTransport();
+
+      const tempoSuffix = analysis.estimatedTempoBpm === null
+        ? ''
+        : ` around ${formatTempo(analysis.estimatedTempoBpm)}`;
+      setProjectState(
+        touchProject({
+          ...project,
+          beatMap: {
+            beatPins: nextBeatPins,
+          },
+        }),
+        `Auto-detected ${nextBeatPins.length} beats${tempoSuffix}.`,
+        {
+          recordHistory: true,
+          historyEntry,
+        },
+      );
+      console.info('[BVB Beat Detect] Beat pins applied successfully.', {
+        resultingBeatPinCount: nextBeatPins.length,
+        selectedBeatPinId,
+      });
+    } catch (error) {
+      console.error('Boomwhacker Video Builder automatic beat detection failed.', error);
+      errorMessage = 'Automatic beat detection failed. Try a shorter file or use tap entry.';
+    } finally {
+      busyMessage = '';
+    }
   }
 
   function generateBlankHighway(): void {
@@ -4174,7 +4245,6 @@
     options?: {
       title?: string;
       grouping?: MacrobeatGrouping;
-      beatMapMode?: BeatMapStartMode;
     },
   ): Promise<void> {
     busyMessage = 'Decoding audio and building a waveform...';
@@ -4188,9 +4258,7 @@
       const importedAsset = await importAudioFile(file);
       const nextTitle = options?.title?.trim() || stripExtension(file.name) || project.metadata.title;
       const nextGrouping = options?.grouping ?? project.grid.defaultMacrobeatGrouping;
-      const beatMapMode = options?.beatMapMode ?? 'tap';
-      const shouldAutoSuggestBeats = beatMapMode === 'auto';
-      const preserveExistingEditorData = hasExistingEditorWork() && !shouldAutoSuggestBeats;
+      const preserveExistingEditorData = hasExistingEditorWork();
       const baseProject = preserveExistingEditorData
         ? touchProject({
             ...project,
@@ -4226,7 +4294,7 @@
             },
             viewState: {
               ...project.viewState,
-              activeTab: shouldAutoSuggestBeats ? 'editor' : 'beats',
+              activeTab: 'beats',
               scrollSlotIndex: 0,
             },
             previewState: {
@@ -4240,7 +4308,7 @@
               },
             },
             beatMap: {
-              beatPins: shouldAutoSuggestBeats ? importedAsset.beatAnalysis.beatPins : [],
+              beatPins: [],
             },
             notes: {
               placedNotes: [],
@@ -4260,8 +4328,6 @@
         nextProject,
         preserveExistingEditorData
           ? `Loaded "${file.name}" without clearing the current beat map, notes, or captured taps.`
-          : shouldAutoSuggestBeats
-          ? `Loaded "${file.name}" and generated ${importedAsset.beatAnalysis.beatPins.length} suggested beat pins.`
           : `Loaded "${file.name}". Tap along with playback in the Beat Editor to build the beat map.`,
       );
       syncSetupModalState(nextProject);
@@ -4424,7 +4490,6 @@
       await handleAudioImport(file, {
         title: nextTitle,
         grouping: setupModalGrouping,
-        beatMapMode: setupModalBeatMapMode,
       });
       return;
     }
@@ -5082,24 +5147,8 @@
           </div>
         </div>
 
-        <div class="panel__subsection">
-          <p class="panel__eyebrow">Starting Beat Map</p>
-          <div class="toggle-cluster" role="group" aria-label="Beat-map import mode">
-            <span class="toggle-cluster__label">First pass</span>
-            <button type="button" class:active={setupModalBeatMapMode === 'tap'} on:click={() => (setupModalBeatMapMode = 'tap')}>
-              Tap beat map
-            </button>
-            <button type="button" class:active={setupModalBeatMapMode === 'auto'} on:click={() => (setupModalBeatMapMode = 'auto')}>
-              Auto-suggest beats
-            </button>
-          </div>
-          <p class="panel__hint">
-            Tap mode opens the Beat Editor with empty pins so you can tap along with playback. Auto-suggest uses the browser beat analyzer as a rough starting point.
-          </p>
-        </div>
-
         <p class="panel__hint">
-          The project title auto-fills from the selected audio file unless you override it. Confirm here to apply the title, grouping, and beat-map starting mode.
+          The project title auto-fills from the selected audio file unless you override it. Confirm here to apply the title and grouping, then tap the beat map manually in the Beat Editor.
         </p>
 
         <div class="modal-card__actions">
@@ -5290,7 +5339,6 @@
               {#each project.beatMap.beatPins as beatPin (beatPin.id)}
                 <span
                   class="waveform-pin"
-                  class:is-downbeat={beatPin.isDownbeat}
                   style={beatPinStyle(beatPin.timeSec)}
                 ></span>
               {/each}
@@ -5411,22 +5459,11 @@
         <div class="beat-table">
           <div class="beat-table__head">Beat</div>
           <div class="beat-table__head">Time</div>
-          <div class="beat-table__head">Downbeat</div>
           <div class="beat-table__head">Action</div>
 
           {#each visibleBeatPins as beatPin, beatIndex (beatPin.id)}
             <div class="beat-table__cell">{beatIndex + 1}</div>
             <div class="beat-table__cell">{formatSeconds(beatPin.timeSec)}</div>
-            <div class="beat-table__cell">
-              <label class="checkbox checkbox--table">
-                <input
-                  type="checkbox"
-                  checked={beatPin.isDownbeat}
-                  on:change={(event) => toggleBeatPinDownbeat(beatPin.id, (event.currentTarget as HTMLInputElement).checked)}
-                />
-                <span>Mark</span>
-              </label>
-            </div>
             <div class="beat-table__cell">
               <button type="button" class="ghost-button" on:click={() => deleteBeatPin(beatPin.id)}>Delete</button>
             </div>
@@ -5462,7 +5499,7 @@
         </div>
         <div>
           <dt>beatMap</dt>
-          <dd>`beatPins[]` with confidence + downbeat flag</dd>
+          <dd>`beatPins[]` with confidence</dd>
         </div>
         <div>
           <dt>grid</dt>
@@ -5572,7 +5609,6 @@
                         type="button"
                         class="beat-editor__pin"
                         class:is-selected={selectedBeatPinId === beatPin.id}
-                        class:is-downbeat={beatPin.isDownbeat}
                         style={beatPinStyle(beatPin.timeSec)}
                         on:click|stopPropagation={() => selectBeatPin(beatPin.id)}
                         on:mousedown={(event) => startBeatPinDrag(event, beatPin.id)}
@@ -5698,6 +5734,7 @@
           <div class="action-row action-row--stack">
             <button type="button" class="action-button action-button--primary" disabled={tapEntryPhase !== 'idle'} on:click={recordBeatTap}>Tap beat</button>
             <button type="button" class="action-button" disabled={tapEntryPhase !== 'idle' || tapBeatTimesSec.length < 2} on:click={() => applyTapBeatSequence()}>Use taps as beat map</button>
+            <button type="button" class="action-button" disabled={Boolean(busyMessage) || tapEntryPhase !== 'idle' || !decodedAudioBuffer} on:click={() => void autoDetectBeatMap()}>Auto-detect beats</button>
             <button type="button" class="ghost-button" disabled={tapEntryPhase !== 'idle' || tapBeatTimesSec.length === 0} on:click={clearTapBeatSequence}>Clear taps</button>
           </div>
 
@@ -5709,7 +5746,7 @@
             </div>
           {:else}
             <p class="panel__hint">
-              Use Begin Tap Entry for a 4-beat visual count-in, then tap Space while playback runs. Manual taps here still work when tap entry is idle.
+              Use Auto-detect beats for a first pass, or Begin Tap Entry for a 4-beat visual count-in and tap Space while playback runs. Manual taps here still work when tap entry is idle.
             </p>
           {/if}
         </div>
@@ -5781,7 +5818,6 @@
                 {#each highwayGuides as guide (guide.id)}
                   <span
                     class="highway__guide"
-                    class:is-downbeat={shouldHighlightDownbeatGuide(guide)}
                     class:is-beat={shouldRenderGuideAsBeat(guide)}
                     style={highwayGuideStyle(guide.timeSec)}
                     aria-hidden="true"
@@ -5913,7 +5949,6 @@
                         type="button"
                         class="beat-editor__pin beat-editor__pin--compact"
                         class:is-selected={selectedBeatPinId === beatPin.id}
-                        class:is-downbeat={beatPin.isDownbeat}
                         style={beatPinStyle(beatPin.timeSec)}
                         on:click|stopPropagation={() => selectBeatPin(beatPin.id)}
                         on:mousedown={(event) => startBeatPinDrag(event, beatPin.id)}
@@ -5955,7 +5990,7 @@
             </div>
           {:else}
             <div class="empty-state empty-state--compact">
-              <p>Upload audio to decode a waveform and generate a first beat-pin pass.</p>
+              <p>Upload audio to decode a waveform, then tap along in the Beat Editor to create the beat map.</p>
             </div>
           {/if}
         {/if}

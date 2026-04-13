@@ -9,7 +9,6 @@ import {
   getActiveHighwayBeatSpan,
   getHighwayJudgmentAreaWidthPx,
   getHighwayNoteLayout,
-  shouldHighlightDownbeatGuide,
   shouldRenderGuideAsBeat,
 } from '../highwayLayout.js';
 
@@ -401,9 +400,8 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
       continue;
     }
 
-    const highlightedDownbeat = shouldHighlightDownbeatGuide(guide);
     const beatGuide = shouldRenderGuideAsBeat(guide);
-    if (!highlightedDownbeat && !beatGuide) {
+    if (!beatGuide) {
       continue;
     }
 
@@ -411,13 +409,9 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
     context.beginPath();
     context.moveTo(guideX, viewportY);
     context.lineTo(guideX, viewportY + viewportHeight);
-    context.lineWidth = highlightedDownbeat ? 3 : 1;
-    context.strokeStyle = highlightedDownbeat
-      ? '#ffd36a'
-      : beatGuide
-        ? 'rgba(255, 255, 255, 0.26)'
-        : 'rgba(121, 187, 255, 0.18)';
-    context.setLineDash(beatGuide ? [9, 8] : []);
+    context.lineWidth = 1;
+    context.strokeStyle = 'rgba(255, 255, 255, 0.26)';
+    context.setLineDash([9, 8]);
     context.stroke();
     context.restore();
   }

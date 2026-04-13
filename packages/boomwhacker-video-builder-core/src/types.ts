@@ -34,7 +34,6 @@ export interface BeatPin {
   id: string;
   timeSec: number;
   confidence?: number;
-  isDownbeat: boolean;
   annotationIds: string[];
   label?: string;
 }
@@ -172,7 +171,6 @@ export interface DerivedBeatSpan {
   slotCount: number;
   startSlotIndex: number;
   endSlotIndex: number;
-  isDownbeat: boolean;
 }
 
 export interface DerivedSlotBoundary {
@@ -182,7 +180,6 @@ export interface DerivedSlotBoundary {
   fractionOfBeat: number;
   isBeatStart: boolean;
   isSubdivisionStart: boolean;
-  isDownbeat: boolean;
 }
 
 export interface DerivedTimingModel {
@@ -197,8 +194,8 @@ export interface DerivedGuideLine {
   timeSec: number;
   beatIndex: number;
   slotIndex: number;
-  kind: 'downbeat' | 'beat' | 'subdivision';
-  emphasis: 'solid' | 'dashed' | 'light';
+  kind: 'beat' | 'subdivision';
+  emphasis: 'dashed' | 'light';
 }
 
 export interface TimedBoomwhackerNote {

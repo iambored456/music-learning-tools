@@ -47,7 +47,6 @@ export function createConstantTempoBeatPins(options: {
     id: createId('beat'),
     timeSec: Number((startTimeSec + (index * secondsPerBeat)).toFixed(4)),
     confidence: 1,
-    isDownbeat: index === 0,
     annotationIds: [],
   }));
 }
@@ -188,7 +187,6 @@ export function createSampleBoomwhackerVideoBuilderProject(): BoomwhackerVideoBu
     id: createId('beat'),
     timeSec,
     confidence: index === 0 ? 1 : 0.78,
-    isDownbeat: index === 0 || index === 4,
     annotationIds: [],
   }));
 

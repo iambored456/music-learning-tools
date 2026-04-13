@@ -1245,11 +1245,6 @@ body {
   background: rgba(255, 255, 255, 0.32);
 }
 
-.waveform-pin.is-downbeat {
-  width: 2px;
-  background: var(--bvb-warm);
-}
-
 .audio-player {
   width: 100%;
 }
@@ -1384,10 +1379,6 @@ body {
   cursor: default;
 }
 
-.beat-editor__pin.is-downbeat {
-  background: var(--bvb-warm);
-}
-
 .beat-editor__pin.is-selected {
   background: var(--bvb-accent);
   box-shadow: 0 0 0 2px rgba(121, 187, 255, 0.28);
@@ -1509,7 +1500,7 @@ body {
 
 .beat-table {
   display: grid;
-  grid-template-columns: 72px 110px minmax(0, 1fr) 110px;
+  grid-template-columns: 72px minmax(0, 1fr) 110px;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--bvb-border);
@@ -1686,11 +1677,6 @@ body {
 
 .highway__guide.is-beat {
   background: rgba(255, 255, 255, 0.22);
-}
-
-.highway__guide.is-downbeat {
-  width: 2px;
-  background: var(--bvb-warm);
 }
 
 .highway__guide.is-subdivision {

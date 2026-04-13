@@ -41,6 +41,23 @@ Run locally:
 pnpm --filter boomwhacker-sketchpad run dev
 ```
 
+## Boomwhacker Video Builder Audio Import
+
+The Boomwhacker Video Builder stays fully static-host friendly. Importing a song decodes audio in the browser, builds a waveform, and leaves beat mapping as a manual Beat Editor step.
+
+Run either app shell as usual:
+
+```bash
+pnpm --filter boomwhacker-video-builder run dev
+pnpm --filter hub run dev
+```
+
+Known behavior notes:
+
+- no backend analysis service is required
+- audio import builds waveform/preview data only
+- beat maps are created and adjusted manually in the Beat Editor
+
 ### CI notes
 
 Install Playwright Chromium before running capture:

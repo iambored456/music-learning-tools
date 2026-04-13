@@ -114,7 +114,6 @@ function normalizeBeatPin(value: unknown, index: number): BeatPin | null {
     id: asString(source?.id) ?? `beat-${index + 1}`,
     timeSec: Math.max(0, timeSec),
     confidence: asFiniteNumber(source?.confidence) ?? undefined,
-    isDownbeat: asBoolean(source?.isDownbeat) ?? index === 0,
     annotationIds: Array.isArray(source?.annotationIds)
       ? source.annotationIds.map((entry) => asString(entry)).filter((entry): entry is string => entry !== null)
       : [],

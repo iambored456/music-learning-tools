@@ -62,12 +62,8 @@ export function getHighwayJudgmentAreaWidthPx(
   return Math.max(2, Math.max(0, beatSpan.durationSec) * Math.max(0, pixelsPerSecond));
 }
 
-export function shouldHighlightDownbeatGuide(guide: DerivedGuideLine): boolean {
-  return guide.kind === 'downbeat' && guide.beatIndex > 0;
-}
-
 export function shouldRenderGuideAsBeat(guide: DerivedGuideLine): boolean {
-  return guide.kind === 'beat' || (guide.kind === 'downbeat' && guide.beatIndex === 0);
+  return guide.kind === 'beat';
 }
 
 export function getHighwayNoteLayout(options: {
