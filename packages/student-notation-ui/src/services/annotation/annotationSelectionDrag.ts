@@ -92,6 +92,22 @@ export function applyLassoSelectionDrag(params: {
           item.data.startTimeIndex = targetTimeIndex;
         }
       }
+    } else if (item.type === 'sixteenthThreeStamp') {
+      const baseGlobal = resolveGlobalRow(item.data.row, item.data.globalRow);
+      const newGlobal = baseGlobal + movementNeeded.row;
+
+      item.data.globalRow = newGlobal;
+      item.data.row = newGlobal;
+
+      if (movementNeeded.col !== 0) {
+        const baseCanvasCol = timeToCanvas(item.data.startTimeIndex, store.state);
+        const targetCanvasCol = baseCanvasCol + movementNeeded.col;
+        const direction = Math.sign(movementNeeded.col) || 1;
+        const targetTimeIndex = resolvePlayableTimeIndex(targetCanvasCol, direction);
+        if (targetTimeIndex !== null) {
+          item.data.startTimeIndex = targetTimeIndex;
+        }
+      }
     }
   });
 
@@ -106,4 +122,3 @@ export function applyLassoSelectionDrag(params: {
 
   return { moved: true, nextSelectionDragTotal, nextConvexHull };
 }
-

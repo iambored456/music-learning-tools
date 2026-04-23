@@ -18,12 +18,17 @@
   const volumeIconHref = new URL('../../student-notation-ui/public/assets/icons/volume.svg', import.meta.url).href;
   const playIconHref = new URL('../../student-notation-ui/public/assets/icons/play.svg', import.meta.url).href;
   const pauseIconHref = new URL('../../student-notation-ui/public/assets/icons/pause.svg', import.meta.url).href;
+  const previousControlRepeatMs = 850;
 
   let volumeOpen = false;
   let volume = 72;
   let isPlaying = true;
   let currentStep = 1;
   let lastLessonCode = '';
+  let actionSkipSignal = 0;
+  let segmentResetSignal = 0;
+  let previousControlPressAt = 0;
+  let previousControlPressStep = 0;
 
   $: lesson = getLessonDefinition(lessonCode);
   $: totalSteps = lesson?.sections.length ?? 0;
@@ -35,6 +40,10 @@
     currentStep = 1;
     volumeOpen = false;
     isPlaying = true;
+    actionSkipSignal = 0;
+    segmentResetSignal = 0;
+    previousControlPressAt = 0;
+    previousControlPressStep = 0;
   }
   $: setLessonAvatarVolume(volume);
 
@@ -49,7 +58,12 @@
 
   function selectStep(step: number): void {
     if (!lesson) return;
-    currentStep = Math.max(1, Math.min(step, lesson.sections.length));
+    const nextStep = Math.max(1, Math.min(step, lesson.sections.length));
+    if (nextStep === currentStep) return;
+    currentStep = nextStep;
+    actionSkipSignal = 0;
+    previousControlPressAt = 0;
+    previousControlPressStep = 0;
   }
 
   function goToPreviousStep(): void {
@@ -58,6 +72,33 @@
 
   function goToNextStep(): void {
     selectStep(currentStep + 1);
+  }
+
+  function skipCurrentAction(): void {
+    actionSkipSignal += 1;
+  }
+
+  function resetCurrentSegment(): void {
+    cancelLessonAvatarSpeech();
+    actionSkipSignal = 0;
+    segmentResetSignal += 1;
+  }
+
+  function handlePreviousControl(): void {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const isRepeatPress =
+      previousControlPressStep === currentStep && now - previousControlPressAt <= previousControlRepeatMs;
+
+    if (isRepeatPress && currentStep > 1) {
+      previousControlPressAt = 0;
+      previousControlPressStep = 0;
+      goToPreviousStep();
+      return;
+    }
+
+    previousControlPressAt = now;
+    previousControlPressStep = currentStep;
+    resetCurrentSegment();
   }
 
   $: if (lessonCode) {
@@ -122,12 +163,40 @@
         <div class="canvas-toolbar-progress">
           <LessonProgress steps={lesson.sections} currentStep={currentStep} onSelectStep={selectStep} />
         </div>
+
+        {#if hasCustomScene}
+          <div class="canvas-subsection-controls" role="group" aria-label="Lesson segment controls">
+            <button
+              class="canvas-subsection-arrow"
+              type="button"
+              aria-label={currentStep > 1
+                ? 'Restart current segment; press again quickly for previous segment'
+                : 'Restart current segment'}
+              title={currentStep > 1
+                ? 'Restart current segment; press again quickly for previous segment'
+                : 'Restart current segment'}
+              onclick={handlePreviousControl}
+            >
+              <span class="canvas-arrow-icon canvas-arrow-icon--left" aria-hidden="true"></span>
+            </button>
+
+            <button
+              class="canvas-subsection-arrow"
+              type="button"
+              aria-label="Skip current action"
+              title="Skip current action"
+              onclick={skipCurrentAction}
+            >
+              <span class="canvas-arrow-icon canvas-arrow-icon--right" aria-hidden="true"></span>
+            </button>
+          </div>
+        {/if}
       </div>
     {/if}
   </header>
 
   {#if lesson && hasCustomScene}
-    <PitchLesson11Scene {lesson} {currentStep} {isPlaying} {volume} />
+    <PitchLesson11Scene {lesson} {currentStep} {isPlaying} {volume} {actionSkipSignal} {segmentResetSignal} />
   {:else if lesson && !isShellOnlyCanvas}
     <section class="canvas-title-card app-card">
       <p class="canvas-title-kicker">Lesson {lesson.code} | {lesson.trail.join(' / ')}</p>
@@ -227,6 +296,67 @@
 
   .canvas-toolbar-progress {
     min-width: 0;
+  }
+
+  .canvas-subsection-controls {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34rem;
+  }
+
+  .canvas-subsection-arrow {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(84, 65, 39, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.28);
+    color: rgba(49, 65, 58, 0.54);
+    cursor: pointer;
+    opacity: 0.46;
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .canvas-subsection-arrow:hover:not(:disabled),
+  .canvas-subsection-arrow:focus-visible {
+    opacity: 0.82;
+    color: rgba(49, 65, 58, 0.82);
+    border-color: rgba(47, 141, 131, 0.22);
+    background: rgba(255, 255, 255, 0.48);
+  }
+
+  .canvas-subsection-arrow:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .canvas-subsection-arrow:disabled {
+    opacity: 0.24;
+    cursor: default;
+  }
+
+  .canvas-arrow-icon {
+    width: 0.58rem;
+    height: 0.58rem;
+    display: block;
+    border-block-start: 2px solid currentColor;
+    border-inline-start: 2px solid currentColor;
+  }
+
+  .canvas-arrow-icon--left {
+    transform: translateX(0.12rem) rotate(-45deg);
+  }
+
+  .canvas-arrow-icon--right {
+    transform: translateX(-0.12rem) rotate(135deg);
   }
 
   .canvas-toolbar-meta {
@@ -521,6 +651,10 @@
 
     .canvas-toolbar-progress {
       overflow-x: auto;
+    }
+
+    .canvas-subsection-controls {
+      align-self: flex-start;
     }
 
     .canvas-stage-surface {

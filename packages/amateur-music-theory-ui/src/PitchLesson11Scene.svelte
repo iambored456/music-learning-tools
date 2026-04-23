@@ -6,24 +6,28 @@
   export let currentStep = 1;
   export let isPlaying = true;
   export let volume = 72;
+  export let actionSkipSignal = 0;
+  export let segmentResetSignal = 0;
 
   $: currentSection = lesson.sections[currentStep - 1] ?? lesson.sections[0];
 </script>
 
-{#if currentStep === 1 && currentSection}
-  {#key currentSection.code}
-    <PitchLesson111HighLow section={currentSection} {isPlaying} {volume} />
+{#if currentSection}
+  {#key `${currentSection.code}-${segmentResetSignal}`}
+    {#if currentStep === 1}
+      <PitchLesson111HighLow section={currentSection} {isPlaying} {volume} {actionSkipSignal} />
+    {:else}
+      <section class="scene-placeholder app-card">
+        <p class="scene-placeholder-kicker">{currentSection.code}</p>
+        <h2>{currentSection.label}</h2>
+        <p>{currentSection.description}</p>
+        <p class="scene-placeholder-note">
+          This subsection has not been staged yet. The lesson shell, progress state, and Grammy avatar
+          support are ready for the next build pass.
+        </p>
+      </section>
+    {/if}
   {/key}
-{:else if currentSection}
-  <section class="scene-placeholder app-card">
-    <p class="scene-placeholder-kicker">{currentSection.code}</p>
-    <h2>{currentSection.label}</h2>
-    <p>{currentSection.description}</p>
-    <p class="scene-placeholder-note">
-      This subsection has not been staged yet. The lesson shell, progress state, and Grammy avatar
-      support are ready for the next build pass.
-    </p>
-  </section>
 {/if}
 
 <style>

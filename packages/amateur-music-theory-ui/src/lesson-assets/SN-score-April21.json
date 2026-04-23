@@ -1,0 +1,713 @@
+{
+  "type": "student-notation-score",
+  "version": 2,
+  "exportedAt": "2026-04-21T22:00:51.853Z",
+  "data": {
+    "placedNotes": [
+      {
+        "row": 32,
+        "startColumnIndex": 0,
+        "endColumnIndex": 1,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808554358-p138thpgc",
+        "globalRow": 32
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 2,
+        "endColumnIndex": 3,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808555582-4hfnt500c",
+        "globalRow": 36
+      },
+      {
+        "row": 29,
+        "startColumnIndex": 4,
+        "endColumnIndex": 5,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808556581-n29akihev",
+        "globalRow": 29
+      },
+      {
+        "row": 32,
+        "startColumnIndex": 6,
+        "endColumnIndex": 6,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808558166-dmhouc7hk",
+        "globalRow": 32
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 7,
+        "endColumnIndex": 7,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808558941-r9c18xeoy",
+        "globalRow": 36
+      },
+      {
+        "row": 37,
+        "startColumnIndex": 8,
+        "endColumnIndex": 9,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808560606-vy02p0fq4",
+        "globalRow": 37
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 10,
+        "endColumnIndex": 10,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808562238-97d6sjd1j",
+        "globalRow": 36
+      },
+      {
+        "row": 32,
+        "startColumnIndex": 11,
+        "endColumnIndex": 11,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808562998-1pl6l46xi",
+        "globalRow": 32
+      },
+      {
+        "row": 34,
+        "startColumnIndex": 12,
+        "endColumnIndex": 13,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808564494-6u5twck4t",
+        "globalRow": 34
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 14,
+        "endColumnIndex": 15,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808600446-ryox3lr3t",
+        "globalRow": 36
+      },
+      {
+        "row": 32,
+        "startColumnIndex": 16,
+        "endColumnIndex": 17,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808601518-zozw0awe5",
+        "globalRow": 32
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 18,
+        "endColumnIndex": 19,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808602678-s5k016tq4",
+        "globalRow": 36
+      },
+      {
+        "row": 29,
+        "startColumnIndex": 20,
+        "endColumnIndex": 21,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808603950-ksdn21imr",
+        "globalRow": 29
+      },
+      {
+        "row": 32,
+        "startColumnIndex": 22,
+        "endColumnIndex": 22,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808605718-fg8gxk91q",
+        "globalRow": 32
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 23,
+        "endColumnIndex": 23,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808607374-45153ahic",
+        "globalRow": 36
+      },
+      {
+        "row": 37,
+        "startColumnIndex": 24,
+        "endColumnIndex": 25,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808610318-lizj30z1b",
+        "globalRow": 37
+      },
+      {
+        "row": 36,
+        "startColumnIndex": 26,
+        "endColumnIndex": 26,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808612038-99t7lg3lk",
+        "globalRow": 36
+      },
+      {
+        "row": 32,
+        "startColumnIndex": 27,
+        "endColumnIndex": 27,
+        "color": "#4a90e2",
+        "shape": "oval",
+        "isDrum": false,
+        "uuid": "uuid-1776808612734-89gri42qv",
+        "globalRow": 32
+      },
+      {
+        "row": 34,
+        "startColumnIndex": 28,
+        "endColumnIndex": 30,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808615950-1r5nxnxr6",
+        "globalRow": 34
+      },
+      {
+        "row": 49,
+        "startColumnIndex": 28,
+        "endColumnIndex": 30,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808825069-q8jdjhixx",
+        "globalRow": 49
+      },
+      {
+        "row": 41,
+        "startColumnIndex": 28,
+        "endColumnIndex": 30,
+        "color": "#4a90e2",
+        "shape": "circle",
+        "isDrum": false,
+        "uuid": "uuid-1776808830430-k31bx3sbo",
+        "globalRow": 41
+      }
+    ],
+    "placedChords": [],
+    "tonicSignGroups": {},
+    "sixteenthStampPlacements": [
+      {
+        "id": "sixteenth-stamp-1776805312172-ldi8ajpm3",
+        "sixteenthStampId": 15,
+        "startColumn": 0,
+        "endColumn": 2,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776805312172,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808243988-1-gmt9jfth2",
+        "sixteenthStampId": 15,
+        "startColumn": 2,
+        "endColumn": 4,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808243988,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7,
+          "diamond_0": -4
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808245892-2-wippwd5jx",
+        "sixteenthStampId": 15,
+        "startColumn": 4,
+        "endColumn": 6,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808245892,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808247244-3-hclht5e0y",
+        "sixteenthStampId": 15,
+        "startColumn": 6,
+        "endColumn": 8,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808247244,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7,
+          "diamond_0": -4
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808540229-1-p2cu4ljr5",
+        "sixteenthStampId": 15,
+        "startColumn": 8,
+        "endColumn": 10,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808540229,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -5,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808709518-a3maflqe9",
+        "sixteenthStampId": 15,
+        "startColumn": 10,
+        "endColumn": 12,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808709518,
+        "shapeOffsets": {
+          "diamond_0": -5,
+          "diamond_1": -7,
+          "diamond_2": -5,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808758990-dj5fpuzzh",
+        "sixteenthStampId": 15,
+        "startColumn": 12,
+        "endColumn": 14,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808758990,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808764806-2i7ee1qsr",
+        "sixteenthStampId": 15,
+        "startColumn": 14,
+        "endColumn": 16,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808764806,
+        "shapeOffsets": {
+          "diamond_0": -4,
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808778324-1-ms2bpwo4w",
+        "sixteenthStampId": 15,
+        "startColumn": 16,
+        "endColumn": 18,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808778324,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808778324-2-1w1499lrv",
+        "sixteenthStampId": 15,
+        "startColumn": 18,
+        "endColumn": 20,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808778324,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7,
+          "diamond_0": -4
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808778324-3-u4y88iczh",
+        "sixteenthStampId": 15,
+        "startColumn": 20,
+        "endColumn": 22,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808778324,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808778324-4-ffknh3xfd",
+        "sixteenthStampId": 15,
+        "startColumn": 22,
+        "endColumn": 24,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808778324,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -4,
+          "diamond_3": -7,
+          "diamond_0": -4
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808778324-5-tpheftfv9",
+        "sixteenthStampId": 15,
+        "startColumn": 24,
+        "endColumn": 26,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808778324,
+        "shapeOffsets": {
+          "diamond_1": -7,
+          "diamond_2": -5,
+          "diamond_3": -7,
+          "diamond_0": -2
+        }
+      },
+      {
+        "id": "sixteenth-stamp-1776808778324-6-m8tc3u3e2",
+        "sixteenthStampId": 15,
+        "startColumn": 26,
+        "endColumn": 28,
+        "row": 48,
+        "globalRow": 48,
+        "color": "#4a90e2",
+        "timestamp": 1776808778324,
+        "shapeOffsets": {
+          "diamond_0": -4,
+          "diamond_1": -7,
+          "diamond_2": 0,
+          "diamond_3": -7
+        }
+      }
+    ],
+    "tripletStampPlacements": [],
+    "sixteenthThreeStampPlacements": [],
+    "annotations": [],
+    "macrobeatGroupings": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "macrobeatBoundaryStyles": [
+      "dashed",
+      "solid",
+      "dashed",
+      "solid",
+      "dashed",
+      "solid",
+      "dashed",
+      "solid",
+      "dashed",
+      "solid",
+      "dashed",
+      "solid",
+      "dashed",
+      "solid",
+      "dashed"
+    ],
+    "hasAnacrusis": false,
+    "baseMicrobeatPx": 40,
+    "tempoModulationMarkers": [],
+    "tempo": 66,
+    "timbres": {
+      "#4a90e2": {
+        "name": "sine",
+        "adsr": {
+          "attack": 0.1,
+          "decay": 0.2,
+          "sustain": 1,
+          "release": 0.3
+        },
+        "filter": {
+          "blend": 2,
+          "cutoff": 31,
+          "resonance": 0,
+          "type": "lowpass",
+          "enabled": true
+        },
+        "activePresetName": "sine",
+        "gain": 1,
+        "vibrato": {
+          "speed": 0,
+          "span": 0
+        },
+        "tremelo": {
+          "speed": 0,
+          "span": 0
+        },
+        "coeffs": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "phases": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "#2d2d2d": {
+        "name": "triangle",
+        "adsr": {
+          "attack": 0.1,
+          "decay": 0.2,
+          "sustain": 1,
+          "release": 0.3
+        },
+        "filter": {
+          "blend": 2,
+          "cutoff": 31,
+          "resonance": 0,
+          "type": "lowpass"
+        },
+        "activePresetName": "triangle",
+        "gain": 0.81,
+        "vibrato": {
+          "speed": 0,
+          "span": 0
+        },
+        "tremelo": {
+          "speed": 0,
+          "span": 0
+        },
+        "coeffs": [
+          1,
+          0,
+          0.1111111119389534,
+          0,
+          0.03999999910593033,
+          0,
+          0.020408162847161293,
+          0,
+          0.012345679104328156,
+          0,
+          0.00826446246355772,
+          0
+        ],
+        "phases": [
+          1.5707963705062866,
+          0,
+          1.5707963705062866,
+          0,
+          1.5707963705062866,
+          0,
+          1.5707963705062866,
+          0,
+          1.5707963705062866,
+          0,
+          1.5707963705062866,
+          0
+        ]
+      },
+      "#d66573": {
+        "name": "square",
+        "adsr": {
+          "attack": 0.1,
+          "decay": 0.2,
+          "sustain": 1,
+          "release": 0.3
+        },
+        "filter": {
+          "blend": 2,
+          "cutoff": 31,
+          "resonance": 0,
+          "type": "lowpass"
+        },
+        "activePresetName": "square",
+        "gain": 1.2732395447351628,
+        "vibrato": {
+          "speed": 0,
+          "span": 0
+        },
+        "tremelo": {
+          "speed": 0,
+          "span": 0
+        },
+        "coeffs": [
+          1,
+          0,
+          0.3333333432674408,
+          0,
+          0.20000000298023224,
+          0,
+          0.1428571492433548,
+          0,
+          0.1111111119389534,
+          0,
+          0.09090909361839294,
+          0
+        ],
+        "phases": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "#68a03f": {
+        "name": "sawtooth",
+        "adsr": {
+          "attack": 0.1,
+          "decay": 0.2,
+          "sustain": 1,
+          "release": 0.3
+        },
+        "filter": {
+          "blend": 2,
+          "cutoff": 31,
+          "resonance": 0,
+          "type": "lowpass"
+        },
+        "activePresetName": "sawtooth",
+        "gain": 0.6366197723675814,
+        "vibrato": {
+          "speed": 0,
+          "span": 0
+        },
+        "tremelo": {
+          "speed": 0,
+          "span": 0
+        },
+        "coeffs": [
+          1,
+          0.5,
+          0.3333333432674408,
+          0.25,
+          0.20000000298023224,
+          0.1666666716337204,
+          0.1428571492433548,
+          0.125,
+          0.1111111119389534,
+          0.10000000149011612,
+          0.09090909361839294,
+          0.0833333358168602
+        ],
+        "phases": [
+          0,
+          3.1415927410125732,
+          0,
+          3.1415927410125732,
+          0,
+          3.1415927410125732,
+          0,
+          3.1415927410125732,
+          0,
+          3.1415927410125732,
+          0,
+          3.1415927410125732
+        ]
+      }
+    },
+    "pitchRange": {
+      "topIndex": 29,
+      "bottomIndex": 54
+    },
+    "degreeDisplayMode": "off",
+    "showOctaveLabels": true,
+    "longNoteStyle": "style1",
+    "playheadMode": "cursor",
+    "selectedNote": {
+      "shape": "circle",
+      "color": "#4a90e2"
+    },
+    "activeChordIntervals": [
+      "1P"
+    ]
+  }
+}

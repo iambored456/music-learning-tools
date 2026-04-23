@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { cubicOut } from 'svelte/easing';
+  import { slide } from 'svelte/transition';
+
   import type { OutlineRow } from './outline';
   import { rowTypeLabels } from './outline';
 
@@ -35,7 +38,7 @@
             isExpanded = !isExpanded;
           }}
         >
-          <span class={`outline-row-chevron ${isExpanded ? 'is-expanded' : ''}`} aria-hidden="true"></span>
+          <span class="outline-row-chevron" class:is-expanded={isExpanded} aria-hidden="true"></span>
         </button>
       {:else if isLessonLink(row)}
         <a
@@ -58,6 +61,7 @@
       class="outline-row-children"
       role="list"
       aria-label={`${row.title} child rows`}
+      transition:slide|local={{ duration: 190, easing: cubicOut }}
     >
       {#each row.children as child (child.id)}
         <div class="outline-row-child" role="listitem">
@@ -154,7 +158,7 @@
     border-right: 2px solid currentColor;
     border-bottom: 2px solid currentColor;
     transform: rotate(45deg) translateY(-1px);
-    transition: transform 0.15s ease;
+    transition: transform 0.19s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .outline-row-chevron.is-expanded {

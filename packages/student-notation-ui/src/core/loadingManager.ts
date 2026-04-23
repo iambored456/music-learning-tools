@@ -27,6 +27,21 @@ class LoadingManager {
   };
   private diagnostics: string[] = [];
 
+  private enterAppLoadingState(): void {
+    if (!this.loadingScreen) {return;}
+
+    this.loadingScreen.classList.remove('is-prejs-loading');
+    this.loadingScreen.classList.add('is-app-loading');
+
+    if (this.progressBar) {
+      this.progressBar.style.width = '0%';
+    }
+
+    if (this.progressText) {
+      this.progressText.textContent = '0%';
+    }
+  }
+
   /**
    * Initialize loading screen UI.
    */
@@ -41,6 +56,7 @@ class LoadingManager {
     } else {
       this.loadingScreen = document.createElement('div');
       this.loadingScreen.id = 'app-loading-screen';
+      this.loadingScreen.classList.add('is-app-loading');
       this.loadingScreen.innerHTML = `
             <div class="loading-container">
                 <div class="loading-logo">
@@ -66,6 +82,7 @@ class LoadingManager {
     this.progressBar = this.loadingScreen.querySelector<HTMLElement>('#loading-progress-fill');
     this.progressText = this.loadingScreen.querySelector<HTMLElement>('#loading-progress-text');
     this.statusText = this.loadingScreen.querySelector<HTMLElement>('#loading-status');
+    this.enterAppLoadingState();
   }
 
   /**

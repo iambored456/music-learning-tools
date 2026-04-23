@@ -12,6 +12,12 @@
   --amt-accent-coral: #cc5b44;
   --amt-accent-olive: #9a8c33;
   --amt-shadow: 0 24px 56px rgba(37, 27, 18, 0.16);
+  --amt-content-max: 1220px;
+  --amt-page-background:
+    radial-gradient(920px 520px at 8% -10%, rgba(197, 123, 47, 0.26), transparent 58%),
+    radial-gradient(860px 540px at 100% 0%, rgba(47, 141, 131, 0.2), transparent 60%),
+    radial-gradient(900px 580px at 50% 120%, rgba(204, 91, 68, 0.14), transparent 62%),
+    linear-gradient(160deg, #ece4d2 0%, var(--amt-bg-cream) 52%, #efe8d9 100%);
   --amt-font-family:
     'Atkinson Hyperlegible Next',
     'Atkinson Hyperlegible Next Variable',
@@ -32,14 +38,38 @@ body {
   min-height: 100%;
 }
 
+html {
+  scrollbar-color: rgba(94, 100, 95, 0.48) rgba(244, 238, 225, 0.38);
+  background: var(--amt-page-background);
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner {
+  background: var(--amt-page-background);
+  background-attachment: fixed;
+}
+
+html::-webkit-scrollbar-corner {
+  background-color: var(--amt-bg-cream);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: rgba(94, 100, 95, 0.38);
+  background-clip: content-box;
+}
+
 body {
   font-family: var(--amt-font-family);
   color: var(--amt-text);
-  background:
-    radial-gradient(920px 520px at 8% -10%, rgba(197, 123, 47, 0.26), transparent 58%),
-    radial-gradient(860px 540px at 100% 0%, rgba(47, 141, 131, 0.2), transparent 60%),
-    radial-gradient(900px 580px at 50% 120%, rgba(204, 91, 68, 0.14), transparent 62%),
-    linear-gradient(160deg, #ece4d2 0%, var(--amt-bg-cream) 52%, #efe8d9 100%);
+  background: transparent;
+  padding-left: min(calc(100vw - 100%), max(0px, calc((100vw - var(--amt-content-max)) / 2)));
 }
 
 h1,
@@ -60,7 +90,7 @@ textarea {
 }
 
 .amt-app {
-  width: min(1220px, 100%);
+  width: min(var(--amt-content-max), 100%);
   margin: 0 auto;
   padding: 2rem 1.1rem 2.8rem;
   display: grid;
@@ -85,9 +115,6 @@ textarea {
 h1 {
   margin: 0;
   line-height: 1.05;
-}
-
-h1 {
   font-size: clamp(2rem, 5.4vw, 3.2rem);
 }
 
@@ -175,10 +202,6 @@ button:focus-visible {
   .hero,
   .planner-shell {
     border-radius: 18px;
-  }
-
-  .hero,
-  .planner-shell {
     padding: 0.85rem;
   }
 

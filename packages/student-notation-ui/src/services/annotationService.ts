@@ -24,6 +24,7 @@ import { getColumnFromX, getRowFromY, getColumnX, getRowY } from '@components/ca
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import PitchGridController from '@components/canvas/PitchGrid/pitchGrid.ts';
 import { isPointInPolygon, isPointNearHull } from '@utils/geometryUtils.ts';
+import { getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { distanceToLineSegment } from '@services/annotation/annotationGeometry.ts';
 import { eraseAnnotationsAtPoint } from '@services/annotation/annotationEraser.ts';
 import { computeConvexHullForSelectedItems, computeLassoSelection, removeFromLassoSelectionAtPoint } from '@services/annotation/annotationLassoSelection.ts';
@@ -124,6 +125,18 @@ class AnnotationService {
   private readonly handleMouseDownBound = this.handleMouseDown.bind(this);
   private readonly handleMouseMoveBound = this.handleMouseMove.bind(this);
   private readonly handleMouseUpBound = this.handleMouseUp.bind(this);
+  private readonly handleWindowMouseMoveBound = (event: MouseEvent): void => {
+    if (!this.shouldTrackLassoOutsideCanvas(event)) {return;}
+    if (event.buttons === 0) {
+      this.handleMouseUp(event);
+      return;
+    }
+    this.handleMouseMove(event);
+  };
+  private readonly handleWindowMouseUpBound = (event: MouseEvent): void => {
+    if (!this.shouldTrackLassoOutsideCanvas(event)) {return;}
+    this.handleMouseUp(event);
+  };
   private readonly handleMouseLeaveBound = this.handleMouseLeave.bind(this);
   private readonly handleDoubleClickBound = this.handleDoubleClick.bind(this);
   private readonly handleWheelBound = this.handleWheel.bind(this);
@@ -209,6 +222,8 @@ class AnnotationService {
     // Fallback: global scroll (e.g., if wrapper not found)
     window.addEventListener('scroll', this.handleScrollBound, { passive: true });
     window.addEventListener('wheel', this.handleWheelBound, { passive: true });
+    window.addEventListener('mousemove', this.handleWindowMouseMoveBound);
+    window.addEventListener('mouseup', this.handleWindowMouseUpBound);
 
     // Add keyboard listener for delete/backspace
     document.addEventListener('keydown', this.handleKeyDownBound);
@@ -235,6 +250,8 @@ class AnnotationService {
 
     window.removeEventListener('scroll', this.handleScrollBound);
     window.removeEventListener('wheel', this.handleWheelBound);
+    window.removeEventListener('mousemove', this.handleWindowMouseMoveBound);
+    window.removeEventListener('mouseup', this.handleWindowMouseUpBound);
     document.removeEventListener('keydown', this.handleKeyDownBound);
   }
 
@@ -341,6 +358,54 @@ class AnnotationService {
     return {
       x: getColumnX(col, options),
       y: getRowY(row, options)
+    };
+  }
+
+  private shouldTrackLassoOutsideCanvas(event: MouseEvent): boolean {
+    return this.isDrawing &&
+      this.currentTool === 'lasso' &&
+      event.target !== this.canvas;
+  }
+
+  private getBoundedCanvasPoint(canvasX: number, canvasY: number): CanvasPoint {
+    const bounds = this.getVisibleCanvasBounds();
+    return {
+      x: Math.max(bounds.minX, Math.min(bounds.maxX, canvasX)),
+      y: Math.max(bounds.minY, Math.min(bounds.maxY, canvasY))
+    };
+  }
+
+  private getVisibleCanvasBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const logicalWidth = Math.max(0, getLogicalCanvasWidth(this.canvas));
+    const logicalHeight = Math.max(0, getLogicalCanvasHeight(this.canvas));
+
+    let left = canvasRect.left;
+    let right = canvasRect.right;
+    let top = canvasRect.top;
+    let bottom = canvasRect.bottom;
+
+    [
+      document.getElementById('grids-wrapper'),
+      document.getElementById('pitch-grid-container')
+    ].forEach(element => {
+      if (!element) {return;}
+      const rect = element.getBoundingClientRect();
+      left = Math.max(left, rect.left);
+      right = Math.min(right, rect.right);
+      top = Math.max(top, rect.top);
+      bottom = Math.min(bottom, rect.bottom);
+    });
+
+    if (right <= left || bottom <= top) {
+      return { minX: 0, maxX: logicalWidth, minY: 0, maxY: logicalHeight };
+    }
+
+    return {
+      minX: Math.max(0, Math.min(logicalWidth, left - canvasRect.left)),
+      maxX: Math.max(0, Math.min(logicalWidth, right - canvasRect.left)),
+      minY: Math.max(0, Math.min(logicalHeight, top - canvasRect.top)),
+      maxY: Math.max(0, Math.min(logicalHeight, bottom - canvasRect.top))
     };
   }
 
@@ -523,9 +588,10 @@ class AnnotationService {
         };
         break;
       case 'lasso':
+        const lassoStartPoint = this.getBoundedCanvasPoint(canvasX, canvasY);
         this.tempAnnotation = {
           type: 'lasso',
-          path: [{ x: canvasX, y: canvasY }]
+          path: [lassoStartPoint]
         };
         break;
     }
@@ -660,7 +726,7 @@ class AnnotationService {
         break;
       case 'lasso':
         if (!isLassoAnnotation(tempAnnotation)) {return;}
-        tempAnnotation.path.push({ x: canvasX, y: canvasY });
+        tempAnnotation.path.push(this.getBoundedCanvasPoint(canvasX, canvasY));
         this.render();
         break;
     }
@@ -836,6 +902,9 @@ class AnnotationService {
 	  }
 
   handleMouseLeave(e: MouseEvent) {
+    if (this.isDrawing && this.currentTool === 'lasso') {
+      return;
+    }
     if (this.isDrawing) {
       this.handleMouseUp(e);
     }
