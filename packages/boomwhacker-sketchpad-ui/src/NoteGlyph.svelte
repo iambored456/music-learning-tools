@@ -35,6 +35,16 @@
     mask-image: url('./assets/stomp.svg');
   }
 
+  .glyph-icon--djembe {
+    -webkit-mask-image: url('./assets/djembe.svg');
+    mask-image: url('./assets/djembe.svg');
+  }
+
+  .glyph-icon--stick-clicks {
+    -webkit-mask-image: url('./assets/stick-clicks.svg');
+    mask-image: url('./assets/stick-clicks.svg');
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;

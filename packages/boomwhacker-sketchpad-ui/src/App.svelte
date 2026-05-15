@@ -41,7 +41,7 @@
     shape: NoteShape;
   };
 
-  type NoteIconId = 'clap' | 'stomp';
+  type NoteIconId = 'clap' | 'stomp' | 'djembe' | 'stick-clicks';
 
   type ExtendedNoteDefinition = NoteDefinition & {
     sampleId?: string;
@@ -74,9 +74,9 @@
 
   type GridZone = 'pickup' | 'main';
 
-  type VoiceIndex = 0 | 1;
+  type VoiceIndex = 0 | 1 | 2 | 3;
 
-  type VoiceCountMode = 1 | 2;
+  type VoiceCountMode = 1 | 2 | 3 | 4;
 
   type VoiceLayoutMode = 'intertwined' | 'separate';
 
@@ -109,7 +109,7 @@
     pickupBeats: number;
     voiceCount: VoiceCountMode;
     voiceLayoutMode: VoiceLayoutMode;
-    voices: [PersistedVoiceCanvas, PersistedVoiceCanvas];
+    voices: PersistedVoiceCanvas[];
   };
 
   type DragPayload = {
@@ -136,9 +136,42 @@
     cellIndex: number;
   };
 
+  type PlaybackStartSelection = {
+    zone: GridZone;
+    rowIndex: number;
+    startIndex: number;
+  };
+
   type GridDropTarget = GridCellRef & {
     voiceIndex: VoiceIndex;
     sixteenthSlot: SixteenthSlot | null;
+  };
+
+  type NoteSelectionRef = GridCellRef & {
+    voiceIndex: VoiceIndex;
+    noteIndex: number;
+  };
+
+  type BoxSelectionState = {
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    active: boolean;
+    additive: boolean;
+    initialSelection: string[];
+  };
+
+  type ClipboardNote = {
+    voiceOffset: number;
+    cellOffset: number;
+    noteIndex: number;
+    note: PlacedNote;
+  };
+
+  type SelectionClipboard = {
+    notes: ClipboardNote[];
   };
 
   type KaraokeAnchor = {
@@ -295,7 +328,7 @@
     document: LibrarySketchDocument;
   };
 
-  const PERCUSSION_NOTE_IDS = ['clap', 'stomp'] as const;
+  const PERCUSSION_NOTE_IDS = ['clap', 'stomp', 'djembe', 'stick-clicks'] as const;
 
   const SUPPLEMENTAL_NOTE_DEFINITIONS: ExtendedNoteDefinition[] = [
     {
@@ -314,11 +347,29 @@
       sampleId: 'roland-tr-909-roland-tr-909-st3t0s3',
       iconId: 'stomp',
     },
+    {
+      id: 'djembe',
+      label: 'Djembe',
+      interval: 0,
+      colorId: 'djembe',
+      sampleId: 'kpr-series-kprlotom',
+      iconId: 'djembe',
+    },
+    {
+      id: 'stick-clicks',
+      label: 'Stick Clicks',
+      interval: 0,
+      colorId: 'stick-clicks',
+      sampleId: 'roland-tr-909-roland-tr-909-hhcd4',
+      iconId: 'stick-clicks',
+    },
   ];
 
   const SUPPLEMENTAL_NOTE_COLORS = {
     clap: '#f6c85f',
     stomp: '#c58b66',
+    djembe: '#8fc7b5',
+    'stick-clicks': '#b7a2d8',
   } as const;
 
   const CHROMANOTES_PALETTE: Record<string, string> = {
@@ -336,6 +387,8 @@
     '7': '#b9017a',
     clap: SUPPLEMENTAL_NOTE_COLORS.clap,
     stomp: SUPPLEMENTAL_NOTE_COLORS.stomp,
+    djembe: SUPPLEMENTAL_NOTE_COLORS.djembe,
+    'stick-clicks': SUPPLEMENTAL_NOTE_COLORS['stick-clicks'],
   };
 
   const model = createBoomwhackerSketchpadModel();
@@ -423,7 +476,7 @@
   const DEFAULT_VOICE_COUNT: VoiceCountMode = 1;
   const DEFAULT_VOICE_LAYOUT_MODE: VoiceLayoutMode = 'intertwined';
   const DEFAULT_TRACK_STYLE: TrackStyle = 'stacked';
-  const VOICE_INDEXES = [0, 1] as const;
+  const VOICE_INDEXES = [0, 1, 2, 3] as const;
   const HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO = 0.34;
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
@@ -436,22 +489,27 @@
   let isPlaying = false;
   let isLooping = false;
   let playbackIndex = 0;
+  let playbackPaused = false;
+  let playbackStartSelection: PlaybackStartSelection | null = null;
+  let selectedNoteKeys = new Set<string>();
+  let boxSelectionState: BoxSelectionState | null = null;
+  let selectionClipboard: SelectionClipboard | null = null;
   let playbackTimer: ReturnType<typeof setInterval> | null = null;
   let pendingPlaybackTimeouts = new Set<ReturnType<typeof setTimeout>>();
-  let voicePlaybackCursors: [GridCellRef | null, GridCellRef | null] = [null, null];
-  let voiceKaraokeBallRowIndexes: [number | null, number | null] = [null, null];
-  let voiceKaraokeBallLeftPercents: [number, number] = [50, 50];
-  let voiceKaraokeBallPinnedLeftPxs: [number | null, number | null] = [null, null];
-  let voiceKaraokeBallArcOffsetPxs: [number, number] = [0, 0];
+  let voicePlaybackCursors: Array<GridCellRef | null> = VOICE_INDEXES.map(() => null);
+  let voiceKaraokeBallRowIndexes: Array<number | null> = VOICE_INDEXES.map(() => null);
+  let voiceKaraokeBallLeftPercents: number[] = VOICE_INDEXES.map(() => 50);
+  let voiceKaraokeBallPinnedLeftPxs: Array<number | null> = VOICE_INDEXES.map(() => null);
+  let voiceKaraokeBallArcOffsetPxs: number[] = VOICE_INDEXES.map(() => 0);
   let karaokeArcHeightPx = 64;
   let karaokeBallSizePx = 40;
   let countInEnabled = true;
   let macrobeatMetronomeEnabled = false;
   let countInDisplayNumber: number | null = null;
   let metronomeVolume = DEFAULT_METRONOME_VOLUME;
-  let voiceKaraokeAnchors: [KaraokeAnchor | null, KaraokeAnchor | null] = [null, null];
-  let voiceKaraokeAnimationFrames: [number | null, number | null] = [null, null];
-  let voiceKaraokeAnimationTokens: [number, number] = [0, 0];
+  let voiceKaraokeAnchors: Array<KaraokeAnchor | null> = VOICE_INDEXES.map(() => null);
+  let voiceKaraokeAnimationFrames: Array<number | null> = VOICE_INDEXES.map(() => null);
+  let voiceKaraokeAnimationTokens: number[] = VOICE_INDEXES.map(() => 0);
   let horizontalPlaybackHighway: HorizontalPlaybackHighwayState = {
     activationIndex: null,
     pinnedVoiceIndex: null,
@@ -460,14 +518,14 @@
   let horizontalPlaybackScrollFrame: number | null = null;
   let horizontalPlaybackScrollToken = 0;
   let horizontalPlaybackRunwayPx = 0;
-  let voiceHorizontalPlaybackLaneShiftPxs: [number, number] = [0, 0];
-  let voiceHorizontalPlaybackLaneShiftFrames: [number | null, number | null] = [null, null];
-  let voiceHorizontalPlaybackLaneShiftTokens: [number, number] = [0, 0];
-  let voiceTrackRowElements: [Array<HTMLElement | null>, Array<HTMLElement | null>] = [[], []];
-  let voicePlaybackHighlights: [PlaybackHighlight | null, PlaybackHighlight | null] = [null, null];
-  let voicePlaybackHighlightAnchors: [KaraokeAnchor | null, KaraokeAnchor | null] = [null, null];
-  let voicePlaybackPulseFlips: [boolean, boolean] = [false, false];
-  let voicePlayedCellIndexes: [Set<number>, Set<number>] = [new Set<number>(), new Set<number>()];
+  let voiceHorizontalPlaybackLaneShiftPxs: number[] = VOICE_INDEXES.map(() => 0);
+  let voiceHorizontalPlaybackLaneShiftFrames: Array<number | null> = VOICE_INDEXES.map(() => null);
+  let voiceHorizontalPlaybackLaneShiftTokens: number[] = VOICE_INDEXES.map(() => 0);
+  let voiceTrackRowElements: Array<Array<HTMLElement | null>> = VOICE_INDEXES.map(() => []);
+  let voicePlaybackHighlights: Array<PlaybackHighlight | null> = VOICE_INDEXES.map(() => null);
+  let voicePlaybackHighlightAnchors: Array<KaraokeAnchor | null> = VOICE_INDEXES.map(() => null);
+  let voicePlaybackPulseFlips: boolean[] = VOICE_INDEXES.map(() => false);
+  let voicePlayedCellIndexes: Array<Set<number>> = VOICE_INDEXES.map(() => new Set<number>());
 
   let dragPayload: DragPayload | null = null;
   let dragOverCell: GridDropTarget | null = null;
@@ -535,11 +593,12 @@
   let voiceLayoutMode: VoiceLayoutMode = DEFAULT_VOICE_LAYOUT_MODE;
   let trackStyle: TrackStyle = DEFAULT_TRACK_STYLE;
   let activeCanvasVoiceIndex: VoiceIndex = 0;
-  let voicePickupRows: [GridRow, GridRow] = [createEmptyRow('pickup_a'), createEmptyRow('pickup_b')];
-  let voiceRows: [GridRow[], GridRow[]] = [
-    Array.from({ length: INITIAL_ROWS }, () => createEmptyRow('row_a')),
-    Array.from({ length: INITIAL_ROWS }, () => createEmptyRow('row_b')),
-  ];
+  let mutedVoiceStates: boolean[] = VOICE_INDEXES.map(() => false);
+  let soloedVoiceStates: boolean[] = VOICE_INDEXES.map(() => false);
+  let voicePickupRows: GridRow[] = VOICE_INDEXES.map((voiceIndex) => createEmptyRow(`pickup_${voiceKey(voiceIndex)}`));
+  let voiceRows: GridRow[][] = VOICE_INDEXES.map((voiceIndex) =>
+    Array.from({ length: INITIAL_ROWS }, () => createEmptyRow(`row_${voiceKey(voiceIndex)}`)),
+  );
   let karaokeOverlayBalls: KaraokeOverlayBall[] = [];
   let renderedTrackRows: RenderedTrackRow[] = [];
   let canvasPersistenceReady = false;
@@ -580,9 +639,10 @@
     voiceKaraokeBallArcOffsetPxs;
     karaokeBallSizePx;
     canvasScrollRevision;
+    voiceCount;
     karaokeOverlayBalls = VOICE_INDEXES.map((voiceIndex) => ({
       voiceIndex,
-      style: karaokeBallOverlayStyle(voiceIndex),
+      style: isVoiceVisible(voiceIndex) ? karaokeBallOverlayStyle(voiceIndex) : null,
     }));
   }
   $: {
@@ -592,6 +652,23 @@
     voiceLayoutMode;
     trackStyle;
     renderedTrackRows = buildRenderedTrackRows();
+  }
+  $: {
+    voiceRows;
+    pickupBeats;
+    if (playbackStartSelection) {
+      const refreshedStartIndex = playbackStartIndexForMeasure(playbackStartSelection.zone, playbackStartSelection.rowIndex);
+      if (refreshedStartIndex === null) {
+        playbackStartSelection = null;
+        if (!isPlaying && !playbackPaused) playbackIndex = 0;
+      } else if (refreshedStartIndex !== playbackStartSelection.startIndex) {
+        playbackStartSelection = {
+          ...playbackStartSelection,
+          startIndex: refreshedStartIndex,
+        };
+        if (!isPlaying && !playbackPaused) playbackIndex = refreshedStartIndex;
+      }
+    }
   }
 
   $: if (canvasPersistenceReady) {
@@ -662,6 +739,12 @@
     window.addEventListener('pointermove', handleWindowPointerMoveForBankActivation);
     window.addEventListener('pointerup', handleWindowPointerUpForBankActivation);
     window.addEventListener('pointercancel', handleWindowPointerCancelForBankActivation);
+    window.addEventListener('pointermove', handleWindowPointerMoveForBoxSelection);
+    window.addEventListener('pointerup', handleWindowPointerUpForBoxSelection);
+    window.addEventListener('pointercancel', handleWindowPointerCancelForBoxSelection);
+    window.addEventListener('mousedown', handleWindowMouseDownForBoxSelection);
+    window.addEventListener('mousemove', handleWindowMouseMoveForBoxSelection);
+    window.addEventListener('mouseup', handleWindowMouseUpForBoxSelection);
     const handleViewportDiagnostics = () => {
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
@@ -720,6 +803,12 @@
       window.removeEventListener('pointermove', handleWindowPointerMoveForBankActivation);
       window.removeEventListener('pointerup', handleWindowPointerUpForBankActivation);
       window.removeEventListener('pointercancel', handleWindowPointerCancelForBankActivation);
+      window.removeEventListener('pointermove', handleWindowPointerMoveForBoxSelection);
+      window.removeEventListener('pointerup', handleWindowPointerUpForBoxSelection);
+      window.removeEventListener('pointercancel', handleWindowPointerCancelForBoxSelection);
+      window.removeEventListener('mousedown', handleWindowMouseDownForBoxSelection);
+      window.removeEventListener('mousemove', handleWindowMouseMoveForBoxSelection);
+      window.removeEventListener('mouseup', handleWindowMouseUpForBoxSelection);
       window.removeEventListener('resize', handleViewportDiagnostics);
       window.removeEventListener('orientationchange', handleViewportDiagnostics);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportDiagnostics);
@@ -744,12 +833,12 @@
     };
   }
 
-  function voiceLabel(voiceIndex: VoiceIndex): 'A' | 'B' {
-    return voiceIndex === 0 ? 'A' : 'B';
+  function voiceLabel(voiceIndex: VoiceIndex): 'A' | 'B' | 'C' | 'D' {
+    return ['A', 'B', 'C', 'D'][voiceIndex] as 'A' | 'B' | 'C' | 'D';
   }
 
-  function voiceKey(voiceIndex: VoiceIndex): 'a' | 'b' {
-    return voiceIndex === 0 ? 'a' : 'b';
+  function voiceKey(voiceIndex: VoiceIndex): 'a' | 'b' | 'c' | 'd' {
+    return ['a', 'b', 'c', 'd'][voiceIndex] as 'a' | 'b' | 'c' | 'd';
   }
 
   function createEmptyVoiceRows(voiceIndex: VoiceIndex, rowCount = INITIAL_ROWS): GridRow[] {
@@ -765,11 +854,39 @@
   }
 
   function visibleVoiceIndices(): VoiceIndex[] {
-    return voiceCount === 2 ? [...VOICE_INDEXES] : [0];
+    return VOICE_INDEXES.slice(0, voiceCount);
+  }
+
+  function coerceVoiceIndex(value: number): VoiceIndex | null {
+    return VOICE_INDEXES.includes(value as VoiceIndex) ? value as VoiceIndex : null;
   }
 
   function isVoiceVisible(voiceIndex: VoiceIndex): boolean {
-    return voiceIndex === 0 || voiceCount === 2;
+    return voiceIndex < voiceCount;
+  }
+
+  function isVoiceMuted(voiceIndex: VoiceIndex): boolean {
+    return mutedVoiceStates[voiceIndex] === true;
+  }
+
+  function isVoiceSoloed(voiceIndex: VoiceIndex): boolean {
+    return soloedVoiceStates[voiceIndex] === true;
+  }
+
+  function isVoiceAudible(voiceIndex: VoiceIndex): boolean {
+    if (!isVoiceVisible(voiceIndex)) return false;
+    if (mutedVoiceStates[voiceIndex]) return false;
+    return !soloedVoiceStates.some(Boolean) || soloedVoiceStates[voiceIndex] === true;
+  }
+
+  function toggleVoiceMute(event: MouseEvent, voiceIndex: VoiceIndex): void {
+    event.stopPropagation();
+    mutedVoiceStates = mutedVoiceStates.map((muted, index) => index === voiceIndex ? !muted : muted);
+  }
+
+  function toggleVoiceSolo(event: MouseEvent, voiceIndex: VoiceIndex): void {
+    event.stopPropagation();
+    soloedVoiceStates = soloedVoiceStates.map((soloed, index) => index === voiceIndex ? !soloed : soloed);
   }
 
   function rowsForVoice(voiceIndex: VoiceIndex): GridRow[] {
@@ -784,6 +901,10 @@
     activeCanvasVoiceIndex = voiceIndex;
   }
 
+  function coerceVoiceCount(value: unknown): VoiceCountMode {
+    return value === 4 ? 4 : value === 3 ? 3 : value === 2 ? 2 : 1;
+  }
+
   function ensureVoiceRowCount(rows: GridRow[], voiceIndex: VoiceIndex, rowCount: number): GridRow[] {
     if (rows.length === rowCount) return rows;
 
@@ -796,14 +917,13 @@
   }
 
   function normalizeVoiceRows(
-    nextVoiceRows: [GridRow[], GridRow[]],
+    nextVoiceRows: GridRow[][],
     preferredRowCount: number | null = null,
-  ): [GridRow[], GridRow[]] {
-    const rowCount = Math.max(preferredRowCount ?? 0, nextVoiceRows[0].length, nextVoiceRows[1].length, 1);
-    return [
-      ensureVoiceRowCount(nextVoiceRows[0], 0, rowCount),
-      ensureVoiceRowCount(nextVoiceRows[1], 1, rowCount),
-    ];
+  ): GridRow[][] {
+    const rowCount = Math.max(preferredRowCount ?? 0, ...VOICE_INDEXES.map((voiceIndex) => nextVoiceRows[voiceIndex]?.length ?? 0), 1);
+    return VOICE_INDEXES.map((voiceIndex) =>
+      ensureVoiceRowCount(nextVoiceRows[voiceIndex] ?? [], voiceIndex, rowCount),
+    );
   }
 
   function buildRenderedTrackRows(): RenderedTrackRow[] {
@@ -825,7 +945,7 @@
 
     if (voiceLayoutMode === 'intertwined') {
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-        for (const voiceIndex of VOICE_INDEXES) {
+        for (const voiceIndex of visibleVoiceIndices()) {
           rows.push({
             voiceIndex,
             rowIndex,
@@ -838,7 +958,7 @@
       return rows;
     }
 
-    for (const voiceIndex of VOICE_INDEXES) {
+    for (const voiceIndex of visibleVoiceIndices()) {
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
         rows.push({
           voiceIndex,
@@ -932,6 +1052,8 @@
     const iconId = noteDefinitionFromId(noteId)?.iconId;
     if (iconId === 'clap') return 'glyph-icon--clap';
     if (iconId === 'stomp') return 'glyph-icon--stomp';
+    if (iconId === 'djembe') return 'glyph-icon--djembe';
+    if (iconId === 'stick-clicks') return 'glyph-icon--stick-clicks';
     return null;
   }
 
@@ -1273,13 +1395,13 @@
   }
 
   function applyVoiceCanvasState(
-    nextVoiceRows: [GridRow[], GridRow[]],
-    nextVoicePickupRows: [GridRow, GridRow],
+    nextVoiceRows: GridRow[][],
+    nextVoicePickupRows: GridRow[],
     nextVoiceCount: VoiceCountMode = voiceCount,
     nextVoiceLayoutMode: VoiceLayoutMode = voiceLayoutMode,
   ): void {
     voiceRows = normalizeVoiceRows(nextVoiceRows);
-    voicePickupRows = nextVoicePickupRows;
+    voicePickupRows = VOICE_INDEXES.map((voiceIndex) => nextVoicePickupRows[voiceIndex] ?? createEmptyVoicePickupRow(voiceIndex));
     voiceCount = nextVoiceCount;
     voiceLayoutMode = nextVoiceLayoutMode;
     if (!isVoiceVisible(activeCanvasVoiceIndex)) {
@@ -1292,22 +1414,17 @@
       pickupBeats,
       voiceCount,
       voiceLayoutMode,
-      voices: [
-        serializeVoiceCanvas(voiceRows[0], voicePickupRows[0]),
-        serializeVoiceCanvas(voiceRows[1], voicePickupRows[1]),
-      ],
+      voices: VOICE_INDEXES.map((voiceIndex) => serializeVoiceCanvas(voiceRows[voiceIndex], voicePickupRows[voiceIndex])),
     };
   }
 
   function applyCanvasHistorySnapshot(snapshot: CanvasHistorySnapshot): void {
-    const restoredVoiceRows = normalizeVoiceRows([
-      deserializeRowsInput(snapshot.voices[0]?.rows, 0),
-      deserializeRowsInput(snapshot.voices[1]?.rows, 1),
-    ]);
-    const restoredVoicePickupRows: [GridRow, GridRow] = [
-      deserializePickupRowInput(snapshot.voices[0]?.pickupCells, 0, snapshot.pickupBeats),
-      deserializePickupRowInput(snapshot.voices[1]?.pickupCells, 1, snapshot.pickupBeats),
-    ];
+    const restoredVoiceRows = normalizeVoiceRows(VOICE_INDEXES.map((voiceIndex) =>
+      deserializeRowsInput(snapshot.voices[voiceIndex]?.rows, voiceIndex),
+    ));
+    const restoredVoicePickupRows = VOICE_INDEXES.map((voiceIndex) =>
+      deserializePickupRowInput(snapshot.voices[voiceIndex]?.pickupCells, voiceIndex, snapshot.pickupBeats),
+    );
 
     suppressCanvasHistoryTracking = true;
     pickupBeats = snapshot.pickupBeats;
@@ -1378,8 +1495,8 @@
   function persistCanvasState(): void {
     if (typeof window === 'undefined') return;
 
-    const primaryVoice = serializeVoiceCanvas(voiceRows[0], voicePickupRows[0]);
-    const secondaryVoice = serializeVoiceCanvas(voiceRows[1], voicePickupRows[1]);
+    const persistedVoices = VOICE_INDEXES.map((voiceIndex) => serializeVoiceCanvas(voiceRows[voiceIndex], voicePickupRows[voiceIndex]));
+    const primaryVoice = persistedVoices[0];
 
     const persistedState: PersistedCanvasState = {
       version: 1,
@@ -1390,7 +1507,7 @@
       voiceCount,
       voiceLayoutMode,
       trackStyle,
-      voices: [primaryVoice, secondaryVoice],
+      voices: persistedVoices,
     };
 
     try {
@@ -1426,7 +1543,7 @@
       : DEFAULTS.MICROBEAT_TEMPO;
 
     const rowsInput = Array.isArray(persisted.rows) ? persisted.rows : [];
-    const storedVoiceCount = persisted.voiceCount === 2 ? 2 : 1;
+    const storedVoiceCount = coerceVoiceCount(persisted.voiceCount);
     const storedVoiceLayoutMode = persisted.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
     const storedTrackStyle = persisted.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
     const persistedVoices = Array.isArray(persisted.voices) ? persisted.voices : [];
@@ -1434,18 +1551,17 @@
       rows: rowsInput,
       pickupCells: Array.isArray(persisted.pickupCells) ? persisted.pickupCells : [],
     };
-    const secondaryVoiceSource = (persistedVoices[1] as PersistedVoiceCanvas | undefined) ?? emptyVoiceCanvas(
-      Math.max(Array.isArray(primaryVoiceSource.rows) ? primaryVoiceSource.rows.length : 0, INITIAL_ROWS),
-      1,
+    const fallbackRowCount = Math.max(Array.isArray(primaryVoiceSource.rows) ? primaryVoiceSource.rows.length : 0, INITIAL_ROWS);
+    const voiceSources = VOICE_INDEXES.map((voiceIndex) =>
+      (persistedVoices[voiceIndex] as PersistedVoiceCanvas | undefined) ??
+      (voiceIndex === 0 ? primaryVoiceSource : emptyVoiceCanvas(fallbackRowCount, voiceIndex)),
     );
-    const restoredVoiceRows = normalizeVoiceRows([
-      deserializeRowsInput(primaryVoiceSource.rows, 0),
-      deserializeRowsInput(secondaryVoiceSource.rows, 1),
-    ]);
-    const restoredVoicePickupRows: [GridRow, GridRow] = [
-      deserializePickupRowInput(primaryVoiceSource.pickupCells, 0, nextPickupBeats),
-      deserializePickupRowInput(secondaryVoiceSource.pickupCells, 1, nextPickupBeats),
-    ];
+    const restoredVoiceRows = normalizeVoiceRows(VOICE_INDEXES.map((voiceIndex) =>
+      deserializeRowsInput(voiceSources[voiceIndex].rows, voiceIndex),
+    ));
+    const restoredVoicePickupRows = VOICE_INDEXES.map((voiceIndex) =>
+      deserializePickupRowInput(voiceSources[voiceIndex].pickupCells, voiceIndex, nextPickupBeats),
+    );
 
     pickupBeats = nextPickupBeats;
     applyVoiceCanvasState(restoredVoiceRows, restoredVoicePickupRows, storedVoiceCount, storedVoiceLayoutMode);
@@ -1771,8 +1887,8 @@
   // --- Share feature ---
 
   function buildShareDocument(): ShareDocument {
-    const primaryVoice = serializeVoiceCanvas(voiceRows[0], voicePickupRows[0]);
-    const secondaryVoice = serializeVoiceCanvas(voiceRows[1], voicePickupRows[1]);
+    const shareVoices = VOICE_INDEXES.map((voiceIndex) => serializeVoiceCanvas(voiceRows[voiceIndex], voicePickupRows[voiceIndex]));
+    const primaryVoice = shareVoices[0];
 
     return {
       v: 1,
@@ -1785,7 +1901,7 @@
       voiceCount,
       voiceLayoutMode,
       trackStyle,
-      voices: [primaryVoice, secondaryVoice],
+      voices: shareVoices,
     };
   }
 
@@ -1906,7 +2022,13 @@
     if (typeof doc.pickupBeats !== 'number') return { ok: false, reason: 'schema' };
     if (!Array.isArray(doc.rows)) return { ok: false, reason: 'schema' };
     if (!Array.isArray(doc.pickupCells)) return { ok: false, reason: 'schema' };
-    if (doc.voiceCount !== undefined && doc.voiceCount !== 1 && doc.voiceCount !== 2) return { ok: false, reason: 'schema' };
+    if (
+      doc.voiceCount !== undefined &&
+      doc.voiceCount !== 1 &&
+      doc.voiceCount !== 2 &&
+      doc.voiceCount !== 3 &&
+      doc.voiceCount !== 4
+    ) return { ok: false, reason: 'schema' };
     if (doc.voiceLayoutMode !== undefined && doc.voiceLayoutMode !== 'intertwined' && doc.voiceLayoutMode !== 'separate') {
       return { ok: false, reason: 'schema' };
     }
@@ -1933,7 +2055,7 @@
     model.setMicrobeatTempo(doc.tempo);
 
     const clampedPickupBeats = Math.max(0, Math.min(PICKUP_MAX_BEATS, Math.round(doc.pickupBeats)));
-    const nextVoiceCount = doc.voiceCount === 2 ? 2 : 1;
+    const nextVoiceCount = coerceVoiceCount(doc.voiceCount);
     const nextVoiceLayoutMode = doc.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
     const nextTrackStyle = doc.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
     const docVoices = Array.isArray(doc.voices) ? doc.voices : [];
@@ -1941,18 +2063,17 @@
       rows: doc.rows,
       pickupCells: doc.pickupCells,
     };
-    const secondaryVoiceSource = (docVoices[1] as PersistedVoiceCanvas | undefined) ?? emptyVoiceCanvas(
-      Math.max(Array.isArray(primaryVoiceSource.rows) ? primaryVoiceSource.rows.length : 0, INITIAL_ROWS),
-      1,
+    const fallbackRowCount = Math.max(Array.isArray(primaryVoiceSource.rows) ? primaryVoiceSource.rows.length : 0, INITIAL_ROWS);
+    const voiceSources = VOICE_INDEXES.map((voiceIndex) =>
+      (docVoices[voiceIndex] as PersistedVoiceCanvas | undefined) ??
+      (voiceIndex === 0 ? primaryVoiceSource : emptyVoiceCanvas(fallbackRowCount, voiceIndex)),
     );
-    const restoredVoiceRows = normalizeVoiceRows([
-      deserializeRowsInput(primaryVoiceSource.rows, 0),
-      deserializeRowsInput(secondaryVoiceSource.rows, 1),
-    ]);
-    const restoredVoicePickupRows: [GridRow, GridRow] = [
-      deserializePickupRowInput(primaryVoiceSource.pickupCells, 0, clampedPickupBeats),
-      deserializePickupRowInput(secondaryVoiceSource.pickupCells, 1, clampedPickupBeats),
-    ];
+    const restoredVoiceRows = normalizeVoiceRows(VOICE_INDEXES.map((voiceIndex) =>
+      deserializeRowsInput(voiceSources[voiceIndex].rows, voiceIndex),
+    ));
+    const restoredVoicePickupRows = VOICE_INDEXES.map((voiceIndex) =>
+      deserializePickupRowInput(voiceSources[voiceIndex].pickupCells, voiceIndex, clampedPickupBeats),
+    );
 
     pickupBeats = clampedPickupBeats;
     applyVoiceCanvasState(restoredVoiceRows, restoredVoicePickupRows, nextVoiceCount, nextVoiceLayoutMode);
@@ -2543,8 +2664,32 @@
     clearPlacementHoverPreview();
   }
 
+  function handleWindowMouseDownForBoxSelection(event: MouseEvent): void {
+    if (boxSelectionState) return;
+    if (event.button !== 0) return;
+    if (dragPayload || tapPlacementPayload || eraserMode || isPlaying) return;
+
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!canvasPanelElement?.contains(target)) return;
+    if (target.closest('.macrobeat-cell, .placed-note, .voice-control-bar, button, input, textarea, select')) return;
+
+    event.preventDefault();
+    boxSelectionState = {
+      pointerId: null,
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      active: false,
+      additive: event.shiftKey || event.ctrlKey || event.metaKey,
+      initialSelection: Array.from(selectedNoteKeys),
+    };
+  }
+
   function handleCanvasMouseLeave(): void {
     if (dragPayload) return;
+    if (boxSelectionState) return;
 
     clearPlacementHoverPreview();
   }
@@ -2577,8 +2722,8 @@
   }
 
   function removeDraggedSource(
-    rowsByVoice: [GridRow[], GridRow[]],
-    pickupCellsByVoice: [Array<GridCellContent | null>, Array<GridCellContent | null>],
+    rowsByVoice: GridRow[][],
+    pickupCellsByVoice: Array<Array<GridCellContent | null>>,
     payload: DragPayload,
   ): void {
     if (payload.voiceIndex === undefined || payload.zone === undefined || payload.rowIndex === undefined || payload.cellIndex === undefined) return;
@@ -2615,11 +2760,8 @@
 
   function updateGridData(
     mutator: (
-      rowsByVoice: [GridRow[], GridRow[]],
-      pickupCellsByVoice: [
-        Array<GridCellContent | null>,
-        Array<GridCellContent | null>,
-      ],
+      rowsByVoice: GridRow[][],
+      pickupCellsByVoice: Array<Array<GridCellContent | null>>,
     ) => void,
   ): void {
     const nextVoiceRows = VOICE_INDEXES.map((voiceIndex) =>
@@ -2627,25 +2769,296 @@
         id: row.id,
         cells: row.cells.map((cell) => cloneCellContent(cell)),
       })),
-    ) as [GridRow[], GridRow[]];
+    );
     const nextVoicePickupCells = VOICE_INDEXES.map((voiceIndex) =>
       voicePickupRows[voiceIndex].cells.map((cell) => cloneCellContent(cell)),
-    ) as [Array<GridCellContent | null>, Array<GridCellContent | null>];
+    );
 
     mutator(nextVoiceRows, nextVoicePickupCells);
     applyVoiceCanvasState(
-      normalizeVoiceRows(nextVoiceRows, Math.max(nextVoiceRows[0].length, nextVoiceRows[1].length, 1)),
-      [
-        {
-          ...voicePickupRows[0],
-          cells: nextVoicePickupCells[0],
-        },
-        {
-          ...voicePickupRows[1],
-          cells: nextVoicePickupCells[1],
-        },
-      ],
+      normalizeVoiceRows(nextVoiceRows, Math.max(...nextVoiceRows.map((rows) => rows.length), 1)),
+      VOICE_INDEXES.map((voiceIndex) => ({
+        ...voicePickupRows[voiceIndex],
+        cells: nextVoicePickupCells[voiceIndex],
+      })),
     );
+    pruneSelectedNotes();
+  }
+
+  function noteSelectionKey(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    noteIndex: number,
+  ): string {
+    return `${voiceIndex}:${zone}:${rowIndex}:${cellIndex}:${noteIndex}`;
+  }
+
+  function noteSelectionRefFromKey(key: string): NoteSelectionRef | null {
+    const [voiceValue, zoneValue, rowValue, cellValue, noteValue] = key.split(':');
+    const voiceIndex = coerceVoiceIndex(Number(voiceValue));
+    const zone = zoneValue === 'pickup' || zoneValue === 'main' ? zoneValue : null;
+    const rowIndex = Number(rowValue);
+    const cellIndex = Number(cellValue);
+    const noteIndex = Number(noteValue);
+    if (voiceIndex === null || zone === null) return null;
+    if (!Number.isInteger(rowIndex) || !Number.isInteger(cellIndex) || !Number.isInteger(noteIndex)) return null;
+    return { voiceIndex, zone, rowIndex, cellIndex, noteIndex };
+  }
+
+  function noteAtSelectionRef(ref: NoteSelectionRef): PlacedNote | null {
+    const cell =
+      ref.zone === 'pickup'
+        ? pickupRowForVoice(ref.voiceIndex).cells[ref.cellIndex]
+        : rowsForVoice(ref.voiceIndex)[ref.rowIndex]?.cells[ref.cellIndex];
+    if (!cell) return null;
+
+    if (cell.shape === 'oval' || cell.shape === 'circle') {
+      if (cell.shape === 'circle' && cell.role !== 'start') return null;
+      return ref.noteIndex === 0 ? cell.notes[0] : null;
+    }
+
+    return cell.notes[ref.noteIndex] ?? null;
+  }
+
+  function clearSelectedNotes(): void {
+    if (selectedNoteKeys.size === 0) return;
+    selectedNoteKeys = new Set<string>();
+  }
+
+  function toggleNoteSelection(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    noteIndex: number,
+  ): void {
+    const key = noteSelectionKey(voiceIndex, zone, rowIndex, cellIndex, noteIndex);
+    const next = new Set(selectedNoteKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    selectedNoteKeys = next;
+  }
+
+  function pruneSelectedNotes(): void {
+    if (selectedNoteKeys.size === 0) return;
+
+    const next = new Set<string>();
+    for (const key of selectedNoteKeys) {
+      const ref = noteSelectionRefFromKey(key);
+      if (ref && noteAtSelectionRef(ref)) next.add(key);
+    }
+    selectedNoteKeys = next;
+  }
+
+  function viewportRectsIntersect(a: DOMRect, b: DOMRect): boolean {
+    return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+  }
+
+  function boxSelectionViewportRect(): DOMRect | null {
+    if (!boxSelectionState) return null;
+
+    const left = Math.min(boxSelectionState.startX, boxSelectionState.currentX);
+    const top = Math.min(boxSelectionState.startY, boxSelectionState.currentY);
+    const width = Math.abs(boxSelectionState.currentX - boxSelectionState.startX);
+    const height = Math.abs(boxSelectionState.currentY - boxSelectionState.startY);
+    return new DOMRect(left, top, width, height);
+  }
+
+  function boxSelectionOverlayStyle(): string | null {
+    const selectionRect = boxSelectionViewportRect();
+    const panelRect = canvasPanelElement?.getBoundingClientRect() ?? null;
+    if (!selectionRect || !panelRect || !boxSelectionState?.active) return null;
+
+    return [
+      `left:${selectionRect.left - panelRect.left}px`,
+      `top:${selectionRect.top - panelRect.top}px`,
+      `width:${selectionRect.width}px`,
+      `height:${selectionRect.height}px`,
+    ].join(';');
+  }
+
+  function updateSelectedNotesFromBox(): void {
+    const selectionRect = boxSelectionViewportRect();
+    if (!selectionRect || typeof document === 'undefined') return;
+
+    const next = new Set<string>(boxSelectionState?.additive ? boxSelectionState.initialSelection : []);
+    const noteElements = document.querySelectorAll<HTMLElement>('.placed-note[data-selection-key]');
+    for (const noteElement of noteElements) {
+      const key = noteElement.dataset.selectionKey;
+      if (!key) continue;
+      if (viewportRectsIntersect(selectionRect, noteElement.getBoundingClientRect())) {
+        next.add(key);
+      }
+    }
+    selectedNoteKeys = next;
+  }
+
+  function finishBoxSelection(): void {
+    if (!boxSelectionState) return;
+
+    if (boxSelectionState.active) {
+      updateSelectedNotesFromBox();
+    } else if (!boxSelectionState.additive) {
+      clearSelectedNotes();
+    }
+    boxSelectionState = null;
+  }
+
+  function handleWindowPointerMoveForBoxSelection(event: PointerEvent): void {
+    if (!boxSelectionState || event.pointerId !== boxSelectionState.pointerId) return;
+
+    const deltaX = event.clientX - boxSelectionState.startX;
+    const deltaY = event.clientY - boxSelectionState.startY;
+    const active = boxSelectionState.active || Math.hypot(deltaX, deltaY) >= 4;
+    boxSelectionState = {
+      ...boxSelectionState,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      active,
+    };
+
+    if (active) {
+      event.preventDefault();
+      updateSelectedNotesFromBox();
+    }
+  }
+
+  function handleWindowPointerUpForBoxSelection(event: PointerEvent): void {
+    if (!boxSelectionState || event.pointerId !== boxSelectionState.pointerId) return;
+    finishBoxSelection();
+  }
+
+  function handleWindowPointerCancelForBoxSelection(event: PointerEvent): void {
+    if (!boxSelectionState || event.pointerId !== boxSelectionState.pointerId) return;
+    finishBoxSelection();
+  }
+
+  function handleWindowMouseMoveForBoxSelection(event: MouseEvent): void {
+    if (!boxSelectionState || boxSelectionState.pointerId !== null) return;
+
+    const deltaX = event.clientX - boxSelectionState.startX;
+    const deltaY = event.clientY - boxSelectionState.startY;
+    const active = boxSelectionState.active || Math.hypot(deltaX, deltaY) >= 4;
+    boxSelectionState = {
+      ...boxSelectionState,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      active,
+    };
+
+    if (active) {
+      event.preventDefault();
+      updateSelectedNotesFromBox();
+    }
+  }
+
+  function handleWindowMouseUpForBoxSelection(): void {
+    if (!boxSelectionState || boxSelectionState.pointerId !== null) return;
+    finishBoxSelection();
+  }
+
+  function copySelectedNotesToClipboard(): void {
+    const refs = Array.from(selectedNoteKeys)
+      .map((key) => noteSelectionRefFromKey(key))
+      .filter((ref): ref is NoteSelectionRef => Boolean(ref));
+    const selectedNotes = refs
+      .map((ref) => {
+        const note = noteAtSelectionRef(ref);
+        const absoluteIndex = absolutePlaybackCellIndex(ref.zone, ref.rowIndex, ref.cellIndex);
+        return note && absoluteIndex !== null ? { ref, note, absoluteIndex } : null;
+      })
+      .filter((entry): entry is { ref: NoteSelectionRef; note: PlacedNote; absoluteIndex: number } => Boolean(entry));
+
+    if (selectedNotes.length === 0) return;
+
+    const minVoiceIndex = Math.min(...selectedNotes.map((entry) => entry.ref.voiceIndex));
+    const minAbsoluteIndex = Math.min(...selectedNotes.map((entry) => entry.absoluteIndex));
+    selectionClipboard = {
+      notes: selectedNotes.map((entry) => ({
+        voiceOffset: entry.ref.voiceIndex - minVoiceIndex,
+        cellOffset: entry.absoluteIndex - minAbsoluteIndex,
+        noteIndex: entry.ref.noteIndex,
+        note: clonePlacedNote(entry.note),
+      })),
+    };
+  }
+
+  function deleteSelectedNotes(): void {
+    if (selectedNoteKeys.size === 0) return;
+
+    const refs = Array.from(selectedNoteKeys)
+      .map((key) => noteSelectionRefFromKey(key))
+      .filter((ref): ref is NoteSelectionRef => Boolean(ref));
+
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
+      for (const ref of refs) {
+        const rows = rowsByVoice[ref.voiceIndex];
+        const pickupCells = pickupCellsByVoice[ref.voiceIndex];
+        const cells = getCellsForZone(rows, pickupCells, ref.zone, ref.rowIndex);
+        if (!cells) continue;
+
+        const currentCell = cells[ref.cellIndex] ?? null;
+        if (!currentCell) continue;
+
+        if (currentCell.shape === 'circle') {
+          clearCircleAtCell(cells, ref.cellIndex);
+          continue;
+        }
+
+        const nextCell = removeNoteFromCell(currentCell, ref.noteIndex);
+        setDraftCell(rows, pickupCells, ref.zone, ref.rowIndex, ref.cellIndex, nextCell);
+      }
+    });
+
+    clearSelectedNotes();
+  }
+
+  function cutSelectedNotesToClipboard(): void {
+    copySelectedNotesToClipboard();
+    deleteSelectedNotes();
+  }
+
+  function pasteSelectionClipboard(): void {
+    if (!selectionClipboard || selectionClipboard.notes.length === 0) return;
+
+    const targetStartIndex = playbackStartSelection?.startIndex ?? pickupMicrobeatCount();
+    const targetVoiceIndex = activeCanvasVoiceIndex;
+    const pastedKeys = new Set<string>();
+
+    updateGridData((rowsByVoice, pickupCellsByVoice) => {
+      for (const clipboardNote of selectionClipboard?.notes ?? []) {
+        const nextVoiceIndex = coerceVoiceIndex(targetVoiceIndex + clipboardNote.voiceOffset);
+        if (nextVoiceIndex === null || !isVoiceVisible(nextVoiceIndex)) continue;
+
+        const targetIndex = targetStartIndex + clipboardNote.cellOffset;
+        if (targetIndex < 0 || targetIndex >= totalPlaybackCells()) continue;
+
+        const targetRef = cellRefFromIndex(targetIndex);
+        const rows = rowsByVoice[nextVoiceIndex];
+        const pickupCells = pickupCellsByVoice[nextVoiceIndex];
+        const targetSlot: SixteenthSlot | null =
+          clipboardNote.note.shape === 'diamond' && (clipboardNote.noteIndex === 0 || clipboardNote.noteIndex === 1)
+            ? clipboardNote.noteIndex as SixteenthSlot
+            : null;
+
+        placeNoteAtLocation(
+          rows,
+          pickupCells,
+          targetRef.zone,
+          targetRef.rowIndex,
+          targetRef.cellIndex,
+          clonePlacedNote(clipboardNote.note),
+          targetSlot,
+        );
+
+        pastedKeys.add(noteSelectionKey(nextVoiceIndex, targetRef.zone, targetRef.rowIndex, targetRef.cellIndex, targetSlot ?? 0));
+      }
+    });
+
+    selectedNoteKeys = pastedKeys;
+    pruneSelectedNotes();
   }
 
   function syncAudioWithState(nextState: BoomwhackerSketchpadState, previousState: BoomwhackerSketchpadState | null): void {
@@ -2773,12 +3186,17 @@
     const target = event.currentTarget;
     if (!(target instanceof HTMLSelectElement)) return;
 
-    const nextVoiceCount: VoiceCountMode = target.value === '2' ? 2 : 1;
+    const nextVoiceCount = coerceVoiceCount(Number(target.value));
     if (nextVoiceCount === voiceCount) return;
 
     voiceCount = nextVoiceCount;
-    if (voiceCount === 1) {
+    if (!isVoiceVisible(activeCanvasVoiceIndex)) {
       activeCanvasVoiceIndex = 0;
+    }
+    mutedVoiceStates = mutedVoiceStates.map((muted, index) => isVoiceVisible(index as VoiceIndex) ? muted : false);
+    soloedVoiceStates = soloedVoiceStates.map((soloed, index) => isVoiceVisible(index as VoiceIndex) ? soloed : false);
+    for (const voiceIndex of VOICE_INDEXES) {
+      if (!isVoiceVisible(voiceIndex)) clearKaraokeBallDisplay(voiceIndex);
     }
 
     if (isPlaying) {
@@ -2845,19 +3263,16 @@
   }
 
   function addRow(): void {
-    voiceRows = [
-      [...voiceRows[0], createEmptyRow('row_a')],
-      [...voiceRows[1], createEmptyRow('row_b')],
-    ];
+    voiceRows = VOICE_INDEXES.map((voiceIndex) => [
+      ...voiceRows[voiceIndex],
+      createEmptyRow(`row_${voiceKey(voiceIndex)}`),
+    ]);
   }
 
   function removeRow(): void {
     if (sharedRowCount() <= 1) return;
 
-    voiceRows = [
-      voiceRows[0].slice(0, -1),
-      voiceRows[1].slice(0, -1),
-    ];
+    voiceRows = VOICE_INDEXES.map((voiceIndex) => voiceRows[voiceIndex].slice(0, -1));
 
     const totalCells = pickupMicrobeatCount() + sharedRowCount() * GRID_COLUMNS;
     if (playbackIndex >= totalCells) {
@@ -2959,6 +3374,24 @@
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
     }
+  }
+
+  function handlePlacedNoteClick(
+    event: MouseEvent,
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+    noteIndex: number,
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      toggleNoteSelection(voiceIndex, zone, rowIndex, cellIndex, noteIndex);
+      return;
+    }
+
+    selectedNoteKeys = new Set([noteSelectionKey(voiceIndex, zone, rowIndex, cellIndex, noteIndex)]);
   }
 
   function handleAnyDragEnd(): void {
@@ -3129,8 +3562,14 @@
     setActiveCanvasVoice(voiceIndex);
 
     if (eraserMode) return;
+    if (!tapPlacementPayload) {
+      if (!dragPayload && !isPlaying) {
+        event.preventDefault();
+        selectPlaybackStartMeasure(zone, rowIndex);
+      }
+      return;
+    }
     if (!bankNativeDragEnabled) return;
-    if (!tapPlacementPayload) return;
 
     event.preventDefault();
     const targetSixteenthSlot: SixteenthSlot | null =
@@ -3153,7 +3592,10 @@
       return;
     }
 
-    if (!tapPlacementPayload) return;
+    if (!tapPlacementPayload) {
+      if (!isPlaying) selectPlaybackStartMeasure(zone, rowIndex);
+      return;
+    }
 
     const targetSixteenthSlot: SixteenthSlot | null = tapPlacementPayload.note.shape === 'diamond' ? 0 : null;
     applyPayloadDropToCell(tapPlacementPayload, voiceIndex, zone, rowIndex, cellIndex, targetSixteenthSlot);
@@ -3275,7 +3717,7 @@
 
   function setHorizontalPlaybackLaneShiftPx(voiceIndex: VoiceIndex, shiftPx: number): void {
     voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] = shiftPx;
-    voiceHorizontalPlaybackLaneShiftPxs = [...voiceHorizontalPlaybackLaneShiftPxs] as [number, number];
+    voiceHorizontalPlaybackLaneShiftPxs = [...voiceHorizontalPlaybackLaneShiftPxs];
   }
 
   function clearHorizontalPlaybackLaneShiftAnimation(voiceIndex: VoiceIndex): void {
@@ -3300,8 +3742,8 @@
       pinnedVoiceIndex: null,
       referenceViewportLeftPx: null,
     };
-    voiceKaraokeBallPinnedLeftPxs = [null, null];
-    voiceHorizontalPlaybackLaneShiftPxs = [0, 0];
+    voiceKaraokeBallPinnedLeftPxs = VOICE_INDEXES.map(() => null);
+    voiceHorizontalPlaybackLaneShiftPxs = VOICE_INDEXES.map(() => 0);
   }
 
   function prepareHorizontalPlaybackHighway(startIndex: number, totalCells: number): void {
@@ -4085,7 +4527,7 @@
     const referenceViewportLeftPx = horizontalPlaybackHighway.referenceViewportLeftPx;
     if (referenceViewportLeftPx === null) return;
 
-    if (voiceCount === 2) return;
+    if (voiceCount > 1) return;
 
     if (currentIndex + 1 >= totalCells) return;
 
@@ -4499,11 +4941,11 @@
     durationMs: number = playbackIntervalMs(),
     startedAtMs: number = performance.now(),
   ): void {
-    if (trackStyle !== 'horizontal' || voiceCount !== 2) return;
+    if (trackStyle !== 'horizontal' || voiceCount <= 1) return;
 
     clearHorizontalPlaybackLaneShiftAnimation(voiceIndex);
 
-    const startShiftPx = voiceHorizontalPlaybackLaneShiftPxs[voiceIndex];
+    const startShiftPx = voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0;
     const normalizedStartShiftPx = startShiftPx + pinnedLeftPx - currentAnchorViewportLeftPx;
     const targetShiftPx = startShiftPx + pinnedLeftPx - targetAnchorViewportLeftPx;
     setHorizontalPlaybackLaneShiftPx(voiceIndex, normalizedStartShiftPx);
@@ -4783,6 +5225,40 @@
     return pickupCells + rowIndex * GRID_COLUMNS + cellIndex;
   }
 
+  function playbackStartIndexForMeasure(zone: GridZone, rowIndex: number): number | null {
+    if (zone === 'pickup') {
+      return pickupMicrobeatCount() > 0 ? 0 : null;
+    }
+
+    if (rowIndex < 0 || rowIndex >= sharedRowCount()) return null;
+    return pickupMicrobeatCount() + rowIndex * GRID_COLUMNS;
+  }
+
+  function selectPlaybackStartMeasure(zone: GridZone, rowIndex: number): void {
+    const startIndex = playbackStartIndexForMeasure(zone, rowIndex);
+    if (startIndex === null) return;
+
+    playbackStartSelection = { zone, rowIndex, startIndex };
+    playbackPaused = false;
+    playbackIndex = startIndex;
+
+    if (trackStyle === 'horizontal') {
+      queueHorizontalPlaybackScroll(startIndex, 'smooth');
+    }
+  }
+
+  function playbackResetIndex(): number {
+    const totalCells = totalPlaybackCells();
+    if (totalCells <= 0) return 0;
+
+    const startIndex = playbackStartSelection?.startIndex ?? 0;
+    return Math.max(0, Math.min(totalCells - 1, startIndex));
+  }
+
+  function isPlaybackStartSelected(zone: GridZone, rowIndex: number): boolean {
+    return playbackStartSelection?.zone === zone && playbackStartSelection?.rowIndex === rowIndex;
+  }
+
   function markPlayedCellsForCursor(voiceIndex: VoiceIndex, cursor: GridCellRef): void {
     const highlight = resolvePlaybackHighlightForCursor(voiceIndex, cursor);
     if (!highlight) return;
@@ -4911,6 +5387,7 @@
       voicePlaybackCursors[voiceIndex] = cursor;
       updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, totalCells, cursor, stepStartedAtMs);
       updatePlaybackHighlight(voiceIndex, cursor);
+      if (!isVoiceAudible(voiceIndex)) continue;
       hasSecondSixteenth = playCellNote(voiceIndex, cursor) || hasSecondSixteenth;
     }
     queuePlaybackScrollForCurrentStep(currentIndex, totalCells);
@@ -4930,11 +5407,11 @@
       if (isLooping) {
         if (hasSecondSixteenth) {
           queuePlaybackTimeout(() => {
-            playbackIndex = 0;
+            playbackIndex = playbackResetIndex();
             restartPlaybackTimer();
           }, Math.max(24, Math.floor(playbackIntervalMs() / 2) + 8));
         } else {
-          playbackIndex = 0;
+          playbackIndex = playbackResetIndex();
           restartPlaybackTimer();
         }
       } else {
@@ -4954,7 +5431,7 @@
 
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
-    if (playbackIndex === 0) {
+    if (playbackIndex === playbackResetIndex()) {
       prepareHorizontalPlaybackHighway(playbackIndex, totalPlaybackCells());
       queueHorizontalPlaybackScroll(playbackIndex, 'auto');
     }
@@ -5063,6 +5540,7 @@
     if (isPlaying) return;
 
     debugPlaybackHighlight('Starting playback.', { playbackIndex, totalCells: totalPlaybackCells() });
+    const resumingPlayback = playbackPaused;
     volumePopupOpen = false;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
@@ -5084,6 +5562,7 @@
     const currentIndex = playbackIndex % totalCells;
     prepareHorizontalPlaybackHighway(currentIndex, totalCells);
     setPlaybackUiState(true);
+    playbackPaused = false;
     queueHorizontalPlaybackScroll(currentIndex, 'auto');
 
     const firstAnchors = new Map<VoiceIndex, KaraokeAnchor>();
@@ -5093,7 +5572,7 @@
         firstAnchors.set(voiceIndex, firstAnchor);
       }
     }
-    const shouldRunCountIn = countInEnabled && playbackIndex === 0;
+    const shouldRunCountIn = countInEnabled && !resumingPlayback;
     const startupDelayMs = readiness.stabilizationDelayMs;
     const shouldUseHorizontalPlaybackHighway = trackStyle === 'horizontal' && firstAnchors.size > 0;
     debugPlaybackStartup('Playback requested.', {
@@ -5135,6 +5614,7 @@
   function pausePlayback(): void {
     debugPlaybackHighlight('Pausing playback.', { playbackIndex });
     setPlaybackUiState(false);
+    playbackPaused = true;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     resetHorizontalPlaybackHighway();
@@ -5149,6 +5629,7 @@
   function stopPlayback(): void {
     debugPlaybackHighlight('Stopping playback.', { playbackIndex });
     setPlaybackUiState(false);
+    playbackPaused = false;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     resetHorizontalPlaybackHighway();
@@ -5160,7 +5641,7 @@
       voicePlayedCellIndexes[voiceIndex] = new Set<number>();
     }
     clearCountInDisplay();
-    playbackIndex = 0;
+    playbackIndex = playbackResetIndex();
   }
 
   async function togglePlayback(): Promise<void> {
@@ -5172,6 +5653,19 @@
     const readiness = await ensureAudioReady();
     if (!readiness.ready) return;
 
+    startPlayback(readiness);
+  }
+
+  async function playFromStart(): Promise<void> {
+    const readiness = await ensureAudioReady();
+    if (!readiness.ready) return;
+
+    if (isPlaying) {
+      pausePlayback();
+    }
+
+    playbackPaused = false;
+    playbackIndex = 0;
     startPlayback(readiness);
   }
 
@@ -5424,9 +5918,43 @@
 
     if (isEditableTarget(event.target)) return;
 
+    if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
+      if (selectedNoteKeys.size === 0) return;
+      event.preventDefault();
+      copySelectedNotesToClipboard();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.code === 'KeyX') {
+      if (selectedNoteKeys.size === 0) return;
+      event.preventDefault();
+      cutSelectedNotesToClipboard();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.code === 'KeyV') {
+      if (!selectionClipboard) return;
+      event.preventDefault();
+      pasteSelectionClipboard();
+      return;
+    }
+
+    if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNoteKeys.size > 0) {
+      event.preventDefault();
+      deleteSelectedNotes();
+      return;
+    }
+
     if (event.key === 'Escape' && tapPlacementPayload) {
       event.preventDefault();
       clearTapPlacementSelection();
+      clearSelectedNotes();
+      return;
+    }
+
+    if (event.key === 'Escape' && selectedNoteKeys.size > 0) {
+      event.preventDefault();
+      clearSelectedNotes();
       return;
     }
 
@@ -5488,6 +6016,12 @@
     <div class="controls-group transport-group">
       <div class="transport-actions">
         <div class="transport-row">
+          <button type="button" class="transport-btn" on:click={playFromStart} title="Play from start" aria-label="Play from start">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="4" y="5" width="2.5" height="14" rx="0.75" />
+              <path d="M9 6.75v10.5c0 1.06 1.17 1.69 2.05 1.1l7.8-5.25a1.32 1.32 0 0 0 0-2.2l-7.8-5.25A1.32 1.32 0 0 0 9 6.75Z" />
+            </svg>
+          </button>
           <button type="button" class="transport-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
             {#if isPlaying}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -6068,6 +6602,7 @@
     class:track-style-horizontal={trackStyle === 'horizontal'}
     bind:this={canvasPanelElement}
     aria-label="Sketch canvas"
+    role="application"
     on:dragenter={handleCanvasDragEnter}
     on:dragleave={handleCanvasDragLeave}
     on:mousemove={handleCanvasMouseMove}
@@ -6076,7 +6611,7 @@
     <div
       class="canvas-scroll-shell"
       class:track-style-horizontal={trackStyle === 'horizontal'}
-      class:two-voice-mode={voiceCount === 2}
+      class:two-voice-mode={voiceCount > 1}
       class:playback-highway-active={trackStyle === 'horizontal' && isPlaying && horizontalPlaybackHighway.referenceViewportLeftPx !== null}
       bind:this={canvasScrollShellElement}
       use:notifyCanvasLayoutChange
@@ -6085,9 +6620,9 @@
       <div
         class="rows-grid"
         class:has-active-pickup={pickupBeats > 0}
-        class:two-voice-mode={voiceCount === 2}
+        class:two-voice-mode={voiceCount > 1}
         class:track-style-horizontal={trackStyle === 'horizontal'}
-        style={`--pickup-columns:${pickupMicrobeatCount()}; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-arc-height-px:${karaokeArcHeightPx}px; --horizontal-playback-runway-px:${horizontalPlaybackRunwayPx}px;`}
+        style={`--pickup-columns:${pickupMicrobeatCount()}; --visible-voice-count:${voiceCount}; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-arc-height-px:${karaokeArcHeightPx}px; --horizontal-playback-runway-px:${horizontalPlaybackRunwayPx}px;`}
       >
         {#each renderedTrackRows as renderedRow (renderedRow.key)}
         {@const voiceIndex = renderedRow.voiceIndex}
@@ -6102,14 +6637,47 @@
           class="track-row voice-track-row"
           class:voice-track-row--a={voiceIndex === 0}
           class:voice-track-row--b={voiceIndex === 1}
+          class:voice-track-row--c={voiceIndex === 2}
+          class:voice-track-row--d={voiceIndex === 3}
           class:voice-track-row--active={activeCanvasVoiceIndex === voiceIndex}
+          class:voice-track-row--muted={mutedVoiceStates[voiceIndex] || (soloedVoiceStates.some(Boolean) && !soloedVoiceStates[voiceIndex])}
           class:with-inline-pickup={hasInlinePickup}
           bind:this={voiceTrackRowElements[voiceIndex][rowIndex]}
           use:notifyCanvasLayoutChange
-          style:--track-row-column={trackStyle === 'horizontal' && voiceCount === 2 ? `${rowIndex + 1}` : null}
-          style:--horizontal-playback-lane-shift-px={trackStyle === 'horizontal' && voiceCount === 2 ? `${voiceHorizontalPlaybackLaneShiftPxs[voiceIndex]}px` : null}
+          style:--track-row-column={trackStyle === 'horizontal' && voiceCount > 1 ? `${rowIndex + 1}` : null}
+          style:--horizontal-playback-lane-shift-px={trackStyle === 'horizontal' && voiceCount > 1 ? `${voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0}px` : null}
           on:pointerdown={() => setActiveCanvasVoice(voiceIndex)}
         >
+          {#if voiceCount > 1}
+            <div
+              class="voice-control-bar"
+              class:voice-control-bar--spacer={rowIndex !== 0}
+              aria-label={`Voice ${voiceLabel(voiceIndex)} playback controls`}
+              on:pointerdown={(event) => event.stopPropagation()}
+            >
+              {#if rowIndex === 0}
+                <span class="voice-control-label">Voice {voiceLabel(voiceIndex)}</span>
+                <button
+                  type="button"
+                  class="voice-control-btn"
+                  class:active={mutedVoiceStates[voiceIndex]}
+                  aria-pressed={mutedVoiceStates[voiceIndex]}
+                  title={`Mute Voice ${voiceLabel(voiceIndex)}`}
+                  on:pointerdown={(event) => event.stopPropagation()}
+                  on:click={(event) => toggleVoiceMute(event, voiceIndex)}
+                >M</button>
+                <button
+                  type="button"
+                  class="voice-control-btn"
+                  class:active={soloedVoiceStates[voiceIndex]}
+                  aria-pressed={soloedVoiceStates[voiceIndex]}
+                  title={`Solo Voice ${voiceLabel(voiceIndex)}`}
+                  on:pointerdown={(event) => event.stopPropagation()}
+                  on:click={(event) => toggleVoiceSolo(event, voiceIndex)}
+                >S</button>
+              {/if}
+            </div>
+          {/if}
           <div
             class="track-row-grids"
             class:with-inline-pickup={hasInlinePickup}
@@ -6121,10 +6689,10 @@
               role="group"
               aria-label={`Row ${rowIndex + 1}`}
             >
-              {#if voiceCount === 2 && rowIndex === 0}
+              {#if voiceCount > 1 && rowIndex === 0}
                 <span class="voice-track-badge" aria-hidden="true">Voice {voiceLabel(voiceIndex)}</span>
               {/if}
-              {#if voiceCount === 2}
+              {#if voiceCount > 1}
                 <span class="voice-track-row-label" aria-hidden="true">{rowIndex + 1}</span>
               {/if}
               {#if rowIndex === 0 && pickupBeats > 0}
@@ -6141,6 +6709,7 @@
                     class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'pickup', -1, cellIndex, 'playback-pulse-b')}
                     class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'pickup', -1, cellIndex)}
                     class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'pickup', -1, cellIndex)}
+                    class:playback-start-selected={isPlaybackStartSelected('pickup', -1)}
                     class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < pickupMicrobeatCount() - 1}
                     data-voice-index={voiceIndex}
                     data-track-zone="pickup"
@@ -6163,9 +6732,12 @@
                           type="button"
                           class="placed-note oval"
                           class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', -1, cellIndex)}
+                          class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0))}
+                          data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0)}
                           style={`--token-color:${cell.notes[0].color};`}
                           draggable="true"
                           title={placedNoteTitle(cell.notes[0])}
+                          on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'pickup', -1, cellIndex, 0)}
                           on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'pickup', -1, cellIndex, cell.notes[0], 0)}
                           on:dragend={handleAnyDragEnd}
                           on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'pickup', -1, cellIndex, 0)}
@@ -6188,9 +6760,12 @@
                           type="button"
                           class="placed-note circle"
                           class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', -1, cellIndex)}
+                          class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0))}
+                          data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0)}
                           style={`--token-color:${cell.notes[0].color};`}
                           draggable="true"
                           title={placedNoteTitle(cell.notes[0])}
+                          on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'pickup', -1, cellIndex, 0)}
                           on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'pickup', -1, cellIndex, cell.notes[0], 0)}
                           on:dragend={handleAnyDragEnd}
                           on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'pickup', -1, cellIndex, 0)}
@@ -6217,9 +6792,12 @@
                                   type="button"
                                   class={`placed-note diamond sixteenth ${cell.notes[0] && cell.notes[1] ? 'split' : 'single'}`}
                                   class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', -1, cellIndex)}
+                                  class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, slotIndex))}
+                                  data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, slotIndex)}
                                   style={`--token-color:${diamondNote.color};`}
                                   draggable="true"
                                   title={placedNoteTitle(diamondNote)}
+                                  on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}
                                   on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'pickup', -1, cellIndex, diamondNote, slotIndex)}
                                   on:dragend={handleAnyDragEnd}
                                   on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}
@@ -6334,6 +6912,7 @@
                 class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-b')}
                 class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'main', rowIndex, cellIndex)}
+                class:playback-start-selected={isPlaybackStartSelected('main', rowIndex)}
                 class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < GRID_COLUMNS - 1}
                 data-voice-index={voiceIndex}
                 data-track-zone="main"
@@ -6356,9 +6935,12 @@
                       type="button"
                       class="placed-note oval"
                       class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
+                      class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0))}
+                      data-selection-key={noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0)}
                       style={`--token-color:${cell.notes[0].color};`}
                       draggable="true"
                       title={placedNoteTitle(cell.notes[0])}
+                      on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
                       on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
                       on:dragend={handleAnyDragEnd}
                       on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
@@ -6381,9 +6963,12 @@
                       type="button"
                       class="placed-note circle"
                       class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
+                      class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0))}
+                      data-selection-key={noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0)}
                       style={`--token-color:${cell.notes[0].color};`}
                       draggable="true"
                       title={placedNoteTitle(cell.notes[0])}
+                      on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
                       on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
                       on:dragend={handleAnyDragEnd}
                       on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
@@ -6410,9 +6995,12 @@
                               type="button"
                               class={`placed-note diamond sixteenth ${cell.notes[0] && cell.notes[1] ? 'split' : 'single'}`}
                               class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
+                              class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, slotIndex))}
+                              data-selection-key={noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
                               style={`--token-color:${diamondNote.color};`}
                               draggable="true"
                               title={placedNoteTitle(diamondNote)}
+                              on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
                               on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, diamondNote, slotIndex)}
                               on:dragend={handleAnyDragEnd}
                               on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
@@ -6520,13 +7108,19 @@
       </div>
     </div>
 
+    {#if boxSelectionState && boxSelectionOverlayStyle()}
+      <div class="box-selection-marquee" style={boxSelectionOverlayStyle() ?? ''} aria-hidden="true"></div>
+    {/if}
+
     <div class="karaoke-overlay" aria-hidden="true">
       {#each karaokeOverlayBalls as overlayBall (overlayBall.voiceIndex)}
         {#if overlayBall.style}
           <div
             class="karaoke-ball"
-            class:karaoke-ball--voice-a={voiceCount === 2 && overlayBall.voiceIndex === 0}
-            class:karaoke-ball--voice-b={voiceCount === 2 && overlayBall.voiceIndex === 1}
+            class:karaoke-ball--voice-a={voiceCount > 1 && overlayBall.voiceIndex === 0}
+            class:karaoke-ball--voice-b={voiceCount > 1 && overlayBall.voiceIndex === 1}
+            class:karaoke-ball--voice-c={voiceCount > 1 && overlayBall.voiceIndex === 2}
+            class:karaoke-ball--voice-d={voiceCount > 1 && overlayBall.voiceIndex === 3}
             class:karaoke-ball--count-in={countInDisplayNumber !== null}
             style={overlayBall.style}
           >
@@ -6655,14 +7249,16 @@
           <select id="settings-voice-count-select" value={String(voiceCount)} on:change={handleVoiceCountModeChange}>
             <option value="1">1 voice</option>
             <option value="2">2 voices</option>
+            <option value="3">3 voices</option>
+            <option value="4">4 voices</option>
           </select>
         </div>
-        {#if voiceCount === 2}
+        {#if voiceCount > 1}
           <div class="settings-field">
             <label for="settings-voice-layout-select">Row layout</label>
             <select id="settings-voice-layout-select" value={voiceLayoutMode} on:change={handleVoiceLayoutModeChange}>
-              <option value="intertwined">A B A B</option>
-              <option value="separate">A A B B</option>
+              <option value="intertwined">Intertwined</option>
+              <option value="separate">Grouped by voice</option>
             </select>
           </div>
         {/if}

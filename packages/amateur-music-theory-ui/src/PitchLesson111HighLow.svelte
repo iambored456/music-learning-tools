@@ -179,6 +179,10 @@
   ];
   const sixteenthStampById = new Map(sixteenthStamps.map((stamp) => [stamp.id, stamp]));
   const rowIndexByTone = new Map(pitchRows.map((row, index) => [row.toneNote, index]));
+  const introScoreViewportStartRow = rowIndexByTone.get('C6') ?? 0;
+  const introScoreViewportEndRow = rowIndexByTone.get('G3') ?? rowCount - 1;
+  const scoreStampDiamondViewBox = '0 0 25 100';
+  const scoreStampDiamondPath = 'M 12.5 2 L 2 12.5 L 2 87.5 L 12.5 98 L 23 87.5 L 23 12.5 Z';
   const legendCells: LegendCell[] = pitchRows.map((row, rowIndex) => ({
     id: `legend-${row.toneNote}`,
     rowIndex,
@@ -323,10 +327,10 @@
       prompt: 'Drag the note into the lower part of the pitch space.',
       narration: 'Drag the note into the lower part of the pitch space.',
       target: 'lower',
-      tones: [220],
+      tones: [],
       snapTone: 'A3',
       reinforcement: 'Good. Lower sounds belong lower in the pitch space.',
-      replayLabel: 'Replay low tone',
+      replayLabel: 'Repeat prompt',
     },
     {
       id: 'high-place',
@@ -335,10 +339,10 @@
       prompt: 'Now drag the note into the higher part of the pitch space.',
       narration: 'Now drag the note into the higher part of the pitch space.',
       target: 'upper',
-      tones: [880],
+      tones: [],
       snapTone: 'A5',
       reinforcement: 'Good. Higher sounds belong higher in the pitch space.',
-      replayLabel: 'Replay high tone',
+      replayLabel: 'Repeat prompt',
     },
     {
       id: 'contrast-1',
@@ -480,20 +484,27 @@
   let actionSkipSignalReady = false;
   let actionSkipEpoch = 0;
   const actionSkipResolvers = new Set<() => void>();
+  const defaultLessonWaveform: OscillatorType = 'triangle';
+  let visiblePitchGridStartRow = 0;
+  let visiblePitchGridEndRow = rowCount - 1;
+  let visiblePitchGridRowCount = rowCount;
 
+  $: visiblePitchGridStartRow = scorePlaybackVisible ? introScoreViewportStartRow : 0;
+  $: visiblePitchGridEndRow = scorePlaybackVisible ? introScoreViewportEndRow : rowCount - 1;
+  $: visiblePitchGridRowCount = Math.max(1, visiblePitchGridEndRow - visiblePitchGridStartRow + 1);
   $: pitchGridLayoutColumnSize = pitchGridFrameWidth > 0 && pitchGridFrameHeight > 0
     ? Math.max(
         1,
         Math.min(
-          pitchGridFrameHeight / (rowCount + 1),
+          pitchGridFrameHeight / (visiblePitchGridRowCount + 1),
           pitchGridFrameWidth / (scoreTotalColumns + pitchGridLegendWidthUnits)
         )
       )
     : pitchGridFallbackColumnSize;
   $: pitchGridShellWidth = pitchGridLayoutColumnSize * (scoreTotalColumns + pitchGridLegendWidthUnits);
-  $: pitchGridShellHeight = pitchGridLayoutColumnSize * (rowCount + 1);
+  $: pitchGridShellHeight = pitchGridLayoutColumnSize * (visiblePitchGridRowCount + 1);
   $: pitchGridCellHeight = pitchGridViewportHeight > 0
-    ? (pitchGridViewportHeight * 2) / (rowCount + 1)
+    ? (pitchGridViewportHeight * 2) / (visiblePitchGridRowCount + 1)
     : pitchGridLayoutColumnSize * 2;
   $: pitchGridCellWidth = pitchGridCellHeight / 2;
   $: pitchGridOverlayNoteSize = pitchGridCellHeight;
@@ -503,8 +514,8 @@
   );
   $: pitchGridLegendWidth = pitchGridCellWidth * pitchGridLegendWidthUnits;
   $: pitchGridViewport = {
-    startRow: 0,
-    endRow: rowCount - 1,
+    startRow: visiblePitchGridStartRow,
+    endRow: visiblePitchGridEndRow,
     zoomLevel: 1,
     containerWidth: pitchGridViewportWidth,
     containerHeight: pitchGridViewportHeight,
@@ -557,11 +568,13 @@
   }
 
   function rowCenter(rowIndex: number): number {
-    return ((rowIndex + 1) / (rowCount + 1)) * 100;
+    const relativeRowIndex = rowIndex - visiblePitchGridStartRow;
+    return ((relativeRowIndex + 1) / (visiblePitchGridRowCount + 1)) * 100;
   }
 
   function getRowIndexForPercent(percentY: number): number {
-    return clampRowIndex((percentY / 100) * (rowCount + 1) - 1);
+    const relativeRowIndex = (percentY / 100) * (visiblePitchGridRowCount + 1) - 1;
+    return clampRowIndex(visiblePitchGridStartRow + relativeRowIndex);
   }
 
   function taskUsesAvatarNoteSource(task: PracticeTask | null): boolean {
@@ -640,7 +653,7 @@
           kind: 'diamond',
           top: `${rowCenter(row)}%`,
           centerX: startX + ((slot + 0.5) / 4) * stampWidthPx,
-          widthPx: Math.max(5, stampWidthPx * 0.26),
+          widthPx: Math.max(5, stampWidthPx * 0.25),
           heightPx: shapeHeightPx,
           color: placement.color,
         });
@@ -951,7 +964,7 @@
     const peak = Math.max(0.012, Math.min(0.075, (volume / 100) * 0.055));
     const voice: ActiveVoice = { oscillator, gain, stopped: false };
 
-    oscillator.type = 'sine';
+    oscillator.type = defaultLessonWaveform;
     oscillator.frequency.setValueAtTime(frequency, now);
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(peak, now + 0.025);
@@ -1042,7 +1055,7 @@
     durationMs: number,
     peakGain: number,
     token: number,
-    waveform: OscillatorType = 'sine'
+    waveform: OscillatorType = defaultLessonWaveform
   ): void {
     if (!isCurrentSequence(token) || !isPlaying) return;
 
@@ -1084,7 +1097,7 @@
     durationMs: number,
     region: PitchRegion,
     token: number,
-    waveform: OscillatorType = 'sine'
+    waveform: OscillatorType = defaultLessonWaveform
   ): Promise<void> {
     if (!isCurrentSequence(token) || !isPlaying) return;
     const context = await ensureAudioContext();
@@ -1586,7 +1599,9 @@
     {/if}
   </div>
 
-  <section class={`pitch-workspace app-card ${feedbackState ? `is-${feedbackState}` : ''}`}>
+  <section
+    class={`pitch-workspace app-card ${feedbackState ? `is-${feedbackState}` : ''} ${scorePlaybackVisible ? 'is-score-prelude' : ''}`}
+  >
     <div
       class="pitch-grid-frame"
       bind:clientWidth={pitchGridFrameWidth}
@@ -1666,18 +1681,19 @@
                   {#if stamp.kind === 'diamond'}
                     <svg
                       class={`score-stamp-shape score-stamp-shape--diamond ${activeScoreItemIds.has(stamp.id) ? 'is-active' : ''}`}
-                      viewBox="0 0 12 20"
+                      viewBox={scoreStampDiamondViewBox}
                       preserveAspectRatio="none"
                       style={`left:${stamp.centerX}px; top:${stamp.top}; width:${stamp.widthPx}px; height:${stamp.heightPx}px; color:${stamp.color};`}
                       focusable="false"
                     >
                       <path
-                        d="M6 0 L12 5.7 L12 14.3 L6 20 L0 14.3 L0 5.7 Z"
+                        d={scoreStampDiamondPath}
                         fill="currentColor"
                         fill-opacity="0.12"
                         stroke="currentColor"
-                        stroke-width="1.8"
-                        vector-effect="non-scaling-stroke"
+                        stroke-width="4"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
                       />
                     </svg>
                   {:else}
@@ -1752,7 +1768,7 @@
     grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
     gap: 1rem;
     align-items: stretch;
-    min-height: min(52rem, calc(100svh - 8.75rem));
+    min-height: 0;
   }
 
   .pitch-scene-support {
@@ -1769,8 +1785,18 @@
     padding: 1rem;
     min-width: 0;
     min-height: 0;
-    align-content: stretch;
+    width: fit-content;
+    max-width: 100%;
+    justify-self: start;
+    align-self: start;
+    align-content: start;
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .pitch-workspace.is-score-prelude {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
   }
 
   .pitch-workspace.is-success {
@@ -1784,12 +1810,17 @@
   }
 
   .pitch-grid-frame {
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     height: clamp(34rem, calc(100svh - 10rem), 52rem);
     display: flex;
     align-items: flex-start;
     justify-content: flex-start;
     overflow: hidden;
+  }
+
+  .pitch-workspace.is-score-prelude .pitch-grid-frame {
+    width: 100%;
   }
 
   .pitch-grid-shell {
@@ -1984,9 +2015,17 @@
     transform: translate(-50%, -50%) scale(1.16);
   }
 
+  .score-stamp-shape--diamond.is-active {
+    filter:
+      drop-shadow(0 0 1px rgba(255, 255, 255, 0.88))
+      drop-shadow(0 0 4px currentColor)
+      drop-shadow(0 0 8px color-mix(in srgb, currentColor 42%, transparent));
+    transform: translate(-50%, -50%);
+  }
+
   .score-stamp-shape--diamond.is-active path {
-    fill-opacity: 0.34;
-    stroke-width: 2.35;
+    fill-opacity: 0.26;
+    stroke-width: 4.5;
   }
 
   .score-stamp-shape--oval.is-active {

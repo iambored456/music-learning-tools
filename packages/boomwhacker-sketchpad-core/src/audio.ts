@@ -28,6 +28,8 @@ const MACROBEAT_METRONOME_SAMPLE_IDS = [
 const SUPPLEMENTAL_NOTE_SAMPLE_IDS = [
   'roland-tr-909-roland-tr-909-handclp2',
   'roland-tr-909-roland-tr-909-st3t0s3',
+  'kpr-series-kprlotom',
+  'roland-tr-909-roland-tr-909-hhcd4',
 ] as const;
 
 function firstAvailableDrumSampleUrl(sampleIds: readonly string[]): string | null {
