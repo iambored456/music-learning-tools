@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LEGEND_SMALL_TEXT_THRESHOLD_PX,
   resolveLegendTextLayout,
   snapToDevicePixel
 } from './legendTextRendering.ts';
@@ -30,7 +29,7 @@ function createMeasureContext(charWidth = 0.58): StubMeasureContext {
 }
 
 describe('legendTextRendering', () => {
-  it('uses fill-only rendering for very small fitted labels', () => {
+  it('keeps a visible stroke outline for very small fitted labels', () => {
     const ctx = createMeasureContext() as unknown as CanvasRenderingContext2D;
 
     const layout = resolveLegendTextLayout(ctx, 'Bb/A#7', {
@@ -39,12 +38,11 @@ describe('legendTextRendering', () => {
       pixelRatio: 1
     });
 
-    expect(layout.regime).toBe('fill');
-    expect(layout.fontSize).toBeLessThan(LEGEND_SMALL_TEXT_THRESHOLD_PX);
-    expect(layout.outlineOffsetPx).toBe(0);
+    expect(layout.regime).toBe('stroke');
+    expect(layout.outlineWidthPx).toBeGreaterThan(0);
   });
 
-  it('switches to halo rendering once the fitted font reaches medium size', () => {
+  it('uses stroke rendering once the fitted font reaches medium size', () => {
     const ctx = createMeasureContext() as unknown as CanvasRenderingContext2D;
 
     const layout = resolveLegendTextLayout(ctx, 'C4', {
@@ -53,9 +51,8 @@ describe('legendTextRendering', () => {
       pixelRatio: 1
     });
 
-    expect(layout.regime).toBe('halo');
-    expect(layout.fontSize).toBeGreaterThanOrEqual(LEGEND_SMALL_TEXT_THRESHOLD_PX);
-    expect(layout.outlineOffsetPx).toBe(1);
+    expect(layout.regime).toBe('stroke');
+    expect(layout.outlineWidthPx).toBeGreaterThan(1);
   });
 
   it('width-fits longer labels inside the legend subcolumn', () => {
@@ -73,7 +70,7 @@ describe('legendTextRendering', () => {
     });
 
     expect(accidentalLayout.fontSize).toBeLessThan(naturalLayout.fontSize);
-    expect(accidentalLayout.maxTextWidth).toBeCloseTo(87.75, 2);
+    expect(accidentalLayout.maxTextWidth).toBeCloseTo(83.85, 2);
   });
 
   it('snaps anchor positions to device pixels', () => {

@@ -21,6 +21,7 @@ type SerializedTimbreState = Omit<TimbreState, 'coeffs' | 'phases'> & {
 };
 
 type SerializedTimbresMap = Record<string, SerializedTimbreState>;
+type SaveSixteenthStampPlacement = AppState['sixteenthStampPlacements'][number];
 
 export interface StudentNotationSaveData {
   placedNotes: PlacedNote[];
@@ -39,6 +40,7 @@ export interface StudentNotationSaveData {
   timbres: Record<string, TimbreState>;
   pitchRange: PitchRange;
   degreeDisplayMode: AppState['degreeDisplayMode'];
+  showPitchLabels: boolean;
   showOctaveLabels: boolean;
   longNoteStyle: AppState['longNoteStyle'];
   playheadMode: AppState['playheadMode'];
@@ -168,6 +170,67 @@ function normalizeTonicSignGroups(value: unknown): TonicSignGroups {
       })
       .filter((entry): entry is [string, TonicSign[]] => entry !== null)
   );
+}
+
+function getUniqueTonicStartColumns(tonicSignGroups: TonicSignGroups): number[] {
+  const seen = new Set<string>();
+  const columns: number[] = [];
+
+  Object.values(tonicSignGroups).forEach((group) => {
+    group.forEach((sign) => {
+      const columnIndex = Number(sign.columnIndex);
+      if (!Number.isFinite(columnIndex)) {
+        return;
+      }
+
+      const key = sign.uuid
+        ? `uuid:${sign.uuid}`
+        : `column:${sign.preMacrobeatIndex ?? ''}:${columnIndex}`;
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      columns.push(columnIndex);
+    });
+  });
+
+  return columns.sort((a, b) => a - b);
+}
+
+function legacyCanvasColumnToTimeIndex(canvasColumn: number, tonicSignGroups: TonicSignGroups): number {
+  const tonicStartsBeforeColumn = getUniqueTonicStartColumns(tonicSignGroups)
+    .filter(columnIndex => columnIndex < canvasColumn).length;
+  return canvasColumn - (tonicStartsBeforeColumn * 2);
+}
+
+function normalizeSixteenthStampPlacements(
+  value: unknown,
+  tonicSignGroups: TonicSignGroups,
+  fallback: SaveSixteenthStampPlacement[]
+): SaveSixteenthStampPlacement[] {
+  if (!Array.isArray(value)) {
+    return cloneJson(fallback);
+  }
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => {
+      const { startColumn, endColumn, ...rest } = entry;
+      const currentStartTimeIndex = Number(entry.startTimeIndex);
+      const legacyStartColumn = Number(startColumn);
+      const startTimeIndex = Number.isFinite(currentStartTimeIndex)
+        ? currentStartTimeIndex
+        : (Number.isFinite(legacyStartColumn)
+          ? legacyCanvasColumnToTimeIndex(legacyStartColumn, tonicSignGroups)
+          : 0);
+
+      void endColumn;
+      return {
+        ...cloneJson(rest),
+        startTimeIndex
+      } as SaveSixteenthStampPlacement;
+    });
 }
 
 function normalizeMacrobeatGroupings(value: unknown, fallback: MacrobeatGrouping[]): MacrobeatGrouping[] {
@@ -366,6 +429,7 @@ function buildSaveData(state: AppState): StudentNotationSaveData {
     ),
     pitchRange: { ...state.pitchRange },
     degreeDisplayMode: state.degreeDisplayMode,
+    showPitchLabels: state.showPitchLabels,
     showOctaveLabels: state.showOctaveLabels,
     longNoteStyle: state.longNoteStyle,
     playheadMode: state.playheadMode,
@@ -386,6 +450,7 @@ function normalizeSaveData(value: unknown): StudentNotationSaveData {
     macrobeatGroupings,
     initialState.macrobeatBoundaryStyles
   );
+  const tonicSignGroups = normalizeTonicSignGroups(raw.tonicSignGroups);
   const timbres = normalizeTimbres(raw.timbres, initialState.timbres);
   const selectedNoteShape = raw.selectedNote?.shape;
   const selectedNoteColor = raw.selectedNote?.color;
@@ -397,14 +462,22 @@ function normalizeSaveData(value: unknown): StudentNotationSaveData {
       ? selectedNoteColor
       : initialState.selectedNote.color,
   };
+  const showPitchLabels = typeof raw.showPitchLabels === 'boolean'
+    ? raw.showPitchLabels
+    : initialState.showPitchLabels;
+  const degreeDisplayMode = DEGREE_DISPLAY_MODES.has(raw.degreeDisplayMode as AppState['degreeDisplayMode'])
+    ? raw.degreeDisplayMode as AppState['degreeDisplayMode']
+    : initialState.degreeDisplayMode;
 
   return {
     placedNotes: normalizePlacedNotes(raw.placedNotes),
     placedChords: Array.isArray(raw.placedChords) ? cloneJson(raw.placedChords) : cloneJson(initialState.placedChords),
-    tonicSignGroups: normalizeTonicSignGroups(raw.tonicSignGroups),
-    sixteenthStampPlacements: Array.isArray(raw.sixteenthStampPlacements)
-      ? cloneJson(raw.sixteenthStampPlacements)
-      : cloneJson(initialState.sixteenthStampPlacements),
+    tonicSignGroups,
+    sixteenthStampPlacements: normalizeSixteenthStampPlacements(
+      raw.sixteenthStampPlacements,
+      tonicSignGroups,
+      initialState.sixteenthStampPlacements
+    ),
     tripletStampPlacements: Array.isArray(raw.tripletStampPlacements)
       ? cloneJson(raw.tripletStampPlacements)
       : cloneJson(initialState.tripletStampPlacements),
@@ -420,9 +493,8 @@ function normalizeSaveData(value: unknown): StudentNotationSaveData {
     tempo: typeof raw.tempo === 'number' && Number.isFinite(raw.tempo) ? raw.tempo : initialState.tempo,
     timbres,
     pitchRange: normalizePitchRange(raw.pitchRange, initialState.pitchRange),
-    degreeDisplayMode: DEGREE_DISPLAY_MODES.has(raw.degreeDisplayMode as AppState['degreeDisplayMode'])
-      ? raw.degreeDisplayMode as AppState['degreeDisplayMode']
-      : initialState.degreeDisplayMode,
+    degreeDisplayMode: showPitchLabels ? 'off' : degreeDisplayMode,
+    showPitchLabels,
     showOctaveLabels: typeof raw.showOctaveLabels === 'boolean'
       ? raw.showOctaveLabels
       : initialState.showOctaveLabels,
@@ -510,6 +582,7 @@ export function applyImportedStudentNotationData(
   store.state.selectedNote = { ...data.selectedNote };
   store.state.tempo = data.tempo;
   store.state.degreeDisplayMode = data.degreeDisplayMode;
+  store.state.showPitchLabels = data.showPitchLabels;
   store.state.showOctaveLabels = data.showOctaveLabels;
   store.state.longNoteStyle = data.longNoteStyle;
   store.state.playheadMode = data.playheadMode;
@@ -525,6 +598,7 @@ export function applyImportedStudentNotationData(
   store.emit('pitchRangeChanged', store.state.pitchRange);
   store.emit('layoutConfigChanged');
   store.emit('degreeDisplayModeChanged', store.state.degreeDisplayMode);
+  store.emit('pitchLabelsChanged', store.state.showPitchLabels);
   store.emit('octaveLabelsChanged', store.state.showOctaveLabels);
   store.emit('longNoteStyleChanged', store.state.longNoteStyle);
   store.emit('playheadModeChanged', store.state.playheadMode);

@@ -12,7 +12,7 @@ logger.moduleLoaded('SixteenthStampPlacements', 'stamps');
 /**
  * Places a stamp at the specified grid position
  */
-export function placeSixteenthStamp(sixteenthStampId: number, startColumn: number, row: number, color = '#4a90e2'): SixteenthStampPlacement | null {
+export function placeSixteenthStamp(sixteenthStampId: number, startTimeIndex: number, row: number, color = '#4a90e2'): SixteenthStampPlacement | null {
   const stamp = getSixteenthStampById(sixteenthStampId);
   if (!stamp) {
     logger.warn('SixteenthStampPlacements', `Invalid sixteenth stamp ID: ${sixteenthStampId}`, { sixteenthStampId }, 'stamps');
@@ -20,7 +20,7 @@ export function placeSixteenthStamp(sixteenthStampId: number, startColumn: numbe
   }
 
   // Use store methods for placement with collision detection and state management
-  return store.addSixteenthStampPlacement(sixteenthStampId, startColumn as CanvasSpaceColumn, row, color);
+  return store.addSixteenthStampPlacement(sixteenthStampId, startTimeIndex, row, color);
 }
 
 // Note: Collision detection and removal functions are now handled by the store actions
@@ -41,10 +41,10 @@ export function getAllSixteenthStampPlacements(): SixteenthStampPlacement[] {
 }
 
 /**
- * Gets stamp placement at specific position
+ * Gets stamp placement at a specific time-space position
  */
-export function getSixteenthStampAt(column: number, row: number): SixteenthStampPlacement | null {
-  return store.getSixteenthStampAt(column as CanvasSpaceColumn, row);
+export function getSixteenthStampAt(timeIndex: number, row: number): SixteenthStampPlacement | null {
+  return store.getSixteenthStampAt(timeIndex, row);
 }
 
 /**

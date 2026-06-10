@@ -42,6 +42,7 @@
 
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;
+  let pitchLabelsToggle: HTMLButtonElement | null = null;
   let degreeVisibilityToggle: HTMLButtonElement | null = null;
   let degreeModeToggle: HTMLElement | null = null;
   let degreeModeScaleButton: HTMLButtonElement | null = null;
@@ -97,6 +98,12 @@
     const isOn = mode !== 'off';
     visibilityButton.classList.toggle('active', isOn);
     visibilityButton.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+  }
+
+  function syncPitchLabelsButton(showPitchLabels: boolean, toggleButton: HTMLElement | null): void {
+    if (!toggleButton) return;
+    toggleButton.classList.toggle('active', showPitchLabels);
+    toggleButton.setAttribute('aria-pressed', showPitchLabels ? 'true' : 'false');
   }
 
   function updateChordButtonSelection(): void {
@@ -397,6 +404,11 @@
     updateScaleModeToggleState(mode);
   }
 
+  function handlePitchLabelsChanged(showPitchLabels?: boolean) {
+    if (typeof showPitchLabels !== 'boolean') return;
+    syncPitchLabelsButton(showPitchLabels, pitchLabelsToggle);
+  }
+
   function handleAccidentalModeChanged(accidentalMode?: { sharp: boolean; flat: boolean }) {
     if (!accidentalMode) return;
     sharpBtn?.classList.toggle('active', accidentalMode.sharp);
@@ -421,11 +433,19 @@
   onMount(() => {
     // Get cached elements
     const cachedElements = domCache.getMultiple(
-      'noteBankContainer', 'eraserButton', 'degreeVisibilityToggle', 'degreeModeToggle',
+      'noteBankContainer', 'eraserButton', 'pitchLabelsToggle', 'degreeVisibilityToggle', 'degreeModeToggle',
       'flatBtn', 'sharpBtn', 'frequencyBtn', 'octaveLabelBtn', 'focusColoursToggle'
     );
 
     eraserBtn = cachedElements['eraserButton'];
+    const cachedPitchLabelsToggle = cachedElements['pitchLabelsToggle'];
+    const livePitchLabelsToggle = (cachedPitchLabelsToggle && cachedPitchLabelsToggle.isConnected)
+      ? cachedPitchLabelsToggle
+      : document.getElementById('pitch-labels-toggle');
+    pitchLabelsToggle = livePitchLabelsToggle instanceof HTMLButtonElement
+      ? livePitchLabelsToggle
+      : null;
+
     const cachedDegreeVisibilityToggle = cachedElements['degreeVisibilityToggle'];
     const liveDegreeVisibilityToggle = (cachedDegreeVisibilityToggle && cachedDegreeVisibilityToggle.isConnected)
       ? cachedDegreeVisibilityToggle
@@ -640,6 +660,13 @@
     }
 
     // Degree visibility toggle
+    if (pitchLabelsToggle) {
+      pitchLabelsToggle.addEventListener('click', () => {
+        store.setShowPitchLabels(!store.state.showPitchLabels);
+        pitchLabelsToggle?.blur();
+      });
+    }
+
     if (degreeVisibilityToggle) {
       degreeVisibilityToggle.addEventListener('click', () => {
         const currentMode = store.state.degreeDisplayMode;
@@ -741,6 +768,7 @@
     store.on('activeChordIntervalsChanged', handleActiveChordIntervalsChanged);
     store.on('noteChanged', handleNoteChanged);
     store.on('degreeDisplayModeChanged', handleDegreeDisplayModeChanged);
+    store.on('pitchLabelsChanged', handlePitchLabelsChanged);
     store.on('accidentalModeChanged', handleAccidentalModeChanged);
     store.on('frequencyLabelsChanged', syncFrequencyUiState);
     store.on('octaveLabelsChanged', syncOctaveUiState);
@@ -764,6 +792,7 @@
     setTimeout(() => updateChordPositionToggleState(), 50);
 
     const currentMode = store.state.degreeDisplayMode;
+    syncPitchLabelsButton(store.state.showPitchLabels, pitchLabelsToggle);
     syncDegreeVisibilityButton(currentMode, degreeVisibilityToggle);
     updateScaleModeToggleState(currentMode);
 
@@ -782,6 +811,7 @@
     store.off('activeChordIntervalsChanged', handleActiveChordIntervalsChanged);
     store.off('noteChanged', handleNoteChanged);
     store.off('degreeDisplayModeChanged', handleDegreeDisplayModeChanged);
+    store.off('pitchLabelsChanged', handlePitchLabelsChanged);
     store.off('accidentalModeChanged', handleAccidentalModeChanged);
     store.off('frequencyLabelsChanged', syncFrequencyUiState);
     store.off('octaveLabelsChanged', syncOctaveUiState);

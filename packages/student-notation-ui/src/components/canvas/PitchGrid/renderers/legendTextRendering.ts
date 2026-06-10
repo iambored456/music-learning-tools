@@ -1,6 +1,6 @@
 export type LegendTextMeasureContext = Pick<CanvasRenderingContext2D, 'font' | 'measureText'>;
 
-export type LegendTextRegime = 'fill' | 'halo';
+export type LegendTextRegime = 'stroke';
 
 export interface LegendTextLayoutOptions {
   cellHeight: number;
@@ -12,16 +12,15 @@ export interface LegendTextLayout {
   fontSize: number;
   font: string;
   regime: LegendTextRegime;
-  outlineOffsetPx: number;
+  outlineWidthPx: number;
   maxTextWidth: number;
 }
 
-export const LEGEND_SMALL_TEXT_THRESHOLD_PX = 16;
-
 const LEGEND_TEXT_HEIGHT_RATIO = 0.66;
-const LEGEND_TEXT_MAX_WIDTH_RATIO = 0.9;
+const LEGEND_TEXT_MAX_WIDTH_RATIO = 0.86;
 const LEGEND_MIN_FONT_SIZE_PX = 7;
-const LEGEND_HALO_OFFSET_PX = 1;
+const LEGEND_MIN_OUTLINE_WIDTH_PX = 1.1;
+const LEGEND_MAX_OUTLINE_WIDTH_PX = 2.35;
 
 export function snapToDevicePixel(value: number, pixelRatio: number): number {
   if (!Number.isFinite(pixelRatio) || pixelRatio <= 0) {
@@ -32,6 +31,10 @@ export function snapToDevicePixel(value: number, pixelRatio: number): number {
 
 export function getLegendFontDeclaration(fontSize: number): string {
   return `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function measureLegendLabelWidth(
@@ -71,14 +74,16 @@ export function resolveLegendTextLayout(
     );
   }
 
-  const regime: LegendTextRegime =
-    fontSize < LEGEND_SMALL_TEXT_THRESHOLD_PX ? 'fill' : 'halo';
+  const outlineWidthPx = snapToDevicePixel(
+    clamp(fontSize * 0.14, LEGEND_MIN_OUTLINE_WIDTH_PX, LEGEND_MAX_OUTLINE_WIDTH_PX),
+    pixelRatio
+  );
 
   return {
     fontSize,
     font: getLegendFontDeclaration(fontSize),
-    regime,
-    outlineOffsetPx: regime === 'halo' ? LEGEND_HALO_OFFSET_PX : 0,
+    regime: 'stroke',
+    outlineWidthPx,
     maxTextWidth
   };
 }

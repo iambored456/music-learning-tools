@@ -334,5 +334,5 @@
 }
 
 .filter-container.mix-inactive .filter-overlay-canvas {
-    display: none; 
+    opacity: 0;
 }

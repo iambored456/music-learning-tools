@@ -77,7 +77,7 @@
       return;
     }
 
-    const { cutoff = 16, blend = 0, mix = 0 } = filter;
+    const { cutoff = 16, blend = 1.0, mix = 0 } = filter;
     updateMixDependentControlState(mix);
 
     if (blendThumb && blendTrack) {
@@ -148,11 +148,11 @@
     verticalBlendTrack = document.getElementById('vertical-blend-track');
     verticalBlendSlider = document.getElementById('vertical-blend-thumb');
 
-    if (!container || !blendThumb || !cutoffThumb || !verticalBlendSlider || !verticalBlendTrack) {
+    if (!container || !blendThumb || !blendTrack || !cutoffThumb || !cutoffTrack || !verticalBlendSlider || !verticalBlendTrack) {
       logger.error(
         'FilterControlsBridge',
         'Missing required elements',
-        { container, blendThumb, cutoffThumb, verticalBlendSlider, verticalBlendTrack },
+        { container, blendThumb, blendTrack, cutoffThumb, cutoffTrack, verticalBlendSlider, verticalBlendTrack },
         'filter'
       );
       return;
@@ -163,6 +163,7 @@
       e.preventDefault();
       isDraggingBlend = true;
       document.body.style.cursor = 'ew-resize';
+      handleBlendDrag(e);
 
       const onMove = (ev: PointerEvent) => handleBlendDrag(ev);
       const onUp = () => {
@@ -182,6 +183,7 @@
       e.preventDefault();
       isDraggingCutoff = true;
       document.body.style.cursor = 'ew-resize';
+      handleCutoffDrag(e);
 
       const onMove = (ev: PointerEvent) => handleCutoffDrag(ev);
       const onUp = () => {
@@ -201,6 +203,7 @@
       e.preventDefault();
       isDraggingVerticalBlend = true;
       document.body.style.cursor = 'ns-resize';
+      handleVerticalBlendDrag(e);
 
       const onMove = (ev: PointerEvent) => handleVerticalBlendDrag(ev);
       const onUp = () => {
@@ -216,9 +219,9 @@
     };
 
     // Attach event listeners
-    blendThumb.addEventListener('pointerdown', handleBlendPointerDown);
-    cutoffThumb.addEventListener('pointerdown', handleCutoffPointerDown);
-    verticalBlendSlider.addEventListener('pointerdown', handleVerticalBlendPointerDown);
+    blendTrack.addEventListener('pointerdown', handleBlendPointerDown);
+    cutoffTrack.addEventListener('pointerdown', handleCutoffPointerDown);
+    verticalBlendTrack.addEventListener('pointerdown', handleVerticalBlendPointerDown);
 
     // Subscribe to store events
     const handleNoteChanged = ({ newNote }: { newNote?: { color?: string } } = {}) => {
@@ -244,9 +247,9 @@
 
     // Cleanup on unmount
     return () => {
-      blendThumb?.removeEventListener('pointerdown', handleBlendPointerDown);
-      cutoffThumb?.removeEventListener('pointerdown', handleCutoffPointerDown);
-      verticalBlendSlider?.removeEventListener('pointerdown', handleVerticalBlendPointerDown);
+      blendTrack?.removeEventListener('pointerdown', handleBlendPointerDown);
+      cutoffTrack?.removeEventListener('pointerdown', handleCutoffPointerDown);
+      verticalBlendTrack?.removeEventListener('pointerdown', handleVerticalBlendPointerDown);
 
       store.off('noteChanged', handleNoteChanged);
       store.off('timbreChanged', handleTimbreChanged);

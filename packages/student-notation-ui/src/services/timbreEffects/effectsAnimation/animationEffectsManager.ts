@@ -77,6 +77,10 @@ class AnimationEffectsManager {
 
       if (effectType === 'delay') {
         this.delayEffect.updateAnimationParameters(color, effectParams as { time: number; feedback: number });
+        store.emit('animationUpdate', {
+          type: 'delay',
+          activeColors: [color]
+        });
       }
     });
 

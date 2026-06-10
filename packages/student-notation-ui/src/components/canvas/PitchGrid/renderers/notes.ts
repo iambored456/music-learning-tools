@@ -20,7 +20,7 @@ const SHARP_SYMBOL = '\u266F';
 const FLAT_SYMBOL = '\u266D';
 const DEGREE_SEPARATOR = '/';
 
-type PitchRendererOptions = Partial<AppState> & {
+export type PitchRendererOptions = Partial<AppState> & {
   columnWidths: number[];
   cellWidth: number;
   cellHeight: number;
@@ -37,6 +37,8 @@ interface DegreeFontResult {
   multiplier: number;
   category: 'natural' | 'single-accidental' | 'both-accidentals';
 }
+
+type NoteLabelCategory = DegreeFontResult['category'];
 
 interface AnimationEffectsManager {
   shouldAnimateNote(note: PlacedNote): boolean;
@@ -331,10 +333,9 @@ function drawStadiumShape(
   ctx.shadowColor = 'transparent';
   ctx.restore();
 
-  // Draw scale degree text in the center of the stadium
-  if (options.degreeDisplayMode !== 'off') {
+  if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
     const stadiumCenterX = (leftCenterX + rightCenterX) / 2;
-    drawScaleDegreeText(ctx, note, options, stadiumCenterX, centerY, ry);
+    drawNoteLabelText(ctx, note, options, stadiumCenterX, centerY, ry);
   }
 }
 
@@ -438,7 +439,62 @@ function getDegreeFontMultiplier(label: string | null): DegreeFontResult {
   return { multiplier: 0.88, category: 'single-accidental' };
 }
 
-function drawScaleDegreeText(
+function getPitchFontCategory(label: string | null): NoteLabelCategory {
+  if (!label) {
+    return 'natural';
+  }
+  if (label.includes(DEGREE_SEPARATOR)) {
+    return 'both-accidentals';
+  }
+  if (label.includes('#') || label.includes('b')) {
+    return 'single-accidental';
+  }
+  return 'natural';
+}
+
+function getPitchLabelFontSize(note: PlacedNote, noteWidth: number, category: NoteLabelCategory): number {
+  if (note.shape === 'circle') {
+    const circleBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
+    switch (category) {
+      case 'natural':
+        return circleBaseSize * 0.95;
+      case 'single-accidental':
+        return circleBaseSize * 0.72;
+      case 'both-accidentals':
+        return circleBaseSize * 0.36;
+      default:
+        return circleBaseSize;
+    }
+  }
+
+  if (note.shape === 'diamond') {
+    const diamondBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
+    switch (category) {
+      case 'natural':
+        return diamondBaseSize;
+      case 'single-accidental':
+        return diamondBaseSize * 0.78;
+      case 'both-accidentals':
+        return diamondBaseSize * 0.66;
+      default:
+        return diamondBaseSize;
+    }
+  }
+
+  const ovalBaseSize = noteWidth * 2 * OVAL_NOTE_FONT_RATIO;
+  switch (category) {
+    case 'natural':
+      return ovalBaseSize * 1.35;
+    case 'single-accidental':
+      return ovalBaseSize * 1.05;
+    case 'both-accidentals':
+      return ovalBaseSize * 0.95;
+    default:
+      return ovalBaseSize;
+  }
+}
+
+export function drawScaleDegreeText(
   ctx: CanvasRenderingContext2D,
   note: PlacedNote,
   options: PitchRendererOptions,
@@ -469,6 +525,21 @@ function drawScaleDegreeText(
       default:
         baseFontSize = circleBaseSize * contentMultiplier;
     }
+  } else if (note.shape === 'diamond') {
+    const diamondBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
+    switch (category) {
+      case 'natural':
+        baseFontSize = diamondBaseSize * 1.05;
+        break;
+      case 'single-accidental':
+        baseFontSize = diamondBaseSize * 0.84;
+        break;
+      case 'both-accidentals':
+        baseFontSize = diamondBaseSize * 0.64;
+        break;
+      default:
+        baseFontSize = diamondBaseSize * contentMultiplier;
+    }
   } else {
     const ovalBaseSize = noteWidth * 2 * OVAL_NOTE_FONT_RATIO;
     switch (category) {
@@ -495,7 +566,7 @@ function drawScaleDegreeText(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if (note.shape === 'oval' && category === 'both-accidentals' && noteLabel.includes(DEGREE_SEPARATOR)) {
+  if ((note.shape === 'oval' || note.shape === 'diamond') && category === 'both-accidentals' && noteLabel.includes(DEGREE_SEPARATOR)) {
     const parts = noteLabel.split(DEGREE_SEPARATOR);
     const lineHeight = fontSize * 1.1;
     const totalHeight = lineHeight * (parts.length - 1);
@@ -509,6 +580,67 @@ function drawScaleDegreeText(
   } else {
     const opticalOffset = fontSize * 0.08;
     ctx.fillText(noteLabel, centerX, centerY + opticalOffset);
+  }
+}
+
+export function drawPitchClassText(
+  ctx: CanvasRenderingContext2D,
+  note: PlacedNote,
+  options: PitchRendererOptions,
+  centerX: number,
+  centerY: number,
+  noteWidth: number,
+  _noteHeight?: number
+): void {
+  const noteLabel = TonalService.getPitchClassForNote(note, options as AppState);
+  if (!noteLabel) {
+    return;
+  }
+
+  const category = getPitchFontCategory(noteLabel);
+  const fontSize = getPitchLabelFontSize(note, noteWidth, category);
+  if (fontSize < MIN_FONT_SIZE) {
+    return;
+  }
+
+  ctx.fillStyle = '#212529';
+  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if ((note.shape === 'oval' || note.shape === 'diamond') && category === 'both-accidentals' && noteLabel.includes(DEGREE_SEPARATOR)) {
+    const parts = noteLabel.split(DEGREE_SEPARATOR);
+    const lineHeight = fontSize * 1.05;
+    const totalHeight = lineHeight * (parts.length - 1);
+    const startY = centerY - (totalHeight / 2);
+
+    parts.forEach((part, index) => {
+      const y = startY + (index * lineHeight);
+      const opticalOffset = fontSize * 0.08;
+      ctx.fillText(part.trim(), centerX, y + opticalOffset);
+    });
+  } else {
+    const opticalOffset = fontSize * 0.08;
+    ctx.fillText(noteLabel, centerX, centerY + opticalOffset);
+  }
+}
+
+export function drawNoteLabelText(
+  ctx: CanvasRenderingContext2D,
+  note: PlacedNote,
+  options: PitchRendererOptions,
+  centerX: number,
+  centerY: number,
+  noteWidth: number,
+  noteHeight?: number
+): void {
+  if (options.showPitchLabels) {
+    drawPitchClassText(ctx, note, options, centerX, centerY, noteWidth, noteHeight);
+    return;
+  }
+
+  if (options.degreeDisplayMode !== 'off') {
+    drawScaleDegreeText(ctx, note, options, centerX, centerY, noteWidth, noteHeight);
   }
 }
 
@@ -631,8 +763,8 @@ export function drawTwoColumnOvalNote(
   ctx.shadowOffsetX = 0;
   ctx.restore();
 
-  if (options.degreeDisplayMode !== 'off') {
-    drawScaleDegreeText(ctx, note, options, centerX, y, rx);
+  if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
+    drawNoteLabelText(ctx, note, options, centerX, y, rx);
   }
 }
 
@@ -705,8 +837,8 @@ export function drawSingleColumnOvalNote(
   ctx.shadowOffsetX = 0;
   ctx.restore();
 
-  if (options.degreeDisplayMode !== 'off') {
-    drawScaleDegreeText(ctx, note, options, cx, y, rx);
+  if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
+    drawNoteLabelText(ctx, note, options, cx, y, rx);
   }
 }
 

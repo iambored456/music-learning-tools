@@ -24,8 +24,6 @@ const THREE_STAMP_SPAN = 1.5;
  * Callbacks for three-sixteenth stamp actions
  */
 export interface SixteenthThreeStampActionCallbacks {
-  /** Convert canvas column to time index */
-  canvasToTime?: (canvasIndex: number, map: ColumnMap) => number | null;
   /** Convert time index to canvas column */
   timeToCanvas?: (timeIndex: number, map: ColumnMap) => number;
   /** Get column map from state */
@@ -46,7 +44,6 @@ function generateSixteenthThreeStampPlacementId(): string {
  */
 export function createSixteenthThreeStampActions(callbacks: SixteenthThreeStampActionCallbacks = {}) {
   const {
-    canvasToTime,
     timeToCanvas,
     getColumnMap,
     log = () => {}
@@ -77,13 +74,11 @@ export function createSixteenthThreeStampActions(callbacks: SixteenthThreeStampA
         this.removeSixteenthThreeStampPlacement(existingThreeStamp.id);
       }
 
-      // Check for collision with four-sixteenth stamps (convert canvas-space to time-space)
-      if (this.state.sixteenthStampPlacements && canvasToTime && getColumnMap) {
-        const map = getColumnMap(this.state);
+      // Check for collision with four-sixteenth stamps (time-space)
+      if (this.state.sixteenthStampPlacements) {
         const collidingStamps = this.state.sixteenthStampPlacements.filter(stamp => {
           if (stamp.row !== row) return false;
-          const stampStartTime = canvasToTime(stamp.startColumn, map);
-          if (stampStartTime === null) return true;
+          const stampStartTime = stamp.startTimeIndex;
           const stampEndTime = stampStartTime + 2; // four-sixteenth stamps span 2 microbeats
           return !(stampEndTime <= startTimeIndex || stampStartTime >= endTimeIndex);
         });

@@ -4,7 +4,7 @@ import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { type TonicSign } from '@utils/tonicColumnUtils.ts';
 import { getPlacedTonicSigns } from '@state/selectors.ts';
-import { canvasToTime, timeToCanvas } from '../services/columnMapService.ts';
+import { timeToCanvas } from '../services/columnMapService.ts';
 import type { TripletStampPlaybackData, TripletStampPlacement } from '@mlt/types';
 
 logger.moduleLoaded('TripletStampPlacements', 'triplets');
@@ -98,10 +98,7 @@ export function canPlaceTripletAt(startTimeIndex: number, span: number, row: num
     for (const placement of state.sixteenthStampPlacements) {
       if (placement.row === row) {
         // Check if this stamp overlaps with our triplet time span
-        const stampStartTime = canvasToTime(placement.startColumn, state);
-        if (stampStartTime === null) {
-          return false;
-        }
+        const stampStartTime = placement.startTimeIndex;
         const stampEndTime = stampStartTime + 2;
         const tripletEndTime = startTimeIndex + timeSpan;
 

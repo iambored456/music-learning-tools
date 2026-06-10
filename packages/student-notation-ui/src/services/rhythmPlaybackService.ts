@@ -8,6 +8,7 @@ import SynthEngine from './initAudio.ts';
 import logger from '@utils/logger.ts';
 import type { SixteenthStampPlacement, SixteenthThreeStampPlacement, TripletStampPlacement } from '@mlt/types';
 import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
+import { canvasToTime } from '@services/columnMapService.ts';
 
 logger.moduleLoaded('RhythmPlaybackService');
 
@@ -245,13 +246,17 @@ class RhythmPlaybackService {
   getSixteenthStampAtPosition(columnIndex: number, rowIndex: number): SixteenthStampPlacement | null {
     if (!store.state.sixteenthStampPlacements) {return null;}
 
-    // Find a stamp that overlaps this position
-    // Stamps span 2 columns (startColumn and endColumn)
+    const timeIndex = canvasToTime(columnIndex, store.state);
+    if (timeIndex === null) {
+      return null;
+    }
+
+    // Find a stamp that overlaps this time-space position.
     const stamp = store.state.sixteenthStampPlacements.find(placement => {
       const rowMatches = placement.row === rowIndex;
-      const columnMatches = columnIndex >= placement.startColumn &&
-                                  columnIndex < placement.endColumn;
-      return rowMatches && columnMatches;
+      const timeMatches = timeIndex >= placement.startTimeIndex &&
+                                  timeIndex < placement.startTimeIndex + 2;
+      return rowMatches && timeMatches;
     });
 
     return stamp || null;

@@ -15,7 +15,7 @@ export interface PitchViewportCoverageMetrics {
 export function calculateZoomToFitRowCount(containerHeight: number, rowCount: number): number {
   return calculateZoomToFitRowCountShared(containerHeight, rowCount, {
     baseUnit: BASE_ABSTRACT_UNIT,
-    paddingRows: 0
+    paddingRows: 1
   });
 }
 
@@ -74,8 +74,12 @@ export function getMinimumCellHeightForViewportCoverage(containerHeight: number,
     return 1;
   }
   const normalizedRowCount = Math.max(1, Math.round(rowCount));
-  const minimum = (2 * containerHeight) / (normalizedRowCount + 1);
-  return Math.max(1, Math.ceil(minimum));
+  const ideal = (2 * containerHeight) / (normalizedRowCount + 1);
+  const lower = Math.max(1, Math.floor(ideal));
+  const upper = Math.max(1, Math.ceil(ideal));
+  const lowerGap = Math.abs(containerHeight - ((normalizedRowCount + 1) * (lower / 2)));
+  const upperGap = Math.abs(containerHeight - ((normalizedRowCount + 1) * (upper / 2)));
+  return upperGap < lowerGap ? upper : lower;
 }
 
 export function resolveZoomAnimationDuration(requestedDurationMs: number, source: string, animationsEnabled: boolean): number {

@@ -11,9 +11,8 @@ import { getPlacedTonicSigns } from '@state/selectors.ts';
 import logger from '@utils/logger.ts';
 import { getCanvasPixelRatio, getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import type { PitchRowData } from '@mlt/types';
-import { getLegendColumnWidthUnitsForCellHeight, getLegendTotalWidthPx } from '@utils/legendSizing.ts';
+import { getLegendTotalWidthPx } from '@utils/legendSizing.ts';
 import {
-  getLegendFontDeclaration,
   resolveLegendTextLayout,
   snapToDevicePixel
 } from './legendTextRendering.ts';
@@ -56,8 +55,7 @@ function drawLegendText(
   pixelRatio: number,
   options: {
     font: string;
-    regime: 'fill' | 'halo';
-    outlineOffsetPx: number;
+    outlineWidthPx: number;
   }
 ): void {
   if (textAlpha === '00') {
@@ -68,27 +66,43 @@ function drawLegendText(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if (options.regime === 'halo') {
-    const offset = options.outlineOffsetPx;
-    const haloOffsets = [
-      [-offset, -offset],
-      [offset, -offset],
-      [-offset, offset],
-      [offset, offset]
-    ] as const;
+  const alpha = Math.max(0, Math.min(1, Number.parseInt(textAlpha, 16) / 255));
 
-    ctx.fillStyle = `#212529${textAlpha}`;
-    for (const [offsetX, offsetY] of haloOffsets) {
-      ctx.fillText(
-        label,
-        snapToDevicePixel(textX + offsetX, pixelRatio),
-        snapToDevicePixel(textY + offsetY, pixelRatio)
-      );
-    }
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.lineWidth = options.outlineWidthPx;
+  ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`;
+  ctx.strokeText(label, textX, textY);
+
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.fillText(label, textX, textY);
+}
+
+function fillLegendCell(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  centerY: number,
+  width: number,
+  height: number,
+  pixelRatio: number
+): void {
+  if (!Number.isFinite(x) || !Number.isFinite(centerY) || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return;
   }
 
-  ctx.fillStyle = `#ffffff${textAlpha}`;
-  ctx.fillText(label, textX, textY);
+  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  const left = snapToDevicePixel(x, ratio);
+  const right = snapToDevicePixel(x + width, ratio);
+  const top = Math.floor((centerY - height / 2) * ratio) / ratio;
+  const bottom = Math.ceil((centerY + height / 2) * ratio) / ratio;
+  const snappedWidth = Math.max(0, right - left);
+  const snappedHeight = Math.max(0, bottom - top);
+
+  if (snappedWidth <= 0 || snappedHeight <= 0) {
+    return;
+  }
+
+  ctx.fillRect(left, top, snappedWidth, snappedHeight);
 }
 
 // Helper function to extract tonic note from pitch at given row
@@ -327,7 +341,7 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
           }
 
           ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
-          ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+          fillLegendCell(ctx, cumulativeX, y, colWidth, cellHeight, pixelRatio);
 
           const textLayout = resolveLegendTextLayout(ctx, pitchToDraw, {
             cellHeight,
@@ -340,8 +354,7 @@ export function drawLegends(ctx: CanvasRenderingContext2D, options: LegendOption
 
           drawLegendText(ctx, pitchToDraw, textX, textY, textAlpha, pixelRatio, {
             font: textLayout.font,
-            regime: textLayout.regime,
-            outlineOffsetPx: textLayout.outlineOffsetPx
+            outlineWidthPx: textLayout.outlineWidthPx
           });
 
           if (focusColours && focusSet.size > 0) {
@@ -547,15 +560,14 @@ export function drawLegendsToSeparateCanvases(
           }
 
           ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
-          ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+          fillLegendCell(ctx, cumulativeX, y, colWidth, cellHeight, pixelRatio);
 
           const textX = snap(cumulativeX + colWidth / 2);
           const textY = snap(y);
 
           drawLegendText(ctx, pitchToDraw, textX, textY, textAlpha, pixelRatio, {
             font: textLayout.font,
-            regime: textLayout.regime,
-            outlineOffsetPx: textLayout.outlineOffsetPx
+            outlineWidthPx: textLayout.outlineWidthPx
           });
         }
       }

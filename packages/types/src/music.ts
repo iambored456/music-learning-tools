@@ -100,10 +100,8 @@ export type TonicSignGroups = Record<string, TonicSign[]>;
 export interface SixteenthStampPlacement {
   id: string;
   sixteenthStampId: number;
-  /** Canvas-space column index (0 = first musical beat) */
-  startColumn: CanvasSpaceColumn;
-  /** Canvas-space column index (0 = first musical beat) */
-  endColumn: CanvasSpaceColumn;
+  /** Time-space microbeat index (0 = first microbeat; excludes tonic columns) */
+  startTimeIndex: number;
   row: number;
   /** Absolute row index in masterRowData; used to restore position after range changes. */
   globalRow?: number;
@@ -128,12 +126,8 @@ export interface TripletStampPlacement {
 
 export interface SixteenthStampPlaybackData {
   sixteenthStampId: number;
-  /** Canvas-space column index (0 = first musical beat) */
-  column: CanvasSpaceColumn;
-  /** Canvas-space column index (0 = first musical beat) */
-  startColumn: CanvasSpaceColumn;
-  /** Canvas-space column index (0 = first musical beat) */
-  endColumn: CanvasSpaceColumn;
+  /** Time-space microbeat index (0 = first microbeat; excludes tonic columns) */
+  startTimeIndex: number;
   row: number;
   pitch: string;
   color: string;

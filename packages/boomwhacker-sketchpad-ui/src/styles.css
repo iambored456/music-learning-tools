@@ -47,6 +47,7 @@ body {
   --adaptive-cell-height-ratio: 2;
   --adaptive-rows-columns: 1;
   --adaptive-rows-gap-px: 14;
+  --playback-highway-height-percent: 70;
 
   width: min(1320px, 100%);
   margin: 0 auto;
@@ -68,13 +69,24 @@ body {
 
 .top-toolbar {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "controls"
+    "quarter";
   align-items: start;
-  gap: 6px;
+  gap: 8px;
+}
+
+.top-toolbar.eighth-bank-visible {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "controls eighth"
+    "quarter quarter";
 }
 
 .top-toolbar.playback-compact {
   grid-template-columns: max-content;
+  grid-template-areas: "controls";
   justify-self: start;
   width: fit-content;
   max-width: 100%;
@@ -94,11 +106,12 @@ body {
 }
 
 .controls-panel {
+  grid-area: controls;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   align-content: flex-start;
-  align-self: stretch;
+  align-self: start;
   min-height: 0;
   gap: 8px;
   border: 1px solid var(--ui-border-strong);
@@ -106,6 +119,14 @@ body {
   background: var(--surface-1);
   padding: 8px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+.toolbar-quarter-notebank-panel {
+  grid-area: quarter;
+}
+
+.toolbar-eighth-notebank-panel {
+  grid-area: eighth;
 }
 
 .controls-group {
@@ -172,7 +193,7 @@ body {
   justify-content: center;
   width: var(--transport-btn-size);
   height: var(--transport-btn-size);
-  padding: 8px;
+  padding: 1px;
   border: none;
   border-radius: 4px;
   background: transparent;
@@ -199,8 +220,9 @@ body {
 }
 
 .transport-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
 }
 
 .transport-btn.active {
@@ -220,29 +242,31 @@ body {
 }
 
 .transport-icon {
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
   display: block;
   filter: brightness(0) invert(1);
 }
 
 .transport-icon--count-in {
-  width: 22px;
-  height: 22px;
-  padding: 1px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   box-sizing: border-box;
   filter: none;
 }
 
 .transport-icon--metronome {
-  width: 16px;
-  height: 22px;
+  width: 24px;
+  height: 30px;
   object-fit: contain;
 }
 
 .transport-icon-mask {
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
   display: block;
   background-color: currentColor;
   -webkit-mask-repeat: no-repeat;
@@ -263,10 +287,43 @@ body {
 }
 
 .library-btn-icon {
-  width: 22px;
-  height: 22px;
+  width: 33px;
+  height: 33px;
   -webkit-mask-image: url('./assets/library.svg');
   mask-image: url('./assets/library.svg');
+}
+
+.play-from-start-btn svg,
+.play-pause-btn svg,
+.stop-btn svg,
+.clear-canvas-btn svg,
+.settings-gear-btn svg {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  flex-basis: 34px;
+}
+
+.share-btn svg,
+.settings-gear-btn svg {
+  width: 31px;
+  height: 31px;
+  min-width: 31px;
+  flex-basis: 31px;
+}
+
+.home-btn-icon {
+  width: 31px;
+  height: 31px;
+  min-width: 31px;
+  flex-basis: 31px;
+}
+
+.library-btn-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  flex-basis: 32px;
 }
 
 
@@ -306,7 +363,7 @@ body {
 }
 
 .controls-group button,
-.canvas-actions button,
+.measure-row-actions button,
 .pickup-controls button {
   border: 1px solid var(--ui-border-strong);
   border-radius: 6px;
@@ -318,20 +375,20 @@ body {
 }
 
 .controls-group button:hover:not(:disabled),
-.canvas-actions button:hover:not(:disabled),
+.measure-row-actions button:hover:not(:disabled),
 .pickup-controls button:hover:not(:disabled) {
   background: var(--ui-hover);
   border-color: var(--accent);
 }
 
 .controls-group button:active:not(:disabled),
-.canvas-actions button:active:not(:disabled),
+.measure-row-actions button:active:not(:disabled),
 .pickup-controls button:active:not(:disabled) {
   background: var(--ui-active);
 }
 
 .controls-group button:disabled,
-.canvas-actions button:disabled,
+.measure-row-actions button:disabled,
 .pickup-controls button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -391,6 +448,60 @@ body {
   scroll-snap-type: none;
 }
 
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded {
+  --playback-highway-content-height: calc(var(--playback-highway-height-percent) * 1dvh - var(--horizontal-scrollbar-height, 18px));
+  --playback-highway-row-height: var(--playback-highway-content-height);
+  --playback-highway-measure-width: calc(var(--playback-highway-row-height) * 4);
+  --horizontal-track-segment-width: var(--playback-highway-measure-width);
+  min-height: calc(var(--playback-highway-height-percent) * 1dvh);
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .rows-grid.track-style-horizontal {
+  min-height: var(--playback-highway-content-height);
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .rows-grid.track-style-horizontal:not(.two-voice-mode) {
+  align-items: stretch;
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .rows-grid.track-style-horizontal.two-voice-mode {
+  --playback-highway-voice-track-gap: max(26px, calc(var(--karaoke-ball-size-px, 40px) + var(--karaoke-arc-height-px, 64px) + 8px));
+  --playback-highway-row-height: calc((var(--playback-highway-content-height) - (var(--playback-highway-voice-track-gap) * (var(--visible-voice-count, 2) - 1))) / var(--visible-voice-count, 2));
+  --playback-highway-measure-width: calc(var(--playback-highway-row-height) * 4);
+  --horizontal-track-segment-width: calc(var(--playback-highway-measure-width) + 54px);
+  grid-template-rows: repeat(var(--visible-voice-count, 2), var(--playback-highway-row-height));
+  row-gap: var(--playback-highway-voice-track-gap);
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .track-row,
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .track-row-grids {
+  min-height: 100%;
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .track-grid {
+  height: var(--playback-highway-row-height);
+  min-height: 0;
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .macrobeat-cell {
+  aspect-ratio: 1 / 2;
+  min-height: 0;
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .placed-note.oval .glyph-label,
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .placed-note.circle .glyph-label {
+  font-size: clamp(4.4rem, 12dvh, 8rem);
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .placed-note.diamond .glyph-label {
+  font-size: clamp(1.75rem, 6dvh, 4rem);
+}
+
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .placed-note.diamond.sixteenth .glyph-label,
+.canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .placed-note.diamond.sixteenth.split .glyph-label {
+  font-size: clamp(1.25rem, 4dvh, 3rem);
+}
+
 .canvas-scroll-shell.track-style-horizontal.two-voice-mode {
   padding-top: 16px;
   padding-right: 16px;
@@ -436,7 +547,7 @@ body {
 }
 
 .toolbar-notebank-panel {
-  --toolbar-bank-scale: 0.52;
+  --toolbar-bank-scale: 0.54;
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr;
@@ -452,7 +563,10 @@ body {
 
 .toolbar-notebank-stack {
   display: grid;
-  gap: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  align-items: start;
+  column-gap: 0;
+  row-gap: 4px;
   min-width: 0;
 }
 
@@ -478,7 +592,7 @@ body {
 .toolbar-notebank-panel .bank-row-main {
   display: flex;
   align-items: flex-start;
-  gap: calc(12px * var(--toolbar-bank-scale));
+  gap: 0;
   min-width: max-content;
 }
 
@@ -498,14 +612,14 @@ body {
 }
 
 .toolbar-notebank-panel .bank-lattice.circle-row {
-  --token-width: calc(116px * var(--toolbar-bank-scale));
+  --token-width: var(--token-height);
 }
 
 .toolbar-notebank-panel .supplemental-note-bank {
   --token-height: 90px;
   display: flex;
   align-items: flex-start;
-  gap: calc(10px * var(--toolbar-bank-scale));
+  gap: 0;
   min-width: max-content;
   min-height: calc(var(--token-height) * 2);
   padding-top: calc(var(--token-height) / 2);
@@ -517,7 +631,7 @@ body {
 }
 
 .toolbar-notebank-panel .supplemental-note-bank--circle {
-  --token-width: calc(116px * var(--toolbar-bank-scale));
+  --token-width: var(--token-height);
 }
 
 .toolbar-notebank-panel .supplemental-note-bank--oval {
@@ -612,7 +726,7 @@ body {
 }
 
 .boomwhacker-sketchpad.viewport-fit .controls-group button,
-.boomwhacker-sketchpad.viewport-fit .canvas-actions button,
+.boomwhacker-sketchpad.viewport-fit .measure-row-actions button,
 .boomwhacker-sketchpad.viewport-fit .pickup-controls button {
   padding: calc(4px * var(--adaptive-controls-scale)) calc(8px * var(--adaptive-controls-scale));
   font-size: calc(0.86rem * var(--adaptive-controls-scale));
@@ -625,13 +739,55 @@ body {
 }
 
 .boomwhacker-sketchpad.viewport-fit .transport-btn {
-  padding: calc(8px * var(--adaptive-controls-scale));
+  padding: calc(1px * var(--adaptive-controls-scale));
 }
 
 .boomwhacker-sketchpad.viewport-fit .transport-btn svg,
 .boomwhacker-sketchpad.viewport-fit .transport-icon {
-  width: calc(18px * var(--adaptive-controls-scale));
-  height: calc(18px * var(--adaptive-controls-scale));
+  width: 32px;
+  height: 32px;
+}
+
+.boomwhacker-sketchpad.viewport-fit .transport-icon--count-in {
+  width: 30px;
+  height: 30px;
+}
+
+.boomwhacker-sketchpad.viewport-fit .transport-icon--metronome {
+  width: 24px;
+  height: 30px;
+}
+
+.boomwhacker-sketchpad.viewport-fit .transport-icon-mask {
+  width: 32px;
+  height: 32px;
+}
+
+.boomwhacker-sketchpad.viewport-fit .library-btn-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  flex-basis: 32px;
+}
+
+.boomwhacker-sketchpad.viewport-fit .play-from-start-btn svg,
+.boomwhacker-sketchpad.viewport-fit .play-pause-btn svg,
+.boomwhacker-sketchpad.viewport-fit .stop-btn svg,
+.boomwhacker-sketchpad.viewport-fit .clear-canvas-btn svg,
+.boomwhacker-sketchpad.viewport-fit .settings-gear-btn svg {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  flex-basis: 34px;
+}
+
+.boomwhacker-sketchpad.viewport-fit .share-btn svg,
+.boomwhacker-sketchpad.viewport-fit .settings-gear-btn svg,
+.boomwhacker-sketchpad.viewport-fit .home-btn-icon {
+  width: 31px;
+  height: 31px;
+  min-width: 31px;
+  flex-basis: 31px;
 }
 
 .boomwhacker-sketchpad.viewport-fit .tempo-inline-group {
@@ -645,8 +801,7 @@ body {
   --tempo-slider-thumb-size: calc(14px * var(--adaptive-controls-scale));
 }
 
-.boomwhacker-sketchpad.viewport-fit .pickup-controls,
-.boomwhacker-sketchpad.viewport-fit .canvas-actions {
+.boomwhacker-sketchpad.viewport-fit .pickup-controls {
   gap: calc(5px * var(--adaptive-controls-scale));
   flex-wrap: nowrap;
 }
@@ -727,7 +882,7 @@ body {
 }
 
 .boomwhacker-sketchpad.viewport-fit .bank-lattice.circle-row {
-  --token-width: calc(108px * var(--adaptive-bank-scale));
+  --token-width: var(--token-height);
   --token-height: calc(84px * var(--adaptive-bank-scale));
 }
 
@@ -736,7 +891,7 @@ body {
 }
 
 .boomwhacker-sketchpad.viewport-fit .toolbar-notebank-panel .supplemental-note-bank--circle {
-  --token-width: calc(108px * var(--adaptive-bank-scale));
+  --token-width: var(--token-height);
 }
 
 .boomwhacker-sketchpad.viewport-fit .toolbar-notebank-panel .supplemental-note-bank--oval {
@@ -874,7 +1029,7 @@ body {
   grid-template-columns: max-content max-content;
   align-items: flex-start;
   justify-content: start;
-  column-gap: 28px;
+  column-gap: 0;
   row-gap: 4px;
 }
 
@@ -891,7 +1046,7 @@ body {
   --lattice-columns: 16;
   --token-width: 58px;
   --token-height: 90px;
-  --lattice-gap-x: calc(var(--token-width) * 0.5);
+  --lattice-gap-x: 0px;
   --lattice-step-x: calc((var(--token-width) + var(--lattice-gap-x)) / 24);
   position: relative;
   width: calc(var(--lattice-columns) * var(--lattice-step-x));
@@ -915,9 +1070,9 @@ body {
 }
 
 .bank-lattice.circle-row {
-  --token-width: 116px;
+  --token-width: var(--token-height);
   --token-height: 90px;
-  --lattice-gap-x: calc(var(--token-width) * 0.25);
+  --lattice-gap-x: 0px;
 }
 
 .bank-lattice-row {
@@ -943,14 +1098,18 @@ body {
 }
 
 .bank-lattice.accidentals-hidden {
+  width: max-content;
+  max-width: none;
   min-height: var(--token-height);
 }
 
 .bank-lattice.accidentals-hidden .bank-lattice-row.middle {
+  position: static;
   top: 0;
   display: flex;
-  width: 100%;
-  justify-content: space-evenly;
+  width: max-content;
+  justify-content: start;
+  gap: 0;
 }
 
 .bank-lattice .bank-token-shell {
@@ -1040,6 +1199,21 @@ body {
 
 .token-hitbox span {
   pointer-events: none;
+}
+
+.token-hitbox .glyph-icon {
+  width: 1.28em;
+  height: 1.28em;
+}
+
+.bank-token-shell.circle .token-hitbox .glyph-icon {
+  width: 1.52em;
+  height: 1.52em;
+}
+
+.bank-token-shell.oval .token-hitbox .glyph-icon {
+  width: 1.18em;
+  height: 1.18em;
 }
 
 .scale-degree-one-low,
@@ -1553,10 +1727,32 @@ body {
 }
 
 .track-row-grids {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   width: 100%;
+}
+
+.measure-row-actions {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  pointer-events: auto;
+}
+
+.measure-row-actions button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 28px;
+  padding: 0;
+  border-radius: 5px;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .pickup-track-row {
@@ -2020,17 +2216,6 @@ body {
   font-size: 1.3rem;
 }
 
-.canvas-actions {
-  margin-top: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.toolbar-canvas-actions {
-  margin-top: 0;
-}
-
 .boomwhacker-sketchpad :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -2040,11 +2225,11 @@ body {
   .transport-btn {
     width: 44px;
     height: 44px;
-    padding: 10px;
+    padding: 2px;
   }
 
   .controls-group button,
-  .canvas-actions button,
+  .measure-row-actions button,
   .pickup-controls button {
     min-height: 44px;
     touch-action: manipulation;
@@ -2083,6 +2268,17 @@ body {
 @media (max-width: 920px) {
   .top-toolbar {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "controls"
+      "quarter";
+  }
+
+  .top-toolbar.eighth-bank-visible {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "controls"
+      "eighth"
+      "quarter";
   }
 
   .transport-group {
@@ -2130,7 +2326,7 @@ body {
   }
 
   .bank-lattice.circle-row {
-    --token-width: 100px;
+    --token-width: var(--token-height);
   }
 
   .toolbar-notebank-panel .supplemental-note-bank {
@@ -2138,7 +2334,7 @@ body {
   }
 
   .toolbar-notebank-panel .supplemental-note-bank--circle {
-    --token-width: 100px;
+    --token-width: var(--token-height);
   }
 
   .toolbar-notebank-panel .supplemental-note-bank--oval {
@@ -2369,6 +2565,28 @@ body {
 
 .settings-slider-field input[type='range'] {
   width: 160px;
+}
+
+.settings-reset-btn {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.settings-reset-btn:hover:not(:disabled) {
+  background: var(--ui-hover);
+  border-color: var(--accent);
+}
+
+.settings-reset-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .settings-dialog .value-readout {
@@ -3004,43 +3222,4 @@ body {
 .gmail-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--ui-border-strong);
-}
-
-/* ── Pickup Beats / Canvas Actions Modal ── */
-.pickup-modal {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  z-index: 201;
-  width: calc(100% - 32px);
-  max-width: 300px;
-  height: fit-content;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 12px;
-  background: var(--surface-1);
-  color: var(--text);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
-  font-family: 'Atkinson Hyperlegible Next', sans-serif;
-}
-
-.pickup-modal-body {
-  padding: 14px 18px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.pickup-modal-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.pickup-modal-section-label {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import store from '@state/initStore.ts';
   import effectsController from '@components/audio/effects/effectsController.ts';
   import CartesianSlider from '../ui/CartesianSlider.svelte';
@@ -77,6 +77,8 @@
   let colors = $state<SliderColors>({});
   let currentColor: string | null = store.state.selectedNote?.color ?? null;
   let isDragging = false;
+  let pendingChange: { x: number; y: number } | null = null;
+  let pendingChangeFrame: number | null = null;
   const isEffectOff = $derived(config ? (
     xValue === config.xRange.min && yValue === config.yRange.min
   ) : false);
@@ -136,12 +138,26 @@
     yValue = nextY;
   }
 
+  function flushPendingChange(): void {
+    if (pendingChangeFrame !== null) {
+      cancelAnimationFrame(pendingChangeFrame);
+      pendingChangeFrame = null;
+    }
+    const nextChange = pendingChange;
+    pendingChange = null;
+    if (!nextChange || !config || !effectType) {return;}
+
+    effectsController.updateEffect(effectType, {
+      [config.xParam]: nextChange.x,
+      [config.yParam]: nextChange.y
+    });
+  }
+
   function handleChange({ x, y }: { x: number; y: number }): void {
     if (!config || !effectType) {return;}
-    effectsController.updateEffect(effectType, {
-      [config.xParam]: x,
-      [config.yParam]: y
-    });
+    pendingChange = { x, y };
+    if (pendingChangeFrame !== null) {return;}
+    pendingChangeFrame = requestAnimationFrame(flushPendingChange);
   }
 
   function handleInteractionStart(): void {
@@ -155,10 +171,18 @@
   function handleInteractionEnd(): void {
     if (!effectType || !isDragging) {return;}
     isDragging = false;
+    flushPendingChange();
     const color = effectsController.getActiveColor();
     store.emit('effectDialInteractionEnd', { effectType, color });
     effectsController.stopHoldPreview(effectType);
   }
+
+  onDestroy(() => {
+    if (pendingChangeFrame !== null) {
+      cancelAnimationFrame(pendingChangeFrame);
+      pendingChangeFrame = null;
+    }
+  });
 
   onMount(() => {
     if (!host) {return;}

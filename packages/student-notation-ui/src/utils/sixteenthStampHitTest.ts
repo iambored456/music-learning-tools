@@ -1,13 +1,16 @@
 // Hit testing utility for detecting individual shapes within stamps
 /**
  * COORDINATE SYSTEM NOTE:
- * - placement.startColumn is canvas-space (0 = first musical beat)
+ * - placement.startTimeIndex is time-space (0 = first playable microbeat)
+ * - timeToCanvas() converts time-space to canvas-space for rendering/hit testing
  * - getColumnX() converts canvas-space column index to pixel position
  * - All hit testing uses canvas-space coordinates
  */
 
 import { getSixteenthStampById } from '@/rhythm/sixteenthStamps.ts';
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
+import { timeToCanvas } from '@services/columnMapService.ts';
+import store from '@state/initStore.ts';
 import type { SixteenthStampPlacement as StateSixteenthStampPlacement } from '@mlt/types';
 
 export type SixteenthStampPlacement = StateSixteenthStampPlacement;
@@ -43,8 +46,14 @@ export function hitTestSixteenthStampShape(
   }
 
   // Calculate stamp bounds
-  const stampX = getColumnX(placement.startColumn, options);
-  const stampWidth = options.cellWidth * 2; // Stamps span 2 microbeats
+  const startCanvasCol = timeToCanvas(placement.startTimeIndex, store.state);
+  const endCanvasCol = startCanvasCol + 2;
+  const stampX = getColumnX(startCanvasCol, options);
+  const stampEndX = getColumnX(endCanvasCol, options);
+  const rawWidth = stampEndX - stampX;
+  const stampWidth = Number.isFinite(rawWidth) && rawWidth > 0
+    ? rawWidth
+    : options.cellWidth * 2;
   const stampHeight = options.cellHeight;
 
   // Calculate slot centers (matching sixteenthStampRenderer.ts)

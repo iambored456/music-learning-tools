@@ -5,6 +5,11 @@ import { getSynthEngine } from '@services/runtimeGlobals.ts';
 
 logger.moduleLoaded('DelayAudioEffect');
 
+const DELAY_MIN_SECONDS = 0.01;
+const DELAY_MAX_SECONDS = 0.5;
+const PARAMETER_RAMP_SECONDS = 0.04;
+const WET_RAMP_SECONDS = 0.025;
+
 interface DelaySettings {
   time: number;
   feedback: number;
@@ -101,7 +106,7 @@ class DelayAudioEffect {
       return null;
     }
 
-    const delayTime = Math.max(0.01, (time / 100) * 0.5);
+    const delayTime = Math.max(DELAY_MIN_SECONDS, (time / 100) * DELAY_MAX_SECONDS);
     const feedbackAmount = Math.min(0.95, feedback / 100);
     const wetAmount = wet / 100;
 
@@ -113,15 +118,15 @@ class DelayAudioEffect {
   }
 
   private updateDelayInstance(delayInstance: DelayInstance, time: number, feedback: number, wet = 15): void {
-    const delayTime = Math.max(0.01, (time / 100) * 0.5);
+    const delayTime = Math.max(DELAY_MIN_SECONDS, (time / 100) * DELAY_MAX_SECONDS);
     const feedbackAmount = Math.min(0.95, feedback / 100);
     const wetAmount = wet / 100;
 
     try {
-      delayInstance.delayTime.value = delayTime;
-      delayInstance.feedback.value = feedbackAmount;
+      this.rampAudioParam(delayInstance.delayTime, delayTime, PARAMETER_RAMP_SECONDS);
+      this.rampAudioParam(delayInstance.feedback, feedbackAmount, PARAMETER_RAMP_SECONDS);
       if (delayInstance._crossFade) {
-        delayInstance._crossFade.fade.value = wetAmount;
+        this.rampAudioParam(delayInstance._crossFade.fade, wetAmount, WET_RAMP_SECONDS);
       }
       delayInstance._wetAmount = wetAmount;
       logger.debug('DelayAudioEffect', 'Updated delay instance', { delayTime, feedbackAmount, wetAmount }, 'audio');
@@ -135,7 +140,7 @@ class DelayAudioEffect {
       return null;
     }
 
-    const delayTime = Math.max(0.01, (time / 100) * 0.5);
+    const delayTime = Math.max(DELAY_MIN_SECONDS, (time / 100) * DELAY_MAX_SECONDS);
     const feedbackAmount = Math.min(0.95, feedback / 100);
     const wetAmount = wet / 100;
 
@@ -144,6 +149,36 @@ class DelayAudioEffect {
       feedback: feedbackAmount,
       wet: wetAmount
     };
+  }
+
+  private rampAudioParam(param: unknown, value: number, rampSeconds: number): void {
+    const target = param as {
+      value?: number;
+      rampTo?: (value: number, rampTime: number, startTime?: number) => void;
+      cancelScheduledValues?: (time: number) => void;
+      setTargetAtTime?: (value: number, startTime: number, timeConstant: number) => void;
+    };
+
+    try {
+      if (typeof target.rampTo === 'function') {
+        target.rampTo(value, rampSeconds);
+        return;
+      }
+
+      const now = Tone.now();
+      if (
+        typeof target.cancelScheduledValues === 'function' &&
+        typeof target.setTargetAtTime === 'function'
+      ) {
+        target.cancelScheduledValues(now);
+        target.setTargetAtTime(value, now, rampSeconds / 3);
+        return;
+      }
+
+      target.value = value;
+    } catch {
+      target.value = value;
+    }
   }
 
   disableForColor(color: string): void {

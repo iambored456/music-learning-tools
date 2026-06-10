@@ -41,7 +41,7 @@
     shape: NoteShape;
   };
 
-  type NoteIconId = 'clap' | 'stomp' | 'djembe' | 'stick-clicks';
+  type NoteIconId = 'clap' | 'stomp' | 'djembe' | 'stick-clicks' | 'tambourine';
 
   type ExtendedNoteDefinition = NoteDefinition & {
     sampleId?: string;
@@ -311,6 +311,7 @@
     showSixteenthsBank: boolean;
     mainPlaybackVoice: OscillatorType;
     mainVolume: number;
+    playbackHighwayHeightPercent?: number;
   };
 
   type LibrarySketchDocument = {
@@ -328,7 +329,7 @@
     document: LibrarySketchDocument;
   };
 
-  const PERCUSSION_NOTE_IDS = ['clap', 'stomp', 'djembe', 'stick-clicks'] as const;
+  const PERCUSSION_NOTE_IDS = ['clap', 'stomp', 'djembe', 'stick-clicks', 'tambourine'] as const;
 
   const SUPPLEMENTAL_NOTE_DEFINITIONS: ExtendedNoteDefinition[] = [
     {
@@ -363,6 +364,14 @@
       sampleId: 'roland-tr-909-roland-tr-909-hhcd4',
       iconId: 'stick-clicks',
     },
+    {
+      id: 'tambourine',
+      label: 'Tambourine',
+      interval: 0,
+      colorId: 'tambourine',
+      sampleId: 'generic-percussion-tamb-1',
+      iconId: 'tambourine',
+    },
   ];
 
   const SUPPLEMENTAL_NOTE_COLORS = {
@@ -370,6 +379,7 @@
     stomp: '#c58b66',
     djembe: '#8fc7b5',
     'stick-clicks': '#b7a2d8',
+    tambourine: '#f0b86a',
   } as const;
 
   const CHROMANOTES_PALETTE: Record<string, string> = {
@@ -389,6 +399,7 @@
     stomp: SUPPLEMENTAL_NOTE_COLORS.stomp,
     djembe: SUPPLEMENTAL_NOTE_COLORS.djembe,
     'stick-clicks': SUPPLEMENTAL_NOTE_COLORS['stick-clicks'],
+    tambourine: SUPPLEMENTAL_NOTE_COLORS.tambourine,
   };
 
   const model = createBoomwhackerSketchpadModel();
@@ -408,6 +419,9 @@
   const KARAOKE_ARC_HEIGHT_MAX = 100;
   const KARAOKE_BALL_SIZE_MIN = 8;
   const KARAOKE_BALL_SIZE_MAX = 72;
+  const PLAYBACK_HIGHWAY_HEIGHT_PERCENT_MIN = 35;
+  const PLAYBACK_HIGHWAY_HEIGHT_PERCENT_MAX = 100;
+  const PLAYBACK_HIGHWAY_HEIGHT_PERCENT_DEFAULT = 70;
   const LOW_SCALE_DEGREE_ONE_NOTE_ID = '1';
   const HIGH_SCALE_DEGREE_ONE_NOTE_ID = 'oct';
   const LOW_SCALE_DEGREE_ONE_LEGACY_LABEL = '1\u0332';
@@ -420,6 +434,10 @@
   const BANK_LATTICE_COLUMN_COUNT_CIRCLE = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_CIRCLE);
   const BANK_LATTICE_COLUMN_COUNT_OVAL = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_OVAL);
   const BANK_LATTICE_COLUMN_COUNT_DIAMOND = calculateBankLatticeColumnCount(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
+  const NOTE_BANK_SHORTCUT_NOTE_IDS = NOTE_BANK_DISPLAY_GROUPS.map((group) => group.natural);
+  const CIRCLE_NOTE_SHORTCUT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8'] as const;
+  const OVAL_NOTE_SHORTCUT_CODES = ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI'] as const;
+  const DIAMOND_NOTE_SHORTCUT_CODES = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK'] as const;
   const countInIconUrl = new URL('./assets/count-in.svg', import.meta.url).href;
   const metronomeIconUrl = new URL('./assets/metronome.svg', import.meta.url).href;
   const loopIconUrl = new URL('./assets/loop.svg', import.meta.url).href;
@@ -490,6 +508,7 @@
   let isLooping = false;
   let playbackIndex = 0;
   let playbackPaused = false;
+  let playbackStartToken = 0;
   let playbackStartSelection: PlaybackStartSelection | null = null;
   let selectedNoteKeys = new Set<string>();
   let boxSelectionState: BoxSelectionState | null = null;
@@ -503,6 +522,7 @@
   let voiceKaraokeBallArcOffsetPxs: number[] = VOICE_INDEXES.map(() => 0);
   let karaokeArcHeightPx = 64;
   let karaokeBallSizePx = 40;
+  let playbackHighwayHeightPercent = PLAYBACK_HIGHWAY_HEIGHT_PERCENT_DEFAULT;
   let countInEnabled = true;
   let macrobeatMetronomeEnabled = false;
   let countInDisplayNumber: number | null = null;
@@ -533,6 +553,7 @@
   let activePreviewPayload: DragPayload | null = null;
   let cursorPreview: { note: PlacedNote; x: number; y: number } | null = null;
   let cursorOverCanvas = false;
+  let lastPointerPosition: { x: number; y: number } | null = null;
   let pendingBankTouchActivation: PendingBankTouchActivation | null = null;
   let suppressNextBankClick = false;
   let pickupPreviewLogKey: string | null = null;
@@ -567,7 +588,6 @@
   let currentLibraryName: string | null = null;
 
   let studentViewModalOpen = false;
-  let pickupBeatsModalOpen = false;
   let studentViewSettings: StudentViewSettings = {};
   let shareStudentViewUrl = '';
   let shareStudentViewCode = '';
@@ -652,6 +672,10 @@
     voiceLayoutMode;
     trackStyle;
     renderedTrackRows = buildRenderedTrackRows();
+  }
+  $: {
+    renderedTrackRows;
+    applyHorizontalPlaybackLaneShiftStyles();
   }
   $: {
     voiceRows;
@@ -743,6 +767,7 @@
     window.addEventListener('pointerup', handleWindowPointerUpForBoxSelection);
     window.addEventListener('pointercancel', handleWindowPointerCancelForBoxSelection);
     window.addEventListener('mousedown', handleWindowMouseDownForBoxSelection);
+    window.addEventListener('mousemove', handleWindowMouseMoveForCursorPreview);
     window.addEventListener('mousemove', handleWindowMouseMoveForBoxSelection);
     window.addEventListener('mouseup', handleWindowMouseUpForBoxSelection);
     const handleViewportDiagnostics = () => {
@@ -807,6 +832,7 @@
       window.removeEventListener('pointerup', handleWindowPointerUpForBoxSelection);
       window.removeEventListener('pointercancel', handleWindowPointerCancelForBoxSelection);
       window.removeEventListener('mousedown', handleWindowMouseDownForBoxSelection);
+      window.removeEventListener('mousemove', handleWindowMouseMoveForCursorPreview);
       window.removeEventListener('mousemove', handleWindowMouseMoveForBoxSelection);
       window.removeEventListener('mouseup', handleWindowMouseUpForBoxSelection);
       window.removeEventListener('resize', handleViewportDiagnostics);
@@ -1054,6 +1080,7 @@
     if (iconId === 'stomp') return 'glyph-icon--stomp';
     if (iconId === 'djembe') return 'glyph-icon--djembe';
     if (iconId === 'stick-clicks') return 'glyph-icon--stick-clicks';
+    if (iconId === 'tambourine') return 'glyph-icon--tambourine';
     return null;
   }
 
@@ -1513,7 +1540,7 @@
     try {
       window.localStorage.setItem(CANVAS_PERSISTENCE_KEY, JSON.stringify(persistedState));
     } catch (error) {
-      console.warn('Boomwhacker Sketchpad canvas persistence save failed.', error);
+      console.warn('Simple Notation canvas persistence save failed.', error);
     }
   }
 
@@ -1526,7 +1553,7 @@
       if (!rawState) return;
       parsed = JSON.parse(rawState);
     } catch (error) {
-      console.warn('Boomwhacker Sketchpad canvas persistence load failed.', error);
+      console.warn('Simple Notation canvas persistence load failed.', error);
       return;
     }
 
@@ -1577,6 +1604,15 @@
     return Math.max(0, Math.min(1, numericValue));
   }
 
+  function clampPlaybackHighwayHeightPercent(value: unknown, fallback = PLAYBACK_HIGHWAY_HEIGHT_PERCENT_DEFAULT): number {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.max(
+      PLAYBACK_HIGHWAY_HEIGHT_PERCENT_MIN,
+      Math.min(PLAYBACK_HIGHWAY_HEIGHT_PERCENT_MAX, Math.round(numericValue)),
+    );
+  }
+
   function normalizeLibrarySketchSettings(value: unknown): LibrarySketchSettings {
     const source = value && typeof value === 'object'
       ? value as Record<string, unknown>
@@ -1605,6 +1641,7 @@
       showSixteenthsBank: typeof source.showSixteenthsBank === 'boolean' ? source.showSixteenthsBank : false,
       mainPlaybackVoice,
       mainVolume: clampUnitInterval(source.mainVolume, state.mainVolume),
+      playbackHighwayHeightPercent: clampPlaybackHighwayHeightPercent(source.playbackHighwayHeightPercent),
     };
   }
 
@@ -1637,6 +1674,7 @@
         showSixteenthsBank,
         mainPlaybackVoice: state.mainPlaybackVoice,
         mainVolume: state.mainVolume,
+        playbackHighwayHeightPercent,
       },
     };
   }
@@ -1653,6 +1691,7 @@
     showAccidentals = settings.showAccidentals;
     showEighthsBank = settings.showEighthsBank;
     showSixteenthsBank = settings.showSixteenthsBank;
+    playbackHighwayHeightPercent = clampPlaybackHighwayHeightPercent(settings.playbackHighwayHeightPercent);
     applyPaletteToPlacedNotes();
     model.setMainPlaybackVoice(settings.mainPlaybackVoice);
     model.setMainVolume(settings.mainVolume);
@@ -1751,7 +1790,6 @@
   async function openLibraryModal(): Promise<void> {
     shareModalOpen = false;
     studentViewModalOpen = false;
-    pickupBeatsModalOpen = false;
     libraryModalOpen = true;
     libraryPendingAction = null;
     libraryError = null;
@@ -1943,7 +1981,7 @@
       const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
       binaryString = atob(padded);
     } catch (error) {
-      console.warn('Boomwhacker Sketchpad share decode (base64) failed.', error);
+      console.warn('Simple Notation share decode (base64) failed.', error);
       return { ok: false, reason: 'decode' };
     }
 
@@ -1959,7 +1997,7 @@
       void dsWriter.close();
       decompressed = await new Response(ds.readable).arrayBuffer();
     } catch (error) {
-      console.warn('Boomwhacker Sketchpad share decode (decompress) failed.', error);
+      console.warn('Simple Notation share decode (decompress) failed.', error);
       return { ok: false, reason: 'decompress' };
     }
 
@@ -1967,7 +2005,7 @@
     try {
       parsed = JSON.parse(new TextDecoder().decode(decompressed));
     } catch (error) {
-      console.warn('Boomwhacker Sketchpad share decode (JSON) failed.', error);
+      console.warn('Simple Notation share decode (JSON) failed.', error);
       return { ok: false, reason: 'parse' };
     }
 
@@ -1987,7 +2025,7 @@
       const codeStr = versionMatch[2];
 
       if (routeVersion !== SHARE_ROUTE_VERSION) {
-        console.warn('Boomwhacker Sketchpad share link has unrecognized route version:', routeVersion);
+        console.warn('Simple Notation share link has unrecognized route version:', routeVersion);
         return { ok: false, reason: 'version-unknown' };
       }
 
@@ -2000,7 +2038,7 @@
       if (storedChecksum) {
         const expectedChecksum = await computeChecksum(base64url);
         if (expectedChecksum && storedChecksum !== expectedChecksum) {
-          console.warn('Boomwhacker Sketchpad share link checksum mismatch.');
+          console.warn('Simple Notation share link checksum mismatch.');
           return { ok: false, reason: 'checksum' };
         }
       }
@@ -2098,9 +2136,9 @@
       case 'decode': return 'Link characters appear corrupted — try copying fresh from the browser.';
       case 'decompress': return 'Link appears truncated — copy the full URL or ask the sender to reshare.';
       case 'parse': return 'Share link is unreadable — it may have been modified.';
-      case 'version-unknown': return 'This link needs a newer version of Boomwhacker Sketchpad to open.';
-      case 'version-mismatch': return 'This share link was created with a newer version of Boomwhacker Sketchpad.';
-      case 'schema': return 'Share link format is invalid — it may not have come from Boomwhacker Sketchpad.';
+      case 'version-unknown': return 'This link needs a newer version of Simple Notation to open.';
+      case 'version-mismatch': return 'This share link was created with a newer version of Simple Notation.';
+      case 'schema': return 'Share link format is invalid — it may not have come from Simple Notation.';
     }
   }
 
@@ -2116,7 +2154,7 @@
 
     if (!result.ok) {
       shareDecodeError = shareDecodeErrorMessage(result.reason);
-      console.warn('Boomwhacker Sketchpad share load failed:', result.reason);
+      console.warn('Simple Notation share load failed:', result.reason);
       return false;
     }
 
@@ -2135,7 +2173,7 @@
       shareCodeCopied = false;
       shareModalOpen = true;
     } catch (error) {
-      console.error('Boomwhacker Sketchpad share encoding failed.', error);
+      console.error('Simple Notation share encoding failed.', error);
       shareFailed = true;
       shareUrl = '';
       shareCode = '';
@@ -2186,7 +2224,7 @@
       shareStudentViewCopied = false;
       shareStudentViewCodeCopied = false;
     } catch (error) {
-      console.error('Boomwhacker Sketchpad student view share encoding failed.', error);
+      console.error('Simple Notation student view share encoding failed.', error);
       shareStudentViewUrl = '';
       shareStudentViewCode = '';
     }
@@ -2213,9 +2251,9 @@
   }
 
   function buildGmailComposeUrl(code: string): string {
-    const subject = encodeURIComponent('Boomwhacker Sketchpad composition');
+    const subject = encodeURIComponent('Simple Notation composition');
     const body = encodeURIComponent(
-      `Hello, I'd like to share my Boomwhacker Sketchpad composition with you.\n\nTo open it:\n1. Go to https://iambored456.github.io/music-learning-tools/boomwhacker-sketchpad/\n2. Click the Share button\n3. Paste this code into the "Load from code" field:\n\n${code}\n\nEnjoy!`
+      `Hello, I'd like to share my Simple Notation composition with you.\n\nTo open it:\n1. Go to https://iambored456.github.io/music-learning-tools/boomwhacker-sketchpad/\n2. Click the Share button\n3. Paste this code into the "Load from code" field:\n\n${code}\n\nEnjoy!`
     );
     return `https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`;
   }
@@ -2520,6 +2558,43 @@
     return Boolean(tapPlacementPayload && tapPlacementPayload.note.noteId === noteId && tapPlacementPayload.note.shape === shape);
   }
 
+  function noteBankShortcutForCode(code: string): { noteId: string; shape: NoteShape } | null {
+    const circleIndex = CIRCLE_NOTE_SHORTCUT_CODES.indexOf(code as (typeof CIRCLE_NOTE_SHORTCUT_CODES)[number]);
+    if (circleIndex >= 0) return { noteId: NOTE_BANK_SHORTCUT_NOTE_IDS[circleIndex], shape: 'circle' };
+
+    const ovalIndex = OVAL_NOTE_SHORTCUT_CODES.indexOf(code as (typeof OVAL_NOTE_SHORTCUT_CODES)[number]);
+    if (ovalIndex >= 0) return { noteId: NOTE_BANK_SHORTCUT_NOTE_IDS[ovalIndex], shape: 'oval' };
+
+    const diamondIndex = DIAMOND_NOTE_SHORTCUT_CODES.indexOf(code as (typeof DIAMOND_NOTE_SHORTCUT_CODES)[number]);
+    if (diamondIndex >= 0) return { noteId: NOTE_BANK_SHORTCUT_NOTE_IDS[diamondIndex], shape: 'diamond' };
+
+    return null;
+  }
+
+  function cursorPreviewCoordinates(): { x: number; y: number } {
+    if (lastPointerPosition) return lastPointerPosition;
+    if (typeof window === 'undefined') return { x: 0, y: 0 };
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  }
+
+  function updateCursorOverCanvasFromTarget(target: EventTarget | null): void {
+    cursorOverCanvas = Boolean(target instanceof Node && canvasPanelElement?.contains(target));
+  }
+
+  function updateCursorPreviewForTapPayload(note: PlacedNote | null): void {
+    if (!note) {
+      cursorPreview = null;
+      cursorOverCanvas = false;
+      return;
+    }
+
+    const { x, y } = cursorPreviewCoordinates();
+    cursorPreview = { note, x, y };
+    if (typeof document !== 'undefined') {
+      updateCursorOverCanvasFromTarget(document.elementFromPoint(x, y));
+    }
+  }
+
   function clearPlacementHoverPreview(): void {
     dragOverCell = null;
     pickupPreviewLogKey = null;
@@ -2532,6 +2607,7 @@
 
   function clearTapPlacementSelection(): void {
     tapPlacementPayload = null;
+    updateCursorPreviewForTapPayload(null);
     clearPlacementPreviewState();
   }
 
@@ -2548,6 +2624,7 @@
       source: 'bank',
       note,
     };
+    updateCursorPreviewForTapPayload(note);
     clearPlacementPreviewState();
     return true;
   }
@@ -2642,6 +2719,14 @@
     cursorPreview = { ...cursorPreview, x: event.clientX, y: event.clientY };
   }
 
+  function handleWindowMouseMoveForCursorPreview(event: MouseEvent): void {
+    lastPointerPosition = { x: event.clientX, y: event.clientY };
+    updateCursorOverCanvasFromTarget(event.target);
+
+    if (!cursorPreview || !tapPlacementPayload) return;
+    cursorPreview = { ...cursorPreview, x: event.clientX, y: event.clientY };
+  }
+
   function handleCanvasDragEnter(): void {
     cursorOverCanvas = true;
   }
@@ -2699,6 +2784,10 @@
   }
 
   function handleCanvasScroll(): void {
+    if (trackStyle === 'horizontal' && isPlaying && horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
+      return;
+    }
+
     invalidateCanvasLayout();
   }
 
@@ -3121,7 +3210,7 @@
         return result;
       } catch (error) {
         audioReady = false;
-        console.warn('Boomwhacker Sketchpad audio initialization failed.', error);
+        console.warn('Simple Notation audio initialization failed.', error);
         return {
           ready: false,
           resumedAudioContext: false,
@@ -3684,6 +3773,17 @@
     karaokeBallSizePx = Math.max(KARAOKE_BALL_SIZE_MIN, Math.min(KARAOKE_BALL_SIZE_MAX, nextValue));
   }
 
+  function handlePlaybackHighwayHeightInput(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLInputElement)) return;
+
+    playbackHighwayHeightPercent = clampPlaybackHighwayHeightPercent(target.value);
+  }
+
+  function resetPlaybackHighwayHeight(): void {
+    playbackHighwayHeightPercent = PLAYBACK_HIGHWAY_HEIGHT_PERCENT_DEFAULT;
+  }
+
   function clearKaraokeAnimation(voiceIndex: VoiceIndex): void {
     voiceKaraokeAnimationTokens[voiceIndex] += 1;
     if (voiceKaraokeAnimationFrames[voiceIndex] !== null) {
@@ -3717,7 +3817,19 @@
 
   function setHorizontalPlaybackLaneShiftPx(voiceIndex: VoiceIndex, shiftPx: number): void {
     voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] = shiftPx;
-    voiceHorizontalPlaybackLaneShiftPxs = [...voiceHorizontalPlaybackLaneShiftPxs];
+    applyHorizontalPlaybackLaneShiftStyle(voiceIndex, shiftPx);
+  }
+
+  function applyHorizontalPlaybackLaneShiftStyle(voiceIndex: VoiceIndex, shiftPx: number): void {
+    for (const rowElement of voiceTrackRowElements[voiceIndex]) {
+      rowElement?.style.setProperty('--horizontal-playback-lane-shift-px', `${shiftPx}px`);
+    }
+  }
+
+  function applyHorizontalPlaybackLaneShiftStyles(): void {
+    for (const voiceIndex of VOICE_INDEXES) {
+      applyHorizontalPlaybackLaneShiftStyle(voiceIndex, voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0);
+    }
   }
 
   function clearHorizontalPlaybackLaneShiftAnimation(voiceIndex: VoiceIndex): void {
@@ -3744,6 +3856,7 @@
     };
     voiceKaraokeBallPinnedLeftPxs = VOICE_INDEXES.map(() => null);
     voiceHorizontalPlaybackLaneShiftPxs = VOICE_INDEXES.map(() => 0);
+    applyHorizontalPlaybackLaneShiftStyles();
   }
 
   function prepareHorizontalPlaybackHighway(startIndex: number, totalCells: number): void {
@@ -4383,7 +4496,11 @@
     return Math.max(0, Math.min(maxScrollLeft, anchorContentLeft - targetViewportLeftPx));
   }
 
-  function animateHorizontalPlaybackScrollTo(targetScrollLeft: number, durationMs: number): void {
+  function animateHorizontalPlaybackScrollTo(
+    targetScrollLeft: number,
+    durationMs: number,
+    startedAtMs: number = performance.now(),
+  ): void {
     const container = canvasScrollShellElement;
     if (!container) return;
 
@@ -4397,7 +4514,7 @@
     }
 
     const token = horizontalPlaybackScrollToken;
-    const startedAt = performance.now();
+    const startedAt = Math.min(startedAtMs, performance.now());
     const startScrollLeft = container.scrollLeft;
     const deltaScrollLeft = clampedTarget - startScrollLeft;
     const motionDurationMs = Math.max(24, Math.floor(durationMs));
@@ -4425,6 +4542,7 @@
     behavior: ScrollBehavior = 'smooth',
     targetViewportLeftPx: number | null = null,
     durationMs: number | null = null,
+    startedAtMs: number | null = null,
   ): void {
     if (trackStyle !== 'horizontal') return;
     if (typeof window === 'undefined') return;
@@ -4438,7 +4556,7 @@
 
     if (Math.abs(targetScrollLeft - container.scrollLeft) < 6) return;
     if (durationMs !== null) {
-      animateHorizontalPlaybackScrollTo(targetScrollLeft, durationMs);
+      animateHorizontalPlaybackScrollTo(targetScrollLeft, durationMs, startedAtMs ?? performance.now());
       return;
     }
 
@@ -4520,7 +4638,7 @@
     };
   }
 
-  function queuePlaybackScrollForCurrentStep(currentIndex: number, totalCells: number): void {
+  function queuePlaybackScrollForCurrentStep(currentIndex: number, totalCells: number, stepStartedAtMs: number): void {
     if (trackStyle !== 'horizontal') return;
     if (typeof window === 'undefined') return;
 
@@ -4531,36 +4649,34 @@
 
     if (currentIndex + 1 >= totalCells) return;
 
-    requestAnimationFrame(() => {
-      if (trackStyle !== 'horizontal') return;
+    const preferredVoiceIndex = horizontalPlaybackHighway.pinnedVoiceIndex ?? resolvePlaybackScrollVoiceIndex();
+    const preferredTransition = nextDistinctKaraokeAnchorTransition(preferredVoiceIndex, currentIndex, totalCells);
+    if (preferredTransition) {
+      scrollHorizontalTrackToAnchor(
+        preferredVoiceIndex,
+        preferredTransition.anchor,
+        'auto',
+        referenceViewportLeftPx,
+        preferredTransition.durationMs,
+        stepStartedAtMs,
+      );
+      return;
+    }
 
-      const preferredVoiceIndex = horizontalPlaybackHighway.pinnedVoiceIndex ?? resolvePlaybackScrollVoiceIndex();
-      const preferredTransition = nextDistinctKaraokeAnchorTransition(preferredVoiceIndex, currentIndex, totalCells);
-      if (preferredTransition) {
+    for (const voiceIndex of visibleVoiceIndices()) {
+      const transition = nextDistinctKaraokeAnchorTransition(voiceIndex, currentIndex, totalCells);
+      if (transition) {
         scrollHorizontalTrackToAnchor(
-          preferredVoiceIndex,
-          preferredTransition.anchor,
+          voiceIndex,
+          transition.anchor,
           'auto',
           referenceViewportLeftPx,
-          preferredTransition.durationMs,
+          transition.durationMs,
+          stepStartedAtMs,
         );
         return;
       }
-
-      for (const voiceIndex of visibleVoiceIndices()) {
-        const transition = nextDistinctKaraokeAnchorTransition(voiceIndex, currentIndex, totalCells);
-        if (transition) {
-          scrollHorizontalTrackToAnchor(
-            voiceIndex,
-            transition.anchor,
-            'auto',
-            referenceViewportLeftPx,
-            transition.durationMs,
-          );
-          return;
-        }
-      }
-    });
+    }
   }
 
   function karaokeBallOverlayStyle(voiceIndex: VoiceIndex): string | null {
@@ -4979,11 +5095,10 @@
 
   function startKaraokeLeadIn(voiceIndex: VoiceIndex, firstAnchor: KaraokeAnchor): number {
     const leadInMs = Math.max(40, Math.floor(playbackIntervalMs() / 2));
-    const crestLeft = karaokeRowLeftBoundaryPercent(firstAnchor.rowIndex);
 
     clearKaraokeAnimation(voiceIndex);
     voiceKaraokeBallRowIndexes[voiceIndex] = firstAnchor.rowIndex;
-    voiceKaraokeBallLeftPercents[voiceIndex] = crestLeft;
+    voiceKaraokeBallLeftPercents[voiceIndex] = firstAnchor.leftPercent;
     voiceKaraokeBallArcOffsetPxs[voiceIndex] = -karaokeArcHeightPx;
 
     const token = voiceKaraokeAnimationTokens[voiceIndex];
@@ -4993,7 +5108,7 @@
       if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
       const progress = Math.min(1, (now - startedAt) / leadInMs);
-      voiceKaraokeBallLeftPercents[voiceIndex] = crestLeft + (firstAnchor.leftPercent - crestLeft) * progress;
+      voiceKaraokeBallLeftPercents[voiceIndex] = firstAnchor.leftPercent;
       voiceKaraokeBallArcOffsetPxs[voiceIndex] = -karaokeArcHeightPx * (1 - progress * progress);
 
       if (progress >= 1) {
@@ -5390,7 +5505,7 @@
       if (!isVoiceAudible(voiceIndex)) continue;
       hasSecondSixteenth = playCellNote(voiceIndex, cursor) || hasSecondSixteenth;
     }
-    queuePlaybackScrollForCurrentStep(currentIndex, totalCells);
+    queuePlaybackScrollForCurrentStep(currentIndex, totalCells, stepStartedAtMs);
     if (PLAYED_NOTE_MUTING_DEBUG && typeof window !== 'undefined' && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         debugPlayedNoteMuting('DOM muted-note classes.', {
@@ -5536,9 +5651,11 @@
     return startupDelayMs + leadInMs;
   }
 
-  function startPlayback(readiness: AudioReadinessResult): void {
+  async function startPlayback(readiness: AudioReadinessResult): Promise<void> {
     if (isPlaying) return;
 
+    playbackStartToken += 1;
+    const startToken = playbackStartToken;
     debugPlaybackHighlight('Starting playback.', { playbackIndex, totalCells: totalPlaybackCells() });
     const resumingPlayback = playbackPaused;
     volumePopupOpen = false;
@@ -5559,10 +5676,20 @@
       return;
     }
 
-    const currentIndex = playbackIndex % totalCells;
-    prepareHorizontalPlaybackHighway(currentIndex, totalCells);
     setPlaybackUiState(true);
     playbackPaused = false;
+    await tick();
+
+    if (!isPlaying || playbackStartToken !== startToken) return;
+
+    const layoutTotalCells = totalPlaybackCells();
+    if (layoutTotalCells <= 0) {
+      stopPlayback();
+      return;
+    }
+
+    const currentIndex = playbackIndex % layoutTotalCells;
+    prepareHorizontalPlaybackHighway(currentIndex, layoutTotalCells);
     queueHorizontalPlaybackScroll(currentIndex, 'auto');
 
     const firstAnchors = new Map<VoiceIndex, KaraokeAnchor>();
@@ -5597,7 +5724,7 @@
 
     const playbackRequestedAt = performance.now();
     queuePlaybackTimeout(() => {
-      if (!isPlaying) return;
+      if (!isPlaying || playbackStartToken !== startToken) return;
       debugPlaybackStartup('Playback lead-in completed.', {
         leadInMs,
         actualDelayMs: Math.round(performance.now() - playbackRequestedAt),
@@ -5614,6 +5741,7 @@
   function pausePlayback(): void {
     debugPlaybackHighlight('Pausing playback.', { playbackIndex });
     setPlaybackUiState(false);
+    playbackStartToken += 1;
     playbackPaused = true;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
@@ -5629,6 +5757,7 @@
   function stopPlayback(): void {
     debugPlaybackHighlight('Stopping playback.', { playbackIndex });
     setPlaybackUiState(false);
+    playbackStartToken += 1;
     playbackPaused = false;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
@@ -5653,7 +5782,7 @@
     const readiness = await ensureAudioReady();
     if (!readiness.ready) return;
 
-    startPlayback(readiness);
+    void startPlayback(readiness);
   }
 
   async function playFromStart(): Promise<void> {
@@ -5666,7 +5795,7 @@
 
     playbackPaused = false;
     playbackIndex = 0;
-    startPlayback(readiness);
+    void startPlayback(readiness);
   }
 
   function toggleCountIn(): void {
@@ -5958,6 +6087,19 @@
       return;
     }
 
+    const bankShortcut = noteBankShortcutForCode(event.code);
+    if (bankShortcut && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      if (event.repeat) return;
+
+      eraserMode = false;
+      const armed = armTapPlacementSelection(bankShortcut.noteId, bankShortcut.shape);
+      if (armed) {
+        void previewBankNote(bankShortcut.noteId);
+      }
+      return;
+    }
+
     if (event.code === 'KeyE') {
       event.preventDefault();
       toggleEraserMode();
@@ -6008,21 +6150,21 @@
   id="boomwhacker-sketchpad-app"
   class:chromanotes-palette={colorPaletteMode === 'chromanotes'}
   class:viewport-fit={viewportFitMode}
-  style={rootInlineStyle()}
+  style={`${rootInlineStyle()};--playback-highway-height-percent:${playbackHighwayHeightPercent};`}
   on:dragover={handleCursorGhostDragOver}
 >
-  <div class="top-toolbar" class:playback-compact={isPlaying}>
+  <div class="top-toolbar" class:playback-compact={isPlaying} class:eighth-bank-visible={showToolbarEighthBank && !isPlaying}>
   <section class="panel controls-panel">
     <div class="controls-group transport-group">
       <div class="transport-actions">
         <div class="transport-row">
-          <button type="button" class="transport-btn" on:click={playFromStart} title="Play from start" aria-label="Play from start">
+          <button type="button" class="transport-btn play-from-start-btn" on:click={playFromStart} title="Play from start" aria-label="Play from start">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <rect x="4" y="5" width="2.5" height="14" rx="0.75" />
               <path d="M9 6.75v10.5c0 1.06 1.17 1.69 2.05 1.1l7.8-5.25a1.32 1.32 0 0 0 0-2.2l-7.8-5.25A1.32 1.32 0 0 0 9 6.75Z" />
             </svg>
           </button>
-          <button type="button" class="transport-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
+          <button type="button" class="transport-btn play-pause-btn" on:click={togglePlayback} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
             {#if isPlaying}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <rect x="5" y="4" width="4" height="16" rx="1" />
@@ -6034,7 +6176,7 @@
               </svg>
             {/if}
           </button>
-          <button type="button" class="transport-btn" on:click={stopPlayback} title="Stop" aria-label="Stop">
+          <button type="button" class="transport-btn stop-btn" on:click={stopPlayback} title="Stop" aria-label="Stop">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <rect x="5" y="5" width="14" height="14" rx="3" ry="3" />
             </svg>
@@ -6182,21 +6324,6 @@
               <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
             </svg>
           </button>
-          {#if !isStudentView || !activeStudentView.hidePickupBeats || !activeStudentView.hideCanvasActions}
-          <button
-            type="button"
-            class="transport-btn pickup-modal-trigger"
-            class:active={pickupBeatsModalOpen}
-            on:click={() => (pickupBeatsModalOpen = true)}
-            title="Pickup beats & canvas rows"
-            aria-label="Pickup beats and canvas rows"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-              <ellipse cx="12.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
-              <ellipse cx="37.5" cy="15" rx="10" ry="13" stroke-dasharray="4 4"/>
-            </svg>
-          </button>
-          {/if}
           {#if !isStudentView || !activeStudentView.hideGearSettings}
           <button type="button" class="transport-btn settings-gear-btn" class:settings-open={settingsOpen} on:click={() => (settingsOpen = true)} title="Settings" aria-label="Open settings">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -6229,7 +6356,7 @@
     </div>
   </section>
 
-  <section class="panel notebank-panel toolbar-notebank-panel" class:playback-content-hidden={isPlaying}>
+  <section class="panel notebank-panel toolbar-notebank-panel toolbar-quarter-notebank-panel" class:playback-content-hidden={isPlaying}>
       <div class="toolbar-notebank-stack">
         <div class="toolbar-bank-row">
           <div class="bank-row-wrap">
@@ -6359,8 +6486,12 @@
             </div>
           </div>
         </div>
+      </div>
+  </section>
 
-        {#if showToolbarEighthBank}
+  {#if showToolbarEighthBank}
+  <section class="panel notebank-panel toolbar-notebank-panel toolbar-eighth-notebank-panel" class:playback-content-hidden={isPlaying}>
+      <div class="toolbar-notebank-stack">
         <div class="toolbar-bank-row">
           <div class="bank-row-wrap">
             <span class="bank-row-corner-label">Eighths</span>
@@ -6489,9 +6620,9 @@
             </div>
           </div>
         </div>
-        {/if}
       </div>
   </section>
+  {/if}
   </div>
 
   {#if showLowerSixteenthBank}
@@ -6612,10 +6743,11 @@
       class="canvas-scroll-shell"
       class:track-style-horizontal={trackStyle === 'horizontal'}
       class:two-voice-mode={voiceCount > 1}
+      class:playback-highway-expanded={trackStyle === 'horizontal' && isPlaying}
       class:playback-highway-active={trackStyle === 'horizontal' && isPlaying && horizontalPlaybackHighway.referenceViewportLeftPx !== null}
       bind:this={canvasScrollShellElement}
       use:notifyCanvasLayoutChange
-      on:scroll={handleCanvasScroll}
+      on:scroll|passive={handleCanvasScroll}
     >
       <div
         class="rows-grid"
@@ -6624,7 +6756,7 @@
         class:track-style-horizontal={trackStyle === 'horizontal'}
         style={`--pickup-columns:${pickupMicrobeatCount()}; --visible-voice-count:${voiceCount}; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-arc-height-px:${karaokeArcHeightPx}px; --horizontal-playback-runway-px:${horizontalPlaybackRunwayPx}px;`}
       >
-        {#each renderedTrackRows as renderedRow (renderedRow.key)}
+        {#each renderedTrackRows as renderedRow, renderedRowIndex (renderedRow.key)}
         {@const voiceIndex = renderedRow.voiceIndex}
         {@const rowIndex = renderedRow.rowIndex}
         {@const row = renderedRow.row}
@@ -7102,6 +7234,12 @@
               </div>
             {/each}
             </div>
+            {#if renderedRowIndex === renderedTrackRows.length - 1 && (!isStudentView || !activeStudentView.hideCanvasActions)}
+              <div class="measure-row-actions" aria-label="Measure controls" on:pointerdown={(event) => event.stopPropagation()}>
+                <button type="button" on:click={removeRow} disabled={sharedRowCount() <= 1} title="Remove measure" aria-label="Remove measure">-</button>
+                <button type="button" on:click={addRow} title="Add measure" aria-label="Add measure">+</button>
+              </div>
+            {/if}
           </div>
         </article>
         {/each}
@@ -7221,6 +7359,23 @@
             <option value="horizontal">Horizontal highway</option>
           </select>
         </div>
+        <div class="settings-slider-field">
+          <label for="settings-playback-highway-height">Highway height</label>
+          <input
+            id="settings-playback-highway-height"
+            type="range"
+            min={PLAYBACK_HIGHWAY_HEIGHT_PERCENT_MIN}
+            max={PLAYBACK_HIGHWAY_HEIGHT_PERCENT_MAX}
+            step="1"
+            value={playbackHighwayHeightPercent}
+            on:input={handlePlaybackHighwayHeightInput}
+            title="Playback highway height"
+          />
+          <output class="value-readout" for="settings-playback-highway-height">{playbackHighwayHeightPercent}%</output>
+          <button type="button" class="settings-reset-btn" on:click={resetPlaybackHighwayHeight} disabled={playbackHighwayHeightPercent === PLAYBACK_HIGHWAY_HEIGHT_PERCENT_DEFAULT}>
+            Reset
+          </button>
+        </div>
         <div class="settings-field settings-checkbox-field">
           <label>
             <input type="checkbox" bind:checked={showAccidentals} />
@@ -7241,6 +7396,20 @@
         </div>
       </div>
     </div>
+    {#if !isStudentView || !activeStudentView.hidePickupBeats}
+    <div class="settings-section">
+      <h3 class="settings-section-label">Pickup Beats</h3>
+      <div class="settings-row">
+        <div class="pickup-controls" role="group" aria-label="Anacrusis pickup beats">
+          {#each [0, 1, 2, 3] as beatCount}
+            <button type="button" class:active={pickupBeats === beatCount} on:click={() => setPickupBeats(beatCount)}>
+              {beatCount}
+            </button>
+          {/each}
+        </div>
+      </div>
+    </div>
+    {/if}
     <div class="settings-section">
       <h3 class="settings-section-label">Voices</h3>
       <div class="settings-row">
@@ -7623,42 +7792,5 @@
         </div>
       </div>
     {/if}
-  </div>
-{/if}
-
-{#if pickupBeatsModalOpen}
-  <div class="share-modal-backdrop" on:click={() => (pickupBeatsModalOpen = false)} role="presentation"></div>
-  <div class="pickup-modal" role="dialog" aria-modal="true" aria-label="Pickup beats and canvas rows">
-    <div class="share-modal-header">
-      <h2>Canvas</h2>
-      <button type="button" class="share-modal-close" on:click={() => (pickupBeatsModalOpen = false)} aria-label="Close">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-        </svg>
-      </button>
-    </div>
-    <div class="pickup-modal-body">
-      {#if !isStudentView || !activeStudentView.hidePickupBeats}
-      <div class="pickup-modal-section">
-        <h3 class="pickup-modal-section-label">Pickup Beats</h3>
-        <div class="pickup-controls" role="group" aria-label="Anacrusis pickup beats">
-          {#each [0, 1, 2, 3] as beatCount}
-            <button type="button" class:active={pickupBeats === beatCount} on:click={() => setPickupBeats(beatCount)}>
-              {beatCount}
-            </button>
-          {/each}
-        </div>
-      </div>
-      {/if}
-      {#if !isStudentView || !activeStudentView.hideCanvasActions}
-      <div class="pickup-modal-section">
-        <h3 class="pickup-modal-section-label">Canvas Rows</h3>
-        <div class="canvas-actions">
-          <button type="button" on:click={addRow}>Add Row</button>
-          <button type="button" on:click={removeRow} disabled={sharedRowCount() <= 1}>Remove Row</button>
-        </div>
-      </div>
-      {/if}
-    </div>
   </div>
 {/if}

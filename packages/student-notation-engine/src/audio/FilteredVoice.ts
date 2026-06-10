@@ -52,6 +52,10 @@ import * as Tone from 'tone';
 // @ts-ignore internal Tone.js import
 import { Monophonic } from 'tone/build/esm/instrument/Monophonic.js';
 
+const MIN_AUDIBLE_RELEASE_SECONDS = 0.02;
+const OSCILLATOR_STOP_PADDING_SECONDS = 0.03;
+const MIN_NONZERO_GAIN = 0.0001;
+
 export interface FilteredVoiceOptions {
   oscillator?: { type?: string; partials?: number[] };
   envelope?: { attack?: number; decay?: number; sustain?: number; release?: number };
@@ -70,6 +74,7 @@ export interface FilterParams {
   cutoff: number;      // MIDI note number offset
   resonance: number;   // 0-100
   blend: number;       // 0-2: 0=HP, 1=BP, 2=LP
+  mix?: number;         // 0-100: dry to wet filter amount
 }
 
 export interface VibratoParams {
@@ -126,6 +131,8 @@ export class FilteredVoice extends MonophonicBase {
   private _adsrParams!: { attack: number; decay: number; sustain: number; release: number };
   private _attackStartTime = -1;
   private _releaseStartTime = -1;
+  private _releaseStartLevel = 0;
+  private _releaseDuration = 0;
   private _lastVelocity = 1;
 
   // --- Native audio nodes (persistent across notes) ---
@@ -251,11 +258,6 @@ export class FilteredVoice extends MonophonicBase {
     const volumeNativeGain = instrumentVolume.input._gainNode as GainNode;
     this._envelopeGain.connect(volumeNativeGain);
 
-    // [PERF:LAZY-FILTER] Conditionally connect filter entrance
-    if (options.filter?.enabled) {
-      this._connectFilterWetChain();
-    }
-
     // Apply initial filter settings
     if (options.filter) {
       this._setFilter(options.filter);
@@ -327,6 +329,8 @@ export class FilteredVoice extends MonophonicBase {
     // Track timing for getLevelAtTime()
     this._attackStartTime = time;
     this._releaseStartTime = -1;
+    this._releaseStartLevel = 0;
+    this._releaseDuration = 0;
     this._lastVelocity = velocity;
 
     // Schedule ADSR attack + decay on _envelopeGain.gain
@@ -340,7 +344,7 @@ export class FilteredVoice extends MonophonicBase {
     gainParam.linearRampToValueAtTime(velocity, time + attack);
 
     // Decay: exponential ramp to sustain level (value must be > 0)
-    const sustainLevel = Math.max(sustain * velocity, 0.0001);
+    const sustainLevel = Math.max(sustain * velocity, MIN_NONZERO_GAIN);
     if (decay > 0) {
       gainParam.exponentialRampToValueAtTime(sustainLevel, time + attack + decay);
     } else {
@@ -365,20 +369,30 @@ export class FilteredVoice extends MonophonicBase {
   _triggerEnvelopeRelease(time: number): void {
     if (!this._oscillator) return;
 
-    const { release } = this._adsrParams;
+    const release = Math.max(this._adsrParams.release, MIN_AUDIBLE_RELEASE_SECONDS);
     const gainParam = this._envelopeGain.gain;
+    const currentLevel = Math.max(0, this._calculateEnvelopeLevelAtTime(time));
 
     this._releaseStartTime = time;
+    this._releaseStartLevel = currentLevel;
+    this._releaseDuration = release;
 
-    // Freeze current gain value and cancel future automation
-    gainParam.cancelAndHoldAtTime(time);
+    // Anchor the release at the currently sounding level before ramping down.
+    // This avoids a discontinuity on browsers where native cancel-and-hold is
+    // unavailable or differs from our custom ADSR state.
+    try {
+      gainParam.cancelAndHoldAtTime(time);
+    } catch {
+      gainParam.cancelScheduledValues(time);
+    }
+    gainParam.setValueAtTime(currentLevel, time);
 
     // Release: linear ramp to 0 (avoids exponential never-reaches-zero issue)
     gainParam.linearRampToValueAtTime(0, time + release);
 
     // Stop oscillator shortly after release completes
     try {
-      this._oscillator.stop(time + release + 0.02);
+      this._oscillator.stop(time + release + OSCILLATOR_STOP_PADDING_SECONDS);
     } catch {
       // Already scheduled to stop (zero-sustain case)
     }
@@ -386,8 +400,38 @@ export class FilteredVoice extends MonophonicBase {
     // When oscillator stops, tell PolySynth this voice is available
     this._oscillator.onended = () => {
       this._attackStartTime = -1;
+      this._releaseStartTime = -1;
+      this._releaseStartLevel = 0;
+      this._releaseDuration = 0;
       this.onsilence(this);
     };
+  }
+
+  private _calculateEnvelopeLevelAtTime(time: number): number {
+    if (this._attackStartTime < 0) return 0;
+
+    const { attack, decay, sustain } = this._adsrParams;
+    const velocity = this._lastVelocity;
+
+    if (this._releaseStartTime >= 0) {
+      const releaseElapsed = time - this._releaseStartTime;
+      if (releaseElapsed >= this._releaseDuration) return 0;
+      if (releaseElapsed >= 0) {
+        const releaseProgress = this._releaseDuration > 0 ? releaseElapsed / this._releaseDuration : 1;
+        return this._releaseStartLevel * (1 - releaseProgress);
+      }
+    }
+
+    const elapsed = time - this._attackStartTime;
+    if (elapsed < 0) return 0;
+    if (attack <= 0 || elapsed >= attack) {
+      if (decay <= 0 || elapsed >= attack + decay) {
+        return sustain * velocity;
+      }
+      const decayProgress = (elapsed - attack) / decay;
+      return velocity - (velocity - sustain * velocity) * decayProgress;
+    }
+    return (elapsed / attack) * velocity;
   }
 
   /**
@@ -395,33 +439,7 @@ export class FilteredVoice extends MonophonicBase {
    * Used by Monophonic for portamento decisions (> 0.05 means "voice is active").
    */
   getLevelAtTime(time: number): number {
-    time = this.toSeconds(time);
-    if (this._attackStartTime < 0) return 0;
-
-    const { attack, decay, sustain, release } = this._adsrParams;
-    const velocity = this._lastVelocity;
-
-    // Release phase
-    if (this._releaseStartTime >= 0) {
-      const releaseElapsed = time - this._releaseStartTime;
-      if (releaseElapsed >= release) return 0;
-      if (releaseElapsed >= 0) {
-        const sustainLevel = sustain * velocity;
-        return sustainLevel * (1 - releaseElapsed / release);
-      }
-    }
-
-    // Attack/decay/sustain phases
-    const elapsed = time - this._attackStartTime;
-    if (elapsed < 0) return 0;
-    if (elapsed < attack) {
-      return (elapsed / attack) * velocity;
-    }
-    if (elapsed < attack + decay) {
-      const decayProgress = (elapsed - attack) / decay;
-      return velocity - (velocity - sustain * velocity) * decayProgress;
-    }
-    return sustain * velocity;
+    return this._calculateEnvelopeLevelAtTime(this.toSeconds(time));
   }
 
   // --- Option handling for PolySynth.set() ---
@@ -472,20 +490,26 @@ export class FilteredVoice extends MonophonicBase {
   }
 
   _setFilter(params: FilterParams): void {
-    // [PERF:LAZY-FILTER] Connect/disconnect filter wet chain based on enabled state
-    if (params.enabled && !this._filterChainConnected) {
+    const mixNorm = Math.max(0, Math.min(100, params.mix ?? 0)) / 100;
+    const isFilterActive = params.enabled && mixNorm > 0;
+
+    // [PERF:LAZY-FILTER] Connect/disconnect filter wet chain based on audible wet mix.
+    if (isFilterActive && !this._filterChainConnected) {
       this._connectFilterWetChain();
-    } else if (!params.enabled && this._filterChainConnected) {
+    } else if (!isFilterActive && this._filterChainConnected) {
       this._disconnectFilterWetChain();
     }
 
-    // Dry/wet toggle: dry=1 when filter off, dry=0 when filter on
-    this._dryGain.gain.value = params.enabled ? 0 : 1;
+    // Dry/wet mix: Mix=0 bypasses the native filter, Mix=100 is fully wet.
+    this._dryGain.gain.value = isFilterActive ? 1 - mixNorm : 1;
 
     // Only update filter parameters when enabled
-    if (params.enabled) {
-      const freq = Tone.Midi(params.cutoff + 35).toFrequency();
-      const q = (params.resonance / 100) * 12 + 0.1;
+    if (isFilterActive) {
+      const cutoff = params.cutoff ?? 16;
+      const resonance = params.resonance ?? 0;
+      const blend = params.blend ?? 1.0;
+      const freq = Tone.Midi(cutoff + 35).toFrequency();
+      const q = (resonance / 100) * 12 + 0.1;
 
       // Set native filter parameters directly
       this._hpFilter.frequency.value = freq;
@@ -496,16 +520,19 @@ export class FilteredVoice extends MonophonicBase {
       this._lpFilter.Q.value = q;
 
       // Linear blend: 0=HP, 1=BP, 2=LP
-      const blend = params.blend;
       if (blend <= 1.0) {
-        this._hpGain.gain.value = 1 - blend;
-        this._bpGain.gain.value = blend;
+        this._hpGain.gain.value = (1 - blend) * mixNorm;
+        this._bpGain.gain.value = blend * mixNorm;
         this._lpGain.gain.value = 0;
       } else {
         this._hpGain.gain.value = 0;
-        this._bpGain.gain.value = 2 - blend;
-        this._lpGain.gain.value = blend - 1;
+        this._bpGain.gain.value = (2 - blend) * mixNorm;
+        this._lpGain.gain.value = (blend - 1) * mixNorm;
       }
+    } else {
+      this._hpGain.gain.value = 0;
+      this._bpGain.gain.value = 0;
+      this._lpGain.gain.value = 0;
     }
   }
 

@@ -7,6 +7,7 @@ import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/
 import { isPlayableColumn } from '@services/columnMapService.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
+import { getDrumRowHeightFromCellWidth, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
 import {
   getDrumVolumeNode,
   invokeInitAudioHandler
@@ -260,11 +261,13 @@ function updateDrumTrackSettingButtons(
     const sampleLabelEl = button.querySelector<HTMLElement>('[data-role="track-sample-label"]');
     const { sampleLabel, machineLabel } = getDrumTrackSampleLabel(track, assignedSamples);
     const summary = machineLabel ? `${sampleLabel} - ${machineLabel}` : sampleLabel;
+    sampleLabelEl?.remove();
 
-    if (sampleLabelEl) {
-      sampleLabelEl.textContent = sampleLabel;
+    const trackLabelEl = button.querySelector<HTMLElement>('.drum-track-settings-button__track');
+    if (trackLabelEl) {
+      trackLabelEl.textContent = track;
     } else {
-      button.textContent = `${track} ${sampleLabel}`;
+      button.textContent = track;
     }
 
     button.title = summary;
@@ -379,7 +382,10 @@ const getModulatedCellWidth = (colIndex: number): number => {
 };
 
 const getDrumRowHeight = (): number =>
-  Math.max(1, Math.round(store.state.cellWidth));
+  getDrumRowHeightFromCellWidth(store.state.cellWidth);
+
+const getDrumShapeBoxHeight = (): number =>
+  getDrumShapeBoxHeightFromCellWidth(store.state.cellWidth);
 
 const clearHover = (): void => {
   if (drumHoverCtx) {
@@ -395,16 +401,19 @@ const clearHover = (): void => {
 function drawHoverHighlight(colIndex: number, rowIndex: number, color: string): void {
   if (!drumHoverCtx) {return;}
   const x = getColumnX(colIndex);
-  const y = rowIndex * getDrumRowHeight();
+  const rowHeight = getDrumRowHeight();
+  const y = rowIndex * rowHeight;
   const cellWidth = getModulatedCellWidth(colIndex);
   drumHoverCtx.fillStyle = color;
-  drumHoverCtx.fillRect(x, y, cellWidth, getDrumRowHeight());
+  drumHoverCtx.fillRect(x, y, cellWidth, rowHeight);
 }
 
 function drawGhostNote(colIndex: number, rowIndex: number): void {
   if (!drumHoverCtx) {return;}
   const x = getColumnX(colIndex);
-  const y = rowIndex * getDrumRowHeight();
+  const rowHeight = getDrumRowHeight();
+  const shapeBoxHeight = getDrumShapeBoxHeight();
+  const y = rowIndex * rowHeight + (rowHeight - shapeBoxHeight) / 2;
   const cellWidth = getModulatedCellWidth(colIndex);
   const drumTrack = DRUM_TRACKS[rowIndex as 0 | 1 | 2];
   if (!drumTrack) {return;}
@@ -413,7 +422,7 @@ function drawGhostNote(colIndex: number, rowIndex: number): void {
   const selectedColor = (store.state.selectedTool as { color?: string } | undefined)?.color ?? '#212529';
   drumHoverCtx.globalAlpha = 0.4;
   drumHoverCtx.fillStyle = selectedColor;
-  drawDrumShape(drumHoverCtx, rowIndex, x, y, cellWidth, getDrumRowHeight(), animationScale);
+  drawDrumShape(drumHoverCtx, rowIndex, x, y, cellWidth, shapeBoxHeight, animationScale);
   drumHoverCtx.globalAlpha = 1.0;
 }
 
@@ -1089,13 +1098,7 @@ function createVolumeSlider(): void {
       trackLabel.textContent = track;
       trackLabel.setAttribute('aria-hidden', 'true');
 
-      const sampleLabel = document.createElement('span');
-      sampleLabel.className = 'drum-track-settings-button__sample';
-      sampleLabel.dataset.role = 'track-sample-label';
-      sampleLabel.textContent = 'Loading...';
-
       trackButton.appendChild(trackLabel);
-      trackButton.appendChild(sampleLabel);
 
       trackButton.addEventListener('click', (event) => {
         event.stopPropagation();

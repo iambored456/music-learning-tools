@@ -1,6 +1,6 @@
 // js/services/tonalService.ts
 import { Note, Interval, Chord, RomanNumeral, Progression } from 'tonal';
-import { getKeyContextForColumn } from '@state/selectors.ts';
+import { getKeyContextForColumn, getPlacedTonicSigns } from '@state/selectors.ts';
 import type { AppState, PlacedNote } from '@mlt/types';
 
 interface DiatonicMapping {
@@ -22,6 +22,62 @@ const SEMITONE_TO_DIATONIC: Record<number, DiatonicMapping> = {
   10: { degree: 7, alt: -1 },
   11: { degree: 7, alt: 0 }
 };
+
+const MODE_NAMES = ['major', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'minor', 'locrian'];
+const INTERVALS_FROM_MAJOR = ['1P', '2M', '3M', '4P', '5P', '6M', '7M'];
+
+const CHROMA_PITCH_CLASS_LABELS: Array<{ natural?: string; sharp: string; flat: string }> = [
+  { natural: 'C', sharp: 'C', flat: 'C' },
+  { sharp: 'C#', flat: 'Db' },
+  { natural: 'D', sharp: 'D', flat: 'D' },
+  { sharp: 'D#', flat: 'Eb' },
+  { natural: 'E', sharp: 'E', flat: 'E' },
+  { natural: 'F', sharp: 'F', flat: 'F' },
+  { sharp: 'F#', flat: 'Gb' },
+  { natural: 'G', sharp: 'G', flat: 'G' },
+  { sharp: 'G#', flat: 'Ab' },
+  { natural: 'A', sharp: 'A', flat: 'A' },
+  { sharp: 'A#', flat: 'Bb' },
+  { natural: 'B', sharp: 'B', flat: 'B' }
+];
+
+const SHARP_MAJOR_KEYS = new Set(['G', 'D', 'A', 'E', 'B', 'F#', 'C#']);
+const FLAT_MAJOR_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb']);
+
+function getParentMajorTonic(keyTonic: string, keyMode: string): string {
+  if (keyMode === 'major') {
+    return Note.pitchClass(keyTonic) || keyTonic;
+  }
+
+  const modeIndex = MODE_NAMES.indexOf(keyMode);
+  const modalInterval = modeIndex > 0 ? INTERVALS_FROM_MAJOR[modeIndex] : null;
+  if (!modalInterval) {
+    return Note.pitchClass(keyTonic) || keyTonic;
+  }
+
+  const inverted = Interval.invert(modalInterval);
+  const parentMajor = Note.transpose(keyTonic, inverted) || keyTonic;
+  return Note.pitchClass(parentMajor) || parentMajor;
+}
+
+function getKeyAccidentalPreference(note: PlacedNote, state: AppState): 'sharp' | 'flat' | null {
+  const tonicSignsBeforeNote = getPlacedTonicSigns(state).filter(ts => ts.columnIndex <= note.startColumnIndex);
+  if (tonicSignsBeforeNote.length === 0) {
+    return null;
+  }
+
+  const { keyTonic, keyMode } = getKeyContextForColumn(state, note.startColumnIndex);
+  const parentMajorTonic = getParentMajorTonic(keyTonic, keyMode);
+
+  if (SHARP_MAJOR_KEYS.has(parentMajorTonic)) {
+    return 'sharp';
+  }
+  if (FLAT_MAJOR_KEYS.has(parentMajorTonic)) {
+    return 'flat';
+  }
+
+  return null;
+}
 
 function getOctavePartner(details: { num: number; alt: number; semitones: number }): DiatonicMapping | null {
   const absNum = Math.abs(details.num);
@@ -119,12 +175,10 @@ const TonalService = {
     if (degreeDisplayMode !== 'modal') {
       // Diatonic mode: determine the parent major tonic when viewing modal keys
       if (keyMode !== 'major') {
-        const modes = ['major', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'minor', 'locrian'];
-        const modeIndex = modes.indexOf(keyMode);
+        const modeIndex = MODE_NAMES.indexOf(keyMode);
 
         if (modeIndex > 0) {
-          const intervalsFromMajor = ['1P', '2M', '3M', '4P', '5P', '6M', '7M'];
-          const modalInterval = intervalsFromMajor[modeIndex];
+          const modalInterval = INTERVALS_FROM_MAJOR[modeIndex];
           if (modalInterval) {
             const inverted = Interval.invert(modalInterval);
             referenceTonic = Note.transpose(keyTonic, inverted) || referenceTonic;
@@ -144,6 +198,45 @@ const TonalService = {
     }
 
     return formattedInterval;
+  },
+
+  getPitchClassForNote(note: PlacedNote, state: AppState): string | null {
+    if (!note || !state) {return null;}
+
+    const rowIndex = note.globalRow ?? note.row;
+    const notePitch = state.fullRowData[rowIndex]?.toneNote;
+    if (!notePitch) {return null;}
+
+    const midi = Note.midi(notePitch);
+    if (typeof midi !== 'number') {
+      const pitchClass = Note.pitchClass(notePitch);
+      return pitchClass ? pitchClass.replace(/([A-G])b/, '$1b') : null;
+    }
+
+    const chroma = ((midi % 12) + 12) % 12;
+    const spellings = CHROMA_PITCH_CLASS_LABELS[chroma];
+    if (!spellings) {return null;}
+    if (spellings.natural) {return spellings.natural;}
+
+    const accidentalMode = state.accidentalMode || {};
+    const sharpEnabled = accidentalMode.sharp ?? true;
+    const flatEnabled = accidentalMode.flat ?? true;
+    if (!sharpEnabled && !flatEnabled) {
+      return null;
+    }
+
+    const preferredAccidental = getKeyAccidentalPreference(note, state);
+    if (preferredAccidental === 'sharp' && sharpEnabled) {
+      return spellings.sharp;
+    }
+    if (preferredAccidental === 'flat' && flatEnabled) {
+      return spellings.flat;
+    }
+
+    if (sharpEnabled && flatEnabled) {
+      return `${spellings.sharp}/${spellings.flat}`;
+    }
+    return sharpEnabled ? spellings.sharp : spellings.flat;
   },
 
   getDegreesForNotes(notes: string[], keyTonic: string): string[] {

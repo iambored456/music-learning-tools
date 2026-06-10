@@ -95,4 +95,56 @@ describe('studentNotationScoreFile', () => {
     expect(() => parseImportedStudentNotationData('12,0,1,#4a90e2,circle,,false,\n'))
       .toThrow('Student Notation imports now require a JSON score file.');
   });
+
+  it('migrates legacy sixteenth stamps from canvas columns to time indices', () => {
+    const legacyScore = {
+      type: 'student-notation-score',
+      version: 2,
+      exportedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+      data: {
+        macrobeatGroupings: [2, 2, 2],
+        macrobeatBoundaryStyles: ['dashed', 'solid'],
+        tonicSignGroups: {
+          tonicA: [
+            {
+              uuid: 'tonicA',
+              columnIndex: 5,
+              row: 9,
+              globalRow: 9,
+              tonicNumber: 4,
+              preMacrobeatIndex: 1,
+            },
+            {
+              uuid: 'tonicA',
+              columnIndex: 5,
+              row: 10,
+              globalRow: 10,
+              tonicNumber: 4,
+              preMacrobeatIndex: 1,
+            },
+          ],
+        },
+        sixteenthStampPlacements: [
+          {
+            id: 'legacy-sixteenth',
+            sixteenthStampId: 7,
+            startColumn: 10,
+            endColumn: 12,
+            row: 12,
+            globalRow: 12,
+            color: '#4a90e2',
+            timestamp: 1,
+            shapeOffsets: {},
+          },
+        ],
+      },
+    };
+
+    const parsed = parseImportedStudentNotationData(JSON.stringify(legacyScore));
+    const migratedStamp = parsed.data.sixteenthStampPlacements[0]!;
+
+    expect(migratedStamp.startTimeIndex).toBe(8);
+    expect('startColumn' in migratedStamp).toBe(false);
+    expect('endColumn' in migratedStamp).toBe(false);
+  });
 });

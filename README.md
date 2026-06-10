@@ -25,9 +25,9 @@ Output files are written to `apps/hub/public/previews/<app>.png`.
 `pnpm -w build:hub` is wired to rebuild the Hub preview screenshot automatically (`--only hub`) after a Hub build.
 `pnpm -w build:pages` now refreshes all Hub preview screenshots before assembling the Pages output.
 
-## Boomwhacker Sketchpad (Refactor)
+## Simple Notation (Refactor)
 
-Legacy source was imported into `0C. Boomwhacker Sketchpad/`.
+Legacy source was imported into the original legacy source folder.
 
 Refactored monorepo targets:
 

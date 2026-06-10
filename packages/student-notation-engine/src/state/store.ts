@@ -14,7 +14,7 @@
  * - No DOM dependencies (storage adapter is injectable)
  */
 
-import type { AppState, Store, TimbreState, HistoryEntry } from '@mlt/types';
+import type { AppState, Store, TimbreState, HistoryEntry, SixteenthStampPlacement, TonicSignGroups } from '@mlt/types';
 import { fullRowData } from './pitchData.js';
 import { getInitialState } from './initialState.js';
 import { createNoteActions, type NoteActionCallbacks } from './actions/noteActions.js';
@@ -116,6 +116,73 @@ function isValidMacrobeatBoundaryStyles(
     && value.every((entry) => VALID_BOUNDARY_STYLES.has(entry));
 }
 
+function getUniqueTonicStartColumns(tonicSignGroups: unknown): number[] {
+  if (!tonicSignGroups || typeof tonicSignGroups !== 'object' || Array.isArray(tonicSignGroups)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const columns: number[] = [];
+  Object.values(tonicSignGroups as TonicSignGroups).forEach((group) => {
+    if (!Array.isArray(group)) {
+      return;
+    }
+
+    group.forEach((sign) => {
+      const columnIndex = Number(sign?.columnIndex);
+      if (!Number.isFinite(columnIndex)) {
+        return;
+      }
+
+      const key = sign?.uuid
+        ? `uuid:${sign.uuid}`
+        : `column:${sign?.preMacrobeatIndex ?? ''}:${columnIndex}`;
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      columns.push(columnIndex);
+    });
+  });
+
+  return columns.sort((a, b) => a - b);
+}
+
+function legacyCanvasColumnToTimeIndex(canvasColumn: number, tonicSignGroups: unknown): number {
+  const tonicStartsBeforeColumn = getUniqueTonicStartColumns(tonicSignGroups)
+    .filter(columnIndex => columnIndex < canvasColumn).length;
+  return canvasColumn - (tonicStartsBeforeColumn * 2);
+}
+
+function normalizeSixteenthStampPlacements(
+  value: unknown,
+  tonicSignGroups: unknown
+): SixteenthStampPlacement[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => {
+      const { startColumn, endColumn, ...rest } = entry;
+      const currentStartTimeIndex = Number(entry.startTimeIndex);
+      const legacyStartColumn = Number(startColumn);
+      const startTimeIndex = Number.isFinite(currentStartTimeIndex)
+        ? currentStartTimeIndex
+        : (Number.isFinite(legacyStartColumn)
+          ? legacyCanvasColumnToTimeIndex(legacyStartColumn, tonicSignGroups)
+          : 0);
+
+      void endColumn;
+      return {
+        ...rest,
+        startTimeIndex
+      } as SixteenthStampPlacement;
+    });
+}
+
 function loadStateFromStorage(storage: StorageAdapter | undefined, storageKey: string): Partial<AppState> | undefined {
   if (!storage) return undefined;
 
@@ -159,6 +226,14 @@ function loadStateFromStorage(storage: StorageAdapter | undefined, storageKey: s
     // Ensure fullRowData is always complete
     parsedState.fullRowData = [...fullRowData];
 
+    const normalizedSixteenthStamps = normalizeSixteenthStampPlacements(
+      parsedState.sixteenthStampPlacements,
+      parsedState.tonicSignGroups
+    );
+    if (normalizedSixteenthStamps) {
+      parsedState.sixteenthStampPlacements = normalizedSixteenthStamps;
+    }
+
     return parsedState;
   } catch {
     return undefined;
@@ -194,6 +269,7 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
       annotations: state.annotations,
       pitchRange: state.pitchRange,
       degreeDisplayMode: state.degreeDisplayMode,
+      showPitchLabels: state.showPitchLabels,
       showOctaveLabels: state.showOctaveLabels,
       longNoteStyle: state.longNoteStyle,
       playheadMode: state.playheadMode
@@ -414,8 +490,21 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     },
 
     setDegreeDisplayMode(mode: 'off' | 'diatonic' | 'modal'): void {
+      if (mode !== 'off' && store.state.showPitchLabels) {
+        store.state.showPitchLabels = false;
+        store.emit('pitchLabelsChanged', false);
+      }
       store.state.degreeDisplayMode = mode;
       store.emit('degreeDisplayModeChanged', mode);
+    },
+
+    setShowPitchLabels(show: boolean): void {
+      if (show && store.state.degreeDisplayMode !== 'off') {
+        store.state.degreeDisplayMode = 'off';
+        store.emit('degreeDisplayModeChanged', 'off');
+      }
+      store.state.showPitchLabels = show;
+      store.emit('pitchLabelsChanged', show);
     },
 
     setLongNoteStyle(style: 'style1' | 'style2'): void {
@@ -544,6 +633,7 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       if (store.state.timbres[color]) {
         store.state.timbres[color].filter = { ...store.state.timbres[color].filter, ...settings };
         store.emit('timbreChanged', color);
+        store.emit('filterChanged', color);
       }
     },
 
@@ -604,6 +694,7 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
   if (storage) {
     store.on('tempoChanged', () => store.saveState());
     store.on('degreeDisplayModeChanged', () => store.saveState());
+    store.on('pitchLabelsChanged', () => store.saveState());
     store.on('longNoteStyleChanged', () => store.saveState());
     store.on('playheadModeChanged', () => store.saveState());
   }

@@ -49,7 +49,7 @@ function updateFromStore() {
   const filter = getFilterState();
   if (!filter) {return;}
 
-  const { cutoff = 16, blend = 0, mix = 0 } = filter;
+  const { cutoff = 16, blend = 1.0, mix = 0 } = filter;
 
   if (blendThumb && blendTrack) {
     const blendPercent = (BLEND_MAX - blend) / (BLEND_MAX - BLEND_MIN);

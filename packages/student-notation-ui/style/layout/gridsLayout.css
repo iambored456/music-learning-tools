@@ -26,9 +26,10 @@
   align-items: stretch;
   justify-content: stretch;
   flex: 0 0 auto;
+  box-sizing: border-box;
   padding: 0;
   background-color: var(--c-surface);
-  border-right: 2px solid var(--c-border-strong);
+  border-right: none;
   border-bottom: 2px solid var(--c-border-strong);
   border-top: none;
   border-left: none;
@@ -44,10 +45,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: minmax(0, 1fr);
-  gap: var(--space-2);
+  gap: clamp(1px, 0.28cqi, 2px);
   align-items: stretch;
   justify-items: stretch;
-  padding: var(--space-2);
+  padding: clamp(1px, 0.32cqi, 2px);
   min-height: 0;
   width: 100%;
   container-type: size;
@@ -69,8 +70,21 @@
   border-left: none;
   border-top-right-radius: var(--border-radius-md);
   box-sizing: border-box;
+  position: relative;
   /* Width will be set by JavaScript to match pitch grid content area (excludes legends) */
   /* Height will be set by JavaScript to match drum grid height */
+}
+
+.button-grid-middle-cell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background-color: #adb5bd;
+  pointer-events: none;
+  z-index: 3;
 }
 
 .button-grid-right-cell {
@@ -253,8 +267,7 @@
 .drum-track-settings-button {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: clamp(2px, calc(var(--drum-row-height, 30px) * 0.16), 10px);
+  justify-content: center;
   width: 100%;
   height: 100%;
   border: 1px solid var(--c-border);
@@ -266,7 +279,7 @@
   font-size: calc(var(--drum-row-height, 30px) * 0.42);
   line-height: 1;
   font-weight: 600;
-  text-align: left;
+  text-align: center;
   padding-inline: clamp(3px, calc(var(--drum-row-height, 30px) * 0.16), 10px);
   overflow: hidden;
   transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -281,14 +294,6 @@
   color: var(--c-text-muted);
   font-weight: 800;
   font-size: calc(var(--drum-row-height, 30px) * 0.52);
-}
-.drum-track-settings-button__sample {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--c-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .drum-layer-sample-modal {
@@ -721,50 +726,45 @@
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-evenly;
+  display: grid;
+  grid-template-rows: minmax(0, 0.95fr) minmax(0, 1.05fr);
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   pointer-events: none;
   container-type: inline-size;
-  --boundary-row-height: clamp(0.9rem, 2.2vw, 1.8rem);
-  --boundary-row-height: clamp(0.9rem, 2.2cqi, 1.8rem);
+  --boundary-row-height: clamp(0.8rem, 1.7vw, 1.3rem);
+  --boundary-row-height: clamp(0.8rem, 1.7cqi, 1.3rem);
 }
 
 .beat-line-row {
   position: relative;
   width: 100%;
-  flex: 1 1 auto;
+  height: 100%;
   min-height: 0;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-}
-
-#time-signature-row,
-#grouping-buttons-row {
-  flex: 1 1 0;
 }
 
 #time-signature-row {
+  grid-row: 1;
   pointer-events: auto; /* allow interactions with the time signature dropdown trigger */
 }
 
 #grouping-buttons-row {
+  grid-row: 2;
   pointer-events: auto;
   border-top: 2px solid var(--buttonGrid-boundary-color, #3a3a3a);
   z-index: 1;
 }
 
 #boundary-buttons-row {
-  /* Width-responsive row height so boundary diamonds scale reliably with grid width */
-  flex: 0 0 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: var(--boundary-row-height);
   min-height: var(--boundary-row-height);
-  align-items: center;
-  position: relative;
-  pointer-events: auto;
+  pointer-events: none;
   z-index: 2;
 }
 
@@ -781,8 +781,8 @@
   border-radius: var(--border-radius-sm);
   background-color: var(--c-surface-overlay);
   color: var(--c-text-muted);
-  font-size: clamp(1.4rem, 3.8cqi, 2.2rem);
-  line-height: 1;
+  font-size: clamp(1rem, 2.55cqi, 1.55rem);
+  line-height: 0.92;
   font-weight: 600;
   letter-spacing: 0.05em;
   box-shadow: var(--box-shadow-sm);

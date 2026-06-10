@@ -39,6 +39,7 @@ interface GroupingButton {
   nextBoundaryStyle: string | null | undefined;
   prevBoundaryStyle: string | null | undefined;
   hasLeftDivider: boolean;
+  isTerminalBoundary: boolean;
 }
 
 interface BoundaryButton {
@@ -56,13 +57,18 @@ const createGroupingSegment = (grouping: GroupingButton, offsetLeft: number) => 
   element.className = 'grouping-segment';
   element.dataset['rhythmUiElement'] = 'grouping';
   element.dataset['index'] = `${grouping.index}`;
-  element.textContent = `${grouping.content}`;
   element.style.left = formatPx(offsetLeft + grouping.startX);
   element.style.width = formatPx(Math.max(0, grouping.endX - grouping.startX));
+
+  const label = document.createElement('span');
+  label.className = 'grouping-segment__label';
+  label.textContent = `${grouping.content}`;
+  element.appendChild(label);
 
   element.dataset['nextBoundaryStyle'] = `${grouping.nextBoundaryStyle ?? ''}`;
   element.dataset['prevBoundaryStyle'] = `${grouping.prevBoundaryStyle ?? ''}`;
   element.dataset['hasLeftDivider'] = grouping.hasLeftDivider ? 'true' : 'false';
+  element.dataset['terminalBoundary'] = grouping.isTerminalBoundary ? 'true' : 'false';
 
   element.setAttribute(
     'aria-label',
@@ -99,6 +105,20 @@ const createBoundaryButton = (boundary: BoundaryButton, offsetLeft: number) => {
   return button;
 };
 
+const createBoundaryRowExtension = (
+  x: number,
+  boundaryStyle: string | null | undefined,
+  offsetLeft: number,
+  elementName: string
+) => {
+  const element = document.createElement('div');
+  element.className = 'buttonGrid-boundary-row-extension';
+  element.dataset['rhythmUiElement'] = elementName;
+  element.dataset['style'] = boundaryStyle || 'solid';
+  element.style.left = formatPx(offsetLeft + x);
+  return element;
+};
+
 export function renderRhythmUI(): void {
   const container = document.getElementById('beat-line-button-layer');
   if (!container) {
@@ -126,6 +146,22 @@ export function renderRhythmUI(): void {
   layoutButtons.forEach((buttonDescriptor) => {
     if (buttonDescriptor.type === 'grouping') {
       groupingFragment.appendChild(createGroupingSegment(buttonDescriptor, offsetLeft));
+      if (buttonDescriptor.hasLeftDivider) {
+        boundaryFragment.appendChild(createBoundaryRowExtension(
+          buttonDescriptor.startX,
+          buttonDescriptor.prevBoundaryStyle,
+          offsetLeft,
+          'tonic-right-boundary'
+        ));
+      }
+      if (buttonDescriptor.isTerminalBoundary) {
+        boundaryFragment.appendChild(createBoundaryRowExtension(
+          buttonDescriptor.endX,
+          'solid',
+          offsetLeft,
+          'terminal-boundary'
+        ));
+      }
     } else if (buttonDescriptor.type === 'boundary') {
       boundaryFragment.appendChild(createBoundaryButton(buttonDescriptor, offsetLeft));
     }

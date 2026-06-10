@@ -38,6 +38,7 @@ class DOMCache {
     // Note bank and tonic controls
     this.cacheElement('noteBankContainer', 'note-bank-container');
     this.cacheElement('tonicModeGrid', 'tonic-mode-grid');
+    this.cacheElement('pitchLabelsToggle', 'pitch-labels-toggle');
     this.cacheElement('degreeVisibilityToggle', 'degree-visibility-toggle');
     this.cacheElement('degreeModeToggle', 'degree-mode-toggle');
     this.cacheElement('flatBtn', 'flat-toggle-btn');

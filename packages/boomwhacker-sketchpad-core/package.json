@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Core state, rules, and audio for Boomwhacker Sketchpad",
+  "description": "Core state, rules, and audio for Simple Notation",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

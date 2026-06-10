@@ -9,7 +9,6 @@ import type {
   Store,
   SixteenthStampPlacement,
   CanvasSpaceColumn,
-  TonicSign,
   SixteenthStampPlaybackData
 } from '@mlt/types';
 import type { ColumnMap } from '../../services/columnMapService.js';
@@ -18,13 +17,9 @@ import type { ColumnMap } from '../../services/columnMapService.js';
  * Callbacks for sixteenth stamp actions
  */
 export interface SixteenthStampActionCallbacks {
-  /** Get placed tonic signs from state */
-  getPlacedTonicSigns?: (state: Store['state']) => TonicSign[];
-  /** Check if column is within a tonic span */
-  isWithinTonicSpan?: (column: number, tonicSigns: TonicSign[]) => boolean;
-  /** Convert canvas column to time index (needed for three-stamp cross-collision) */
-  canvasToTime?: (canvasIndex: number, map: ColumnMap) => number | null;
-  /** Get column map from state (needed for three-stamp cross-collision) */
+  /** Convert time index to canvas column for canvas-space hit/erase operations */
+  timeToCanvas?: (timeIndex: number, map: ColumnMap) => number;
+  /** Get column map from state */
   getColumnMap?: (state: Store['state']) => ColumnMap;
   /** Logger function */
   log?: (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => void;
@@ -42,9 +37,7 @@ function generateSixteenthStampPlacementId(): string {
  */
 export function createSixteenthStampActions(callbacks: SixteenthStampActionCallbacks = {}) {
   const {
-    getPlacedTonicSigns,
-    isWithinTonicSpan,
-    canvasToTime,
+    timeToCanvas,
     getColumnMap,
     log = () => {}
   } = callbacks;
@@ -52,36 +45,23 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
   return {
     /**
      * Adds a stamp placement to the state
-     * @param startColumn Canvas-space column index (0 = first musical beat)
-     * @returns The placement if successful, null if blocked by tonic column
+     * @param startTimeIndex Time-space microbeat index (excludes tonic columns)
+     * @returns The placement if successful
      */
     addSixteenthStampPlacement(
       this: Store,
       sixteenthStampId: number,
-      startColumn: CanvasSpaceColumn,
+      startTimeIndex: number,
       row: number,
       color = '#4a90e2'
     ): SixteenthStampPlacement {
-      const endColumn = (startColumn + 2) as CanvasSpaceColumn; // Stamps span 2 microbeats (endColumn is exclusive)
-
-      // Check for collision with tonic columns (stamps span 2 microbeats)
-      if (getPlacedTonicSigns && isWithinTonicSpan) {
-        const placedTonicSigns = getPlacedTonicSigns(this.state);
-        if (isWithinTonicSpan(startColumn, placedTonicSigns) ||
-            isWithinTonicSpan(startColumn + 1, placedTonicSigns)) {
-          log('debug', `Cannot place sixteenth stamp - overlaps tonic column`, {
-            sixteenthStampId, startColumn, row
-          });
-          // Note: Original returns null, but Store interface expects SixteenthStampPlacement
-          // We'll create a dummy placement or throw - for now, proceed
-        }
-      }
+      const endTimeIndex = startTimeIndex + 2;
 
       // Check for collision with existing stamps (2-microbeat collision detection)
       const existingStamp = this.state.sixteenthStampPlacements.find(placement =>
         placement.row === row &&
-        placement.startColumn < endColumn &&
-        placement.endColumn > startColumn
+        placement.startTimeIndex < endTimeIndex &&
+        placement.startTimeIndex + 2 > startTimeIndex
       );
 
       if (existingStamp) {
@@ -90,20 +70,27 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
       }
 
       // Check for collision with three-sixteenth stamps (time-space)
-      if (this.state.sixteenthThreeStampPlacements && canvasToTime && getColumnMap) {
-        const map = getColumnMap(this.state);
-        const fourStampStartTime = canvasToTime(startColumn, map);
-        if (fourStampStartTime !== null) {
-          const fourStampEndTime = fourStampStartTime + 2;
-          const collidingThreeStamps = this.state.sixteenthThreeStampPlacements.filter(placement => {
-            if (placement.row !== row) return false;
-            const threeStampEndTime = placement.startTimeIndex + 1.5;
-            return !(threeStampEndTime <= fourStampStartTime || fourStampEndTime <= placement.startTimeIndex);
-          });
-          collidingThreeStamps.forEach(stamp => {
-            this.removeSixteenthThreeStampPlacement(stamp.id);
-          });
-        }
+      if (this.state.sixteenthThreeStampPlacements) {
+        const collidingThreeStamps = this.state.sixteenthThreeStampPlacements.filter(placement => {
+          if (placement.row !== row) return false;
+          const threeStampEndTime = placement.startTimeIndex + 1.5;
+          return !(threeStampEndTime <= startTimeIndex || endTimeIndex <= placement.startTimeIndex);
+        });
+        collidingThreeStamps.forEach(stamp => {
+          this.removeSixteenthThreeStampPlacement(stamp.id);
+        });
+      }
+
+      // Check for collision with triplet stamps (time-space)
+      if (this.state.tripletStampPlacements) {
+        const collidingTriplets = this.state.tripletStampPlacements.filter(placement => {
+          if (placement.row !== row) return false;
+          const tripletEndTime = placement.startTimeIndex + (placement.span * 2);
+          return !(tripletEndTime <= startTimeIndex || endTimeIndex <= placement.startTimeIndex);
+        });
+        collidingTriplets.forEach(stamp => {
+          this.removeTripletStampPlacement(stamp.id);
+        });
       }
 
       // Row indices are stored as global (full gamut) indices.
@@ -112,8 +99,7 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
       const placement: SixteenthStampPlacement = {
         id: generateSixteenthStampPlacementId(),
         sixteenthStampId,
-        startColumn,
-        endColumn,
+        startTimeIndex,
         row,
         globalRow,
         color,
@@ -124,10 +110,9 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
       this.state.sixteenthStampPlacements.push(placement);
       this.emit('sixteenthStampPlacementsChanged');
 
-      log('debug', `Added sixteenth stamp ${sixteenthStampId} at canvas-space ${startColumn}-${endColumn},${row}`, {
+      log('debug', `Added sixteenth stamp ${sixteenthStampId} at time ${startTimeIndex},${row}`, {
         sixteenthStampId,
-        startColumn,
-        endColumn,
+        startTimeIndex,
         row,
         placementId: placement.id
       });
@@ -147,11 +132,10 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
 
       this.emit('sixteenthStampPlacementsChanged');
 
-      log('debug', `Removed sixteenth stamp ${removed.sixteenthStampId} at ${removed.startColumn}-${removed.endColumn},${removed.row}`, {
+      log('debug', `Removed sixteenth stamp ${removed.sixteenthStampId} at time ${removed.startTimeIndex},${removed.row}`, {
         placementId,
         sixteenthStampId: removed.sixteenthStampId,
-        startColumn: removed.startColumn,
-        endColumn: removed.endColumn,
+        startTimeIndex: removed.startTimeIndex,
         row: removed.row
       });
 
@@ -171,10 +155,15 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
       eraseEndRow: number
     ): boolean {
       const toRemove: string[] = [];
+      const map = getColumnMap?.(this.state);
 
       for (const placement of this.state.sixteenthStampPlacements) {
         // Check for overlap between stamp's 2×1 area and eraser's area
-        const horizontalOverlap = placement.startColumn <= eraseEndCol && placement.endColumn >= eraseStartCol;
+        const startCanvasCol = map && timeToCanvas
+          ? timeToCanvas(placement.startTimeIndex, map)
+          : placement.startTimeIndex;
+        const endCanvasCol = startCanvasCol + 2;
+        const horizontalOverlap = startCanvasCol <= eraseEndCol && endCanvasCol >= eraseStartCol;
         const verticalOverlap = placement.row >= eraseStartRow && placement.row <= eraseEndRow;
 
         if (horizontalOverlap && verticalOverlap) {
@@ -200,14 +189,14 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
     },
 
     /**
-     * Gets stamp placement at specific position
-     * @param column Canvas-space column index (0 = first musical beat)
+     * Gets stamp placement at specific time-space position
+     * @param timeIndex Time-space microbeat index
      */
-    getSixteenthStampAt(this: Store, column: CanvasSpaceColumn, row: number): SixteenthStampPlacement | null {
+    getSixteenthStampAt(this: Store, timeIndex: number, row: number): SixteenthStampPlacement | null {
       return this.state.sixteenthStampPlacements.find(placement =>
         placement.row === row &&
-        column >= placement.startColumn &&
-        column < placement.endColumn
+        timeIndex >= placement.startTimeIndex &&
+        timeIndex < placement.startTimeIndex + 2
       ) || null;
     },
 
@@ -232,9 +221,7 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
         const rowData = this.state.fullRowData[placement.row];
         return {
           sixteenthStampId: placement.sixteenthStampId,
-          column: placement.startColumn,
-          startColumn: placement.startColumn,
-          endColumn: placement.endColumn,
+          startTimeIndex: placement.startTimeIndex,
           row: placement.row,
           pitch: rowData?.toneNote || '',
           color: placement.color,

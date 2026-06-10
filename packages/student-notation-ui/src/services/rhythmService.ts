@@ -35,6 +35,7 @@ interface GroupingButton {
   nextBoundaryStyle: BoundaryStyle;
   prevBoundaryStyle: BoundaryStyle;
   hasLeftDivider: boolean;
+  isTerminalBoundary: boolean;
 }
 
 interface BoundaryButton {
@@ -104,7 +105,7 @@ const RhythmService = {
 
         // Reset for next measure
         if (!isLastBeat) {
-          measureStartColumn = measureEndColumn;
+          measureStartColumn = (getMacrobeatInfo(state, index + 1) as MacrobeatInfo).startColumn;
           measureMicrobeatTotal = 0;
           measureContainsThreeGrouping = false;
           if (isSolidBoundary) {isAnacrusisSegment = false;}
@@ -148,7 +149,8 @@ const RhythmService = {
 
       const boundaryStyle = macrobeatBoundaryStyles[index] ?? null;
       const prevBoundaryStyle = index > 0 ? macrobeatBoundaryStyles[index - 1] ?? null : null;
-      const hasLeftDivider = prevBoundaryStyle !== null && tonicRightEdgeColumns.has(startColumn);
+      const hasLeftDivider = tonicRightEdgeColumns.has(startColumn);
+      const isTerminalBoundary = index === macrobeatGroupings.length - 1;
 
       buttons.push({
         type: 'grouping',
@@ -157,9 +159,10 @@ const RhythmService = {
         startX,
         endX,
         index,
-        nextBoundaryStyle: boundaryStyle,
+        nextBoundaryStyle: isTerminalBoundary ? 'solid' : boundaryStyle,
         prevBoundaryStyle,
-        hasLeftDivider
+        hasLeftDivider,
+        isTerminalBoundary
       });
 
       if (index < macrobeatGroupings.length - 1) {

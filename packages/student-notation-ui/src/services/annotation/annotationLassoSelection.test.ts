@@ -7,7 +7,7 @@ vi.mock('@components/canvas/PitchGrid/renderers/rendererUtils.ts', () => ({
 }));
 
 vi.mock('@services/columnMapService.ts', () => ({
-  timeToCanvas: (timeIndex: number) => timeIndex
+  timeToCanvas: (timeIndex: number) => timeIndex >= 6 ? timeIndex + 2 : timeIndex
 }));
 
 vi.mock('@state/initStore.ts', () => ({
@@ -22,8 +22,7 @@ function createSixteenthStamp(overrides: Partial<SixteenthStampPlacement> = {}):
   return {
     id: 'stamp-1',
     sixteenthStampId: 1,
-    startColumn: 4 as SixteenthStampPlacement['startColumn'],
-    endColumn: 6 as SixteenthStampPlacement['endColumn'],
+    startTimeIndex: 4,
     row: 10,
     globalRow: 10,
     color: '#4a90e2',
@@ -103,6 +102,30 @@ describe('computeLassoSelection', () => {
         { x: 118, y: 96 },
         { x: 118, y: 104 },
         { x: 100, y: 104 }
+      ],
+      state: {
+        placedNotes: [],
+        sixteenthStampPlacements: [stamp],
+        sixteenthThreeStampPlacements: [],
+        tripletStampPlacements: [],
+        tempoModulationMarkers: []
+      },
+      renderOptions,
+      isAdditive: false
+    });
+
+    expect(selection.selectedItems).toHaveLength(0);
+    expect(selection.convexHull).toBeNull();
+  });
+
+  it('does not stretch a sixteenth stamp across a later tonic gap', () => {
+    const stamp = createSixteenthStamp({ sixteenthStampId: 4 });
+    const selection = computeLassoSelection({
+      lassoPath: [
+        { x: 144, y: 94 },
+        { x: 156, y: 94 },
+        { x: 156, y: 106 },
+        { x: 144, y: 106 }
       ],
       state: {
         placedNotes: [],

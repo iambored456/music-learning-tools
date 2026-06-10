@@ -9,7 +9,7 @@
   border: 2px solid var(--c-border) !important;
   color: var(--c-text-muted) !important;
   font-size: clamp(0.85rem, 1.8vw, 1.125rem);
-  font-size: clamp(0.8rem, min(22cqi, 28cqb), 1.65rem);
+  font-size: clamp(0.9rem, min(26cqi, 34cqb), 1.85rem);
   font-weight: 600;
   box-sizing: border-box;
   flex: 1 1 auto;
@@ -81,18 +81,18 @@
 
 #flat-toggle-btn,
 #sharp-toggle-btn {
-  font-size: clamp(0.95rem, min(24cqi, 30cqb), 1.8rem);
+  font-size: clamp(1.05rem, min(31cqi, 40cqb), 2.1rem);
 }
 
 #hz-toggle-btn {
-  font-size: clamp(0.72rem, min(19cqi, 24cqb), 1.35rem);
+  font-size: clamp(0.86rem, min(28cqi, 36cqb), 1.7rem);
   letter-spacing: 0.01em;
 }
 
 #spn-octave-toggle-btn {
-  --octave-label-size: clamp(0.72rem, min(18cqi, 24cqb), 1.35rem);
+  --octave-label-size: clamp(0.86rem, min(28cqi, 36cqb), 1.7rem);
   --octave-digit-scale: 0.72;
-  font-size: clamp(0.72rem, min(18cqi, 24cqb), 1.35rem);
+  font-size: clamp(0.86rem, min(28cqi, 36cqb), 1.7rem);
 }
 
 .octave-toggle-btn .octave-label {

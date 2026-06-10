@@ -45,6 +45,11 @@
     mask-image: url('./assets/stick-clicks.svg');
   }
 
+  .glyph-icon--tambourine {
+    -webkit-mask-image: url('./assets/tambourine.svg');
+    mask-image: url('./assets/tambourine.svg');
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;

@@ -243,31 +243,14 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
         const stampsToRemove: SixteenthStampPlacement[] = [];
 
         this.state.sixteenthStampPlacements.forEach(stamp => {
-          const startTime = visualToTimeIndex(this.state, stamp.startColumn, oldGroupings);
-          const endTime = visualToTimeIndex(this.state, stamp.endColumn, oldGroupings);
-
-          if (startTime === null || endTime === null) {
-            return;
-          }
-
-          const newStartTime = startTime + timeShift;
-          const newEndTime = endTime + timeShift;
+          const newStartTime = stamp.startTimeIndex + timeShift;
 
           if (newStartTime < 0) {
             stampsToRemove.push(stamp);
             return;
           }
 
-          const newStartColumn = timeIndexToVisualColumn(this.state, newStartTime, newGroupings);
-          const newEndColumn = timeIndexToVisualColumn(this.state, newEndTime, newGroupings);
-
-          if (newStartColumn === null || newEndColumn === null) {
-            stampsToRemove.push(stamp);
-            return;
-          }
-
-          stamp.startColumn = newStartColumn as CanvasSpaceColumn;
-          stamp.endColumn = newEndColumn as CanvasSpaceColumn;
+          stamp.startTimeIndex = newStartTime;
         });
 
         stampsToRemove.forEach(stampToRemove => {
@@ -484,8 +467,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
 
         const stampsToRemove: SixteenthStampPlacement[] = [];
         this.state.sixteenthStampPlacements.forEach(stamp => {
-          const startTime = visualToTimeIndex(this.state, stamp.startColumn, this.state.macrobeatGroupings);
-          if (startTime !== null && startTime >= boundaryTime) {
+          if (stamp.startTimeIndex >= boundaryTime) {
             stampsToRemove.push(stamp);
           }
         });

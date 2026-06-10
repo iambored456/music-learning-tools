@@ -22,6 +22,12 @@ export interface SixteenthStampRendererOptions {
 }
 
 type ShapeFillLevels = Record<string, number>;
+export interface SixteenthStampShapeEffects {
+  getYOffset?: (shapeKey: string) => number;
+  drawEllipseDelayGhosts?: (shapeKey: string, cx: number, cy: number, rx: number, ry: number) => void;
+  drawPathDelayGhosts?: (shapeKey: string, cx: number, cy: number, width: number, height: number) => void;
+}
+
 let svgGradientCounter = 0;
 
 /**
@@ -106,7 +112,8 @@ export class SixteenthStampRenderer {
     color = '#000',
     placement: (SixteenthStampPlacementLike & { shapeOffsets?: Record<string, number> }) | null = null,
     getRowY: GetRowY | null = null,
-    shapeFillLevels: ShapeFillLevels | null = null
+    shapeFillLevels: ShapeFillLevels | null = null,
+    shapeEffects: SixteenthStampShapeEffects | null = null
   ): void {
     // Separate horizontal and vertical scaling to support modulation stretch
     const scaleX = (width / 100) * 0.8;
@@ -137,8 +144,10 @@ export class SixteenthStampRenderer {
         const shapeRow = placement.row + rowOffset;
         ovalY = getRowY(shapeRow);
       }
+      ovalY += shapeEffects?.getYOffset?.(shapeKey) ?? 0;
 
       const fillLevel = shapeFillLevels?.[shapeKey] ?? 0;
+      shapeEffects?.drawEllipseDelayGhosts?.(shapeKey, cx, ovalY, ovalRx, ovalRy);
       this.drawEnvelopeFillEllipse(ctx, cx, ovalY, ovalRx, ovalRy, color, fillLevel);
 
       ctx.beginPath();
@@ -160,10 +169,12 @@ export class SixteenthStampRenderer {
         const shapeRow = placement.row + rowOffset;
         diamondY = getRowY(shapeRow);
       }
+      diamondY += shapeEffects?.getYOffset?.(shapeKey) ?? 0;
 
       const path = diamondPath(cx, diamondY, diamondW, diamondH);
       const pathObj = new Path2D(path);
       const fillLevel = shapeFillLevels?.[shapeKey] ?? 0;
+      shapeEffects?.drawPathDelayGhosts?.(shapeKey, cx, diamondY, diamondW, diamondH);
       this.drawEnvelopeFillPath(ctx, pathObj, cx, diamondY, Math.max(diamondW, diamondH) / 2, color, fillLevel);
       ctx.stroke(pathObj);
     });

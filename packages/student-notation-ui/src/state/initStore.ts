@@ -81,6 +81,54 @@ let columnMapServiceCallbacks: {
   getTimeBoundaryAfterMacrobeat?: (state: AppState, index: number, groupings: MacrobeatGrouping[]) => number;
 } = {};
 
+function getMacrobeatInfoFromColumnMap(state: AppState, index: number): { startColumn: number; endColumn: number } | null {
+  const map = columnMapServiceCallbacks.getColumnMap?.(state);
+  if (!map) {
+    return null;
+  }
+
+  let startColumn: number | null = null;
+  let endColumn: number | null = null;
+
+  for (const entry of map.entries) {
+    if (entry.type !== 'beat' || entry.macrobeatIndex !== index || entry.canvasIndex === null) {
+      continue;
+    }
+
+    startColumn = startColumn === null ? entry.canvasIndex : Math.min(startColumn, entry.canvasIndex);
+    endColumn = endColumn === null ? entry.canvasIndex : Math.max(endColumn, entry.canvasIndex);
+  }
+
+  return startColumn === null || endColumn === null
+    ? null
+    : { startColumn, endColumn };
+}
+
+function getFallbackMacrobeatInfo(state: AppState, index: number): { startColumn: number; endColumn: number } {
+  const groupings = state.macrobeatGroupings || [];
+  const tonicCountsByPreMacrobeat = new Map<number, number>();
+
+  Object.entries(state.tonicSignGroups || {}).forEach(([, group]) => {
+    const preMacrobeatIndex = group?.[0]?.preMacrobeatIndex;
+    if (typeof preMacrobeatIndex !== 'number' || !Number.isFinite(preMacrobeatIndex)) {
+      return;
+    }
+    tonicCountsByPreMacrobeat.set(
+      preMacrobeatIndex,
+      (tonicCountsByPreMacrobeat.get(preMacrobeatIndex) ?? 0) + 1
+    );
+  });
+
+  let startColumn = (tonicCountsByPreMacrobeat.get(-1) ?? 0) * 2;
+  for (let i = 0; i < index && i < groupings.length; i++) {
+    startColumn += groupings[i] || 2;
+    startColumn += (tonicCountsByPreMacrobeat.get(i) ?? 0) * 2;
+  }
+
+  const endColumn = startColumn + (groupings[index] || 2) - 1;
+  return { startColumn, endColumn };
+}
+
 /**
  * Register column map service callbacks after the service is initialized.
  * This allows the store to be created before the column map service.
@@ -101,15 +149,7 @@ const store: StoreInstance = createStore({
   },
   noteActionCallbacks: {
     getMacrobeatInfo: (state, index) => {
-      // This will be provided by column map service
-      // For now, return a basic calculation
-      const groupings = state.macrobeatGroupings || [];
-      let startColumn = 0;
-      for (let i = 0; i < index && i < groupings.length; i++) {
-        startColumn += groupings[i] || 2;
-      }
-      const endColumn = startColumn + (groupings[index] || 2) - 1;
-      return { startColumn, endColumn };
+      return getMacrobeatInfoFromColumnMap(state, index) ?? getFallbackMacrobeatInfo(state, index);
     },
     log: (level, message, data) => logWrapper(level, 'noteActions', message, data)
   },
@@ -149,9 +189,7 @@ const store: StoreInstance = createStore({
     log: logWrapper
   },
   sixteenthStampActionCallbacks: {
-    canvasToTime: (canvasIndex, map) => {
-      return map.canvasToTime.get(canvasIndex) ?? null;
-    },
+    timeToCanvas: (timeIndex, map) => map.timeToCanvas.get(timeIndex) ?? timeIndex,
     getColumnMap: (state) => {
       if (columnMapServiceCallbacks.getColumnMap) {
         return columnMapServiceCallbacks.getColumnMap(state);
@@ -161,9 +199,6 @@ const store: StoreInstance = createStore({
     log: (level, message, data) => logWrapper(level, 'sixteenthStampActions', message, data)
   },
   tripletStampActionCallbacks: {
-    canvasToTime: (canvasIndex, map) => {
-      return map.canvasToTime.get(canvasIndex) ?? null;
-    },
     timeToCanvas: (timeIndex, map) => {
       return map.timeToCanvas.get(timeIndex) ?? timeIndex;
     },
@@ -176,9 +211,6 @@ const store: StoreInstance = createStore({
     log: (level, message, data) => logWrapper(level, 'tripletStampActions', message, data)
   },
   sixteenthThreeStampActionCallbacks: {
-    canvasToTime: (canvasIndex, map) => {
-      return map.canvasToTime.get(canvasIndex) ?? null;
-    },
     timeToCanvas: (timeIndex, map) => {
       return map.timeToCanvas.get(timeIndex) ?? timeIndex;
     },

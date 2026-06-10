@@ -28,7 +28,7 @@ export interface FilterSettings {
  * @returns Filter amplitude (0-1)
  */
 export function getFilterAmplitudeAt(norm_pos: number, filterSettings: FilterSettings): number {
-  const { blend, cutoff, resonance } = filterSettings;
+  const { blend = 1.0, cutoff = 16, resonance = 0 } = filterSettings;
   // Map cutoff (1-31) to normalized position across the 12 bins
   const norm_cutoff = (cutoff - 1) / (31 - 1);
 
@@ -58,10 +58,10 @@ export function getFilterAmplitudeAt(norm_pos: number, filterSettings: FilterSet
     shape = bp * (2 - blend) + lp * (blend - 1);
   }
 
-  const res_q = 1.0 - (resonance || 0) / 105;
+  const res_q = 1.0 - resonance / 105;
   const peak_width = Math.max(0.01, 0.2 * res_q * res_q);
   const peak = Math.exp(-Math.pow((norm_pos - norm_cutoff) / peak_width, 2));
-  const res_gain = ((resonance || 0) / 100) * 0.6;
+  const res_gain = (resonance / 100) * 0.6;
 
   // Add resonance peak but ensure total stays within 0-1 bounds
   const result = shape + peak * res_gain;
@@ -195,8 +195,8 @@ export function getFilterDataForSynth(color: string): {
     enabled: true,
     coefficients: filteredCoefficients,
     settings: {
-      blend: filterSettings.blend,
-      cutoff: filterSettings.cutoff,
+      blend: filterSettings.blend ?? 1.0,
+      cutoff: filterSettings.cutoff ?? 16,
       mix: mixAmount,
       resonance: filterSettings.resonance || 0
     }

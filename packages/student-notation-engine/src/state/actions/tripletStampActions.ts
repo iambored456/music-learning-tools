@@ -13,7 +13,6 @@ import type {
   Store,
   TripletStampPlacement,
   CanvasSpaceColumn,
-  SixteenthStampPlacement,
   TripletStampPlaybackData
 } from '@mlt/types';
 import type { ColumnMap } from '../../services/columnMapService.js';
@@ -22,8 +21,6 @@ import type { ColumnMap } from '../../services/columnMapService.js';
  * Callbacks for triplet stamp actions
  */
 export interface TripletStampActionCallbacks {
-  /** Convert canvas column to time index */
-  canvasToTime?: (canvasIndex: number, map: ColumnMap) => number | null;
   /** Convert time index to canvas column */
   timeToCanvas?: (timeIndex: number, map: ColumnMap) => number;
   /** Get column map from state */
@@ -44,7 +41,6 @@ function generateTripletStampPlacementId(): string {
  */
 export function createTripletStampActions(callbacks: TripletStampActionCallbacks = {}) {
   const {
-    canvasToTime,
     timeToCanvas,
     getColumnMap,
     log = () => {}
@@ -79,13 +75,11 @@ export function createTripletStampActions(callbacks: TripletStampActionCallbacks
       }
 
       // Check for collision with existing stamp placements
-      if (this.state.sixteenthStampPlacements && canvasToTime && getColumnMap) {
-        const map = getColumnMap(this.state);
+      if (this.state.sixteenthStampPlacements) {
         const collidingStamps = this.state.sixteenthStampPlacements.filter(stamp => {
           if (stamp.row !== placement.row) return false;
 
-          const stampStartTime = canvasToTime(stamp.startColumn, map);
-          if (stampStartTime === null) return true;
+          const stampStartTime = stamp.startTimeIndex;
           const stampEndTime = stampStartTime + 2;
           return !(stampEndTime <= placement.startTimeIndex || stampStartTime >= newEndTime);
         });

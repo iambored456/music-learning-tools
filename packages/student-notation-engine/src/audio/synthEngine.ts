@@ -22,6 +22,10 @@ import type {
   SynthLogger
 } from './types.js';
 
+const HARD_STOP_FADE_SECONDS = 0.03;
+const MODULATION_RAMP_SECONDS = 0.035;
+const TREMOLO_GAIN_DELTA_SCALE = 0.5;
+
 /**
  * Create a new synth engine instance
  */
@@ -49,6 +53,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
   let gainManager: GainManager | null = null;
   let clippingMonitor: ClippingMonitor | null = null;
   let outputHardMuted = false;
+  let outputMuteTimerId: ReturnType<typeof setTimeout> | null = null;
 
   // Copy of timbres for internal mutation
   const internalTimbres: Record<string, InternalTimbreState> = { ...timbres };
@@ -73,11 +78,30 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     return total;
   }
 
-  function ensureOutputAudible(): void {
-    if (!outputHardMuted || !volumeControl) {
+  function cancelPendingOutputMute(): void {
+    if (outputMuteTimerId === null) {
       return;
     }
-    volumeControl.mute = false;
+    clearTimeout(outputMuteTimerId);
+    outputMuteTimerId = null;
+  }
+
+  function ensureOutputAudible(): void {
+    if (!outputHardMuted && volumeControl?.mute !== true) {
+      return;
+    }
+
+    cancelPendingOutputMute();
+
+    if (volumeControl) {
+      volumeControl.mute = false;
+    }
+    if (masterGain) {
+      const now = Tone.now();
+      masterGain.gain.cancelScheduledValues(now);
+      masterGain.gain.setValueAtTime(getPerVoiceBaselineGain(), now);
+    }
+    gainManager?.start();
     outputHardMuted = false;
   }
 
@@ -136,7 +160,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       } else {
         // Update existing LFO parameters
         const lfo = sharedVibratoLFOs[color]!;
-        lfo.frequency.value = freqHz;
+        lfo.frequency.rampTo(freqHz, MODULATION_RAMP_SECONDS);
         lfo.min = -depthCents;
         lfo.max = depthCents;
       }
@@ -151,18 +175,23 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     }
   }
 
+  function getTremoloGainDelta(span: number): number {
+    const normalizedSpan = Math.min(1, Math.max(0, span / 100));
+    return normalizedSpan * TREMOLO_GAIN_DELTA_SCALE;
+  }
+
   // [PERF:SHARED-LFO] Update or create/destroy shared tremolo LFO for a color.
-  // Tremolo LFO outputs (-depth, 0) which adds to tremoloGain.gain (intrinsic=1),
-  // so effective gain oscillates between (1-depth) and 1.
+  // The LFO is centered on 0 and added to tremoloGain.gain (intrinsic=1),
+  // so tremolo oscillates around normal level instead of only reducing gain.
   function updateSharedTremolo(color: string, params: { speed: number; span: number }): void {
     const isActive = params.speed > 0 && params.span > 0;
 
     if (isActive) {
       const freqHz = (params.speed / 100) * 16;       // 0-100% → 0-16 Hz
-      const depth = params.span / 100;                  // 0-100% → 0-1
+      const gainDelta = getTremoloGainDelta(params.span); // 0-100% -> +/-0.5 gain
 
       if (!sharedTremoloLFOs[color]) {
-        const lfo = new Tone.LFO({ frequency: freqHz, min: -depth, max: 0, type: 'sine' });
+        const lfo = new Tone.LFO({ frequency: freqHz, min: -gainDelta, max: gainDelta, type: 'sine' });
         lfo.start();
         sharedTremoloLFOs[color] = lfo;
 
@@ -173,13 +202,13 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
             try { lfo.connect(voice.tremoloInput); } catch { /* voice may be disposed */ }
           });
         }
-        log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared tremolo LFO for ${color}`, { freqHz, depth }, 'audio');
+        log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared tremolo LFO for ${color}`, { freqHz, gainDelta }, 'audio');
       } else {
         // Update existing LFO parameters
         const lfo = sharedTremoloLFOs[color]!;
-        lfo.frequency.value = freqHz;
-        lfo.min = -depth;
-        lfo.max = 0;
+        lfo.frequency.rampTo(freqHz, MODULATION_RAMP_SECONDS);
+        lfo.min = -gainDelta;
+        lfo.max = gainDelta;
       }
     } else {
       // Disable: dispose shared tremolo LFO, reset voice gains to pass-through
@@ -477,6 +506,22 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       });
     },
 
+    updateModulationForColor(color: string) {
+      const timbre = internalTimbres[color];
+      const synth = synths[color];
+      if (!synth || !timbre) return;
+
+      if (!timbre.vibrato) {
+        timbre.vibrato = { speed: 0, span: 0 };
+      }
+      if (!timbre.tremelo) {
+        timbre.tremelo = { speed: 0, span: 0 };
+      }
+
+      updateSharedVibrato(color, timbre.vibrato);
+      updateSharedTremolo(color, timbre.tremelo);
+    },
+
     setBpm(tempo: number) {
       try {
         if (Tone?.Transport?.bpm) {
@@ -627,9 +672,25 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       this.releaseAll();
       effectsManager?.flushPlaybackTails?.();
 
+      cancelPendingOutputMute();
+      outputHardMuted = true;
+      gainManager?.stop();
+
+      if (masterGain) {
+        const now = Tone.now();
+        const currentGain = Math.max(masterGain.gain.value ?? getPerVoiceBaselineGain(), 0);
+        masterGain.gain.cancelScheduledValues(now);
+        masterGain.gain.setValueAtTime(currentGain, now);
+        masterGain.gain.linearRampToValueAtTime(0, now + HARD_STOP_FADE_SECONDS);
+      }
+
       if (volumeControl) {
-        volumeControl.mute = true;
-        outputHardMuted = true;
+        outputMuteTimerId = setTimeout(() => {
+          outputMuteTimerId = null;
+          if (outputHardMuted && volumeControl) {
+            volumeControl.mute = true;
+          }
+        }, (HARD_STOP_FADE_SECONDS * 1000) + 10);
       }
     },
 
@@ -704,6 +765,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     // === Cleanup ===
 
     stopBackgroundMonitors() {
+      cancelPendingOutputMute();
       clippingMonitor?.stop();
       gainManager?.stop();
       if (diagIntervalId) { clearInterval(diagIntervalId); diagIntervalId = null; }

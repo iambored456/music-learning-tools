@@ -108,6 +108,7 @@ export interface AppState {
   /** Canvas-space: legacy per-column widths for some renderers. */
   musicalColumnWidths: number[];
   degreeDisplayMode: DegreeDisplayMode;
+  showPitchLabels: boolean;
   accidentalMode: AccidentalMode;
   showFrequencyLabels: boolean;
   showOctaveLabels: boolean;
@@ -203,11 +204,11 @@ export interface Store {
   clearModulationMarkers(): void;
 
   // Stamp actions
-  addSixteenthStampPlacement(sixteenthStampId: number, startColumn: CanvasSpaceColumn, row: number, color?: string): SixteenthStampPlacement;
+  addSixteenthStampPlacement(sixteenthStampId: number, startTimeIndex: number, row: number, color?: string): SixteenthStampPlacement;
   removeSixteenthStampPlacement(placementId: string): boolean;
   eraseSixteenthStampsInArea(eraseStartCol: CanvasSpaceColumn, eraseEndCol: CanvasSpaceColumn, eraseStartRow: number, eraseEndRow: number): boolean;
   getAllSixteenthStampPlacements(): SixteenthStampPlacement[];
-  getSixteenthStampAt(column: CanvasSpaceColumn, row: number): SixteenthStampPlacement | null;
+  getSixteenthStampAt(timeIndex: number, row: number): SixteenthStampPlacement | null;
   clearAllSixteenthStamps(): void;
   getSixteenthStampPlaybackData(): SixteenthStampPlaybackData[];
   updateSixteenthStampShapeOffset(placementId: string, shapeKey: string, rowOffset: number): void;
@@ -250,6 +251,7 @@ export interface Store {
   toggleFrequencyLabels(): void;
   toggleOctaveLabels(): void;
   toggleFocusColours(): void;
+  setShowPitchLabels(show: boolean): void;
   setDegreeDisplayMode(mode: DegreeDisplayMode): void;
   toggleWaveformExtendedView(): void;
   shiftGridUp(): void;

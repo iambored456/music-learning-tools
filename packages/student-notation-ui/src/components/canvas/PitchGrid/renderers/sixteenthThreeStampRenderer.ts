@@ -1,15 +1,20 @@
 // js/components/Canvas/PitchGrid/renderers/sixteenthThreeStampRenderer.ts
 import { getSixteenthThreeStampById } from '../../../../rhythm/sixteenthThreeStamps.ts';
+import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.ts';
 import { defaultSixteenthThreeStampRenderer } from '../../../../utils/sixteenthThreeStampRenderer.ts';
 import { getRowY, getColumnX } from './rendererUtils.ts';
+import {
+  drawStampShapeDelayPath,
+  getStampShapeVibratoYOffset
+} from './stampShapeEffects.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { timeToCanvas } from '../../../../services/columnMapService.ts';
 import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildSixteenthStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
-import type { ModulationMarker, SixteenthThreeStampPlacement } from '@mlt/types';
-import type { SixteenthThreeStampShape } from '../../../../utils/sixteenthThreeStampRenderer.ts';
+import type { AnimatableNote, ModulationMarker, SixteenthThreeStampPlacement } from '@mlt/types';
+import type { SixteenthThreeStampShape, SixteenthThreeStampShapeEffects } from '../../../../utils/sixteenthThreeStampRenderer.ts';
 
 /** Constant span: 1.5 microbeats */
 const THREE_STAMP_TIME_SPAN = 1.5;
@@ -21,6 +26,7 @@ interface SixteenthThreeStampRenderOptions {
   cellHeight: number;
   baseMicrobeatPx?: number;
   tempoModulationMarkers?: ModulationMarker[];
+  tempo?: number;
 }
 
 logger.moduleLoaded('SixteenthThreeStampRenderer', 'stamps');
@@ -33,6 +39,46 @@ interface AnimationEffectsManager {
 const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
   return getRuntimeAnimationEffectsManager() as AnimationEffectsManager | undefined;
 };
+
+function createStampShapeEffectNote(
+  placement: SixteenthThreeStampPlacement,
+  shapeKey: string
+): AnimatableNote {
+  return {
+    uuid: buildSixteenthStampShapeNoteId(placement.id, shapeKey),
+    color: placement.color
+  };
+}
+
+function createSixteenthThreeStampShapeEffects(
+  ctx: CanvasRenderingContext2D,
+  placement: SixteenthThreeStampPlacement,
+  options: SixteenthThreeStampRenderOptions
+): SixteenthThreeStampShapeEffects {
+  const effectOptions = {
+    cellWidth: options.cellWidth,
+    cellHeight: options.cellHeight,
+    tempo: options.tempo ?? store.state.tempo
+  };
+
+  return {
+    getYOffset: (shapeKey) => {
+      return getStampShapeVibratoYOffset(createStampShapeEffectNote(placement, shapeKey), effectOptions);
+    },
+    drawPathDelayGhosts: (shapeKey, cx, cy, width, height) => {
+      drawStampShapeDelayPath(
+        ctx,
+        createStampShapeEffectNote(placement, shapeKey),
+        effectOptions,
+        cx,
+        cy,
+        width,
+        height,
+        (pathCx, pathCy, pathWidth, pathHeight) => new Path2D(diamondPath(pathCx, pathCy, pathWidth, pathHeight))
+      );
+    }
+  };
+}
 
 function getShapeFillLevels(placement: SixteenthThreeStampPlacement, stamp: SixteenthThreeStampShape): Record<string, number> | null {
   const manager = getAnimationEffectsManager();
@@ -93,6 +139,7 @@ function renderSixteenthThreeStamp(ctx: CanvasRenderingContext2D, placement: Six
 
   const getRowYWithOptions = (rowIndex: number) => getRowY(rowIndex, options);
   const shapeFillLevels = getShapeFillLevels(placement, stamp);
+  const shapeEffects = createSixteenthThreeStampShapeEffects(ctx, placement, options);
 
   defaultSixteenthThreeStampRenderer.renderToCanvas(
     ctx,
@@ -104,7 +151,8 @@ function renderSixteenthThreeStamp(ctx: CanvasRenderingContext2D, placement: Six
     color,
     placement,
     getRowYWithOptions,
-    shapeFillLevels
+    shapeFillLevels,
+    shapeEffects
   );
 
   ctx.save();

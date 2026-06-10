@@ -103,6 +103,7 @@
     store.on('focusColoursChanged', renderAll);
     store.on('octaveLabelsChanged', renderAll);
     store.on('degreeDisplayModeChanged', renderAll);
+    store.on('pitchLabelsChanged', renderAll);
     store.on('longNoteStyleChanged', renderAll);
     store.on('layoutConfigChanged', handleLayoutConfigChanged);
     store.on('rhythmStructureChanged', handleRhythmStructureChanged);
@@ -123,6 +124,7 @@
       store.off('focusColoursChanged', renderAll);
       store.off('octaveLabelsChanged', renderAll);
       store.off('degreeDisplayModeChanged', renderAll);
+      store.off('pitchLabelsChanged', renderAll);
       store.off('longNoteStyleChanged', renderAll);
       store.off('layoutConfigChanged', handleLayoutConfigChanged);
       store.off('rhythmStructureChanged', handleRhythmStructureChanged);

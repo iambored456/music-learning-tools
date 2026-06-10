@@ -75,7 +75,7 @@ const TransportService = {
         }),
         getStampPlaybackData: () => getSixteenthStampPlaybackData().map((stamp) => ({
           sixteenthStampId: String(stamp.sixteenthStampId),
-          column: stamp.column,
+          startTimeIndex: stamp.startTimeIndex,
           row: stamp.row,
           color: stamp.color,
           placement: stamp.placement

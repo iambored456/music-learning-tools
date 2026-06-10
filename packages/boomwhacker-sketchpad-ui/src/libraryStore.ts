@@ -98,7 +98,7 @@ function readLocalStorageEntries(): Array<SketchpadLibraryEntry<unknown>> {
       .map((entry) => normalizeEntry(entry))
       .filter((entry): entry is SketchpadLibraryEntry<unknown> => entry !== null);
   } catch (error) {
-    console.warn('Boomwhacker Sketchpad library localStorage read failed.', error);
+    console.warn('Simple Notation library localStorage read failed.', error);
     return [];
   }
 }
@@ -123,7 +123,7 @@ async function readIndexedDbEntries(): Promise<Array<SketchpadLibraryEntry<unkno
       .map((entry) => normalizeEntry(entry))
       .filter((entry): entry is SketchpadLibraryEntry<unknown> => entry !== null);
   } catch (error) {
-    console.warn('Boomwhacker Sketchpad library IndexedDB read failed.', error);
+    console.warn('Simple Notation library IndexedDB read failed.', error);
     return [];
   }
 }
@@ -182,7 +182,7 @@ export async function saveSketchpadLibraryEntry<TDocument = unknown>(input: {
       await writeIndexedDbEntry(entry as SketchpadLibraryEntry<unknown>);
       savedToIndexedDb = true;
     } catch (error) {
-      console.warn('Boomwhacker Sketchpad library IndexedDB save failed.', error);
+      console.warn('Simple Notation library IndexedDB save failed.', error);
     }
   }
 
@@ -206,7 +206,7 @@ export async function deleteSketchpadLibraryEntry(id: string): Promise<void> {
       removed = true;
     } catch (error) {
       indexedDbFailure = error;
-      console.warn('Boomwhacker Sketchpad library IndexedDB delete failed.', error);
+      console.warn('Simple Notation library IndexedDB delete failed.', error);
     }
   }
 
@@ -220,7 +220,7 @@ export async function deleteSketchpadLibraryEntry(id: string): Promise<void> {
       }
     } catch (error) {
       localStorageFailure = error;
-      console.warn('Boomwhacker Sketchpad library localStorage delete failed.', error);
+      console.warn('Simple Notation library localStorage delete failed.', error);
     }
   }
 

@@ -50,6 +50,7 @@ import {
   rangeFromCenterAndSpan,
   resolveZoomAnimationDuration
 } from './layout/pitchRangeState.ts';
+import { getDrumRowHeightFromCellWidth } from '@utils/drumGridSizing.ts';
 
 
 
@@ -123,6 +124,7 @@ let lastCalculatedButtonGridHeight = 0;
 let lockedButtonGridHeight: number | null = null;
 const ENABLE_ZOOM_ANIMATION = false;
 const ENABLE_LAYOUT_DIAGNOSTICS = false;
+const BUTTON_GRID_ROW_COUNT = 2;
 
 function getNormalizedPitchRange(): PitchRange {
   const totalRanks = store.state.fullRowData.length;
@@ -205,6 +207,8 @@ function cancelPitchRangeAnimation(): void {
   pitchRangeAnimationToken += 1;
   isZooming = false;
   zoomReferenceContainerHeight = null;
+  pendingFinalRecalc = false;
+  finalRecalcAttempts = 0;
 }
 
 function applyPitchRange(nextRange: PitchRange, source: string): void {
@@ -215,6 +219,9 @@ function applyPitchRange(nextRange: PitchRange, source: string): void {
   if (normalizedNext.topIndex === prevRange.topIndex && normalizedNext.bottomIndex === prevRange.bottomIndex) {
     return;
   }
+
+  pendingFinalRecalc = false;
+  finalRecalcAttempts = 0;
 
   const prevTop = prevRange.topIndex;
   const prevSpan = getSpan(prevRange);
@@ -672,10 +679,13 @@ function recalcAndApplyLayout() {
   const hasModulation = store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0;
   const finalMusicalWidth = hasModulation ? modulatedMusicalWidth : musicalCanvasWidth;
 
-  // After Phase 8: Add legend widths to musical width to get total grid width
-  const leftLegendWidthUnits = getLegendTotalWidthPx(passCellWidth, newCellHeight);
-  const rightLegendWidthUnits = getLegendTotalWidthPx(passCellWidth, newCellHeight);
-  const totalCanvasWidthPx = Math.round(finalMusicalWidth + leftLegendWidthUnits + rightLegendWidthUnits);
+  // After Phase 8: Add legend widths to musical width to get total grid width.
+  // Keep these rounded values as the single source of truth for the button grid
+  // and canvases so their column boundaries land on the same pixels.
+  const leftLegendWidthPx = Math.round(getLegendTotalWidthPx(passCellWidth, newCellHeight));
+  const rightLegendWidthPx = Math.round(getLegendTotalWidthPx(passCellWidth, newCellHeight));
+  const musicalCanvasWidthPx = Math.round(finalMusicalWidth);
+  const totalCanvasWidthPx = leftLegendWidthPx + musicalCanvasWidthPx + rightLegendWidthPx;
 
   const pixelRatio = getDevicePixelRatio();
 
@@ -808,7 +818,7 @@ function recalcAndApplyLayout() {
 
   // Keep button grid height stable across zoom frames. Drum grid remains zoom-coupled.
   const zoomResponsiveButtonRowHeight = Math.max(BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR * store.state.cellHeight);
-  const zoomResponsiveButtonGridHeight = DRUM_ROW_COUNT * zoomResponsiveButtonRowHeight;
+  const zoomResponsiveButtonGridHeight = BUTTON_GRID_ROW_COUNT * zoomResponsiveButtonRowHeight;
   const shouldRefreshLockedButtonHeight =
     lockedButtonGridHeight === null
     || layoutTriggerSource.startsWith('init:')
@@ -926,19 +936,16 @@ function recalcAndApplyLayout() {
 
 
 
-    // Calculate left legend width (first 2 columns)
+    // Match the legend canvases exactly.
 
 
-    const leftCellWidth = getLegendTotalWidthPx(passCellWidth, newCellHeight);
+    const leftCellWidth = leftLegendWidthPx;
 
 
 
 
 
-    // Calculate right legend width (last 2 columns)
-
-
-    const rightCellWidth = getLegendTotalWidthPx(passCellWidth, newCellHeight);
+    const rightCellWidth = rightLegendWidthPx;
 
 
 
@@ -1055,19 +1062,19 @@ function recalcAndApplyLayout() {
       }
 
 
-      applyCellSizing(middleCell, middleCellWidth);
+      applyCellSizing(middleCell, musicalCanvasWidthPx);
 
 
       const middleRect = middleCell.getBoundingClientRect();
 
 
-      if (middleCellWidth > 0 && middleRect.width === 0) {
+      if (musicalCanvasWidthPx > 0 && middleRect.width === 0) {
 
 
         logger.warn('LayoutService', 'Middle button-grid cell assigned width but still measures 0.', {
 
 
-          assignedWidth: middleCellWidth,
+          assignedWidth: musicalCanvasWidthPx,
 
 
           measuredWidth: middleRect.width,
@@ -1082,13 +1089,13 @@ function recalcAndApplyLayout() {
       }
 
 
-      if (Math.abs(middleRect.width - middleCellWidth) > 5) {
+      if (Math.abs(middleRect.width - musicalCanvasWidthPx) > 5) {
 
 
         logger.warn('LayoutService', 'Middle cell measured width does not match assigned width.', {
 
 
-          assignedWidth: middleCellWidth,
+          assignedWidth: musicalCanvasWidthPx,
 
 
           measuredWidth: middleRect.width,
@@ -1109,19 +1116,19 @@ function recalcAndApplyLayout() {
           const postRect = middleCell.getBoundingClientRect();
 
 
-          if (Math.abs(postRect.width - middleCellWidth) > 5) {
+          if (Math.abs(postRect.width - musicalCanvasWidthPx) > 5) {
 
 
             logger.warn('LayoutService', 'Middle cell still mismatched after RAF.', {
 
 
-              assignedWidth: middleCellWidth,
+              assignedWidth: musicalCanvasWidthPx,
 
 
               measuredWidth: postRect.width,
 
 
-              delta: postRect.width - middleCellWidth,
+              delta: postRect.width - musicalCanvasWidthPx,
 
 
               computedStyles: window.getComputedStyle(middleCell)
@@ -1276,7 +1283,7 @@ function recalcAndApplyLayout() {
 
 
 
-    const totalButtonGridWidth = leftCellWidth + middleCellWidth + rightCellWidth;
+    const totalButtonGridWidth = leftCellWidth + musicalCanvasWidthPx + rightCellWidth;
 
 
 
@@ -1321,7 +1328,8 @@ function recalcAndApplyLayout() {
         leftCellWidth,
 
 
-        middleCellWidth,
+        middleCellWidth: musicalCanvasWidthPx,
+        rawCalculatedMiddleCellWidth: middleCellWidth,
 
 
         rightCellWidth,
@@ -1345,11 +1353,9 @@ function recalcAndApplyLayout() {
 
 
 
-  // Both pitch and drum canvases now use the same unified width
-
-
-  // Keep drum cells square with pitch time cells (strict 1:1 in CSS pixel space).
-  const drumRowHeight = Math.max(1, Math.round(passCellWidth));
+  // Both pitch and drum canvases now use the same unified width.
+  // Drum rows are taller than they are wide; hit symbols keep a square cell-width drawing box.
+  const drumRowHeight = getDrumRowHeightFromCellWidth(passCellWidth);
 
 
   const drumCanvasHeight = DRUM_ROW_COUNT * drumRowHeight;
@@ -1403,13 +1409,6 @@ function recalcAndApplyLayout() {
       });
     }
   }
-
-  // Legend columns are fixed width (not in newColumnWidths after Phase 8)
-  const leftLegendWidthPx = Math.round(getLegendTotalWidthPx(passCellWidth, newCellHeight));
-  const rightLegendWidthPx = Math.round(getLegendTotalWidthPx(passCellWidth, newCellHeight));
-
-  // Musical canvas width is already calculated above as finalMusicalWidth
-  const musicalCanvasWidthPx = Math.round(finalMusicalWidth);
 
   const pitchCanvasTargets = [
     { element: canvas, context: ctx },
@@ -1558,6 +1557,38 @@ function recalcAndApplyLayout() {
       initialPitchContainerHeight: pitchContainerHeight,
       settledPitchContainerHeight
     });
+  }
+
+  if (!isZooming && settledPitchContainerHeight > 0) {
+    const settledContainerHeightForZoom = settledPitchContainerHeight + horizontalScrollbarBlockSize;
+    const heightDeltaAfterDrumSizing = Math.abs(settledContainerHeightForZoom - containerHeight);
+    if (heightDeltaAfterDrumSizing > 0.5) {
+      const settledRowCount = Math.max(1, getSpan(normalizedRange));
+      const settledZoom = calculateZoomToFitRowCount(settledContainerHeightForZoom, settledRowCount);
+      const rawSettledCellHeight = baseCellHeight * settledZoom;
+      const quantizedSettledCellHeight = quantizeWithHysteresis(rawSettledCellHeight, newCellHeight, 0.24);
+      const minimumSettledCellHeightForCoverage = getMinimumCellHeightForViewportCoverage(settledContainerHeightForZoom, settledRowCount);
+      const settledCellHeight = Math.max(quantizedSettledCellHeight, minimumSettledCellHeightForCoverage);
+      const settledCellWidth = Math.round(settledCellHeight * GRID_WIDTH_RATIO);
+
+      if (settledCellHeight !== newCellHeight || settledCellWidth !== newCellWidth) {
+        pendingFinalRecalc = true;
+        logLayoutFlowSnapshot('queued-final-pass-for-post-drum-height-settle', {
+          pass: layoutPassId,
+          passCellHeight: newCellHeight,
+          passCellWidth: newCellWidth,
+          settledCellHeight,
+          settledCellWidth,
+          rawSettledCellHeight: Math.round(rawSettledCellHeight * 1000) / 1000,
+          quantizedSettledCellHeight,
+          minimumSettledCellHeightForCoverage,
+          settledContainerHeightForZoom,
+          horizontalScrollbarBlockSize,
+          settledPitchContainerHeight,
+          initialContainerHeight: containerHeight
+        });
+      }
+    }
   }
 
   logLayoutSizingSnapshot('post-drum-sizing', {
@@ -1758,6 +1789,7 @@ function recalcAndApplyLayout() {
         finalRecalcAttempts,
         maxFinalRecalcAttempts: MAX_FINAL_RECALC_ATTEMPTS
       }, 'layout');
+      finalRecalcAttempts = 0;
     }
   } else {
     finalRecalcAttempts = 0;

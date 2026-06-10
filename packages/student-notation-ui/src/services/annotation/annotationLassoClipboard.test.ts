@@ -53,8 +53,7 @@ function createSelection(state: AppState): LassoSelection {
   const sixteenthStamp: SixteenthStampPlacement = {
     id: 'sixteenth-1',
     sixteenthStampId: 7,
-    startColumn: 8 as SixteenthStampPlacement['startColumn'],
-    endColumn: 10 as SixteenthStampPlacement['endColumn'],
+    startTimeIndex: 8,
     row: 12,
     globalRow: 12,
     color: '#4a90e2',
@@ -139,8 +138,7 @@ describe('annotation lasso clipboard', () => {
 
     const pastedSixteenth = state.sixteenthStampPlacements[1]!;
     expect(pastedSixteenth.id).not.toBe('sixteenth-1');
-    expect(pastedSixteenth.startColumn).toBe(9);
-    expect(pastedSixteenth.endColumn).toBe(11);
+    expect(pastedSixteenth.startTimeIndex).toBe(9);
     expect(pastedSixteenth.row).toBe(13);
     expect(pastedSixteenth.shapeOffsets).toEqual({ diamond_0: 2 });
 
@@ -169,7 +167,7 @@ describe('annotation lasso clipboard', () => {
     expect(secondPaste?.pastedCount).toBe(4);
     expect(state.placedNotes[2]?.startColumnIndex).toBe(6);
     expect(state.placedNotes[2]?.row).toBe(12);
-    expect(state.sixteenthStampPlacements[2]?.startColumn).toBe(10);
+    expect(state.sixteenthStampPlacements[2]?.startTimeIndex).toBe(10);
     expect(state.sixteenthThreeStampPlacements[2]?.startTimeIndex).toBe(14);
     expect(state.tripletStampPlacements[2]?.startTimeIndex).toBe(18);
   });

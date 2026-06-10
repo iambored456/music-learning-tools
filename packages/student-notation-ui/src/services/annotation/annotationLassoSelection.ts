@@ -50,7 +50,7 @@ export function buildNoteSelectionId(note: PlacedNote): string {
 }
 
 export function buildSixteenthStampSelectionId(stamp: SixteenthStampPlacement): string {
-  return `sixteenth-stamp-${stamp.row}-${stamp.startColumn}-${stamp.sixteenthStampId}`;
+  return `sixteenth-stamp-${stamp.id}`;
 }
 
 export function buildSixteenthThreeStampSelectionId(stamp: SixteenthThreeStampPlacement): string {
@@ -62,16 +62,30 @@ export function buildTripletStampSelectionId(triplet: TripletStampPlacement, sta
   return `triplet-stamp-${triplet.row}-${tripletStartCol}-${triplet.tripletStampId}`;
 }
 
-function getSixteenthStampWidth(stamp: SixteenthStampPlacement, renderOptions: RendererOptions): number {
-  const startX = getColumnX(stamp.startColumn, renderOptions);
-  const endColumn = typeof stamp.endColumn === 'number' ? stamp.endColumn : stamp.startColumn + 2;
-  const endX = getColumnX(endColumn, renderOptions);
-  const width = endX - startX;
-  return Number.isFinite(width) && width > 0 ? width : renderOptions.cellWidth * 2;
+function getSixteenthStampBaseRect(
+  stamp: SixteenthStampPlacement,
+  state: LassoState | AppState,
+  renderOptions: RendererOptions
+): Rect {
+  const startCanvasCol = timeToCanvas(stamp.startTimeIndex, state as AppState);
+  const endCanvasCol = startCanvasCol + 2;
+  const x = getColumnX(startCanvasCol, renderOptions);
+  const rawWidth = getColumnX(endCanvasCol, renderOptions) - x;
+  const width = Number.isFinite(rawWidth) && rawWidth > 0
+    ? rawWidth
+    : renderOptions.cellWidth * 2;
+
+  return {
+    x,
+    y: getRowY(stamp.row, renderOptions) - (renderOptions.cellHeight / 2),
+    width,
+    height: renderOptions.cellHeight
+  };
 }
 
 function getSixteenthStampShapeGeometry(
   stamp: SixteenthStampPlacement,
+  state: LassoState | AppState,
   renderOptions: RendererOptions
 ): { rects: Rect[]; ellipses: Ellipse[] } {
   const stampDefinition = getSixteenthStampById(stamp.sixteenthStampId);
@@ -79,9 +93,8 @@ function getSixteenthStampShapeGeometry(
     return { rects: [], ellipses: [] };
   }
 
-  const { cellHeight } = renderOptions;
-  const stampX = getColumnX(stamp.startColumn, renderOptions);
-  const stampWidth = getSixteenthStampWidth(stamp, renderOptions);
+  const baseRect = getSixteenthStampBaseRect(stamp, state, renderOptions);
+  const { height: cellHeight, width: stampWidth, x: stampX } = baseRect;
   const scaleX = (stampWidth / 100) * 0.8;
   const scaleY = (cellHeight / 100) * 0.8;
   const diamondW = 30 * scaleX;
@@ -176,15 +189,20 @@ function distanceToEllipse(x: number, y: number, ellipse: Ellipse): number {
 function lassoIntersectsSixteenthStamp(
   lassoPath: Array<{ x: number; y: number }>,
   stamp: SixteenthStampPlacement,
+  state: LassoState | AppState,
   renderOptions: RendererOptions
 ): boolean {
-  const geometry = getSixteenthStampShapeGeometry(stamp, renderOptions);
+  const geometry = getSixteenthStampShapeGeometry(stamp, state, renderOptions);
   return geometry.rects.some(rect => polygonIntersectsRect(lassoPath, rect)) ||
     geometry.ellipses.some(ellipse => polygonIntersectsEllipse(lassoPath, ellipse));
 }
 
-function getSixteenthStampHullPoints(stamp: SixteenthStampPlacement, renderOptions: RendererOptions): GeometryPoint[] {
-  const geometry = getSixteenthStampShapeGeometry(stamp, renderOptions);
+function getSixteenthStampHullPoints(
+  stamp: SixteenthStampPlacement,
+  state: LassoState | AppState,
+  renderOptions: RendererOptions
+): GeometryPoint[] {
+  const geometry = getSixteenthStampShapeGeometry(stamp, state, renderOptions);
   return [
     ...geometry.rects.flatMap(rectToPoints),
     ...geometry.ellipses.flatMap(ellipseToPoints)
@@ -195,10 +213,11 @@ function isPointNearSixteenthStamp(
   canvasX: number,
   canvasY: number,
   stamp: SixteenthStampPlacement,
+  state: LassoState | AppState,
   renderOptions: RendererOptions,
   threshold: number
 ): boolean {
-  const geometry = getSixteenthStampShapeGeometry(stamp, renderOptions);
+  const geometry = getSixteenthStampShapeGeometry(stamp, state, renderOptions);
   return geometry.rects.some(rect => pointInRect(canvasX, canvasY, rect) || distanceToRect(canvasX, canvasY, rect) <= threshold) ||
     geometry.ellipses.some(ellipse => distanceToEllipse(canvasX, canvasY, ellipse) <= threshold);
 }
@@ -438,7 +457,7 @@ export function computeLassoSelection(params: {
 
   // Sixteenth stamps (rendered glyph intersection)
   state.sixteenthStampPlacements.forEach((stamp, index: number) => {
-    if (lassoIntersectsSixteenthStamp(lassoPath, stamp, renderOptions)) {
+    if (lassoIntersectsSixteenthStamp(lassoPath, stamp, state, renderOptions)) {
       const id = buildSixteenthStampSelectionId(stamp);
       if (!selectedItems.find(item => item.id === id)) {
         selectedItems.push({ type: 'sixteenthStamp', id, data: stamp, index });
@@ -483,7 +502,7 @@ export function computeConvexHullForSelectedItems(params: {
   const canvasState = (state ?? store.state) as AppState;
   const points = selectedItems.flatMap(item => {
     if (item.type === 'sixteenthStamp') {
-      return getSixteenthStampHullPoints(item.data, renderOptions);
+      return getSixteenthStampHullPoints(item.data, canvasState, renderOptions);
     }
     if (item.type === 'sixteenthThreeStamp') {
       return getSixteenthThreeStampHullPoints(item.data, canvasState, renderOptions);
@@ -532,7 +551,7 @@ export function removeFromLassoSelectionAtPoint(params: {
 
   if (!clickedItemId) {
     state.sixteenthStampPlacements.forEach((stamp) => {
-      if (isPointNearSixteenthStamp(canvasX, canvasY, stamp, renderOptions, threshold)) {
+      if (isPointNearSixteenthStamp(canvasX, canvasY, stamp, state, renderOptions, threshold)) {
         clickedItemId = buildSixteenthStampSelectionId(stamp);
       }
     });

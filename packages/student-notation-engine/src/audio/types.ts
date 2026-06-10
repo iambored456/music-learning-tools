@@ -84,6 +84,9 @@ export interface SynthEngineInstance {
   /** Update synth for a specific timbre color */
   updateSynthForColor(color: string): void;
 
+  /** Update shared vibrato/tremolo modulation without rebuilding the synth graph */
+  updateModulationForColor(color: string): void;
+
   /** Set the BPM */
   setBpm(tempo: number): void;
 
@@ -194,7 +197,7 @@ export interface SchedulableNote {
  */
 export interface SchedulableStamp {
   sixteenthStampId: string | number;
-  column: number;
+  startTimeIndex: number;
   row: number;
   color: string;
   placement?: {

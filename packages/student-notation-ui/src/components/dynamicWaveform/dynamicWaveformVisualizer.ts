@@ -35,6 +35,9 @@ const getAnimationManager = (): AnimationEffectsManagerLike | null =>
 
 logger.moduleLoaded('DynamicWaveformVisualizer');
 
+const WAVEFORM_PHASE_CYCLES_PER_SECOND = 1;
+const MAX_ANIMATION_DELTA_SECONDS = 0.1;
+
 class DynamicWaveformVisualizer {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
@@ -46,7 +49,8 @@ class DynamicWaveformVisualizer {
   private playbackAnimationId: number | null = null;
 
   private animationSpeed = 100;
-  private frameSkipCounter = 0;
+  private lastAnimationTimestamp: number | null = null;
+  private waveformPhaseByColor = new Map<string, number>();
 
   onWaveformUpdate?: () => void;
 
@@ -74,14 +78,6 @@ class DynamicWaveformVisualizer {
       }
     });
 
-    store.on('spacebarPlayback', ({ color, isPlaying = false }: { color?: string; isPlaying?: boolean } = {}) => {
-      if (isPlaying && color) {
-        this.startSingleNoteVisualization(color);
-      } else {
-        this.stopLiveVisualization();
-      }
-    });
-
     store.on('tremoloAmplitudeUpdate', ({ activeColors }: { activeColors?: string[] } = {}) => {
       if (this.isPlaybackActive && activeColors?.some(color => this.liveWaveforms.has(color))) {
         logger.debug('DynamicWaveformVisualizer', 'Tremolo update received for active colors', activeColors, 'waveform');
@@ -92,13 +88,14 @@ class DynamicWaveformVisualizer {
   }
 
   setAnimationSpeed(percentage: number): void {
-    this.animationSpeed = percentage;
-    this.frameSkipCounter = 0;
+    if (!Number.isFinite(percentage)) {return;}
+    this.animationSpeed = Math.max(5, Math.min(100, percentage));
   }
 
   startLiveVisualization(): void {
     if (this.isPlaybackActive) {return;}
     this.isPlaybackActive = true;
+    this.lastAnimationTimestamp = null;
     this.setupLiveAnalysers();
     this.updateContainerState(true);
     this.animateLiveWaveforms();
@@ -106,9 +103,15 @@ class DynamicWaveformVisualizer {
   }
 
   startSingleNoteVisualization(color: string): void {
-    if (this.isPlaybackActive) {return;}
-    this.isPlaybackActive = true;
     this.setupSingleAnalyser(color);
+
+    if (this.isPlaybackActive) {
+      this.updateContainerState(true);
+      return;
+    }
+
+    this.isPlaybackActive = true;
+    this.lastAnimationTimestamp = null;
     this.updateContainerState(true);
     this.animateLiveWaveforms();
     logger.debug('DynamicWaveformVisualizer', `Started single note visualization for ${color}`, null, 'waveform');
@@ -122,6 +125,8 @@ class DynamicWaveformVisualizer {
     });
     this.liveAnalysers.clear();
     this.liveWaveforms.clear();
+    this.waveformPhaseByColor.clear();
+    this.lastAnimationTimestamp = null;
     if (this.playbackAnimationId) {
       cancelAnimationFrame(this.playbackAnimationId);
       this.playbackAnimationId = null;
@@ -155,18 +160,24 @@ class DynamicWaveformVisualizer {
       if (analyser) {
         this.liveAnalysers.set(color, analyser);
         this.liveWaveforms.set(color, new Float32Array(1024));
+        this.waveformPhaseByColor.set(color, this.waveformPhaseByColor.get(color) ?? 0);
         logger.debug('DynamicWaveformVisualizer', `Created analyser for ${color}`, null, 'waveform');
       }
     });
   }
 
   private setupSingleAnalyser(color: string): void {
+    if (this.liveAnalysers.has(color)) {
+      return;
+    }
+
     const synthEngine = getSynthEngine();
     if (!synthEngine) {return;}
     const analyser = synthEngine.createWaveformAnalyzer?.(color);
     if (analyser) {
       this.liveAnalysers.set(color, analyser);
       this.liveWaveforms.set(color, new Float32Array(1024));
+      this.waveformPhaseByColor.set(color, this.waveformPhaseByColor.get(color) ?? 0);
       logger.debug('DynamicWaveformVisualizer', `Created single analyser for ${color}`, null, 'waveform');
     }
   }
@@ -189,22 +200,65 @@ class DynamicWaveformVisualizer {
     return result;
   }
 
-  private animateLiveWaveforms(): void {
+  private animateLiveWaveforms(timestamp = performance.now()): void {
     if (!this.isPlaybackActive) {return;}
-    this.frameSkipCounter++;
-    const skipFrames = Math.max(1, Math.floor(100 / Math.max(this.animationSpeed, 1)));
-    if (this.frameSkipCounter % skipFrames !== 0) {
-      this.playbackAnimationId = requestAnimationFrame(() => this.animateLiveWaveforms());
-      return;
-    }
+
+    const deltaSeconds = this.lastAnimationTimestamp === null
+      ? 0
+      : Math.min((timestamp - this.lastAnimationTimestamp) / 1000, MAX_ANIMATION_DELTA_SECONDS);
+    this.lastAnimationTimestamp = timestamp;
 
     this.liveAnalysers.forEach((analyser, color) => {
       const newWaveformArray = analyser.getValue();
       this.liveWaveforms.set(color, newWaveformArray);
+      this.advanceWaveformPhase(color, deltaSeconds);
     });
 
     this.onWaveformUpdate?.();
-    this.playbackAnimationId = requestAnimationFrame(() => this.animateLiveWaveforms());
+    this.playbackAnimationId = requestAnimationFrame((nextTimestamp) => this.animateLiveWaveforms(nextTimestamp));
+  }
+
+  private advanceWaveformPhase(color: string, deltaSeconds: number): void {
+    if (deltaSeconds <= 0) {return;}
+    const currentPhase = this.waveformPhaseByColor.get(color) ?? 0;
+    const speedScale = this.animationSpeed / 100;
+    const nextPhase = (currentPhase + deltaSeconds * WAVEFORM_PHASE_CYCLES_PER_SECOND * speedScale) % 1;
+    this.waveformPhaseByColor.set(color, nextPhase);
+  }
+
+  private sampleWaveformAt(waveform: Float32Array, sampleIndex: number): number {
+    const length = waveform.length;
+    if (length === 0) {return 0;}
+
+    const wrappedIndex = ((sampleIndex % length) + length) % length;
+    const lowerIndex = Math.floor(wrappedIndex);
+    const upperIndex = (lowerIndex + 1) % length;
+    const fraction = wrappedIndex - lowerIndex;
+    const lowerValue = waveform[lowerIndex] ?? 0;
+    const upperValue = waveform[upperIndex] ?? lowerValue;
+    return lowerValue + (upperValue - lowerValue) * fraction;
+  }
+
+  private getTriggeredSampleOffset(waveform: Float32Array): number {
+    let maxAmplitude = 0;
+    for (let i = 0; i < waveform.length; i++) {
+      maxAmplitude = Math.max(maxAmplitude, Math.abs(waveform[i] ?? 0));
+    }
+
+    if (maxAmplitude < 0.01) {
+      return 0;
+    }
+
+    const minimumSlope = maxAmplitude * 0.05;
+    for (let i = 1; i < waveform.length; i++) {
+      const previous = waveform[i - 1] ?? 0;
+      const current = waveform[i] ?? 0;
+      if (previous <= 0 && current > 0 && current - previous >= minimumSlope) {
+        return i;
+      }
+    }
+
+    return 0;
   }
 
   drawLiveWaveforms(width: number, centerY: number, baseAmplitude: number): void {
@@ -263,13 +317,14 @@ class DynamicWaveformVisualizer {
 
     const baseSpread = waveform.length / width;
     const stretchedSpread = baseSpread * (1 + vibratoStretch);
+    const triggerOffsetSamples = this.getTriggeredSampleOffset(waveform);
+    const phaseOffsetSamples = (this.waveformPhaseByColor.get(color) ?? 0) * waveform.length;
 
     for (let x = 0; x < width; x++) {
       const shiftAmount = vibratoStretch * width * 0.3;
       const shiftedX = x + shiftAmount;
-      const sampleIndex = Math.floor(shiftedX * stretchedSpread);
-      const clampedIndex = Math.max(0, Math.min(waveform.length - 1, sampleIndex));
-      const sample = (waveform[clampedIndex] ?? 0) * normalizationFactor;
+      const sampleIndex = triggerOffsetSamples + shiftedX * stretchedSpread + phaseOffsetSamples;
+      const sample = this.sampleWaveformAt(waveform, sampleIndex) * normalizationFactor;
       const y = centerY - (sample * amplitude);
 
       if (x === 0) {
@@ -324,13 +379,14 @@ class DynamicWaveformVisualizer {
 
     const baseSpread = waveform.length / width;
     const stretchedSpread = baseSpread * (1 + vibratoStretch);
+    const triggerOffsetSamples = this.getTriggeredSampleOffset(waveform);
+    const phaseOffsetSamples = (this.waveformPhaseByColor.get(color) ?? 0) * waveform.length;
 
     for (let x = 0; x < width; x++) {
       const shiftAmount = vibratoStretch * width * 0.3;
       const shiftedX = x + shiftAmount;
-      const sampleIndex = Math.floor(shiftedX * stretchedSpread);
-      const clampedIndex = Math.max(0, Math.min(waveform.length - 1, sampleIndex));
-      const sample = (waveform[clampedIndex] ?? 0) * normalizationFactor;
+      const sampleIndex = triggerOffsetSamples + shiftedX * stretchedSpread + phaseOffsetSamples;
+      const sample = this.sampleWaveformAt(waveform, sampleIndex) * normalizationFactor;
       const y = centerY - (sample * amplitude * 0.7);
 
       if (x === 0) {

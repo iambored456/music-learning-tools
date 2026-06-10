@@ -374,6 +374,14 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
         }
       });
 
+      Object.values(this.state.tonicSignGroups).forEach(group => {
+        group.forEach(sign => {
+          if (sign.columnIndex >= boundaryColumn) {
+            sign.columnIndex = (sign.columnIndex + 2) as CanvasSpaceColumn;
+          }
+        });
+      });
+
       const uuid = generateUUID();
       const groupWithId = tonicSignGroup.map(sign => ({
         ...sign,
@@ -424,6 +432,14 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
           note.startColumnIndex = (note.startColumnIndex - 2) as CanvasSpaceColumn;
           note.endColumnIndex = (note.endColumnIndex - 2) as CanvasSpaceColumn;
         }
+      });
+
+      Object.values(this.state.tonicSignGroups).forEach(group => {
+        group.forEach(sign => {
+          if (sign.columnIndex >= boundaryColumn) {
+            sign.columnIndex = (sign.columnIndex - 2) as CanvasSpaceColumn;
+          }
+        });
       });
 
       this.emit('notesChanged');

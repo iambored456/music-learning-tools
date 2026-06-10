@@ -5,6 +5,7 @@ import { placeSixteenthStamp } from '@/rhythm/sixteenthStampPlacements.ts';
 import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.ts';
 import { hitTestAnySixteenthStampShape } from '@utils/sixteenthStampHitTest.ts';
 import { getColumnX, getRowY } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
+import { canvasToTime, timeToCanvas } from '@services/columnMapService.ts';
 import type { SixteenthStampPlacement } from '@mlt/types';
 
 interface DraggedStampShape {
@@ -86,6 +87,10 @@ export class PitchGridSixteenthStampToolInteractor {
     if (alignedCol === null) {
       return { handled: true, activePreviewPitches: [] };
     }
+    const startTimeIndex = canvasToTime(alignedCol, store.state);
+    if (startTimeIndex === null) {
+      return { handled: true, activePreviewPitches: [] };
+    }
 
     const selectedNote = store.state.selectedNote;
     if (!selectedNote) {
@@ -93,7 +98,7 @@ export class PitchGridSixteenthStampToolInteractor {
     }
 
     const { color, shape } = selectedNote;
-    const placement = placeSixteenthStamp(selectedStamp.id, alignedCol, opts.rowIndex, color);
+    const placement = placeSixteenthStamp(selectedStamp.id, startTimeIndex, opts.rowIndex, color);
     if (!placement) {
       return { handled: true, activePreviewPitches: [] };
     }
@@ -190,11 +195,9 @@ function isOverSixteenthStamp(
   placements: SixteenthStampPlacement[],
   options: { cellHeight: number; columnWidths?: number[] }
 ): boolean {
-  const columnWidths = options.columnWidths || [];
-
   for (const placement of placements) {
-    const startColumn = placement.startColumn as number;
-    const endColumn = Math.min(placement.endColumn as number, columnWidths.length);
+    const startColumn = timeToCanvas(placement.startTimeIndex, store.state);
+    const endColumn = startColumn + 2;
     const startX = getColumnX(startColumn, options as any);
     const endX = getColumnX(endColumn, options as any);
     const rowCenterY = getRowY(placement.row, options as any);

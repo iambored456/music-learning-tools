@@ -442,7 +442,7 @@ export function createTransportService(config: TransportConfig): TransportServic
     state: TransportState,
     configuredLoopEnd: number
   ): void {
-    const canvasColumnIndex = stampData.column;
+    const canvasColumnIndex = stateCallbacks.timeToCanvas?.(stampData.startTimeIndex, state) ?? stampData.startTimeIndex;
     const cellStartTime = getCellStartTime(timeMap, canvasColumnIndex);
     if (cellStartTime === null) return;
 

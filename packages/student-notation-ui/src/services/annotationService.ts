@@ -89,6 +89,20 @@ function isLassoAnnotation(annotation: TempAnnotation | null): annotation is Las
   return annotation?.type === 'lasso';
 }
 
+function areSettingsEqual<T extends object>(current: T, next: T): boolean {
+  const currentSettings = current as Record<string, unknown>;
+  const nextSettings = next as Record<string, unknown>;
+  const keys = new Set([...Object.keys(currentSettings), ...Object.keys(nextSettings)]);
+
+  for (const key of keys) {
+    if (currentSettings[key] !== nextSettings[key]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 class AnnotationService {
   canvas!: HTMLCanvasElement;
   ctx!: CanvasRenderingContext2D;
@@ -443,6 +457,8 @@ class AnnotationService {
           this.canvas.style.cursor = 'default';
       }
     }
+
+    this.applyCurrentSettingsToSelected();
   }
 
   handleMouseDown(e: MouseEvent) {
@@ -1772,8 +1788,10 @@ class AnnotationService {
     const drawToolsController = getDrawToolsController();
     if (annotation.type === 'arrow' && drawToolsController) {
       drawToolsController.applyArrowSettings(annotation.settings);
+      drawToolsController.selectTool('arrow');
     } else if (annotation.type === 'text' && drawToolsController) {
       drawToolsController.applyTextSettings(annotation.settings);
+      drawToolsController.selectTool('text');
     }
   }
 
@@ -1783,10 +1801,12 @@ class AnnotationService {
     const toolSettings = this.toolSettings;
     if (!toolSettings) {return;}
 
-    if (this.selectedAnnotation.type === 'arrow' && toolSettings.arrow) {
+    if (this.selectedAnnotation.type === 'arrow' && this.currentTool === 'arrow' && toolSettings.arrow) {
+      if (areSettingsEqual(this.selectedAnnotation.settings, toolSettings.arrow)) {return;}
       this.selectedAnnotation.settings = { ...toolSettings.arrow };
       this.render();
-    } else if (this.selectedAnnotation.type === 'text' && toolSettings.text) {
+    } else if (this.selectedAnnotation.type === 'text' && this.currentTool === 'text' && toolSettings.text) {
+      if (areSettingsEqual(this.selectedAnnotation.settings, toolSettings.text)) {return;}
       this.selectedAnnotation.settings = { ...toolSettings.text };
       this.render();
     }

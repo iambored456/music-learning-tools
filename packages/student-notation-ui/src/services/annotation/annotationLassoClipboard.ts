@@ -93,9 +93,10 @@ function getItemColumnBounds(item: LassoSelectedItem, state: AppState): { minCol
   }
 
   if (item.type === 'sixteenthStamp') {
+    const startCol = timeToCanvas(item.data.startTimeIndex, state);
     return {
-      minCol: item.data.startColumn,
-      maxCol: item.data.endColumn
+      minCol: startCol,
+      maxCol: startCol + 2
     };
   }
 
@@ -214,15 +215,19 @@ function copySixteenthStamp(
   item: Extract<LassoSelectedItem, { type: 'sixteenthStamp' }>,
   offsets: PasteOffsets,
   state: AppState
-): SixteenthStampPlacement {
+): SixteenthStampPlacement | null {
+  const startTimeIndex = offsetTimeIndex(item.data.startTimeIndex, offsets.col, state);
+  if (startTimeIndex === null) {
+    return null;
+  }
+
   const row = offsetRow(item, offsets.row, state);
   return {
     ...cloneJson(item.data),
     id: generateId('sixteenth-stamp'),
     row,
     globalRow: row,
-    startColumn: (item.data.startColumn + offsets.col) as CanvasSpaceColumn,
-    endColumn: (item.data.endColumn + offsets.col) as CanvasSpaceColumn,
+    startTimeIndex,
     timestamp: Date.now()
   };
 }
@@ -308,6 +313,9 @@ export function pasteLassoClipboard(state: AppState, renderOptions: RendererOpti
 
     if (item.type === 'sixteenthStamp') {
       const stamp = copySixteenthStamp(item, offsets, state);
+      if (!stamp) {
+        return;
+      }
       state.sixteenthStampPlacements.push(stamp);
       selectedItems.push({ type: 'sixteenthStamp', id: buildSixteenthStampSelectionId(stamp), data: stamp, index: state.sixteenthStampPlacements.length - 1 });
       changed.sixteenthStamps = true;

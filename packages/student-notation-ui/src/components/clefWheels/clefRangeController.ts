@@ -2,12 +2,11 @@ import store from '@state/initStore.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import logger from '@utils/logger.ts';
+import { getClefRangePresetRanges } from '@/core/pitchRangePresets.ts';
 import {
-  buildSpanLadder,
   computeConstrainedTopIndex,
   computeConstrainedBottomIndex,
-  DEFAULT_MIN_VIEWPORT_ROWS,
-  snapRangeToSpanLadder
+  DEFAULT_MIN_VIEWPORT_ROWS
 } from '@utils/pitchViewport.ts';
 
 interface WheelOption {
@@ -427,44 +426,7 @@ class ClefViewportController {
     //
     // Resolve preset endpoints using `toneNote` (Tone.js/SPN) instead of the display label.
     // Display labels include special music glyphs and may vary with notation settings, which makes them brittle.
-    const resolvePresetFromToneNotes = (topToneNote: string, bottomToneNote: string) => {
-      const topIndex = this.findToneNoteIndex(topToneNote);
-      const bottomIndex = this.findToneNoteIndex(bottomToneNote);
-      if (topIndex === -1 || bottomIndex === -1) {return null;}
-      return { topIndex: Math.min(topIndex, bottomIndex), bottomIndex: Math.max(topIndex, bottomIndex) };
-    };
-
-    const totalRanks = this.masterOptions.length;
-    const spanLadder = buildSpanLadder(totalRanks, DEFAULT_MIN_VIEWPORT_ROWS);
-    const snapToLadder = (range: { topIndex: number; bottomIndex: number } | null) => {
-      if (!range) {return null;}
-      return snapRangeToSpanLadder(range, {
-        totalRanks,
-        minSpan: DEFAULT_MIN_VIEWPORT_ROWS,
-        ladder: spanLadder,
-        mode: 'nearest'
-      });
-    };
-
-    const trebleRange = snapToLadder(resolvePresetFromToneNotes('G5', 'C4'));
-    const bassRange = snapToLadder(resolvePresetFromToneNotes('C4', 'F2'));
-    const grandStaffRange = (trebleRange && bassRange)
-      ? {
-          topIndex: Math.min(trebleRange.topIndex, bassRange.bottomIndex),
-          bottomIndex: Math.max(trebleRange.topIndex, bassRange.bottomIndex)
-        }
-      : null;
-
-    this.presetRanges = {
-      full: { topIndex: 0, bottomIndex: Math.max(0, this.masterOptions.length - 1) },
-      treble: trebleRange,
-      grandstaff: grandStaffRange,
-      alto: snapToLadder(resolvePresetFromToneNotes('A4', 'D3')),
-      bass: bassRange,
-      voice1: snapToLadder(resolvePresetFromToneNotes('A5', 'A3')),  // Voice I
-      voice2: snapToLadder(resolvePresetFromToneNotes('C5', 'C3')),  // Voice II
-      voice3: snapToLadder(resolvePresetFromToneNotes('E4', 'E2'))   // Voice III
-    };
+    this.presetRanges = getClefRangePresetRanges(this.masterOptions);
   }
 
   private updatePresetHighlight(topIndex: number, bottomIndex: number) {
@@ -504,14 +466,6 @@ class ClefViewportController {
     // Animate preset changes so the viewport doesn't snap instantly (especially noticeable for "Full Range").
     const durationMs = preset === 'full' ? 420 : 280;
     pitchGridViewportService.setPitchViewportRange(range, { animateMs: durationMs, source: `preset:${preset}` });
-  }
-
-  private findNoteIndex(noteLabel: string) {
-    return this.masterOptions.findIndex(opt => opt.label === noteLabel);
-  }
-
-  private findToneNoteIndex(toneNote: string) {
-    return this.masterOptions.findIndex(opt => opt.toneNote === toneNote);
   }
 
   private calculateAndSetWheelHeight() {

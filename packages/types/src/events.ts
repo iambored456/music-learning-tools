@@ -41,6 +41,7 @@ export interface EngineEvents {
   pitchRangeChanged: PitchRange;
   layoutConfigChanged: { oldConfig: unknown; newConfig: unknown };
   degreeDisplayModeChanged: string;
+  pitchLabelsChanged: boolean;
 
   // Timbre events
   timbreChanged: string;

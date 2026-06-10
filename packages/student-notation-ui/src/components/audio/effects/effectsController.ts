@@ -232,11 +232,7 @@ class EffectsController {
   updateEffect(effectType: string, params: Record<string, number>) {
     const color = this.currentColor || store.state.selectedNote?.color;
     if (!color) {return;}
-    Object.entries(params).forEach(([param, value]) => {
-      if (typeof value === 'number') {
-        effectsCoordinator.updateParameter(effectType, param, value, color);
-      }
-    });
+    effectsCoordinator.updateParameters(effectType, params, color);
   }
 
   /**

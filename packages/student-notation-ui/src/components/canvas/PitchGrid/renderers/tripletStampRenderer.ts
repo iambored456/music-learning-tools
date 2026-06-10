@@ -1,13 +1,18 @@
 // js/components/Canvas/PitchGrid/renderers/tripletStampRenderer.ts
 import { getTripletStampById, tripletCenterPercents } from '../../../../rhythm/tripletStamps.ts';
 import { getRowY, getColumnX } from './rendererUtils.ts';
+import { drawNoteLabelText, type PitchRendererOptions } from './notes.ts';
+import {
+  drawStampShapeDelayEllipse,
+  getStampShapeVibratoYOffset
+} from './stampShapeEffects.ts';
 import store from '@state/initStore.ts';
 import logger from '../../../../utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { timeToCanvas } from '../../../../services/columnMapService.ts';
 import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
-import type { TripletStampPlacement } from '@mlt/types';
+import type { AnimatableNote, CanvasSpaceColumn, PlacedNote, TripletStampPlacement } from '@mlt/types';
 import type { TripletStamp } from '../../../../rhythm/tripletStamps.ts';
 import type { ModulationMarker } from '@mlt/types';
 
@@ -17,6 +22,7 @@ interface TripletStampRenderOptions {
   cellHeight: number;
   baseMicrobeatPx?: number;
   tempoModulationMarkers?: ModulationMarker[];
+  tempo?: number;
 }
 
 logger.moduleLoaded('TripletStampRenderer', 'triplets');
@@ -29,6 +35,82 @@ interface AnimationEffectsManager {
 const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
   return getRuntimeAnimationEffectsManager() as AnimationEffectsManager | undefined;
 };
+
+function createTripletDegreeNote(
+  placement: TripletStampPlacement,
+  shapeKey: string,
+  rowOffset: number,
+  startColumn: number,
+  color: string
+): PlacedNote {
+  const row = placement.row + rowOffset;
+  const globalRow = (placement.globalRow ?? placement.row) + rowOffset;
+  const columnIndex = Math.max(0, Math.floor(startColumn)) as CanvasSpaceColumn;
+
+  return {
+    uuid: buildTripletStampShapeNoteId(placement.id, shapeKey),
+    row,
+    globalRow,
+    startColumnIndex: columnIndex,
+    endColumnIndex: columnIndex,
+    shape: 'oval',
+    color
+  };
+}
+
+function createTripletShapeEffectNote(
+  placement: TripletStampPlacement,
+  shapeKey: string
+): AnimatableNote {
+  return {
+    uuid: buildTripletStampShapeNoteId(placement.id, shapeKey),
+    color: placement.color
+  };
+}
+
+function renderTripletDegreeLabels(
+  ctx: CanvasRenderingContext2D,
+  stamp: TripletStamp,
+  placement: TripletStampPlacement,
+  startColumn: number,
+  timeSpan: number,
+  groupX: number,
+  centerY: number,
+  groupWidth: number,
+  groupHeight: number,
+  color: string,
+  options: TripletStampRenderOptions
+): void {
+  if (!store.state.showPitchLabels && store.state.degreeDisplayMode === 'off') {
+    return;
+  }
+
+  const scaleX = (groupWidth / 100) * 0.8;
+  const scaleY = (groupHeight / 100) * 0.8;
+  const rx = 20 * scaleX;
+  const ry = 60 * scaleY;
+  const degreeOptions = { ...store.state, ...options } as PitchRendererOptions;
+
+  stamp.hits.forEach(slot => {
+    const centerPercent = tripletCenterPercents[slot] ?? 50;
+    const noteheadX = groupX + (groupWidth * centerPercent / 100);
+    const shapeKey = `triplet_${slot}`;
+    const rowOffset = placement.shapeOffsets?.[shapeKey] || 0;
+    const noteheadY = rowOffset === 0
+      ? centerY
+      : getRowY(placement.row + rowOffset, options);
+    const noteColumn = Math.min(
+      startColumn + Math.max(0, timeSpan - 1),
+      startColumn + Math.floor(timeSpan * centerPercent / 100)
+    );
+    const note = createTripletDegreeNote(placement, shapeKey, rowOffset, noteColumn, color);
+    const labelY = noteheadY + getStampShapeVibratoYOffset(note, options);
+
+    ctx.save();
+    drawNoteLabelText(ctx, note, degreeOptions, noteheadX, labelY, Math.max(1, Math.min(rx, ry) * 0.9));
+    ctx.restore();
+  });
+}
 
 /**
  * Renders all placed triplet groups on the pitch grid
@@ -93,7 +175,7 @@ function renderTripletStampGroup(ctx: CanvasRenderingContext2D, placement: Tripl
 
   // Draw triplet noteheads with per-shape offsets
   const getRowYWithOptions = (rowIndex: number) => getRowY(rowIndex, options);
-  renderTripletNoteheads(ctx, stamp, groupX, rowCenterY, groupWidth, groupHeight, color, placement, getRowYWithOptions);
+  renderTripletNoteheads(ctx, stamp, groupX, rowCenterY, groupWidth, groupHeight, color, options, placement, getRowYWithOptions);
 
   // Draw a subtle background to make triplets stand out (like sixteenth stamps)
   ctx.save();
@@ -101,6 +183,20 @@ function renderTripletStampGroup(ctx: CanvasRenderingContext2D, placement: Tripl
   ctx.fillStyle = color;
   ctx.fillRect(groupX + 1, groupY + 1, groupWidth - 2, groupHeight - 2);
   ctx.restore();
+
+  renderTripletDegreeLabels(
+    ctx,
+    stamp,
+    placement,
+    startColumn,
+    timeSpan,
+    groupX,
+    rowCenterY,
+    groupWidth,
+    groupHeight,
+    color,
+    options
+  );
 
   // Optional: Draw triplet bracket/number (can be toggled later)
   // renderTripletBracket(ctx, groupX, rowCenterY, groupWidth, groupHeight);
@@ -126,6 +222,7 @@ function renderTripletNoteheads(
   groupWidth: number,
   groupHeight: number,
   color: string,
+  options: TripletStampRenderOptions,
   placement: TripletStampPlacement | null = null,
   getRowY: ((row: number) => number) | null = null
 ): void {
@@ -135,6 +232,11 @@ function renderTripletNoteheads(
   const scaleY = (groupHeight / 100) * 0.8;
   const strokeWidth = Math.max(1, 3 * scaleY);
   const animationManager = getAnimationEffectsManager();
+  const effectOptions = {
+    cellWidth: options.cellWidth,
+    cellHeight: options.cellHeight,
+    tempo: options.tempo ?? store.state.tempo
+  };
 
   // Draw noteheads for each active slot
   stamp.hits.forEach(slot => {
@@ -161,13 +263,20 @@ function renderTripletNoteheads(
       }
     }
 
+    const effectNote = placement?.id ? createTripletShapeEffectNote(placement, shapeKey) : null;
+    if (effectNote) {
+      noteheadY += getStampShapeVibratoYOffset(effectNote, effectOptions);
+    }
+
     let fillLevel = 0;
-    if (animationManager && placement?.id) {
-      const noteId = buildTripletStampShapeNoteId(placement.id, shapeKey);
-      const note = { uuid: noteId, color };
-      if (animationManager.shouldFillNote(note)) {
-        fillLevel = animationManager.getFillLevel(note);
+    if (animationManager && effectNote) {
+      if (animationManager.shouldFillNote(effectNote)) {
+        fillLevel = animationManager.getFillLevel(effectNote);
       }
+    }
+
+    if (effectNote) {
+      drawStampShapeDelayEllipse(ctx, effectNote, effectOptions, noteheadX, noteheadY, 20 * scaleX, 60 * scaleY);
     }
 
     drawTripletNotehead(ctx, noteheadX, noteheadY, color, strokeWidth, scaleX, scaleY, fillLevel);
@@ -270,7 +379,7 @@ export function renderTripletStampPreview(
   ctx.globalAlpha = 0.6;
 
   const previewColor = options.previewColor || '#4a90e2';
-  renderTripletNoteheads(ctx, stamp, groupX, rowCenterY, groupWidth, groupHeight, previewColor);
+  renderTripletNoteheads(ctx, stamp, groupX, rowCenterY, groupWidth, groupHeight, previewColor, options);
 
   ctx.restore();
 }

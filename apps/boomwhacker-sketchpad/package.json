@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Boomwhacker Sketchpad - standalone app shell",
+  "description": "Simple Notation - standalone app shell",
   "scripts": {
     "build": "vite build",
     "dev": "vite",

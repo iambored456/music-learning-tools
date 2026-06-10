@@ -22,6 +22,8 @@ interface SynthEngineLike {
   updateSynthForColor?: (color: string) => void;
 }
 
+const EFFECT_STATE_DEBOUNCE_MS = 250;
+
 function isEffectType(value: string): value is EffectType {
   return value === 'vibrato' || value === 'tremolo' || value === 'delay';
 }
@@ -36,6 +38,10 @@ function cloneEffectParameters(map: EffectParameterMap): EffectParameterMap {
 
 class EffectsCoordinator {
   private readonly effectParameters = new Map<string, EffectParameterMap>();
+  private saveTimerId: ReturnType<typeof setTimeout> | null = null;
+  private historyTimerId: ReturnType<typeof setTimeout> | null = null;
+  private hasPendingHistoryRecord = false;
+  private isRestoringSavedValues = false;
 
   private readonly defaultEffects: EffectParameterMap = {
     vibrato: { speed: 0, span: 0, wet: 100 },
@@ -56,6 +62,12 @@ class EffectsCoordinator {
     });
 
     this.loadSavedValues();
+
+    store.on('effectDialInteractionEnd', () => {
+      this.flushScheduledHistoryRecord();
+      this.flushScheduledSave();
+    });
+
     logger.info('EffectsCoordinator', 'Event subscriptions established', null, 'effects');
     return true;
   }
@@ -80,17 +92,21 @@ class EffectsCoordinator {
   }
 
   updateParameter(effectType: string, parameter: string, value: number, color: string): void {
+    this.updateParameters(effectType, { [parameter]: value }, color);
+  }
+
+  updateParameters(effectType: string, params: Record<string, number>, color: string): void {
     if (!color) {
       logger.warn(
         'EffectsCoordinator',
-        'Cannot update parameter: no color provided',
-        { effectType, parameter, value },
+        'Cannot update parameters: no color provided',
+        { effectType, params },
         'effects'
       );
       return;
     }
     if (!isEffectType(effectType)) {
-      logger.warn('EffectsCoordinator', 'Cannot update unknown effect type', { effectType, parameter, color }, 'effects');
+      logger.warn('EffectsCoordinator', 'Cannot update unknown effect type', { effectType, params, color }, 'effects');
       return;
     }
 
@@ -105,12 +121,29 @@ class EffectsCoordinator {
       colorEffects[effectType] = { ...this.defaultEffects[effectType] };
     }
 
-    colorEffects[effectType][parameter] = value;
+    const changedEntries = Object.entries(params).filter((entry): entry is [string, number] => {
+      const value = entry[1];
+      return typeof value === 'number' && Number.isFinite(value);
+    });
+    if (changedEntries.length === 0) {
+      return;
+    }
+
+    changedEntries.forEach(([parameter, value]) => {
+      colorEffects[effectType][parameter] = value;
+    });
+
+    this.updateTimbreState(effectType, colorEffects[effectType], color);
+
+    const [firstParameter, firstValue] = changedEntries[0] ?? ['batch', 0];
+    const parameter = changedEntries.length === 1 ? firstParameter : 'batch';
+    const value = changedEntries.length === 1 ? firstValue : 0;
 
     this.notifyAudioSystem(effectType, parameter, value, color, colorEffects[effectType]);
     this.notifyAnimationSystem(effectType, parameter, value, color, colorEffects[effectType]);
-    this.updateTimbreState(effectType, colorEffects[effectType], color);
-    this.saveValues();
+    if (!this.isRestoringSavedValues) {
+      this.scheduleSaveValues();
+    }
   }
 
   notifyAudioSystem(
@@ -185,7 +218,9 @@ class EffectsCoordinator {
       tremelo?: EffectParameterValues;
     })[timbreProperty] = target;
 
-    store.recordState();
+    if (!this.isRestoringSavedValues) {
+      this.scheduleHistoryRecord();
+    }
   }
 
   getEffectParameters(color: string, effectType: string): EffectParameterValues {
@@ -219,6 +254,41 @@ class EffectsCoordinator {
     });
 
     logger.info('EffectsCoordinator', `Reset all effects for color ${color}`, colorEffects, 'effects');
+  }
+
+  private scheduleHistoryRecord(): void {
+    this.hasPendingHistoryRecord = true;
+    if (this.historyTimerId !== null) {
+      clearTimeout(this.historyTimerId);
+    }
+    this.historyTimerId = setTimeout(() => this.flushScheduledHistoryRecord(), EFFECT_STATE_DEBOUNCE_MS);
+  }
+
+  private flushScheduledHistoryRecord(): void {
+    if (this.historyTimerId !== null) {
+      clearTimeout(this.historyTimerId);
+      this.historyTimerId = null;
+    }
+    if (!this.hasPendingHistoryRecord) {
+      return;
+    }
+    this.hasPendingHistoryRecord = false;
+    store.recordState();
+  }
+
+  private scheduleSaveValues(): void {
+    if (this.saveTimerId !== null) {
+      clearTimeout(this.saveTimerId);
+    }
+    this.saveTimerId = setTimeout(() => this.flushScheduledSave(), EFFECT_STATE_DEBOUNCE_MS);
+  }
+
+  private flushScheduledSave(): void {
+    if (this.saveTimerId !== null) {
+      clearTimeout(this.saveTimerId);
+      this.saveTimerId = null;
+    }
+    this.saveValues();
   }
 
   saveValues(): void {
@@ -256,6 +326,7 @@ class EffectsCoordinator {
       const dialData = JSON.parse(saved) as StoredDialData;
       logger.debug('EffectsCoordinator', 'Loading saved effect values', null, 'effects');
 
+      this.isRestoringSavedValues = true;
       Object.entries(dialData).forEach(([color, savedData]) => {
         if (!store.state.timbres[color] || !savedData) {
           return;
@@ -304,10 +375,14 @@ class EffectsCoordinator {
       });
     } catch (error) {
       logger.warn('EffectsCoordinator', 'Failed to load saved effect values', error, 'effects');
+    } finally {
+      this.isRestoringSavedValues = false;
     }
   }
 
   dispose(): void {
+    this.flushScheduledHistoryRecord();
+    this.flushScheduledSave();
     this.effectParameters.clear();
     logger.info('EffectsCoordinator', 'Disposed', null, 'effects');
   }

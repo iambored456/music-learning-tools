@@ -2,7 +2,6 @@ import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import GlobalService from '@services/globalService.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
-import { getWaveformVisualizer } from '@services/runtimeGlobals.ts';
 import { isNotePlayableAtColumn } from '@/utils/tonicColumnUtils.ts';
 import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
 
@@ -53,13 +52,6 @@ export class PitchGridNoteToolInteractor {
           lastDragRow: null
         }
       };
-    }
-
-    const staticWaveform = getWaveformVisualizer();
-    if (staticWaveform) {
-      staticWaveform.currentColor = existingNote.color;
-      staticWaveform.generateWaveform();
-      staticWaveform.startSingleNoteVisualization(existingNote.color);
     }
 
     audioPreviewService.triggerAttack(pitch, existingNote.color, { kind: 'single', bypassThrottle: true });
@@ -154,12 +146,6 @@ export class PitchGridNoteToolInteractor {
         );
       }
 
-      const staticWaveform = getWaveformVisualizer();
-      if (staticWaveform) {
-        staticWaveform.currentColor = addedNote.color;
-        staticWaveform.generateWaveform();
-        staticWaveform.startSingleNoteVisualization(addedNote.color);
-      }
     }
 
     return { placed: true, state: nextState, shouldStartDragging: true };

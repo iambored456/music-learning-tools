@@ -45,6 +45,7 @@ interface AnimationEffectsManagerRuntime {
 
 interface SynthEngineRuntime {
   updateSynthForColor?: (color: string) => void;
+  updateModulationForColor?: (color: string) => void;
   createWaveformAnalyzer?: (color: string) => unknown;
   getWaveformAnalyzer?: (color: string) => unknown;
   removeWaveformAnalyzer?: (color: string) => void;

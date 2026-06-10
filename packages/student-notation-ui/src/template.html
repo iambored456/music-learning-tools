@@ -237,8 +237,13 @@
                               <div class="waveform-display-wrapper">
                                   <canvas id="static-waveform-canvas"></canvas>
                                   <div class="waveform-speed-controls">
-                                      <button class="waveform-speed-btn" data-speed="50">50%</button>
-                                      <button class="waveform-speed-btn" data-speed="10">10%</button>
+                                      <button class="waveform-speed-btn" id="waveform-speed-button" data-speed="10" aria-expanded="false" aria-controls="waveform-speed-slider-popover">10%</button>
+                                      <div class="waveform-speed-slider-popover" id="waveform-speed-slider-popover" hidden>
+                                          <div class="waveform-speed-slider-shell" id="waveform-speed-slider" role="slider" tabindex="0" aria-label="Waveform speed" aria-orientation="vertical" aria-valuemin="5" aria-valuemax="100" aria-valuenow="10" data-value="10">
+                                              <div class="waveform-speed-slider-rail"></div>
+                                              <div class="waveform-speed-slider-thumb"></div>
+                                          </div>
+                                      </div>
                                   </div>
                               </div>
                           </div>
@@ -352,6 +357,9 @@
                                     </div>
                                     <div class="range-panel-section degrees-section">
                                         <div class="degree-visibility-toggle-container">
+                                            <button class="degree-visibility-button" id="pitch-labels-toggle" type="button">
+                                                Show Pitch
+                                            </button>
                                             <button class="degree-visibility-button" id="degree-visibility-toggle" type="button">
                                                 Show Degrees
                                             </button>
@@ -497,7 +505,8 @@
                                                             <div class="draw-option-label">Line Style</div>
                                                             <div class="draw-button-group">
                                                                 <button class="draw-option-button active" data-line-style="solid">Solid</button>
-                                                                <button class="draw-option-button" data-line-style="dashed">Dashed</button>
+                                                                <button class="draw-option-button" data-line-style="dashed-big">Dashed</button>
+                                                                <button class="draw-option-button" data-line-style="dotted">Dotted</button>
                                                             </div>
                                                         </div>
                                                     </div>

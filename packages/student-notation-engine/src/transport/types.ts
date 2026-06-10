@@ -24,7 +24,7 @@ export interface TimeMapConfig {
 /** Playback data for a stamp */
 export interface StampPlaybackData {
   sixteenthStampId: string;
-  column: number;
+  startTimeIndex: number;
   row: number;
   pitch: string;
   color: string;

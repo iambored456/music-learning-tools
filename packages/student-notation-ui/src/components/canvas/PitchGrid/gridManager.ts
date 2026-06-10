@@ -31,6 +31,10 @@ const GridManager = {
       if (data.type === 'vibrato' && data.activeColors && data.activeColors.length > 0) {
         this.renderPitchGrid();
       }
+      // Delay ghost outlines are static per parameter change, so redraw when delay settings change.
+      else if (data.type === 'delay' && data.activeColors && data.activeColors.length > 0) {
+        this.renderPitchGrid();
+      }
       // Handle envelope fill animations
       else if (data.type === 'envelopeFill' || data.hasEnvelopeFills) {
         this.renderPitchGrid();

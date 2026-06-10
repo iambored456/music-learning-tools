@@ -4,6 +4,7 @@ import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/
 import { renderModulationMarkers } from '@components/canvas/PitchGrid/renderers/modulationRenderer.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
+import { getDrumRowHeightFromCellWidth, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo } from '@state/selectors.ts';
 import type { AppState, MacrobeatBoundaryStyle, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
@@ -195,7 +196,7 @@ function drawVerticalGridLines(ctx: CanvasRenderingContext2D, options: DrumGridR
   });
 
   for (let canvasCol = 0; canvasCol <= totalColumns; canvasCol++) {
-    const isGridStartOrEnd = canvasCol === 0;
+    const isGridStartOrEnd = canvasCol === 0 || canvasCol === totalColumns;
     const isTonicColumnStart = isTonicColumn(canvasCol, placedTonicSigns);
     const isTonicColumnEnd = placedTonicSigns.some(ts => canvasCol === ts.columnIndex + 2);
     const isMacrobeatEnd = macrobeatBoundaries.includes(canvasCol);
@@ -236,7 +237,8 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
 
   ctx.clearRect(0, 0, getLogicalCanvasWidth(ctx.canvas), getLogicalCanvasHeight(ctx.canvas));
 
-  const drumRowHeight = Math.max(1, Math.round(cellWidth));
+  const drumRowHeight = getDrumRowHeightFromCellWidth(cellWidth);
+  const drumShapeBoxHeight = getDrumShapeBoxHeightFromCellWidth(cellWidth);
   // columnWidths is canvas-space (musical columns only, no legends)
   const totalColumns = columnWidths.length;
   const drumLabels = ['H', 'M', 'L'];
@@ -298,7 +300,8 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
         ctx.fillStyle = drumHit.color;
         // Pass canvas-space column to animation
         const animationScale = DrumPlayheadRenderer.getAnimationScale(canvasCol, drumTrack);
-        drawDrumShape(ctx, row, x, y, currentCellWidth, drumRowHeight, animationScale);
+        const shapeY = y + (drumRowHeight - drumShapeBoxHeight) / 2;
+        drawDrumShape(ctx, row, x, shapeY, currentCellWidth, drumShapeBoxHeight, animationScale);
       } else {
         ctx.fillStyle = '#ced4da';
         ctx.beginPath();

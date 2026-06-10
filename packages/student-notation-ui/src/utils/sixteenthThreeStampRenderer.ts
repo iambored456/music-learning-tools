@@ -20,6 +20,11 @@ export interface SixteenthThreeStampRendererOptions {
 }
 
 type ShapeFillLevels = Record<string, number>;
+export interface SixteenthThreeStampShapeEffects {
+  getYOffset?: (shapeKey: string) => number;
+  drawPathDelayGhosts?: (shapeKey: string, cx: number, cy: number, width: number, height: number) => void;
+}
+
 const snapToHalf = (value: number): number => Math.round(value * 2) / 2;
 const CANVAS_SCALE_FACTOR = 0.8;
 let svgGradientCounter = 0;
@@ -82,7 +87,8 @@ export class SixteenthThreeStampRenderer {
     color = '#000',
     placement: (SixteenthThreeStampPlacementLike & { shapeOffsets?: Record<string, number> }) | null = null,
     getRowY: GetRowY | null = null,
-    shapeFillLevels: ShapeFillLevels | null = null
+    shapeFillLevels: ShapeFillLevels | null = null,
+    shapeEffects: SixteenthThreeStampShapeEffects | null = null
   ): void {
     const scaleX = (width / 100) * CANVAS_SCALE_FACTOR;
     const scaleY = (height / 100) * CANVAS_SCALE_FACTOR;
@@ -114,10 +120,12 @@ export class SixteenthThreeStampRenderer {
         const shapeRow = placement.row + rowOffset;
         diamondY = getRowY(shapeRow);
       }
+      diamondY += shapeEffects?.getYOffset?.(shapeKey) ?? 0;
 
       const path = diamondPath(cx, diamondY, diamondW, diamondH);
       const pathObj = new Path2D(path);
       const fillLevel = shapeFillLevels?.[shapeKey] ?? 0;
+      shapeEffects?.drawPathDelayGhosts?.(shapeKey, cx, diamondY, diamondW, diamondH);
       this.drawEnvelopeFillPath(ctx, pathObj, cx, diamondY, Math.max(diamondW, diamondH) / 2, color, fillLevel);
       ctx.stroke(pathObj);
     });

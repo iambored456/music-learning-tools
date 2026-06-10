@@ -6,26 +6,41 @@ interface TonePreset {
   bottom: string | null;
 }
 
-const TREBLE_CLEF_PRESET_TONES: TonePreset = {
-  top: 'G5',
-  bottom: 'C4'
+export type ClefRangePresetId =
+  | 'full'
+  | 'treble'
+  | 'grandstaff'
+  | 'alto'
+  | 'bass'
+  | 'voice1'
+  | 'voice2'
+  | 'voice3';
+
+export type ClefRangePresetMap = Record<ClefRangePresetId, PitchRange | null>;
+
+const CLEF_RANGE_PRESET_TONES: Record<Exclude<ClefRangePresetId, 'full'>, TonePreset> = {
+  treble: { top: 'G5', bottom: 'C4' },
+  grandstaff: { top: 'G5', bottom: 'F2' },
+  alto: { top: 'A4', bottom: 'D3' },
+  bass: { top: 'C4', bottom: 'F2' },
+  voice1: { top: 'A5', bottom: 'A3' },
+  voice2: { top: 'C5', bottom: 'C3' },
+  voice3: { top: 'E4', bottom: 'E2' }
 };
 
-export function getTrebleClefPresetRange(
-  rows: Array<{ toneNote?: string }>
+function resolvePresetRangeFromToneNotes(
+  rows: Array<{ toneNote?: string }>,
+  tones: TonePreset
 ): PitchRange | null {
-  const topTone = TREBLE_CLEF_PRESET_TONES.top;
-  const bottomTone = TREBLE_CLEF_PRESET_TONES.bottom;
-
-  if (!topTone || !bottomTone) {
+  if (!tones.top || !tones.bottom) {
     return null;
   }
 
-  const topIndex = rows.findIndex(row => row.toneNote === topTone);
-  const bottomIndex = rows.findIndex(row => row.toneNote === bottomTone);
+  const topIndex = rows.findIndex(row => row.toneNote === tones.top);
+  const bottomIndex = rows.findIndex(row => row.toneNote === tones.bottom);
 
   if (topIndex === -1 || bottomIndex === -1) {
-    logger.warn('Main', 'Failed to resolve preset range from tone notes', TREBLE_CLEF_PRESET_TONES);
+    logger.warn('Main', 'Failed to resolve preset range from tone notes', tones);
     return null;
   }
 
@@ -33,6 +48,27 @@ export function getTrebleClefPresetRange(
     topIndex: Math.min(topIndex, bottomIndex),
     bottomIndex: Math.max(topIndex, bottomIndex)
   };
+}
+
+export function getClefRangePresetRanges(
+  rows: Array<{ toneNote?: string }>
+): ClefRangePresetMap {
+  return {
+    full: { topIndex: 0, bottomIndex: Math.max(0, rows.length - 1) },
+    treble: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.treble),
+    grandstaff: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.grandstaff),
+    alto: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.alto),
+    bass: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.bass),
+    voice1: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.voice1),
+    voice2: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.voice2),
+    voice3: resolvePresetRangeFromToneNotes(rows, CLEF_RANGE_PRESET_TONES.voice3)
+  };
+}
+
+export function getTrebleClefPresetRange(
+  rows: Array<{ toneNote?: string }>
+): PitchRange | null {
+  return getClefRangePresetRanges(rows).treble;
 }
 
 export function isFullGamutRange(

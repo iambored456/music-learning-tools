@@ -41,7 +41,6 @@ class StaticWaveformVisualizer {
 
   private readonly dynamicVisualizer = new DynamicWaveformVisualizer();
   private animationSpeed = 100;
-  private frameSkipCounter = 0;
   private resizeObserver: ResizeObserver | null = null;
 
   public calculatedAmplitude = 0;
@@ -139,32 +138,127 @@ class StaticWaveformVisualizer {
   }
 
   private setupSpeedControls(): void {
-    const speedButtons = Array.from(document.querySelectorAll<HTMLElement>('.waveform-speed-btn'));
-    if (speedButtons.length === 0) {return;}
+    const button = document.getElementById('waveform-speed-button');
+    const popover = document.getElementById('waveform-speed-slider-popover');
+    const slider = document.getElementById('waveform-speed-slider');
 
-    speedButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const speedAttr = button.dataset['speed'];
-        const speed = speedAttr ? parseInt(speedAttr, 10) : NaN;
-        if (!Number.isFinite(speed)) {return;}
+    if (!(button instanceof HTMLButtonElement) ||
+      !(popover instanceof HTMLElement) ||
+      !(slider instanceof HTMLElement)) {
+      return;
+    }
 
-        if (button.classList.contains('active')) {
-          button.classList.remove('active');
-          this.setAnimationSpeed(100);
-        } else {
-          speedButtons.forEach(btn => btn.classList.remove('active'));
-          button.classList.add('active');
-          this.setAnimationSpeed(speed);
-        }
-      });
+    const minSpeed = 5;
+    const maxSpeed = 100;
+    let isDragging = false;
+
+    const setPopoverOpen = (isOpen: boolean): void => {
+      popover.hidden = !isOpen;
+      button.setAttribute('aria-expanded', String(isOpen));
+    };
+
+    const applySliderSpeed = (speed: number): void => {
+      const nextSpeed = this.setAnimationSpeed(speed);
+      slider.style.setProperty('--waveform-speed-percent', `${nextSpeed}%`);
+      slider.dataset['value'] = String(nextSpeed);
+      slider.setAttribute('aria-valuenow', String(nextSpeed));
+      button.dataset['speed'] = String(nextSpeed);
+      button.textContent = `${nextSpeed}%`;
+      button.classList.toggle('active', nextSpeed < 100);
+      button.title = `Waveform speed: ${nextSpeed}%`;
+    };
+
+    applySliderSpeed(Number(slider.dataset['value'] ?? button.dataset['speed'] ?? this.animationSpeed));
+
+    const getSpeedFromPointer = (event: PointerEvent): number => {
+      const rect = slider.getBoundingClientRect();
+      const ratio = rect.height > 0
+        ? 1 - ((event.clientY - rect.top) / rect.height)
+        : 0;
+      const clampedRatio = Math.max(0, Math.min(1, ratio));
+      return minSpeed + (clampedRatio * (maxSpeed - minSpeed));
+    };
+
+    const updateSpeedFromPointer = (event: PointerEvent): void => {
+      applySliderSpeed(getSpeedFromPointer(event));
+    };
+
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const shouldOpen = popover.hidden;
+      setPopoverOpen(shouldOpen);
+      if (shouldOpen && this.animationSpeed === 100) {
+        applySliderSpeed(Number(slider.dataset['value'] ?? '10'));
+      }
+    });
+
+    popover.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+
+    slider.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      isDragging = true;
+      slider.focus();
+      slider.setPointerCapture(event.pointerId);
+      updateSpeedFromPointer(event);
+    });
+
+    slider.addEventListener('pointermove', (event) => {
+      if (!isDragging) {return;}
+      updateSpeedFromPointer(event);
+    });
+
+    const stopDragging = (event: PointerEvent): void => {
+      if (!isDragging) {return;}
+      isDragging = false;
+      if (slider.hasPointerCapture(event.pointerId)) {
+        slider.releasePointerCapture(event.pointerId);
+      }
+    };
+
+    slider.addEventListener('pointerup', stopDragging);
+    slider.addEventListener('pointercancel', stopDragging);
+
+    slider.addEventListener('keydown', (event) => {
+      const currentSpeed = Number(slider.dataset['value'] ?? this.animationSpeed);
+      let nextSpeed = currentSpeed;
+
+      if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+        nextSpeed += 1;
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+        nextSpeed -= 1;
+      } else if (event.key === 'PageUp') {
+        nextSpeed += 10;
+      } else if (event.key === 'PageDown') {
+        nextSpeed -= 10;
+      } else if (event.key === 'Home') {
+        nextSpeed = minSpeed;
+      } else if (event.key === 'End') {
+        nextSpeed = maxSpeed;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      applySliderSpeed(nextSpeed);
+    });
+
+    document.addEventListener('click', () => {
+      setPopoverOpen(false);
     });
   }
 
-  private setAnimationSpeed(percentage: number): void {
-    if (!Number.isFinite(percentage)) {return;}
-    this.animationSpeed = percentage;
-    this.frameSkipCounter = 0;
-    this.dynamicVisualizer.setAnimationSpeed(percentage);
+  private setAnimationSpeed(percentage: number): number {
+    if (!Number.isFinite(percentage)) {
+      return this.animationSpeed;
+    }
+
+    const nextSpeed = Math.round(Math.max(5, Math.min(100, percentage)));
+    this.animationSpeed = nextSpeed;
+    this.dynamicVisualizer.setAnimationSpeed(nextSpeed);
+    return nextSpeed;
   }
 
   private setupExtendToggle(): void {

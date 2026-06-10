@@ -41,7 +41,7 @@ export const appCards: AppCard[] = [
   },
   {
     id: 'boomwhacker-sketchpad',
-    name: 'Boomwhacker Sketchpad',
+    name: 'Simple Notation',
     description: 'Diatonic oval notation with block rhythms, drone, and keyboard-first practice.',
     href: withBase('boomwhacker-sketchpad/'),
     preview: withBase('previews/boomwhacker-sketchpad.png'),

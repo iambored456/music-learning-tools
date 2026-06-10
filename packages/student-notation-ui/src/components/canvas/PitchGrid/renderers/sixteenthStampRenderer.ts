@@ -1,15 +1,22 @@
 // js/components/Canvas/PitchGrid/renderers/sixteenthStampRenderer.ts
 import { getSixteenthStampById } from '../../../../rhythm/sixteenthStamps.ts';
+import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.ts';
 import { defaultSixteenthStampRenderer } from '../../../../utils/sixteenthStampRenderer.ts';
 import { getRowY, getColumnX } from './rendererUtils.ts';
+import { drawNoteLabelText, type PitchRendererOptions } from './notes.ts';
+import {
+  drawStampShapeDelayEllipse,
+  drawStampShapeDelayPath,
+  getStampShapeVibratoYOffset
+} from './stampShapeEffects.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
-import { canvasToTime, timeToCanvas } from '../../../../services/columnMapService.ts';
+import { timeToCanvas } from '../../../../services/columnMapService.ts';
 import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildSixteenthStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
-import type { ModulationMarker, SixteenthStampPlacement } from '@mlt/types';
-import type { SixteenthStampShape } from '../../../../utils/sixteenthStampRenderer.ts';
+import type { AnimatableNote, CanvasSpaceColumn, ModulationMarker, PlacedNote, SixteenthStampPlacement } from '@mlt/types';
+import type { SixteenthStampShape, SixteenthStampShapeEffects } from '../../../../utils/sixteenthStampRenderer.ts';
 
 interface SixteenthStampRenderOptions {
   columnWidths: number[];
@@ -18,6 +25,7 @@ interface SixteenthStampRenderOptions {
   cellHeight: number;
   baseMicrobeatPx?: number;
   tempoModulationMarkers?: ModulationMarker[];
+  tempo?: number;
 }
 
 logger.moduleLoaded('SixteenthStampRenderer', 'stamps');
@@ -30,6 +38,130 @@ interface AnimationEffectsManager {
 const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
   return getRuntimeAnimationEffectsManager() as AnimationEffectsManager | undefined;
 };
+
+function createStampDegreeNote(
+  placement: SixteenthStampPlacement,
+  shapeKey: string,
+  rowOffset: number,
+  startColumn: number,
+  color: string,
+  shape: PlacedNote['shape'] = 'diamond'
+): PlacedNote {
+  const row = placement.row + rowOffset;
+  const globalRow = (placement.globalRow ?? placement.row) + rowOffset;
+  const columnIndex = Math.max(0, Math.floor(startColumn)) as CanvasSpaceColumn;
+
+  return {
+    uuid: buildSixteenthStampShapeNoteId(placement.id, shapeKey),
+    row,
+    globalRow,
+    startColumnIndex: columnIndex,
+    endColumnIndex: columnIndex,
+    shape,
+    color
+  };
+}
+
+function createStampShapeEffectNote(
+  placement: SixteenthStampPlacement,
+  shapeKey: string
+): AnimatableNote {
+  return {
+    uuid: buildSixteenthStampShapeNoteId(placement.id, shapeKey),
+    color: placement.color
+  };
+}
+
+function createSixteenthStampShapeEffects(
+  ctx: CanvasRenderingContext2D,
+  placement: SixteenthStampPlacement,
+  options: SixteenthStampRenderOptions
+): SixteenthStampShapeEffects {
+  const effectOptions = {
+    cellWidth: options.cellWidth,
+    cellHeight: options.cellHeight,
+    tempo: options.tempo ?? store.state.tempo
+  };
+
+  return {
+    getYOffset: (shapeKey) => {
+      return getStampShapeVibratoYOffset(createStampShapeEffectNote(placement, shapeKey), effectOptions);
+    },
+    drawEllipseDelayGhosts: (shapeKey, cx, cy, rx, ry) => {
+      drawStampShapeDelayEllipse(ctx, createStampShapeEffectNote(placement, shapeKey), effectOptions, cx, cy, rx, ry);
+    },
+    drawPathDelayGhosts: (shapeKey, cx, cy, width, height) => {
+      drawStampShapeDelayPath(
+        ctx,
+        createStampShapeEffectNote(placement, shapeKey),
+        effectOptions,
+        cx,
+        cy,
+        width,
+        height,
+        (pathCx, pathCy, pathWidth, pathHeight) => new Path2D(diamondPath(pathCx, pathCy, pathWidth, pathHeight))
+      );
+    }
+  };
+}
+
+function renderSixteenthStampDegreeLabels(
+  ctx: CanvasRenderingContext2D,
+  stamp: SixteenthStampShape,
+  placement: SixteenthStampPlacement,
+  startColumn: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+  options: SixteenthStampRenderOptions
+): void {
+  if (!store.state.showPitchLabels && store.state.degreeDisplayMode === 'off') {
+    return;
+  }
+
+  const scaleX = (width / 100) * 0.8;
+  const scaleY = (height / 100) * 0.8;
+  const diamondW = 30 * scaleX;
+  const ovalRx = 30 * scaleX;
+  const ovalRy = 60 * scaleY;
+  const slotCenters = [0.125, 0.375, 0.625, 0.875].map(ratio => x + ratio * width);
+  const centerY = y + height / 2;
+  const degreeOptions = { ...store.state, ...options } as PitchRendererOptions;
+
+  stamp.ovals.forEach(ovalStart => {
+    const shapeKey = `oval_${ovalStart}`;
+    const rowOffset = placement.shapeOffsets?.[shapeKey] || 0;
+    const ovalY = getRowY(placement.row + rowOffset, options);
+    const cx = ovalStart === 0 ? x + 0.25 * width : x + 0.75 * width;
+    const noteColumn = startColumn + (ovalStart === 0 ? 0 : 1);
+    const note = createStampDegreeNote(placement, shapeKey, rowOffset, noteColumn, color, 'oval');
+    const labelY = ovalY + getStampShapeVibratoYOffset(note, options);
+
+    ctx.save();
+    drawNoteLabelText(ctx, note, degreeOptions, cx, labelY, Math.max(1, Math.min(ovalRx, ovalRy) * 0.82));
+    ctx.restore();
+  });
+
+  stamp.diamonds.forEach(slot => {
+    const cx = slotCenters[slot];
+    if (cx === undefined) {
+      return;
+    }
+
+    const shapeKey = `diamond_${slot}`;
+    const rowOffset = placement.shapeOffsets?.[shapeKey] || 0;
+    const diamondY = getRowY(placement.row + rowOffset, options);
+    const noteColumn = startColumn + Math.floor(slot / 2);
+    const note = createStampDegreeNote(placement, shapeKey, rowOffset, noteColumn, color);
+    const labelY = diamondY + getStampShapeVibratoYOffset(note, options);
+
+    ctx.save();
+    drawNoteLabelText(ctx, note, degreeOptions, cx, labelY, Math.max(1, diamondW * 0.66));
+    ctx.restore();
+  });
+}
 
 function getShapeFillLevels(placement: SixteenthStampPlacement, stamp: SixteenthStampShape): Record<string, number> | null {
   const manager = getAnimationEffectsManager();
@@ -79,26 +211,18 @@ function renderSixteenthStamp(ctx: CanvasRenderingContext2D, placement: Sixteent
   const stamp: SixteenthStampShape | undefined = getSixteenthStampById(placement.sixteenthStampId);
   if (!stamp) {return;}
 
-  const { startColumn, row, color } = placement;
+  const { startTimeIndex, row, color } = placement;
   const state = store.state;
 
+  const startColumn = timeToCanvas(startTimeIndex, state);
   const stampX = getColumnX(startColumn, options);
   const rowCenterY = getRowY(row, options);
   const stampY = rowCenterY - (options.cellHeight / 2);
 
-  // Calculate end column using time-space to handle tonic columns correctly
-  // Stamps have a fixed duration of 2 time columns (microbeats)
-  const startTimeCol = canvasToTime(startColumn, state);
-  let effectiveEndColumn: number;
-
-  if (startTimeCol !== null) {
-    // Convert time span to canvas span (skipping any tonic columns)
-    const endTimeCol = startTimeCol + 2;
-    effectiveEndColumn = timeToCanvas(endTimeCol, state);
-  } else {
-    // Fallback for edge cases (stamp on tonic column - shouldn't happen with validation)
-    effectiveEndColumn = startColumn + 2;
-  }
+  // Stamps visually occupy two canvas columns. Do not convert the end time through
+  // the column map, because inserted tonic columns have no time and would stretch
+  // stamps that end at a tonic boundary.
+  const effectiveEndColumn = startColumn + 2;
 
   const stampEndX = getColumnX(effectiveEndColumn, options);
   const stampWidth = stampEndX - stampX;
@@ -110,6 +234,7 @@ function renderSixteenthStamp(ctx: CanvasRenderingContext2D, placement: Sixteent
 
   const getRowYWithOptions = (rowIndex: number) => getRowY(rowIndex, options);
   const shapeFillLevels = getShapeFillLevels(placement, stamp);
+  const shapeEffects = createSixteenthStampShapeEffects(ctx, placement, options);
 
   defaultSixteenthStampRenderer.renderToCanvas(
     ctx,
@@ -121,7 +246,8 @@ function renderSixteenthStamp(ctx: CanvasRenderingContext2D, placement: Sixteent
     color,
     placement,
     getRowYWithOptions,
-    shapeFillLevels
+    shapeFillLevels,
+    shapeEffects
   );
 
   ctx.save();
@@ -130,8 +256,22 @@ function renderSixteenthStamp(ctx: CanvasRenderingContext2D, placement: Sixteent
   ctx.fillRect(stampX + 1, stampY + 1, stampWidth - 2, stampHeight - 2);
   ctx.restore();
 
-  logger.debug('SixteenthStampRenderer', `Rendered stamp ${placement.sixteenthStampId} at ${startColumn}-${effectiveEndColumn},${row}`, {
+  renderSixteenthStampDegreeLabels(
+    ctx,
+    stamp,
+    placement,
+    startColumn,
+    stampX,
+    stampY,
+    stampWidth,
+    stampHeight,
+    color,
+    options
+  );
+
+  logger.debug('SixteenthStampRenderer', `Rendered stamp ${placement.sixteenthStampId} at time ${startTimeIndex}, row ${row}`, {
     sixteenthStampId: placement.sixteenthStampId,
+    startTimeIndex,
     startColumn,
     effectiveEndColumn,
     row,
@@ -155,17 +295,7 @@ export function renderSixteenthStampPreview(
   const rowCenterY = getRowY(row, options);
   const stampY = rowCenterY - (options.cellHeight / 2);
 
-  // Calculate end column using time-space to handle tonic columns correctly
-  // Preview stamps also have a fixed duration of 2 time columns (microbeats)
-  const startTimeCol = canvasToTime(column, state);
-  let effectiveEndColumn: number;
-
-  if (startTimeCol !== null) {
-    const endTimeCol = startTimeCol + 2;
-    effectiveEndColumn = timeToCanvas(endTimeCol, state);
-  } else {
-    effectiveEndColumn = column + 2;
-  }
+  const effectiveEndColumn = column + 2;
 
   const stampEndX = getColumnX(effectiveEndColumn, options);
   const stampWidth = stampEndX - stampX;

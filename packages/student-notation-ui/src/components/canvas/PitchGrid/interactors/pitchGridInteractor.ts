@@ -17,7 +17,6 @@ import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import annotationService from '@services/annotationService.ts';
-import { getWaveformVisualizer } from '@services/runtimeGlobals.ts';
 import { drawSingleColumnOvalNote, drawTwoColumnOvalNote } from '../renderers/notes.ts';
 import { getRowY, getColumnFromX, getColumnX } from '../renderers/rendererUtils.ts';
 import GlobalService from '@services/globalService.ts';
@@ -849,11 +848,6 @@ function handleGlobalMouseUp() {
         }
       }
 
-      // Stop dynamic waveform visualization when releasing note/chord previews.
-      const staticWaveform = getWaveformVisualizer();
-      if (staticWaveform) {
-        staticWaveform.stopLiveVisualization();
-      }
     }
 
     activePreviewPitches = [];

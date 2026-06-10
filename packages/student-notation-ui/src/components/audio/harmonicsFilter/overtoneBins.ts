@@ -141,28 +141,6 @@ function drawFilterOverlay() {
     }
 
 
-    // Draw continuous curve showing the RAW filter shape (not mixed)
-    overlayCtx.beginPath();
-    const step = 2;
-    for (let x = 0; x <= width; x += step) {
-      const norm_pos = x / width;
-      const rawFilterAmp = getFilterAmplitudeAt(norm_pos, filterSettings);
-      const y = barBaseY - rawFilterAmp * maxBarHeight;
-      if (x === 0) {
-        overlayCtx.moveTo(x, y);
-      } else {
-        overlayCtx.lineTo(x, y);
-      }
-    }
-
-    // Use mix for transparency - higher mix = more visible overlay
-    const mixNorm = mixAmount / 100;
-    const strokeAlpha = 0.4 + (mixNorm * 0.6); // Range from 0.4 to 1.0
-
-    overlayCtx.strokeStyle = hexToRgba(shadeHexColor(currentColor, -0.3), strokeAlpha);
-    overlayCtx.lineWidth = 2.5;
-    overlayCtx.stroke();
-
     // Draw white transparency overlay above the filter curve
     const whiteOpacity = mixAmount / 100; // 0% mix = 0 opacity, 100% mix = 1.0 opacity
 
@@ -196,6 +174,28 @@ function drawFilterOverlay() {
       overlayCtx.fillStyle = `rgba(255, 255, 255, ${whiteOpacity})`;
       overlayCtx.fill();
     }
+
+    // Draw continuous curve showing the RAW filter shape (not mixed)
+    overlayCtx.beginPath();
+    const step = 2;
+    for (let x = 0; x <= width; x += step) {
+      const norm_pos = x / width;
+      const rawFilterAmp = getFilterAmplitudeAt(norm_pos, filterSettings);
+      const y = barBaseY - rawFilterAmp * maxBarHeight;
+      if (x === 0) {
+        overlayCtx.moveTo(x, y);
+      } else {
+        overlayCtx.lineTo(x, y);
+      }
+    }
+
+    // Use mix for transparency - higher mix = more visible overlay
+    const mixNorm = mixAmount / 100;
+    const strokeAlpha = 0.4 + (mixNorm * 0.6); // Range from 0.4 to 1.0
+
+    overlayCtx.strokeStyle = hexToRgba(shadeHexColor(currentColor, -0.3), strokeAlpha);
+    overlayCtx.lineWidth = 2.5;
+    overlayCtx.stroke();
 
   } else {
     // Reset filter values when filter is disabled
@@ -736,13 +736,17 @@ export function initOvertoneBins() {
 
   // Size the overlay canvas
   const sizeOverlayCanvas = () => {
-    if (!overlayCanvas) {
+    if (!overlayCanvas || !overtoneBinsGrid) {
       return;
     }
-    const rect = overlayCanvas.getBoundingClientRect(); // Use canvas rect, not grid rect
-    if (overlayCanvas.width !== rect.width || overlayCanvas.height !== rect.height) {
-      overlayCanvas.width = rect.width;
-      overlayCanvas.height = rect.height;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const gridRect = overtoneBinsGrid.getBoundingClientRect();
+    const width = Math.max(0, Math.round(rect.width || gridRect.width));
+    const height = Math.max(0, Math.round(rect.height || gridRect.height - 24));
+
+    if (overlayCanvas.width !== width || overlayCanvas.height !== height) {
+      overlayCanvas.width = width;
+      overlayCanvas.height = height;
       drawFilterOverlay();
     }
   };
