@@ -25,14 +25,6 @@ const MACROBEAT_METRONOME_SAMPLE_IDS = [
   'linn-lm-1-linndrum-linndrum-congahh',
 ] as const;
 
-const SUPPLEMENTAL_NOTE_SAMPLE_IDS = [
-  'roland-tr-909-roland-tr-909-handclp2',
-  'roland-tr-909-roland-tr-909-st3t0s3',
-  'kpr-series-kprlotom',
-  'roland-tr-909-roland-tr-909-hhcd4',
-  'generic-percussion-tamb-1',
-] as const;
-
 function firstAvailableDrumSampleUrl(sampleIds: readonly string[]): string | null {
   return sampleIds.map((sampleId) => getLocalDrumSampleById(sampleId)?.url ?? null).find(Boolean) ?? null;
 }
@@ -62,7 +54,9 @@ export class BoomwhackerSketchpadAudioEngine {
 
   private metronomePlayers: Tone.Players | null = null;
 
-  private supplementalNotePlayers: Tone.Players | null = null;
+  private readonly supplementalSamplePlayers = new Map<string, Tone.Player>();
+
+  private readonly supplementalSampleLoadPromises = new Map<string, Promise<Tone.Player | null>>();
 
   private droneVolumeNode: Tone.Volume | null = null;
 
@@ -137,23 +131,6 @@ export class BoomwhackerSketchpadAudioEngine {
         }
       }
 
-      const supplementalNotePlayerUrls = Object.fromEntries(
-        SUPPLEMENTAL_NOTE_SAMPLE_IDS.flatMap((sampleId) => {
-          const sampleUrl = getLocalDrumSampleById(sampleId)?.url;
-          return sampleUrl ? [[sampleId, sampleUrl]] : [];
-        }),
-      );
-
-      if (Object.keys(supplementalNotePlayerUrls).length > 0) {
-        try {
-          this.supplementalNotePlayers = new Tone.Players(supplementalNotePlayerUrls).connect(this.masterVolumeNode);
-          await this.supplementalNotePlayers.loaded;
-        } catch {
-          this.supplementalNotePlayers?.dispose();
-          this.supplementalNotePlayers = null;
-        }
-      }
-
       this.droneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).connect(this.masterVolumeNode);
       this.momentaryDroneVolumeNode = new Tone.Volume(Tone.gainToDb(state.droneVolume)).connect(this.masterVolumeNode);
 
@@ -187,7 +164,11 @@ export class BoomwhackerSketchpadAudioEngine {
     this.masterVolumeNode?.dispose();
     this.metronomeVolumeNode?.dispose();
     this.metronomePlayers?.dispose();
-    this.supplementalNotePlayers?.dispose();
+    for (const player of this.supplementalSamplePlayers.values()) {
+      player.dispose();
+    }
+    this.supplementalSamplePlayers.clear();
+    this.supplementalSampleLoadPromises.clear();
     this.droneVolumeNode?.dispose();
     this.momentaryDroneVolumeNode?.dispose();
 
@@ -195,7 +176,6 @@ export class BoomwhackerSketchpadAudioEngine {
     this.masterVolumeNode = null;
     this.metronomeVolumeNode = null;
     this.metronomePlayers = null;
-    this.supplementalNotePlayers = null;
     this.droneVolumeNode = null;
     this.momentaryDroneVolumeNode = null;
 
@@ -344,11 +324,59 @@ export class BoomwhackerSketchpadAudioEngine {
     }
   }
 
+  async loadSample(sampleId: string): Promise<boolean> {
+    if (!this.isReady() || !this.masterVolumeNode) return false;
+
+    const existingPlayer = this.supplementalSamplePlayers.get(sampleId);
+    if (existingPlayer?.loaded) return true;
+
+    const existingLoad = this.supplementalSampleLoadPromises.get(sampleId);
+    if (existingLoad) {
+      const player = await existingLoad;
+      return Boolean(player?.loaded);
+    }
+
+    const sampleUrl = getLocalDrumSampleById(sampleId)?.url;
+    if (!sampleUrl) return false;
+
+    const player = new Tone.Player({
+      autostart: false,
+      fadeOut: 0.01,
+    }).connect(this.masterVolumeNode);
+
+    const loadPromise = player.load(sampleUrl)
+      .then(() => {
+        this.supplementalSamplePlayers.set(sampleId, player);
+        return player;
+      })
+      .catch(() => {
+        player.dispose();
+        return null;
+      })
+      .finally(() => {
+        this.supplementalSampleLoadPromises.delete(sampleId);
+      });
+
+    this.supplementalSampleLoadPromises.set(sampleId, loadPromise);
+    const loadedPlayer = await loadPromise;
+    return Boolean(loadedPlayer?.loaded);
+  }
+
   playSampleNow(sampleId: string): boolean {
-    if (!this.isReady() || !this.supplementalNotePlayers?.loaded) return false;
+    if (!this.isReady()) return false;
 
     try {
-      this.supplementalNotePlayers.player(sampleId)?.start(Tone.now());
+      const player = this.supplementalSamplePlayers.get(sampleId);
+      if (!player?.loaded) {
+        void this.loadSample(sampleId).then((loaded) => {
+          if (loaded) {
+            this.playSampleNow(sampleId);
+          }
+        });
+        return false;
+      }
+
+      player.start(Tone.now());
       return true;
     } catch {
       return false;

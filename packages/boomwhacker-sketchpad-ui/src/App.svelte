@@ -82,6 +82,16 @@
 
   type TrackStyle = 'stacked' | 'horizontal';
 
+  type PercussionNoteId = 'clap' | 'stomp' | 'djembe' | 'stick-clicks' | 'tambourine';
+
+  type PercussionSampleSelections = Record<PercussionNoteId, string>;
+
+  type LocalDrumSampleGroup = {
+    machineId: string;
+    machineLabel: string;
+    samples: any[];
+  };
+
   type GridRow = {
     id: string;
     cells: Array<GridCellContent | null>;
@@ -102,6 +112,7 @@
     voiceCount?: VoiceCountMode;
     voiceLayoutMode?: VoiceLayoutMode;
     trackStyle?: TrackStyle;
+    percussionSamples?: Partial<PercussionSampleSelections>;
     voices?: PersistedVoiceCanvas[];
   };
 
@@ -134,6 +145,7 @@
     zone: GridZone;
     rowIndex: number;
     cellIndex: number;
+    sourceRowIndex?: number;
   };
 
   type PlaybackStartSelection = {
@@ -208,6 +220,9 @@
   type RenderedTrackRow = {
     voiceIndex: VoiceIndex;
     rowIndex: number;
+    sourceRowIndex: number;
+    loopCycle: number;
+    includesPickup: boolean;
     key: string;
     row: GridRow;
     pickupRow: GridRow;
@@ -293,6 +308,7 @@
     voiceCount?: VoiceCountMode;
     voiceLayoutMode?: VoiceLayoutMode;
     trackStyle?: TrackStyle;
+    percussionSamples?: Partial<PercussionSampleSelections>;
     voices?: PersistedVoiceCanvas[];
     sv?: StudentViewSettings;
   };
@@ -329,7 +345,7 @@
     document: LibrarySketchDocument;
   };
 
-  const PERCUSSION_NOTE_IDS = ['clap', 'stomp', 'djembe', 'stick-clicks', 'tambourine'] as const;
+  const PERCUSSION_NOTE_IDS: readonly PercussionNoteId[] = ['clap', 'stomp', 'djembe', 'stick-clicks', 'tambourine'] as const;
 
   const SUPPLEMENTAL_NOTE_DEFINITIONS: ExtendedNoteDefinition[] = [
     {
@@ -345,7 +361,7 @@
       label: 'Stomp',
       interval: 0,
       colorId: 'stomp',
-      sampleId: 'roland-tr-909-roland-tr-909-st3t0s3',
+      sampleId: 'kpr-series-kprlotom',
       iconId: 'stomp',
     },
     {
@@ -374,12 +390,23 @@
     },
   ];
 
+  const DEFAULT_PERCUSSION_SAMPLE_SELECTIONS: PercussionSampleSelections = Object.fromEntries(
+    PERCUSSION_NOTE_IDS.map((noteId) => {
+      const definition = SUPPLEMENTAL_NOTE_DEFINITIONS.find((note) => note.id === noteId);
+      return [noteId, definition?.sampleId ?? ''];
+    }),
+  ) as PercussionSampleSelections;
+
+  const LOCAL_DRUM_SAMPLE_BY_ID = new Map();
+
+  const LOCAL_DRUM_SAMPLE_GROUPS: LocalDrumSampleGroup[] = [];
+
   const SUPPLEMENTAL_NOTE_COLORS = {
-    clap: '#f6c85f',
-    stomp: '#c58b66',
-    djembe: '#8fc7b5',
-    'stick-clicks': '#b7a2d8',
-    tambourine: '#f0b86a',
+    clap: '#dfa049',
+    stomp: '#24c1e1',
+    djembe: '#7ac379',
+    'stick-clicks': '#aaa0fa',
+    tambourine: '#ef8aab',
   } as const;
 
   const CHROMANOTES_PALETTE: Record<string, string> = {
@@ -442,6 +469,7 @@
   const metronomeIconUrl = new URL('./assets/metronome.svg', import.meta.url).href;
   const loopIconUrl = new URL('./assets/loop.svg', import.meta.url).href;
   const volumeIconUrl = new URL('./assets/volume.svg', import.meta.url).href;
+  const audioSamplesIconUrl = new URL('./assets/audio-samples.svg', import.meta.url).href;
   const undoIconUrl = new URL('./assets/undo.svg', import.meta.url).href;
   const redoIconUrl = new URL('./assets/redo.svg', import.meta.url).href;
   const eraserIconUrl = new URL('./assets/eraser.svg', import.meta.url).href;
@@ -496,6 +524,12 @@
   const DEFAULT_TRACK_STYLE: TrackStyle = 'stacked';
   const VOICE_INDEXES = [0, 1, 2, 3] as const;
   const HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO = 0.34;
+  const HORIZONTAL_LOOP_RENDER_CYCLES = 5;
+  const HORIZONTAL_LOOP_ANCHOR_CYCLE = 2;
+  const HORIZONTAL_LOOP_RECENTER_CYCLE = 3;
+  const TRACK_ZOOM_MIN = 0.65;
+  const TRACK_ZOOM_MAX = 1.8;
+  const TRACK_ZOOM_WHEEL_SENSITIVITY = 0.0016;
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
@@ -538,6 +572,8 @@
   let horizontalPlaybackScrollFrame: number | null = null;
   let horizontalPlaybackScrollToken = 0;
   let horizontalPlaybackRunwayPx = 0;
+  let trackZoom = 1;
+  let trackPlaybackShellHeightPx = 0;
   let voiceHorizontalPlaybackLaneShiftPxs: number[] = VOICE_INDEXES.map(() => 0);
   let voiceHorizontalPlaybackLaneShiftFrames: Array<number | null> = VOICE_INDEXES.map(() => null);
   let voiceHorizontalPlaybackLaneShiftTokens: number[] = VOICE_INDEXES.map(() => 0);
@@ -563,6 +599,8 @@
   let viewportFitMode = false;
   let adaptiveLayout: AdaptiveLayoutConfig = ADAPTIVE_LAYOUT_DEFAULT;
   let colorPaletteMode: ColorPaletteMode = 'chromanotes';
+  let percussionSampleSelections: PercussionSampleSelections = { ...DEFAULT_PERCUSSION_SAMPLE_SELECTIONS };
+  let activeSamplePickerNoteId: PercussionNoteId = 'clap';
   let showAccidentals = false;
   let showEighthsBank = true;
   let showSixteenthsBank = false;
@@ -597,6 +635,8 @@
   let activeStudentView: StudentViewSettings = {};
   let volumePopupOpen = false;
   let volumeControlWrapper: HTMLDivElement | null = null;
+  let audioSamplesPopupOpen = false;
+  let audioSamplesControlWrapper: HTMLDivElement | null = null;
   let canvasPanelElement: HTMLElement | null = null;
   let canvasScrollShellElement: HTMLDivElement | null = null;
   let canvasScrollRevision = 0;
@@ -640,18 +680,21 @@
     bankLatticeRowsDiamond = buildBankLatticeRows(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
   }
 
-  $: activePreviewPayload = dragPayload ?? tapPlacementPayload;
+  $: activePreviewPayload = isPlaying ? null : dragPayload ?? tapPlacementPayload;
   $: showToolbarEighthBank = (!isStudentView || !activeStudentView.hideEighthBank) && showEighthsBank;
   $: showLowerSixteenthBank = (!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank;
   $: {
     trackStyle;
+    isPlaying;
     canvasScrollRevision;
     horizontalPlaybackHighway.referenceViewportLeftPx;
     const scrollShellWidth = canvasScrollShellElement?.clientWidth ?? 0;
+    const scrollShellHeight = canvasScrollShellElement?.clientHeight ?? 0;
     horizontalPlaybackRunwayPx =
       trackStyle === 'horizontal' && horizontalPlaybackHighway.referenceViewportLeftPx !== null
         ? Math.max(0, scrollShellWidth - horizontalPlaybackHighway.referenceViewportLeftPx)
         : 0;
+    trackPlaybackShellHeightPx = trackStyle === 'horizontal' && isPlaying ? Math.max(0, scrollShellHeight) : 0;
   }
   $: {
     voiceKaraokeBallRowIndexes;
@@ -671,6 +714,9 @@
     voiceCount;
     voiceLayoutMode;
     trackStyle;
+    isPlaying;
+    isLooping;
+    playbackStartSelection;
     renderedTrackRows = buildRenderedTrackRows();
   }
   $: {
@@ -702,6 +748,7 @@
     voiceCount;
     voiceLayoutMode;
     trackStyle;
+    percussionSampleSelections;
     state.microbeatTempo;
     persistCanvasState();
     trackCanvasHistorySnapshot();
@@ -740,6 +787,7 @@
     || libraryModalOpen
   ) {
     volumePopupOpen = false;
+    audioSamplesPopupOpen = false;
   }
 
   onMount(() => {
@@ -759,7 +807,7 @@
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     window.addEventListener('keyup', handleGlobalKeyUp);
-    window.addEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
+    window.addEventListener('pointerdown', handleDocumentPointerDownForPopups);
     window.addEventListener('pointermove', handleWindowPointerMoveForBankActivation);
     window.addEventListener('pointerup', handleWindowPointerUpForBankActivation);
     window.addEventListener('pointercancel', handleWindowPointerCancelForBankActivation);
@@ -824,7 +872,7 @@
       canvasPanelRepositionAnimation?.cancel();
       window.removeEventListener('keydown', handleGlobalKeyDown);
       window.removeEventListener('keyup', handleGlobalKeyUp);
-      window.removeEventListener('pointerdown', handleDocumentPointerDownForVolumePopup);
+      window.removeEventListener('pointerdown', handleDocumentPointerDownForPopups);
       window.removeEventListener('pointermove', handleWindowPointerMoveForBankActivation);
       window.removeEventListener('pointerup', handleWindowPointerUpForBankActivation);
       window.removeEventListener('pointercancel', handleWindowPointerCancelForBankActivation);
@@ -952,19 +1000,85 @@
     );
   }
 
+  function isHorizontalLoopPlaybackActive(): boolean {
+    return isPlaying && shouldUseHorizontalLoopIndexing();
+  }
+
+  function shouldUseHorizontalLoopIndexing(): boolean {
+    return trackStyle === 'horizontal' && isLooping && totalPlaybackCells() > 0;
+  }
+
+  function horizontalLoopSegmentStartIndex(): number {
+    return playbackResetIndex();
+  }
+
+  function horizontalLoopSegmentSourceStartRow(): number {
+    const startIndex = horizontalLoopSegmentStartIndex();
+    const pickupCells = pickupMicrobeatCount();
+    if (startIndex <= pickupCells) return 0;
+    return Math.max(0, Math.min(sharedRowCount() - 1, Math.floor((startIndex - pickupCells) / GRID_COLUMNS)));
+  }
+
+  function horizontalLoopSegmentIncludesPickup(): boolean {
+    return pickupMicrobeatCount() > 0 && horizontalLoopSegmentStartIndex() < pickupMicrobeatCount();
+  }
+
+  function horizontalLoopSegmentRowCount(): number {
+    return Math.max(1, sharedRowCount() - horizontalLoopSegmentSourceStartRow());
+  }
+
+  function pushRenderedTrackRow(
+    rows: RenderedTrackRow[],
+    voiceIndex: VoiceIndex,
+    sourceRowIndex: number,
+    rowIndex: number,
+    loopCycle = 0,
+    includesPickup = sourceRowIndex === 0 && pickupBeats > 0,
+  ): void {
+    rows.push({
+      voiceIndex,
+      rowIndex,
+      sourceRowIndex,
+      loopCycle,
+      includesPickup,
+      key: `voice-${voiceKey(voiceIndex)}-${loopCycle}-${rowIndex}-${voiceRows[voiceIndex][sourceRowIndex]?.id ?? sourceRowIndex}`,
+      row: voiceRows[voiceIndex][sourceRowIndex],
+      pickupRow: voicePickupRows[voiceIndex],
+    });
+  }
+
+  function buildHorizontalLoopRenderedTrackRows(): RenderedTrackRow[] {
+    const rows: RenderedTrackRow[] = [];
+    const sourceStartRow = horizontalLoopSegmentSourceStartRow();
+    const segmentRowCount = horizontalLoopSegmentRowCount();
+    const includesPickup = horizontalLoopSegmentIncludesPickup();
+
+    for (let loopCycle = 0; loopCycle < HORIZONTAL_LOOP_RENDER_CYCLES; loopCycle += 1) {
+      for (let sourceOffset = 0; sourceOffset < segmentRowCount; sourceOffset += 1) {
+        const sourceRowIndex = sourceStartRow + sourceOffset;
+        const visualRowIndex = loopCycle * segmentRowCount + sourceOffset;
+        const rowIncludesPickup = includesPickup && sourceOffset === 0;
+
+        for (const voiceIndex of visibleVoiceIndices()) {
+          pushRenderedTrackRow(rows, voiceIndex, sourceRowIndex, visualRowIndex, loopCycle, rowIncludesPickup);
+        }
+      }
+    }
+
+    return rows;
+  }
+
   function buildRenderedTrackRows(): RenderedTrackRow[] {
     const rowCount = sharedRowCount();
     const rows: RenderedTrackRow[] = [];
 
+    if (isHorizontalLoopPlaybackActive()) {
+      return buildHorizontalLoopRenderedTrackRows();
+    }
+
     if (voiceCount === 1) {
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-        rows.push({
-          voiceIndex: 0,
-          rowIndex,
-          key: `voice-a-${voiceRows[0][rowIndex]?.id ?? rowIndex}`,
-          row: voiceRows[0][rowIndex],
-          pickupRow: voicePickupRows[0],
-        });
+        pushRenderedTrackRow(rows, 0, rowIndex, rowIndex);
       }
       return rows;
     }
@@ -972,13 +1086,7 @@
     if (voiceLayoutMode === 'intertwined') {
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
         for (const voiceIndex of visibleVoiceIndices()) {
-          rows.push({
-            voiceIndex,
-            rowIndex,
-            key: `voice-${voiceKey(voiceIndex)}-${voiceRows[voiceIndex][rowIndex]?.id ?? rowIndex}`,
-            row: voiceRows[voiceIndex][rowIndex],
-            pickupRow: voicePickupRows[voiceIndex],
-          });
+          pushRenderedTrackRow(rows, voiceIndex, rowIndex, rowIndex);
         }
       }
       return rows;
@@ -986,13 +1094,7 @@
 
     for (const voiceIndex of visibleVoiceIndices()) {
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-        rows.push({
-          voiceIndex,
-          rowIndex,
-          key: `voice-${voiceKey(voiceIndex)}-${voiceRows[voiceIndex][rowIndex]?.id ?? rowIndex}`,
-          row: voiceRows[voiceIndex][rowIndex],
-          pickupRow: voicePickupRows[voiceIndex],
-        });
+        pushRenderedTrackRow(rows, voiceIndex, rowIndex, rowIndex);
       }
     }
 
@@ -1070,8 +1172,62 @@
     return palette[colorId] ?? SUPPLEMENTAL_NOTE_COLORS[colorId as keyof typeof SUPPLEMENTAL_NOTE_COLORS] ?? '#d9d9d9';
   }
 
+  function isPercussionNoteId(noteId: string): noteId is PercussionNoteId {
+    return (PERCUSSION_NOTE_IDS as readonly string[]).includes(noteId);
+  }
+
+  function normalizePercussionSampleSelections(value: unknown): PercussionSampleSelections {
+    const source = value && typeof value === 'object'
+      ? value as Record<string, unknown>
+      : {};
+
+    const selections: PercussionSampleSelections = { ...DEFAULT_PERCUSSION_SAMPLE_SELECTIONS };
+    for (const noteId of PERCUSSION_NOTE_IDS) {
+      const sampleId = source[noteId];
+      if (typeof sampleId === 'string' && LOCAL_DRUM_SAMPLE_BY_ID.has(sampleId)) {
+        selections[noteId] = sampleId;
+      }
+    }
+
+    return selections;
+  }
+
+  function serializePercussionSampleSelections(): Partial<PercussionSampleSelections> | undefined {
+    const changedEntries = PERCUSSION_NOTE_IDS.flatMap((noteId) =>
+      percussionSampleSelections[noteId] !== DEFAULT_PERCUSSION_SAMPLE_SELECTIONS[noteId]
+        ? [[noteId, percussionSampleSelections[noteId]] as const]
+        : [],
+    );
+
+    return changedEntries.length > 0 ? Object.fromEntries(changedEntries) as Partial<PercussionSampleSelections> : undefined;
+  }
+
+  function selectedPercussionSample(noteId: PercussionNoteId): any | null {
+    return LOCAL_DRUM_SAMPLE_BY_ID.get(percussionSampleSelections[noteId]) ?? null;
+  }
+
+  function selectedPercussionSampleLabel(noteId: PercussionNoteId): string {
+    const sample = selectedPercussionSample(noteId);
+    return sample ? `${sample.machineLabel} / ${sample.label}` : 'Default';
+  }
+
+  function noteSampleId(noteId: string): string | undefined {
+    if (isPercussionNoteId(noteId)) {
+      return percussionSampleSelections[noteId];
+    }
+
+    return noteDefinitionFromId(noteId)?.sampleId;
+  }
+
   function noteDefinitionFromId(noteId: string): ExtendedNoteDefinition | null {
-    return SUPPLEMENTAL_NOTE_DEFINITIONS.find((note) => note.id === noteId || note.aliasId === noteId) ?? findNoteDefinitionById(noteId);
+    const supplementalNote = SUPPLEMENTAL_NOTE_DEFINITIONS.find((note) => note.id === noteId || note.aliasId === noteId);
+    if (supplementalNote) {
+      return isPercussionNoteId(supplementalNote.id)
+        ? { ...supplementalNote, sampleId: percussionSampleSelections[supplementalNote.id] }
+        : supplementalNote;
+    }
+
+    return findNoteDefinitionById(noteId);
   }
 
   function noteIconClass(noteId: string): string | null {
@@ -1524,6 +1680,7 @@
 
     const persistedVoices = VOICE_INDEXES.map((voiceIndex) => serializeVoiceCanvas(voiceRows[voiceIndex], voicePickupRows[voiceIndex]));
     const primaryVoice = persistedVoices[0];
+    const percussionSamples = serializePercussionSampleSelections();
 
     const persistedState: PersistedCanvasState = {
       version: 1,
@@ -1534,6 +1691,7 @@
       voiceCount,
       voiceLayoutMode,
       trackStyle,
+      ...(percussionSamples ? { percussionSamples } : {}),
       voices: persistedVoices,
     };
 
@@ -1573,6 +1731,7 @@
     const storedVoiceCount = coerceVoiceCount(persisted.voiceCount);
     const storedVoiceLayoutMode = persisted.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
     const storedTrackStyle = persisted.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
+    const storedPercussionSamples = normalizePercussionSampleSelections(persisted.percussionSamples);
     const persistedVoices = Array.isArray(persisted.voices) ? persisted.voices : [];
     const primaryVoiceSource = (persistedVoices[0] as PersistedVoiceCanvas | undefined) ?? {
       rows: rowsInput,
@@ -1591,6 +1750,7 @@
     );
 
     pickupBeats = nextPickupBeats;
+    percussionSampleSelections = storedPercussionSamples;
     applyVoiceCanvasState(restoredVoiceRows, restoredVoicePickupRows, storedVoiceCount, storedVoiceLayoutMode);
     trackStyle = storedTrackStyle;
     activeCanvasVoiceIndex = 0;
@@ -1927,6 +2087,7 @@
   function buildShareDocument(): ShareDocument {
     const shareVoices = VOICE_INDEXES.map((voiceIndex) => serializeVoiceCanvas(voiceRows[voiceIndex], voicePickupRows[voiceIndex]));
     const primaryVoice = shareVoices[0];
+    const percussionSamples = serializePercussionSampleSelections();
 
     return {
       v: 1,
@@ -1939,6 +2100,7 @@
       voiceCount,
       voiceLayoutMode,
       trackStyle,
+      ...(percussionSamples ? { percussionSamples } : {}),
       voices: shareVoices,
     };
   }
@@ -2073,6 +2235,9 @@
     if (doc.trackStyle !== undefined && doc.trackStyle !== 'stacked' && doc.trackStyle !== 'horizontal') {
       return { ok: false, reason: 'schema' };
     }
+    if (doc.percussionSamples !== undefined && (typeof doc.percussionSamples !== 'object' || doc.percussionSamples === null)) {
+      return { ok: false, reason: 'schema' };
+    }
     if (doc.voices !== undefined && !Array.isArray(doc.voices)) return { ok: false, reason: 'schema' };
     return { ok: true, doc: doc as unknown as ShareDocument };
   }
@@ -2096,6 +2261,7 @@
     const nextVoiceCount = coerceVoiceCount(doc.voiceCount);
     const nextVoiceLayoutMode = doc.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
     const nextTrackStyle = doc.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
+    const nextPercussionSamples = normalizePercussionSampleSelections(doc.percussionSamples);
     const docVoices = Array.isArray(doc.voices) ? doc.voices : [];
     const primaryVoiceSource = (docVoices[0] as PersistedVoiceCanvas | undefined) ?? {
       rows: doc.rows,
@@ -2114,6 +2280,7 @@
     );
 
     pickupBeats = clampedPickupBeats;
+    percussionSampleSelections = nextPercussionSamples;
     applyVoiceCanvasState(restoredVoiceRows, restoredVoicePickupRows, nextVoiceCount, nextVoiceLayoutMode);
     trackStyle = nextTrackStyle;
     activeCanvasVoiceIndex = 0;
@@ -2609,6 +2776,7 @@
     tapPlacementPayload = null;
     updateCursorPreviewForTapPayload(null);
     clearPlacementPreviewState();
+    pendingBankTouchActivation = null;
   }
 
   function armTapPlacementSelection(noteId: string, shape: NoteShape): boolean {
@@ -2789,6 +2957,33 @@
     }
 
     invalidateCanvasLayout();
+  }
+
+  function handleTrackWheel(event: WheelEvent): void {
+    if (!event.ctrlKey) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const container = canvasScrollShellElement;
+    const containerRect = container?.getBoundingClientRect() ?? null;
+    const anchorX = containerRect ? event.clientX - containerRect.left : 0;
+    const scrollWidthBefore = container ? Math.max(1, container.scrollWidth) : 1;
+    const anchorRatio = container ? (container.scrollLeft + anchorX) / scrollWidthBefore : null;
+    const nextZoom = roundTo2(clamp(trackZoom * Math.exp(-event.deltaY * TRACK_ZOOM_WHEEL_SENSITIVITY), TRACK_ZOOM_MIN, TRACK_ZOOM_MAX));
+
+    if (nextZoom === trackZoom) return;
+
+    trackZoom = nextZoom;
+    invalidateCanvasLayout();
+
+    if (!container || anchorRatio === null) return;
+
+    void tick().then(() => {
+      const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+      container.scrollLeft = clamp(anchorRatio * container.scrollWidth - anchorX, 0, maxScrollLeft);
+      invalidateCanvasLayout();
+    });
   }
 
   function notifyCanvasLayoutChange(node: HTMLElement): { destroy(): void } {
@@ -3316,7 +3511,9 @@
     trackStyle = nextTrackStyle;
     if (trackStyle === 'horizontal' && isPlaying && totalPlaybackCells() > 0) {
       void tick().then(() => {
-        queueHorizontalPlaybackScroll(playbackIndex % totalPlaybackCells(), 'auto');
+        const totalCells = totalPlaybackCells();
+        const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, totalCells);
+        queueHorizontalPlaybackScroll(currentIndex, 'auto');
       });
     }
   }
@@ -3329,14 +3526,30 @@
   function handleVolumeIconClick(event: Event): void {
     event.stopPropagation();
     volumePopupOpen = !volumePopupOpen;
+    if (volumePopupOpen) {
+      audioSamplesPopupOpen = false;
+    }
   }
 
-  function handleDocumentPointerDownForVolumePopup(event: PointerEvent): void {
-    if (!volumePopupOpen) return;
+  function handleAudioSamplesIconClick(event: Event): void {
+    event.stopPropagation();
+    audioSamplesPopupOpen = !audioSamplesPopupOpen;
+    if (audioSamplesPopupOpen) {
+      volumePopupOpen = false;
+    }
+  }
+
+  function handleDocumentPointerDownForPopups(event: PointerEvent): void {
     const target = event.target;
     if (!(target instanceof Node)) return;
-    if (volumeControlWrapper?.contains(target)) return;
-    volumePopupOpen = false;
+
+    if (volumePopupOpen && !volumeControlWrapper?.contains(target)) {
+      volumePopupOpen = false;
+    }
+
+    if (audioSamplesPopupOpen && !audioSamplesControlWrapper?.contains(target)) {
+      audioSamplesPopupOpen = false;
+    }
   }
 
   function navigateHome(): void {
@@ -3385,6 +3598,34 @@
     model.setMicrobeatTempo(DEFAULTS.MICROBEAT_TEMPO);
   }
 
+  function setPercussionSample(noteId: PercussionNoteId, sampleId: string): void {
+    if (!LOCAL_DRUM_SAMPLE_BY_ID.has(sampleId)) return;
+
+    percussionSampleSelections = {
+      ...percussionSampleSelections,
+      [noteId]: sampleId,
+    };
+
+    if (audioReady) {
+      void audio.loadSample(sampleId);
+    }
+  }
+
+  async function previewAudioSample(sampleId: string): Promise<void> {
+    const readiness = await ensureAudioReady();
+    if (!readiness.ready) return;
+
+    const loaded = await audio.loadSample(sampleId);
+    if (loaded) {
+      audio.playSampleNow(sampleId);
+    }
+  }
+
+  async function preloadConfiguredPercussionSamples(): Promise<void> {
+    const sampleIds = Array.from(new Set(PERCUSSION_NOTE_IDS.map((noteId) => percussionSampleSelections[noteId])));
+    await Promise.all(sampleIds.map((sampleId) => audio.loadSample(sampleId).catch(() => false)));
+  }
+
   async function previewBankNote(noteId: string): Promise<void> {
     const readiness = await ensureAudioReady();
     if (!readiness.ready) return;
@@ -3393,7 +3634,10 @@
     if (!note) return;
 
     if (note.sampleId) {
-      audio.playSampleNow(note.sampleId);
+      const loaded = await audio.loadSample(note.sampleId);
+      if (loaded) {
+        audio.playSampleNow(note.sampleId);
+      }
       return;
     }
 
@@ -4736,13 +4980,16 @@
     rowIndex: number,
     cellIndex: number,
   ): HTMLElement | null {
-    const containerRowIndex = zone === 'pickup' ? 0 : rowIndex;
-    const rowElement = getTrackRowElement(voiceIndex, containerRowIndex);
+    const rowElement = getTrackRowElement(voiceIndex, rowIndex);
     if (!rowElement) return null;
 
     return rowElement.querySelector<HTMLElement>(
       `.macrobeat-cell[data-voice-index="${voiceIndex}"][data-track-zone="${zone}"][data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`,
     );
+  }
+
+  function sourceRowIndexForCursor(cursor: GridCellRef): number {
+    return cursor.zone === 'pickup' ? 0 : cursor.sourceRowIndex ?? cursor.rowIndex;
   }
 
   function resolveRenderedKaraokeAnchorLeftPercent(
@@ -4805,10 +5052,11 @@
 
     const pickupColumns = pickupMicrobeatCount();
     const isPickupZone = cursor.zone === 'pickup';
-    const rowIndex = isPickupZone ? 0 : cursor.rowIndex;
+    const rowIndex = cursor.rowIndex;
+    const sourceRowIndex = sourceRowIndexForCursor(cursor);
     const rowCells = isPickupZone
       ? pickupRowForVoice(voiceIndex).cells
-      : rowsForVoice(voiceIndex)[cursor.rowIndex]?.cells;
+      : rowsForVoice(voiceIndex)[sourceRowIndex]?.cells;
 
     if (!rowCells) return null;
 
@@ -4846,9 +5094,10 @@
 
   function karaokeAnchorFromPlaybackIndex(voiceIndex: VoiceIndex, index: number): KaraokeAnchor | null {
     const totalCells = totalPlaybackCells();
-    if (index < 0 || index >= totalCells) return null;
+    const endIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
+    if (index < 0 || index >= endIndex) return null;
 
-    return resolveKaraokeAnchor(voiceIndex, cellRefFromIndex(index));
+    return resolveKaraokeAnchor(voiceIndex, cellRefFromPlaybackIndex(index, totalCells));
   }
 
   function nextDistinctKaraokeAnchorTransition(
@@ -5214,10 +5463,11 @@
 
   function resolvePlaybackHighlightForCursor(voiceIndex: VoiceIndex, cursor: GridCellRef): Omit<PlaybackHighlight, 'pulseClass'> | null {
     const isPickupZone = cursor.zone === 'pickup';
-    const rowIndex = isPickupZone ? -1 : cursor.rowIndex;
+    const rowIndex = cursor.rowIndex;
+    const sourceRowIndex = sourceRowIndexForCursor(cursor);
     const rowCells = isPickupZone
       ? pickupRowForVoice(voiceIndex).cells
-      : rowsForVoice(voiceIndex)[cursor.rowIndex]?.cells;
+      : rowsForVoice(voiceIndex)[sourceRowIndex]?.cells;
     if (!rowCells) return null;
 
     const maxCells = isPickupZone ? pickupMicrobeatCount() : GRID_COLUMNS;
@@ -5329,15 +5579,20 @@
 
   function absolutePlaybackCellIndex(zone: GridZone, rowIndex: number, cellIndex: number): number | null {
     const pickupCells = pickupMicrobeatCount();
+    const visualRowIndex = zone === 'pickup' ? Math.max(0, rowIndex) : rowIndex;
+    const visualRowStride = pickupCells + GRID_COLUMNS;
 
     if (zone === 'pickup') {
       if (cellIndex < 0 || cellIndex >= pickupCells) return null;
-      return cellIndex;
+      return visualRowIndex * visualRowStride + cellIndex;
     }
 
-    if (rowIndex < 0 || rowIndex >= sharedRowCount()) return null;
+    const maxRowIndex = isHorizontalLoopPlaybackActive()
+      ? HORIZONTAL_LOOP_RENDER_CYCLES * horizontalLoopSegmentRowCount()
+      : sharedRowCount();
+    if (rowIndex < 0 || rowIndex >= maxRowIndex) return null;
     if (cellIndex < 0 || cellIndex >= GRID_COLUMNS) return null;
-    return pickupCells + rowIndex * GRID_COLUMNS + cellIndex;
+    return rowIndex * visualRowStride + pickupCells + cellIndex;
   }
 
   function playbackStartIndexForMeasure(zone: GridZone, rowIndex: number): number | null {
@@ -5400,6 +5655,43 @@
     return playedIndexes.has(absoluteIndex);
   }
 
+  function positiveModulo(value: number, modulus: number): number {
+    if (modulus <= 0) return 0;
+    return ((value % modulus) + modulus) % modulus;
+  }
+
+  function horizontalLoopSegmentLength(totalCells: number = totalPlaybackCells()): number {
+    return Math.max(1, totalCells - horizontalLoopSegmentStartIndex());
+  }
+
+  function horizontalLoopDisplayIndexForLogicalIndex(logicalIndex: number, cycle = HORIZONTAL_LOOP_ANCHOR_CYCLE): number {
+    const totalCells = totalPlaybackCells();
+    const startIndex = horizontalLoopSegmentStartIndex();
+    const segmentLength = horizontalLoopSegmentLength(totalCells);
+    const offset = positiveModulo(Math.max(startIndex, logicalIndex) - startIndex, segmentLength);
+    return startIndex + cycle * segmentLength + offset;
+  }
+
+  function horizontalLoopDisplayEndIndex(totalCells: number = totalPlaybackCells()): number {
+    return horizontalLoopSegmentStartIndex() + HORIZONTAL_LOOP_RENDER_CYCLES * horizontalLoopSegmentLength(totalCells);
+  }
+
+  function horizontalLoopDisplayCycleForIndex(index: number, totalCells: number = totalPlaybackCells()): number {
+    const startIndex = horizontalLoopSegmentStartIndex();
+    const segmentLength = horizontalLoopSegmentLength(totalCells);
+    return Math.max(0, Math.floor((index - startIndex) / segmentLength));
+  }
+
+  function logicalPlaybackIndexFromDisplayIndex(index: number, totalCells: number = totalPlaybackCells()): number {
+    if (shouldUseHorizontalLoopIndexing()) {
+      const startIndex = horizontalLoopSegmentStartIndex();
+      const segmentLength = horizontalLoopSegmentLength(totalCells);
+      return startIndex + positiveModulo(index - startIndex, segmentLength);
+    }
+
+    return positiveModulo(index, totalCells);
+  }
+
   function cellRefFromIndex(index: number): GridCellRef {
     const pickupCells = pickupMicrobeatCount();
     if (index < pickupCells) {
@@ -5418,12 +5710,41 @@
     };
   }
 
+  function cellRefFromPlaybackIndex(index: number, totalCells: number = totalPlaybackCells()): GridCellRef {
+    if (!isHorizontalLoopPlaybackActive()) {
+      const ref = cellRefFromIndex(logicalPlaybackIndexFromDisplayIndex(index, totalCells));
+      return ref.zone === 'pickup'
+        ? { ...ref, rowIndex: 0, sourceRowIndex: 0 }
+        : ref;
+    }
+
+    const logicalIndex = logicalPlaybackIndexFromDisplayIndex(index, totalCells);
+    const logicalRef = cellRefFromIndex(logicalIndex);
+    const loopCycle = horizontalLoopDisplayCycleForIndex(index, totalCells);
+    const sourceStartRow = horizontalLoopSegmentSourceStartRow();
+    const segmentRowCount = horizontalLoopSegmentRowCount();
+
+    if (logicalRef.zone === 'pickup') {
+      return {
+        ...logicalRef,
+        rowIndex: loopCycle * segmentRowCount,
+        sourceRowIndex: 0,
+      };
+    }
+
+    return {
+      ...logicalRef,
+      rowIndex: loopCycle * segmentRowCount + Math.max(0, logicalRef.rowIndex - sourceStartRow),
+      sourceRowIndex: logicalRef.rowIndex,
+    };
+  }
+
   function playPlacedNote(note: PlacedNote): void {
     if (!audioReady) return;
 
-    const noteDefinition = noteDefinitionFromId(note.noteId);
-    if (noteDefinition?.sampleId) {
-      audio.playSampleNow(noteDefinition.sampleId);
+    const sampleId = noteSampleId(note.noteId);
+    if (sampleId) {
+      audio.playSampleNow(sampleId);
       return;
     }
 
@@ -5434,10 +5755,11 @@
   }
 
   function playCellNote(voiceIndex: VoiceIndex, cellRef: GridCellRef): boolean {
+    const sourceRowIndex = sourceRowIndexForCursor(cellRef);
     const cell =
       cellRef.zone === 'pickup'
         ? pickupRowForVoice(voiceIndex).cells[cellRef.cellIndex]
-        : rowsForVoice(voiceIndex)[cellRef.rowIndex]?.cells[cellRef.cellIndex];
+        : rowsForVoice(voiceIndex)[sourceRowIndex]?.cells[cellRef.cellIndex];
 
     if (!cell || !cellHasAnyNotes(cell)) return false;
 
@@ -5476,6 +5798,37 @@
     return true;
   }
 
+  function recenterHorizontalLoopPlaybackIfNeeded(totalCells: number): void {
+    if (!isHorizontalLoopPlaybackActive()) return;
+
+    const segmentLength = horizontalLoopSegmentLength(totalCells);
+    const currentCycle = horizontalLoopDisplayCycleForIndex(playbackIndex, totalCells);
+    if (currentCycle < HORIZONTAL_LOOP_RECENTER_CYCLE) return;
+
+    const shiftCycles = currentCycle - HORIZONTAL_LOOP_ANCHOR_CYCLE;
+    if (shiftCycles <= 0) return;
+
+    const container = canvasScrollShellElement;
+    if (!container) return;
+
+    const preferredVoiceIndex = horizontalPlaybackHighway.pinnedVoiceIndex ?? resolvePlaybackScrollVoiceIndex();
+    const beforeAnchor = karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, playbackIndex);
+    const beforeContentLeft = beforeAnchor ? karaokeAnchorContentLeftPx(preferredVoiceIndex, beforeAnchor) : null;
+    const nextPlaybackIndex = playbackIndex - shiftCycles * segmentLength;
+
+    playbackIndex = nextPlaybackIndex;
+
+    const afterAnchor = karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, playbackIndex);
+    const afterContentLeft = afterAnchor ? karaokeAnchorContentLeftPx(preferredVoiceIndex, afterAnchor) : null;
+
+    if (beforeContentLeft !== null && afterContentLeft !== null) {
+      clearHorizontalPlaybackScrollAnimation();
+      container.scrollLeft += afterContentLeft - beforeContentLeft;
+    }
+
+    invalidateCanvasLayout();
+  }
+
   function playbackStep(): void {
     const totalCells = totalPlaybackCells();
     if (totalCells <= 0) {
@@ -5484,8 +5837,14 @@
       return;
     }
 
-    const currentIndex = playbackIndex % totalCells;
-    const cursor = cellRefFromIndex(currentIndex);
+    const horizontalLoopActive = isHorizontalLoopPlaybackActive();
+    if (horizontalLoopActive && playbackIndex < horizontalLoopSegmentStartIndex()) {
+      playbackIndex = horizontalLoopDisplayIndexForLogicalIndex(playbackIndex);
+    }
+
+    const currentIndex = horizontalLoopActive ? playbackIndex : positiveModulo(playbackIndex, totalCells);
+    const traversalEndIndex = horizontalLoopActive ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
+    const cursor = cellRefFromPlaybackIndex(currentIndex, totalCells);
     const stepStartedAtMs = performance.now();
     debugPlaybackHighlight('Playback step.', { currentIndex, totalCells, cursor });
 
@@ -5500,12 +5859,12 @@
     let hasSecondSixteenth = false;
     for (const voiceIndex of visibleVoiceIndices()) {
       voicePlaybackCursors[voiceIndex] = cursor;
-      updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, totalCells, cursor, stepStartedAtMs);
+      updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, traversalEndIndex, cursor, stepStartedAtMs);
       updatePlaybackHighlight(voiceIndex, cursor);
       if (!isVoiceAudible(voiceIndex)) continue;
       hasSecondSixteenth = playCellNote(voiceIndex, cursor) || hasSecondSixteenth;
     }
-    queuePlaybackScrollForCurrentStep(currentIndex, totalCells, stepStartedAtMs);
+    queuePlaybackScrollForCurrentStep(currentIndex, traversalEndIndex, stepStartedAtMs);
     if (PLAYED_NOTE_MUTING_DEBUG && typeof window !== 'undefined' && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         debugPlayedNoteMuting('DOM muted-note classes.', {
@@ -5516,6 +5875,11 @@
     }
 
     playbackIndex = currentIndex + 1;
+    if (horizontalLoopActive) {
+      recenterHorizontalLoopPlaybackIfNeeded(totalCells);
+      return;
+    }
+
     if (playbackIndex >= totalCells) {
       clearPlaybackTimer();
 
@@ -5546,9 +5910,12 @@
 
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
-    if (playbackIndex === playbackResetIndex()) {
-      prepareHorizontalPlaybackHighway(playbackIndex, totalPlaybackCells());
-      queueHorizontalPlaybackScroll(playbackIndex, 'auto');
+    const totalCells = totalPlaybackCells();
+    const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, totalCells);
+    const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
+    if (currentIndex === playbackResetIndex() || isHorizontalLoopPlaybackActive()) {
+      prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
+      queueHorizontalPlaybackScroll(currentIndex, 'auto');
     }
     playbackTimer = setInterval(playbackStep, playbackIntervalMs());
   }
@@ -5659,6 +6026,8 @@
     debugPlaybackHighlight('Starting playback.', { playbackIndex, totalCells: totalPlaybackCells() });
     const resumingPlayback = playbackPaused;
     volumePopupOpen = false;
+    audioSamplesPopupOpen = false;
+    clearTapPlacementSelection();
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     for (const voiceIndex of VOICE_INDEXES) {
@@ -5676,6 +6045,12 @@
       return;
     }
 
+    if (trackStyle === 'horizontal' && isLooping) {
+      playbackIndex = horizontalLoopDisplayIndexForLogicalIndex(
+        logicalPlaybackIndexFromDisplayIndex(playbackIndex, totalCells),
+      );
+    }
+
     setPlaybackUiState(true);
     playbackPaused = false;
     await tick();
@@ -5688,8 +6063,9 @@
       return;
     }
 
-    const currentIndex = playbackIndex % layoutTotalCells;
-    prepareHorizontalPlaybackHighway(currentIndex, layoutTotalCells);
+    const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, layoutTotalCells);
+    const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(layoutTotalCells) : layoutTotalCells;
+    prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
     queueHorizontalPlaybackScroll(currentIndex, 'auto');
 
     const firstAnchors = new Map<VoiceIndex, KaraokeAnchor>();
@@ -5740,9 +6116,13 @@
 
   function pausePlayback(): void {
     debugPlaybackHighlight('Pausing playback.', { playbackIndex });
+    const pausedLogicalIndex = shouldUseHorizontalLoopIndexing()
+      ? logicalPlaybackIndexFromDisplayIndex(playbackIndex)
+      : playbackIndex;
     setPlaybackUiState(false);
     playbackStartToken += 1;
     playbackPaused = true;
+    playbackIndex = pausedLogicalIndex;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     resetHorizontalPlaybackHighway();
@@ -5779,15 +6159,19 @@
       return;
     }
 
+    clearTapPlacementSelection();
     const readiness = await ensureAudioReady();
     if (!readiness.ready) return;
+    await preloadConfiguredPercussionSamples();
 
     void startPlayback(readiness);
   }
 
   async function playFromStart(): Promise<void> {
+    clearTapPlacementSelection();
     const readiness = await ensureAudioReady();
     if (!readiness.ready) return;
+    await preloadConfiguredPercussionSamples();
 
     if (isPlaying) {
       pausePlayback();
@@ -5807,15 +6191,33 @@
   }
 
   function toggleLoop(): void {
-    isLooping = !isLooping;
+    const nextLooping = !isLooping;
+    const logicalIndex = totalPlaybackCells() > 0
+      ? logicalPlaybackIndexFromDisplayIndex(playbackIndex)
+      : 0;
+
+    isLooping = nextLooping;
+
+    if (trackStyle === 'horizontal' && isPlaying && totalPlaybackCells() > 0) {
+      playbackIndex = nextLooping ? horizontalLoopDisplayIndexForLogicalIndex(logicalIndex) : logicalIndex;
+      resetHorizontalPlaybackHighway();
+      void tick().then(() => {
+        if (!isPlaying || trackStyle !== 'horizontal') return;
+        const totalCells = totalPlaybackCells();
+        const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, totalCells);
+        const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
+        prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
+        queueHorizontalPlaybackScroll(currentIndex, 'auto');
+      });
+    }
   }
 
   function isPlaybackCell(cursor: GridCellRef | null, rowIndex: number, cellIndex: number): boolean {
     return cursor?.zone === 'main' && cursor?.rowIndex === rowIndex && cursor?.cellIndex === cellIndex;
   }
 
-  function isPlaybackPickupCell(cursor: GridCellRef | null, cellIndex: number): boolean {
-    return cursor?.zone === 'pickup' && cursor?.cellIndex === cellIndex;
+  function isPlaybackPickupCell(cursor: GridCellRef | null, rowIndex: number, cellIndex: number): boolean {
+    return cursor?.zone === 'pickup' && cursor?.rowIndex === rowIndex && cursor?.cellIndex === cellIndex;
   }
 
   function playbackHighlightMatches(
@@ -5825,7 +6227,7 @@
     cellIndex: number,
   ): boolean {
     if (!highlight || highlight.zone !== zone) return false;
-    if (zone === 'main' && highlight.rowIndex !== rowIndex) return false;
+    if (highlight.rowIndex !== rowIndex) return false;
 
     const start = highlight.startCellIndex;
     return cellIndex >= start && cellIndex < start + highlight.span;
@@ -5835,8 +6237,8 @@
     return playbackHighlightMatches(highlight, 'main', rowIndex, cellIndex);
   }
 
-  function isPlaybackPickupHighlightCell(highlight: PlaybackHighlight | null, cellIndex: number): boolean {
-    return playbackHighlightMatches(highlight, 'pickup', -1, cellIndex);
+  function isPlaybackPickupHighlightCell(highlight: PlaybackHighlight | null, rowIndex: number, cellIndex: number): boolean {
+    return playbackHighlightMatches(highlight, 'pickup', rowIndex, cellIndex);
   }
 
   function isPlaybackHighlightSpanStart(
@@ -6045,6 +6447,11 @@
       return;
     }
 
+    if (event.key === 'Escape' && audioSamplesPopupOpen) {
+      audioSamplesPopupOpen = false;
+      return;
+    }
+
     if (isEditableTarget(event.target)) return;
 
     if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
@@ -6150,7 +6557,9 @@
   id="boomwhacker-sketchpad-app"
   class:chromanotes-palette={colorPaletteMode === 'chromanotes'}
   class:viewport-fit={viewportFitMode}
-  style={`${rootInlineStyle()};--playback-highway-height-percent:${playbackHighwayHeightPercent};`}
+  class:track-style-horizontal={trackStyle === 'horizontal'}
+  class:playback-active={isPlaying}
+  style={`${rootInlineStyle()};--track-zoom:${trackZoom};--track-playback-shell-height-px:${trackPlaybackShellHeightPx};--playback-highway-height-percent:${playbackHighwayHeightPercent};`}
   on:dragover={handleCursorGhostDragOver}
 >
   <div class="top-toolbar" class:playback-compact={isPlaying} class:eighth-bank-visible={showToolbarEighthBank && !isPlaying}>
@@ -6214,6 +6623,7 @@
           >
             <img src={loopIconUrl} alt="Loop" class="transport-icon" />
           </button>
+          {/if}
           {#if !isStudentView || !activeStudentView.hideVolumeSlider}
           <div class="volume-control-wrapper" bind:this={volumeControlWrapper}>
             <button
@@ -6243,7 +6653,6 @@
               />
             </div>
           </div>
-          {/if}
           {/if}
         </div>
 
@@ -6293,6 +6702,90 @@
           >
             <img src={eraserIconUrl} alt="Eraser" class="transport-icon" />
           </button>
+          {#if !isStudentView}
+          <div class="audio-samples-control-wrapper" bind:this={audioSamplesControlWrapper}>
+            <button
+              type="button"
+              class="transport-btn audio-samples-btn"
+              class:active={audioSamplesPopupOpen}
+              on:click={handleAudioSamplesIconClick}
+              title="Audio samples"
+              aria-label="Audio samples"
+              aria-expanded={audioSamplesPopupOpen}
+              aria-controls="audio-samples-popup"
+            >
+              <img src={audioSamplesIconUrl} alt="" class="transport-icon transport-icon--audio-samples" />
+            </button>
+            {#if audioSamplesPopupOpen}
+              {@const activeSample = selectedPercussionSample(activeSamplePickerNoteId)}
+              <div id="audio-samples-popup" class="audio-samples-popup" role="dialog" aria-label="Audio samples">
+                <div class="audio-samples-note-tabs" role="tablist" aria-label="Percussion notes">
+                  {#each PERCUSSION_NOTE_IDS as noteId (noteId)}
+                    <button
+                      type="button"
+                      class="audio-samples-note-tab"
+                      class:active={activeSamplePickerNoteId === noteId}
+                      style={`--sample-note-color:${noteColor(noteId)};`}
+                      role="tab"
+                      aria-selected={activeSamplePickerNoteId === noteId}
+                      title={selectedPercussionSampleLabel(noteId)}
+                      on:click={() => (activeSamplePickerNoteId = noteId)}
+                    >
+                      <span class="audio-samples-note-color" aria-hidden="true"></span>
+                      <span class="audio-samples-note-name">{displayLabelFromId(noteId)}</span>
+                      <span class="audio-samples-note-sample">{selectedPercussionSample(noteId)?.label ?? 'Default'}</span>
+                    </button>
+                  {/each}
+                </div>
+                <div class="audio-samples-current">
+                  <span class="audio-samples-current-note">{displayLabelFromId(activeSamplePickerNoteId)}</span>
+                  <span class="audio-samples-current-sample">{activeSample ? `${activeSample.machineLabel} / ${activeSample.label}` : 'Default'}</span>
+                </div>
+                <div class="audio-sample-tree" role="tree" aria-label="Audio sample folders">
+                  {#each LOCAL_DRUM_SAMPLE_GROUPS as group (group.machineId)}
+                    <details class="audio-sample-folder" open={group.samples.some((sample) => sample.id === percussionSampleSelections[activeSamplePickerNoteId])}>
+                      <summary>
+                        <span class="audio-sample-folder-name">{group.machineLabel}</span>
+                        <span class="audio-sample-folder-count">{group.samples.length}</span>
+                      </summary>
+                      <div class="audio-sample-list">
+                        {#each group.samples as sample (sample.id)}
+                          {@const sampleSelected = percussionSampleSelections[activeSamplePickerNoteId] === sample.id}
+                          <div class="audio-sample-row" class:selected={sampleSelected} role="treeitem" aria-selected={sampleSelected}>
+                            <button
+                              type="button"
+                              class="audio-sample-preview-btn"
+                              title={`Preview ${sample.label}`}
+                              aria-label={`Preview ${sample.label}`}
+                              on:click={() => void previewAudioSample(sample.id)}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M8 5.8v12.4c0 .72.8 1.15 1.4.75l9.3-6.2a.9.9 0 0 0 0-1.5L9.4 5.05A.9.9 0 0 0 8 5.8Z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              class="audio-sample-use-btn"
+                              class:selected={sampleSelected}
+                              disabled={sampleSelected}
+                              title={`Use ${sample.label} for ${displayLabelFromId(activeSamplePickerNoteId)}`}
+                              aria-label={`Use ${sample.label} for ${displayLabelFromId(activeSamplePickerNoteId)}`}
+                              on:click={() => setPercussionSample(activeSamplePickerNoteId, sample.id)}
+                            >
+                              <span class="audio-sample-label">{sample.label}</span>
+                              <span class="audio-sample-meta">{sample.voiceMetadata?.description ?? sample.fileName}</span>
+                              <span class="audio-sample-use-state">{sampleSelected ? 'Selected' : 'Use'}</span>
+                            </button>
+                          </div>
+                        {/each}
+                      </div>
+                    </details>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          </div>
+          {/if}
           <button
             type="button"
             class="transport-btn home-btn"
@@ -6748,6 +7241,7 @@
       bind:this={canvasScrollShellElement}
       use:notifyCanvasLayoutChange
       on:scroll|passive={handleCanvasScroll}
+      on:wheel|nonpassive={handleTrackWheel}
     >
       <div
         class="rows-grid"
@@ -6759,12 +7253,13 @@
         {#each renderedTrackRows as renderedRow, renderedRowIndex (renderedRow.key)}
         {@const voiceIndex = renderedRow.voiceIndex}
         {@const rowIndex = renderedRow.rowIndex}
+        {@const sourceRowIndex = renderedRow.sourceRowIndex}
         {@const row = renderedRow.row}
         {@const pickupRow = renderedRow.pickupRow}
         {@const playbackCursor = voicePlaybackCursors[voiceIndex]}
         {@const playbackHighlight = voicePlaybackHighlights[voiceIndex]}
         {@const playedCellIndexes = voicePlayedCellIndexes[voiceIndex]}
-        {@const hasInlinePickup = rowIndex === 0 && pickupBeats > 0}
+        {@const hasInlinePickup = renderedRow.includesPickup}
         <article
           class="track-row voice-track-row"
           class:voice-track-row--a={voiceIndex === 0}
@@ -6774,6 +7269,7 @@
           class:voice-track-row--active={activeCanvasVoiceIndex === voiceIndex}
           class:voice-track-row--muted={mutedVoiceStates[voiceIndex] || (soloedVoiceStates.some(Boolean) && !soloedVoiceStates[voiceIndex])}
           class:with-inline-pickup={hasInlinePickup}
+          class:track-row--loop-copy={isHorizontalLoopPlaybackActive()}
           bind:this={voiceTrackRowElements[voiceIndex][rowIndex]}
           use:notifyCanvasLayoutChange
           style:--track-row-column={trackStyle === 'horizontal' && voiceCount > 1 ? `${rowIndex + 1}` : null}
@@ -6788,7 +7284,6 @@
               on:pointerdown={(event) => event.stopPropagation()}
             >
               {#if rowIndex === 0}
-                <span class="voice-control-label">Voice {voiceLabel(voiceIndex)}</span>
                 <button
                   type="button"
                   class="voice-control-btn"
@@ -6819,15 +7314,12 @@
               class:with-inline-pickup={hasInlinePickup}
               style={trackGridInlineStyle(hasInlinePickup)}
               role="group"
-              aria-label={`Row ${rowIndex + 1}`}
+              aria-label={`Row ${sourceRowIndex + 1}`}
             >
-              {#if voiceCount > 1 && rowIndex === 0}
-                <span class="voice-track-badge" aria-hidden="true">Voice {voiceLabel(voiceIndex)}</span>
+              {#if trackStyle === 'horizontal' || voiceCount > 1}
+                <span class="voice-track-row-label" aria-hidden="true">{sourceRowIndex + 1}</span>
               {/if}
-              {#if voiceCount > 1}
-                <span class="voice-track-row-label" aria-hidden="true">{rowIndex + 1}</span>
-              {/if}
-              {#if rowIndex === 0 && pickupBeats > 0}
+              {#if hasInlinePickup}
                 {#each pickupRow.cells.slice(0, pickupMicrobeatCount()) as cell, cellIndex}
                   {@const pickupPreviewNote = dragPreviewNote(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                   <div
@@ -6835,17 +7327,17 @@
                     class:has-note={pickupCellHasNote(voiceIndex, cellIndex)}
                     class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                     class:drop-target={isPickupDropTarget(dragOverCell, voiceIndex, cellIndex)}
-                    class:playback-target={isPlaybackPickupCell(playbackCursor, cellIndex)}
-                    class:playback-illuminated={isPlaybackPickupHighlightCell(playbackHighlight, cellIndex)}
-                    class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'pickup', -1, cellIndex, 'playback-pulse-a')}
-                    class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'pickup', -1, cellIndex, 'playback-pulse-b')}
-                    class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'pickup', -1, cellIndex)}
-                    class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'pickup', -1, cellIndex)}
+                    class:playback-target={isPlaybackPickupCell(playbackCursor, rowIndex, cellIndex)}
+                    class:playback-illuminated={isPlaybackPickupHighlightCell(playbackHighlight, rowIndex, cellIndex)}
+                    class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'pickup', rowIndex, cellIndex, 'playback-pulse-a')}
+                    class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'pickup', rowIndex, cellIndex, 'playback-pulse-b')}
+                    class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'pickup', rowIndex, cellIndex)}
+                    class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'pickup', rowIndex, cellIndex)}
                     class:playback-start-selected={isPlaybackStartSelected('pickup', -1)}
                     class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < pickupMicrobeatCount() - 1}
                     data-voice-index={voiceIndex}
                     data-track-zone="pickup"
-                    data-row-index={-1}
+                    data-row-index={rowIndex}
                     data-cell-index={cellIndex}
                     style={macrobeatCellInlineStyle('pickup', cellIndex, hasInlinePickup)}
                     role="gridcell"
@@ -6863,7 +7355,7 @@
                         <button
                           type="button"
                           class="placed-note oval"
-                          class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', -1, cellIndex)}
+                          class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', rowIndex, cellIndex)}
                           class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0))}
                           data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0)}
                           style={`--token-color:${cell.notes[0].color};`}
@@ -6891,7 +7383,7 @@
                         <button
                           type="button"
                           class="placed-note circle"
-                          class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', -1, cellIndex)}
+                          class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', rowIndex, cellIndex)}
                           class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0))}
                           data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0)}
                           style={`--token-color:${cell.notes[0].color};`}
@@ -6923,7 +7415,7 @@
                                 <button
                                   type="button"
                                   class={`placed-note diamond sixteenth ${cell.notes[0] && cell.notes[1] ? 'split' : 'single'}`}
-                                  class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', -1, cellIndex)}
+                                  class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', rowIndex, cellIndex)}
                                   class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, slotIndex))}
                                   data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, slotIndex)}
                                   style={`--token-color:${diamondNote.color};`}
@@ -7032,19 +7524,19 @@
                 {/each}
               {/if}
             {#each row.cells as cell, cellIndex}
-              {@const mainPreviewNote = dragPreviewNote(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
+              {@const mainPreviewNote = dragPreviewNote(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex)}
               <div
                 class="macrobeat-cell"
-                class:has-note={cellHasNote(voiceIndex, rowIndex, cellIndex)}
-                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
-                class:drop-target={isDropTarget(dragOverCell, voiceIndex, rowIndex, cellIndex)}
+                class:has-note={cellHasNote(voiceIndex, sourceRowIndex, cellIndex)}
+                class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex)}
+                class:drop-target={isDropTarget(dragOverCell, voiceIndex, sourceRowIndex, cellIndex)}
                 class:playback-target={isPlaybackCell(playbackCursor, rowIndex, cellIndex)}
                 class:playback-illuminated={isPlaybackHighlightCell(playbackHighlight, rowIndex, cellIndex)}
                 class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-a')}
                 class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-b')}
                 class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'main', rowIndex, cellIndex)}
-                class:playback-start-selected={isPlaybackStartSelected('main', rowIndex)}
+                class:playback-start-selected={isPlaybackStartSelected('main', sourceRowIndex)}
                 class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < GRID_COLUMNS - 1}
                 data-voice-index={voiceIndex}
                 data-track-zone="main"
@@ -7053,13 +7545,13 @@
                 style={macrobeatCellInlineStyle('main', cellIndex, hasInlinePickup)}
                 role="gridcell"
                 tabindex={tapPlacementPayload || eraserMode ? 0 : -1}
-                aria-label={`Voice ${voiceLabel(voiceIndex)} row ${rowIndex + 1}, macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
-                on:mousemove={(event) => handleCellMouseMove(event, voiceIndex, 'main', rowIndex, cellIndex)}
-                on:dragover={(event) => handleCellDragOver(event, voiceIndex, 'main', rowIndex, cellIndex)}
-                on:drop={(event) => handleCellDrop(event, voiceIndex, 'main', rowIndex, cellIndex)}
-                on:pointerdown={(event) => handleCellPointerDown(event, voiceIndex, 'main', rowIndex, cellIndex)}
-                on:click={(event) => handleCellClick(event, voiceIndex, 'main', rowIndex, cellIndex)}
-                on:keydown={(event) => handleCellKeyDown(event, voiceIndex, 'main', rowIndex, cellIndex)}
+                aria-label={`Voice ${voiceLabel(voiceIndex)} row ${sourceRowIndex + 1}, macrobeat ${Math.floor(cellIndex / MICROBEATS_PER_BEAT) + 1}, microbeat ${(cellIndex % MICROBEATS_PER_BEAT) + 1}`}
+                on:mousemove={(event) => handleCellMouseMove(event, voiceIndex, 'main', sourceRowIndex, cellIndex)}
+                on:dragover={(event) => handleCellDragOver(event, voiceIndex, 'main', sourceRowIndex, cellIndex)}
+                on:drop={(event) => handleCellDrop(event, voiceIndex, 'main', sourceRowIndex, cellIndex)}
+                on:pointerdown={(event) => handleCellPointerDown(event, voiceIndex, 'main', sourceRowIndex, cellIndex)}
+                on:click={(event) => handleCellClick(event, voiceIndex, 'main', sourceRowIndex, cellIndex)}
+                on:keydown={(event) => handleCellKeyDown(event, voiceIndex, 'main', sourceRowIndex, cellIndex)}
               >
                 {#if cell}
                   {#if cell.shape === 'oval' && cell.notes[0]}
@@ -7067,15 +7559,15 @@
                       type="button"
                       class="placed-note oval"
                       class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
-                      class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0))}
-                      data-selection-key={noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0)}
+                      class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0))}
+                      data-selection-key={noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
                       style={`--token-color:${cell.notes[0].color};`}
                       draggable="true"
                       title={placedNoteTitle(cell.notes[0])}
-                      on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
-                      on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
+                      on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
+                      on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', sourceRowIndex, cellIndex, cell.notes[0], 0)}
                       on:dragend={handleAnyDragEnd}
-                      on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
+                      on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
                     >
                       <svg
                         class="token-glyph oval"
@@ -7095,15 +7587,15 @@
                       type="button"
                       class="placed-note circle"
                       class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
-                      class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0))}
-                      data-selection-key={noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, 0)}
+                      class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0))}
+                      data-selection-key={noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
                       style={`--token-color:${cell.notes[0].color};`}
                       draggable="true"
                       title={placedNoteTitle(cell.notes[0])}
-                      on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
-                      on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, cell.notes[0], 0)}
+                      on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
+                      on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', sourceRowIndex, cellIndex, cell.notes[0], 0)}
                       on:dragend={handleAnyDragEnd}
-                      on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, 0)}
+                      on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
                     >
                       <svg
                         class="token-glyph circle"
@@ -7121,21 +7613,21 @@
                   {:else if cell.shape === 'diamond'}
                     <div class="placed-sixteenth-pair">
                       {#each cell.notes as diamondNote, slotIndex}
-                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}>
+                        <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex)}>
                           {#if diamondNote}
                             <button
                               type="button"
                               class={`placed-note diamond sixteenth ${cell.notes[0] && cell.notes[1] ? 'split' : 'single'}`}
                               class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
-                              class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, slotIndex))}
-                              data-selection-key={noteSelectionKey(voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
+                              class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex))}
+                              data-selection-key={noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex)}
                               style={`--token-color:${diamondNote.color};`}
                               draggable="true"
                               title={placedNoteTitle(diamondNote)}
-                              on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
-                              on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', rowIndex, cellIndex, diamondNote, slotIndex)}
+                              on:click={(event) => handlePlacedNoteClick(event, voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex)}
+                              on:dragstart={(event) => handleCellDragStart(event, voiceIndex, 'main', sourceRowIndex, cellIndex, diamondNote, slotIndex)}
                               on:dragend={handleAnyDragEnd}
-                              on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', rowIndex, cellIndex, slotIndex)}
+                              on:contextmenu={(event) => removeCellNote(event, voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex)}
                             >
                               <svg
                                 class="token-glyph diamond"
@@ -7180,8 +7672,8 @@
                   {#if mainPreviewNote.shape === 'diamond'}
                     <div class="placed-sixteenth-pair drag-preview-sixteenth-pair" aria-hidden="true">
                       {#each SIXTEENTH_SLOTS as previewSlot}
-                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}>
-                          {#if isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex, previewSlot)}
+                        <div class="sixteenth-slot" class:slot-drop-target={isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex, previewSlot)}>
+                          {#if isDragPreviewSixteenthSlot(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex, previewSlot)}
                             <div
                               class="drag-preview-note placed-note diamond sixteenth single"
                               style={`--token-color:${mainPreviewNote.color};`}
@@ -7218,7 +7710,7 @@
                     <div class="drag-preview-layer" aria-hidden="true">
                       <div
                         class="drag-preview-note placed-note circle"
-                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(activePreviewPayload, dragOverCell, voiceIndex, 'main', rowIndex, cellIndex)}
+                        class:drag-preview-circle-continuation={isCircleDragPreviewOnSecondMicrobeat(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex)}
                         style={`--token-color:${mainPreviewNote.color};`}
                       >
                         <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">

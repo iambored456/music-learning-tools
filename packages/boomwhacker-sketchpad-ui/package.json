@@ -23,6 +23,7 @@
   "dependencies": {
     "@mlt/font-atkinson": "workspace:*",
     "@mlt/notation-glyphs": "workspace:*",
+    "@mlt/audio-samples": "workspace:*",
     "@mlt/boomwhacker-sketchpad-core": "workspace:*",
     "@mlt/tempo-controls-ui": "workspace:*"
   },

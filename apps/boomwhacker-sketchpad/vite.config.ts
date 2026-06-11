@@ -14,12 +14,16 @@ const base = process.env.BASE_URL ? `${normalizeBase(process.env.BASE_URL)}boomw
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packagesRoot = fileURLToPath(new URL('../../packages', import.meta.url));
 const tempoControlsUiSrc = fileURLToPath(new URL('../../packages/tempo-controls-ui/src/index.ts', import.meta.url));
+const audioSamplesLocalSamplesSrc = fileURLToPath(new URL('../../packages/audio-samples/src/localDrumSamples.ts', import.meta.url));
 
 export default defineConfig({
   base,
   plugins: [svelte()],
   resolve: {
-    alias: [{ find: '@mlt/tempo-controls-ui', replacement: tempoControlsUiSrc }],
+    alias: [
+      { find: '@mlt/tempo-controls-ui', replacement: tempoControlsUiSrc },
+      { find: '@mlt/audio-samples/local-samples', replacement: audioSamplesLocalSamplesSrc },
+    ],
   },
   build: {
     outDir: 'dist',
