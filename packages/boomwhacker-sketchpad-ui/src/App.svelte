@@ -284,6 +284,12 @@
     referenceViewportLeftPx: number | null;
   };
 
+  type HorizontalPlaybackScrollAnimationState = {
+    targetScrollLeft: number;
+    startedAtMs: number;
+    durationMs: number;
+  };
+
   type RectSnapshot = {
     x: number;
     y: number;
@@ -634,6 +640,7 @@
   };
   let horizontalPlaybackScrollFrame: number | null = null;
   let horizontalPlaybackScrollToken = 0;
+  let horizontalPlaybackScrollAnimation: HorizontalPlaybackScrollAnimationState | null = null;
   let horizontalPlaybackRunwayPx = 0;
   let trackZoom = 1;
   let trackPlaybackShellHeightPx = 0;
@@ -4349,6 +4356,7 @@
 
   function clearHorizontalPlaybackScrollAnimation(): void {
     horizontalPlaybackScrollToken += 1;
+    horizontalPlaybackScrollAnimation = null;
     if (horizontalPlaybackScrollFrame !== null) {
       cancelAnimationFrame(horizontalPlaybackScrollFrame);
       horizontalPlaybackScrollFrame = null;
@@ -5051,20 +5059,34 @@
     const container = canvasScrollShellElement;
     if (!container) return;
 
-    clearHorizontalPlaybackScrollAnimation();
-
     const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
     const clampedTarget = Math.max(0, Math.min(maxScrollLeft, targetScrollLeft));
     if (Math.abs(clampedTarget - container.scrollLeft) < 0.5) {
+      clearHorizontalPlaybackScrollAnimation();
       container.scrollLeft = clampedTarget;
       return;
     }
+
+    if (
+      horizontalPlaybackScrollFrame !== null &&
+      horizontalPlaybackScrollAnimation &&
+      Math.abs(horizontalPlaybackScrollAnimation.targetScrollLeft - clampedTarget) < 0.5
+    ) {
+      return;
+    }
+
+    clearHorizontalPlaybackScrollAnimation();
 
     const token = horizontalPlaybackScrollToken;
     const startedAt = Math.min(startedAtMs, performance.now());
     const startScrollLeft = container.scrollLeft;
     const deltaScrollLeft = clampedTarget - startScrollLeft;
     const motionDurationMs = Math.max(24, Math.floor(durationMs));
+    horizontalPlaybackScrollAnimation = {
+      targetScrollLeft: clampedTarget,
+      startedAtMs: startedAt,
+      durationMs: motionDurationMs,
+    };
 
     const step = (now: number): void => {
       if (token !== horizontalPlaybackScrollToken) return;
@@ -5074,6 +5096,7 @@
 
       if (progress >= 1) {
         horizontalPlaybackScrollFrame = null;
+        horizontalPlaybackScrollAnimation = null;
         return;
       }
 
@@ -5108,6 +5131,11 @@
     }
 
     clearHorizontalPlaybackScrollAnimation();
+    if (isPlaying) {
+      container.scrollLeft = targetScrollLeft;
+      return;
+    }
+
     container.scrollTo({ left: targetScrollLeft, behavior });
   }
 
