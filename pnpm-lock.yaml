@@ -264,6 +264,9 @@ importers:
 
   packages/boomwhacker-sketchpad-core:
     dependencies:
+      '@mlt/audio-samples':
+        specifier: workspace:*
+        version: link:../audio-samples
       tone:
         specifier: ^15.1.22
         version: 15.1.22
@@ -274,6 +277,9 @@ importers:
 
   packages/boomwhacker-sketchpad-ui:
     dependencies:
+      '@mlt/audio-samples':
+        specifier: workspace:*
+        version: link:../audio-samples
       '@mlt/boomwhacker-sketchpad-core':
         specifier: workspace:*
         version: link:../boomwhacker-sketchpad-core

@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { getLocalDrumSampleById } from '../../audio-samples/dist/localDrumSamples.js';
+import { getLocalDrumSampleById } from '@mlt/audio-samples/local-samples';
 
 import { BLOCK_MICROBEAT_CAPACITIES, MAIN_PLAYBACK_SYNTH_PROFILE } from './constants.js';
 import type { BoomwhackerSketchpadModel } from './model.js';

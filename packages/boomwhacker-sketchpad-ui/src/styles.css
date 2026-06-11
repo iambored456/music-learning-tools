@@ -180,6 +180,15 @@ body {
   border-left: 1px solid var(--ui-border);
 }
 
+.tempo-stack {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+
 .tempo-inline-group .tempo-controls {
   width: max-content;
   max-width: 100%;
@@ -198,6 +207,36 @@ body {
   --c-text-muted: #c5d2e8;
   --c-accent: var(--accent);
   --c-accent-light: rgba(103, 169, 255, 0.24);
+}
+
+.tempo-shortcut-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.tempo-shortcut-buttons button {
+  min-width: 0;
+  min-height: 22px;
+  padding: 2px 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tempo-shortcut-buttons button:hover {
+  border-color: var(--accent);
+  background: var(--ui-hover);
+}
+
+.tempo-shortcut-buttons button.active {
+  border-color: var(--accent);
+  background: rgba(103, 169, 255, 0.24);
 }
 
 .transport-btn {
@@ -553,6 +592,11 @@ body {
   height: 1.12em;
 }
 
+.boomwhacker-sketchpad.playback-active .canvas-scroll-shell .placed-note.oval .glyph-icon {
+  width: 0.78em;
+  height: 0.78em;
+}
+
 .canvas-scroll-shell.track-style-horizontal .placed-note.circle .glyph-icon {
   width: 1.18em;
   height: 1.18em;
@@ -854,11 +898,25 @@ body {
   padding-left: calc(6px * var(--adaptive-controls-scale));
 }
 
+.boomwhacker-sketchpad.viewport-fit .tempo-stack {
+  gap: calc(4px * var(--adaptive-controls-scale));
+}
+
 .boomwhacker-sketchpad.viewport-fit .tempo-inline-group .tempo-controls {
   --tempo-slider-shell-width: calc(20px * var(--adaptive-controls-scale));
   --tempo-slider-shell-padding: calc(4px * var(--adaptive-controls-scale));
   --tempo-slider-track-thickness: calc(5px * var(--adaptive-controls-scale));
   --tempo-slider-thumb-size: calc(14px * var(--adaptive-controls-scale));
+}
+
+.boomwhacker-sketchpad.viewport-fit .tempo-shortcut-buttons {
+  gap: calc(2px * var(--adaptive-controls-scale));
+}
+
+.boomwhacker-sketchpad.viewport-fit .tempo-shortcut-buttons button {
+  min-height: calc(20px * var(--adaptive-controls-scale));
+  padding: calc(2px * var(--adaptive-controls-scale)) calc(4px * var(--adaptive-controls-scale));
+  font-size: calc(0.68rem * var(--adaptive-controls-scale));
 }
 
 .boomwhacker-sketchpad.viewport-fit .pickup-controls {
@@ -1434,9 +1492,9 @@ body {
 }
 
 .audio-samples-popup {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  top: 96px;
+  left: 12px;
   z-index: 70;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -1910,7 +1968,7 @@ body {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.32),
     0 3px 7px rgba(115, 0, 0, 0.5);
-  transform: translate(-50%, calc(-100% + var(--karaoke-ball-y, 0px)));
+  transform: translate(-50%, calc(var(--karaoke-ball-anchor-y, -100%) + var(--karaoke-ball-y, 0px)));
   transform-origin: center bottom;
   pointer-events: none;
   z-index: 20;

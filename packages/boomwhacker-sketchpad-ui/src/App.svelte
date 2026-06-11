@@ -26,6 +26,10 @@
     saveSketchpadLibraryEntry,
     type SketchpadLibraryEntry,
   } from './libraryStore.js';
+  import {
+    LOCAL_DRUM_SAMPLE_ENTRIES,
+    type LocalDrumSampleEntry,
+  } from '@mlt/audio-samples/local-samples';
 
   const hubHref = new URL('..', `https://music-learning-tools.local${import.meta.env.BASE_URL}`).pathname;
 
@@ -89,7 +93,7 @@
   type LocalDrumSampleGroup = {
     machineId: string;
     machineLabel: string;
-    samples: any[];
+    samples: LocalDrumSampleEntry[];
   };
 
   type GridRow = {
@@ -361,7 +365,7 @@
       label: 'Stomp',
       interval: 0,
       colorId: 'stomp',
-      sampleId: 'kpr-series-kprlotom',
+      sampleId: 'roland-tr-909-roland-tr-909-st3t0s3',
       iconId: 'stomp',
     },
     {
@@ -397,9 +401,29 @@
     }),
   ) as PercussionSampleSelections;
 
-  const LOCAL_DRUM_SAMPLE_BY_ID = new Map();
+  const LOCAL_DRUM_SAMPLE_BY_ID = new Map(LOCAL_DRUM_SAMPLE_ENTRIES.map((sample) => [sample.id, sample]));
 
-  const LOCAL_DRUM_SAMPLE_GROUPS: LocalDrumSampleGroup[] = [];
+  const LOCAL_DRUM_SAMPLE_GROUPS: LocalDrumSampleGroup[] = Array.from(
+    LOCAL_DRUM_SAMPLE_ENTRIES.reduce<Map<string, LocalDrumSampleGroup>>((groups, sample) => {
+      const existingGroup = groups.get(sample.machineId);
+      if (existingGroup) {
+        existingGroup.samples.push(sample);
+        return groups;
+      }
+
+      groups.set(sample.machineId, {
+        machineId: sample.machineId,
+        machineLabel: sample.machineLabel,
+        samples: [sample],
+      });
+      return groups;
+    }, new Map()).values(),
+  )
+    .map((group) => ({
+      ...group,
+      samples: [...group.samples].sort((a, b) => a.label.localeCompare(b.label)),
+    }))
+    .sort((a, b) => a.machineLabel.localeCompare(b.machineLabel));
 
   const SUPPLEMENTAL_NOTE_COLORS = {
     clap: '#dfa049',
@@ -530,6 +554,7 @@
   const TRACK_ZOOM_MIN = 0.65;
   const TRACK_ZOOM_MAX = 1.8;
   const TRACK_ZOOM_WHEEL_SENSITIVITY = 0.0016;
+  const TEMPO_SHORTCUT_VALUES = [60, 65, 70, 75, 80, 85] as const;
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
@@ -637,6 +662,7 @@
   let volumeControlWrapper: HTMLDivElement | null = null;
   let audioSamplesPopupOpen = false;
   let audioSamplesControlWrapper: HTMLDivElement | null = null;
+  let audioSamplesPopupStyle = '';
   let canvasPanelElement: HTMLElement | null = null;
   let canvasScrollShellElement: HTMLDivElement | null = null;
   let canvasScrollRevision = 0;
@@ -703,6 +729,9 @@
     karaokeBallSizePx;
     canvasScrollRevision;
     voiceCount;
+    trackStyle;
+    isPlaying;
+    voicePlaybackHighlights;
     karaokeOverlayBalls = VOICE_INDEXES.map((voiceIndex) => ({
       voiceIndex,
       style: isVoiceVisible(voiceIndex) ? karaokeBallOverlayStyle(voiceIndex) : null,
@@ -822,6 +851,7 @@
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
       updateAdaptiveLayout();
+      updateAudioSamplesPopupPlacement();
       queueTempoSliderLayoutSnapshot('Viewport changed.');
       queueMobileLayoutSnapshot('Viewport changed.');
     };
@@ -829,6 +859,7 @@
       updateViewportFitMode();
       updateTapPlacementHintVisibility();
       updateAdaptiveLayout();
+      updateAudioSamplesPopupPlacement();
       queueTempoSliderLayoutSnapshot('Visual viewport changed.');
       queueMobileLayoutSnapshot('Visual viewport changed.');
     };
@@ -1202,7 +1233,7 @@
     return changedEntries.length > 0 ? Object.fromEntries(changedEntries) as Partial<PercussionSampleSelections> : undefined;
   }
 
-  function selectedPercussionSample(noteId: PercussionNoteId): any | null {
+  function selectedPercussionSample(noteId: PercussionNoteId): LocalDrumSampleEntry | null {
     return LOCAL_DRUM_SAMPLE_BY_ID.get(percussionSampleSelections[noteId]) ?? null;
   }
 
@@ -3536,7 +3567,37 @@
     audioSamplesPopupOpen = !audioSamplesPopupOpen;
     if (audioSamplesPopupOpen) {
       volumePopupOpen = false;
+      void tick().then(updateAudioSamplesPopupPlacement);
+    } else {
+      audioSamplesPopupStyle = '';
     }
+  }
+
+  function updateAudioSamplesPopupPlacement(): void {
+    if (!audioSamplesPopupOpen || typeof window === 'undefined' || !audioSamplesControlWrapper) {
+      audioSamplesPopupStyle = '';
+      return;
+    }
+
+    const margin = 12;
+    const minPopupHeight = 240;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const controlRect = audioSamplesControlWrapper.getBoundingClientRect();
+    const width = Math.min(720, Math.max(280, viewportWidth - margin * 2));
+    const left = clamp(controlRect.right - width, margin, Math.max(margin, viewportWidth - width - margin));
+    const preferredTop = controlRect.bottom + 6;
+    const preferredMaxHeight = Math.min(620, Math.max(minPopupHeight, viewportHeight - margin * 2));
+    const hasEnoughSpaceBelow = viewportHeight - preferredTop - margin >= minPopupHeight;
+    const fallbackTop = controlRect.top - preferredMaxHeight - 6;
+    const top = clamp(
+      hasEnoughSpaceBelow ? preferredTop : fallbackTop,
+      margin,
+      Math.max(margin, viewportHeight - minPopupHeight - margin),
+    );
+    const maxHeight = Math.min(620, Math.max(minPopupHeight, viewportHeight - top - margin));
+
+    audioSamplesPopupStyle = `left:${left}px;top:${top}px;width:${width}px;max-height:${maxHeight}px;`;
   }
 
   function handleDocumentPointerDownForPopups(event: PointerEvent): void {
@@ -3562,6 +3623,10 @@
     if (isPlaying) {
       restartPlaybackTimer();
     }
+  }
+
+  function setQuarterTempoShortcut(quarterTempo: number): void {
+    handleQuarterTempoChange(quarterTempo);
   }
 
   function addRow(): void {
@@ -4939,9 +5004,47 @@
     const leftPx =
       pinnedLeftPx ??
       (rowRect.left - panelRect.left - panel.clientLeft + (voiceKaraokeBallLeftPercents[voiceIndex] / 100) * rowRect.width);
-    const topPx = rowRect.top - panelRect.top - panel.clientTop;
+    const horizontalPlaybackActive = trackStyle === 'horizontal' && isPlaying;
+    const laneRect = horizontalPlaybackActive ? karaokePlaybackLaneRect(voiceIndex, rowIndex) ?? rowRect : rowRect;
+    const horizontalLaneInsetPx = horizontalPlaybackActive ? horizontalPlaybackKaraokeLaneInsetPx(laneRect.height) : 0;
+    const topPx = laneRect.top - panelRect.top - panel.clientTop + horizontalLaneInsetPx;
+    const anchorY = horizontalPlaybackActive ? '-50%' : '-100%';
 
-    return `left:${leftPx}px; top:${topPx}px; --karaoke-ball-y:${voiceKaraokeBallArcOffsetPxs[voiceIndex]}px; --karaoke-ball-size-px:${karaokeBallSizePx}px;`;
+    return `left:${leftPx}px; top:${topPx}px; --karaoke-ball-y:${voiceKaraokeBallArcOffsetPxs[voiceIndex]}px; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-ball-anchor-y:${anchorY};`;
+  }
+
+  function karaokePlaybackLaneRect(voiceIndex: VoiceIndex, rowIndex: number): DOMRect | null {
+    const highlight = voicePlaybackHighlights[voiceIndex];
+    if (highlight?.rowIndex === rowIndex) {
+      const startCell = getTrackCellElement(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex);
+      if (highlight.span === 1) {
+        return startCell?.getBoundingClientRect() ?? null;
+      }
+
+      const endCell = getTrackCellElement(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex + highlight.span - 1);
+      const startRect = startCell?.getBoundingClientRect() ?? null;
+      const endRect = endCell?.getBoundingClientRect() ?? null;
+      if (startRect && endRect) {
+        return DOMRect.fromRect({
+          x: Math.min(startRect.left, endRect.left),
+          y: Math.min(startRect.top, endRect.top),
+          width: Math.max(startRect.right, endRect.right) - Math.min(startRect.left, endRect.left),
+          height: Math.max(startRect.bottom, endRect.bottom) - Math.min(startRect.top, endRect.top),
+        });
+      }
+
+      return startRect ?? endRect;
+    }
+
+    const rowElement = getTrackRowElement(voiceIndex, rowIndex);
+    return rowElement?.querySelector<HTMLElement>('.macrobeat-cell')?.getBoundingClientRect() ?? null;
+  }
+
+  function horizontalPlaybackKaraokeLaneInsetPx(laneHeightPx: number): number {
+    const preferredInsetPx = laneHeightPx * 0.09;
+    const minimumInsetPx = karaokeBallSizePx * 0.65;
+    const maximumInsetPx = Math.min(laneHeightPx * 0.24, karaokeBallSizePx * 1.6);
+    return clamp(preferredInsetPx, minimumInsetPx, Math.max(minimumInsetPx, maximumInsetPx));
   }
 
   function rowsAreOnSameVisualLine(voiceIndex: VoiceIndex, rowA: number, rowB: number): boolean {
@@ -5815,8 +5918,42 @@
     const beforeAnchor = karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, playbackIndex);
     const beforeContentLeft = beforeAnchor ? karaokeAnchorContentLeftPx(preferredVoiceIndex, beforeAnchor) : null;
     const nextPlaybackIndex = playbackIndex - shiftCycles * segmentLength;
+    const rowShift = shiftCycles * horizontalLoopSegmentRowCount();
 
     playbackIndex = nextPlaybackIndex;
+    for (const voiceIndex of VOICE_INDEXES) {
+      if (voiceKaraokeBallRowIndexes[voiceIndex] !== null) {
+        voiceKaraokeBallRowIndexes[voiceIndex] = Math.max(0, voiceKaraokeBallRowIndexes[voiceIndex]! - rowShift);
+      }
+
+      if (voiceKaraokeAnchors[voiceIndex]) {
+        voiceKaraokeAnchors[voiceIndex] = {
+          ...voiceKaraokeAnchors[voiceIndex]!,
+          rowIndex: Math.max(0, voiceKaraokeAnchors[voiceIndex]!.rowIndex - rowShift),
+        };
+      }
+
+      if (voicePlaybackHighlightAnchors[voiceIndex]) {
+        voicePlaybackHighlightAnchors[voiceIndex] = {
+          ...voicePlaybackHighlightAnchors[voiceIndex]!,
+          rowIndex: Math.max(0, voicePlaybackHighlightAnchors[voiceIndex]!.rowIndex - rowShift),
+        };
+      }
+
+      if (voicePlaybackHighlights[voiceIndex]) {
+        voicePlaybackHighlights[voiceIndex] = {
+          ...voicePlaybackHighlights[voiceIndex]!,
+          rowIndex: Math.max(0, voicePlaybackHighlights[voiceIndex]!.rowIndex - rowShift),
+        };
+      }
+
+      if (voicePlaybackCursors[voiceIndex]) {
+        voicePlaybackCursors[voiceIndex] = {
+          ...voicePlaybackCursors[voiceIndex]!,
+          rowIndex: Math.max(0, voicePlaybackCursors[voiceIndex]!.rowIndex - rowShift),
+        };
+      }
+    }
 
     const afterAnchor = karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, playbackIndex);
     const afterContentLeft = afterAnchor ? karaokeAnchorContentLeftPx(preferredVoiceIndex, afterAnchor) : null;
@@ -6718,7 +6855,13 @@
             </button>
             {#if audioSamplesPopupOpen}
               {@const activeSample = selectedPercussionSample(activeSamplePickerNoteId)}
-              <div id="audio-samples-popup" class="audio-samples-popup" role="dialog" aria-label="Audio samples">
+              <div
+                id="audio-samples-popup"
+                class="audio-samples-popup"
+                role="dialog"
+                aria-label="Audio samples"
+                style={audioSamplesPopupStyle}
+              >
                 <div class="audio-samples-note-tabs" role="tablist" aria-label="Percussion notes">
                   {#each PERCUSSION_NOTE_IDS as noteId (noteId)}
                     <button
@@ -6831,19 +6974,33 @@
 
       {#if !isPlaying && ((!isStudentView || !activeStudentView.hideTempoSlider) || (!isStudentView || !activeStudentView.hideQuarterTempo))}
       <div class="tempo-inline-group">
-        <TempoControls
-          quarterTempo={state.microbeatTempo / 2}
-          minQuarter={MICROBEAT_TEMPO_MIN / 2}
-          maxQuarter={MICROBEAT_TEMPO_MAX / 2}
-          step={1}
-          sliderOrientation="vertical"
-          onchange={handleQuarterTempoChange}
-          showEighth={false}
-          showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
-          showDottedQuarter={false}
-          showRows={!isStudentView || !activeStudentView.hideQuarterTempo}
-          showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
-        />
+        <div class="tempo-stack">
+          <TempoControls
+            quarterTempo={state.microbeatTempo / 2}
+            minQuarter={MICROBEAT_TEMPO_MIN / 2}
+            maxQuarter={MICROBEAT_TEMPO_MAX / 2}
+            step={1}
+            sliderOrientation="vertical"
+            onchange={handleQuarterTempoChange}
+            showEighth={false}
+            showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
+            showDottedQuarter={false}
+            showRows={!isStudentView || !activeStudentView.hideQuarterTempo}
+            showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
+          />
+          <div class="tempo-shortcut-buttons" aria-label="Tempo shortcuts">
+            {#each TEMPO_SHORTCUT_VALUES as tempoValue}
+              <button
+                type="button"
+                class:active={Math.round(state.microbeatTempo / 2) === tempoValue}
+                on:click={() => setQuarterTempoShortcut(tempoValue)}
+                aria-pressed={Math.round(state.microbeatTempo / 2) === tempoValue}
+              >
+                {tempoValue}
+              </button>
+            {/each}
+          </div>
+        </div>
       </div>
       {/if}
     </div>

@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@mlt/audio-samples": "workspace:*",
     "tone": "^15.1.22"
   },
   "devDependencies": {
