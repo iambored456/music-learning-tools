@@ -331,6 +331,7 @@
     scrollShellRect: RectSnapshot | null;
     rowRects: Map<string, RectSnapshot>;
     cellRects: Map<string, RectSnapshot>;
+    noteRects: Map<string, RectSnapshot>;
     cellElements: Map<string, HTMLElement>;
     firstCellRects: Map<string, RectSnapshot>;
   };
@@ -3127,6 +3128,7 @@
 
     const rowRects = new Map<string, RectSnapshot>();
     const cellRects = new Map<string, RectSnapshot>();
+    const noteRects = new Map<string, RectSnapshot>();
     const cellElements = new Map<string, HTMLElement>();
     const firstCellRects = new Map<string, RectSnapshot>();
 
@@ -3147,6 +3149,13 @@
           const key = cellGeometryKey(voiceIndex, zone, parsedRowIndex, parsedCellIndex);
           cellRects.set(key, snapshot);
           cellElements.set(key, cellElement);
+          const noteElement = cellElement.querySelector<HTMLElement>('.placed-note.oval, .placed-note.circle');
+          if (noteElement) {
+            const noteRect = noteElement.getBoundingClientRect();
+            if (noteRect.width > 0 && noteRect.height > 0) {
+              noteRects.set(key, rectSnapshot(noteRect));
+            }
+          }
           const firstCellKey = rowGeometryKey(voiceIndex, parsedRowIndex);
           if (!firstCellRects.has(firstCellKey)) {
             firstCellRects.set(firstCellKey, snapshot);
@@ -3161,6 +3170,7 @@
       scrollShellRect: canvasScrollShellElement ? rectSnapshot(canvasScrollShellElement.getBoundingClientRect()) : null,
       rowRects,
       cellRects,
+      noteRects,
       cellElements,
       firstCellRects,
     };
@@ -3178,6 +3188,16 @@
     cellIndex: number,
   ): DOMRect | null {
     const snapshot = playbackGeometryCache?.cellRects.get(cellGeometryKey(voiceIndex, zone, rowIndex, cellIndex));
+    return snapshot ? cachedRectWithScrollOffset(snapshot) : null;
+  }
+
+  function getCachedTrackNoteRect(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): DOMRect | null {
+    const snapshot = playbackGeometryCache?.noteRects.get(cellGeometryKey(voiceIndex, zone, rowIndex, cellIndex));
     return snapshot ? cachedRectWithScrollOffset(snapshot) : null;
   }
 
@@ -4751,11 +4771,12 @@
       },
       geometryCache: playbackGeometryCache
         ? {
-            cachedScrollLeft: roundedMetric(playbackGeometryCache.scrollLeft),
-            rowRects: playbackGeometryCache.rowRects.size,
-            cellRects: playbackGeometryCache.cellRects.size,
-            cellElements: playbackGeometryCache.cellElements.size,
-          }
+          cachedScrollLeft: roundedMetric(playbackGeometryCache.scrollLeft),
+          rowRects: playbackGeometryCache.rowRects.size,
+          cellRects: playbackGeometryCache.cellRects.size,
+          noteRects: playbackGeometryCache.noteRects.size,
+          cellElements: playbackGeometryCache.cellElements.size,
+        }
         : null,
       activeAnimationFrames: activeAnimationFrameCounts(),
     };
@@ -6029,6 +6050,21 @@
       ?? null;
   }
 
+  function getTrackNoteRect(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): DOMRect | null {
+    const cachedRect = getCachedTrackNoteRect(voiceIndex, zone, rowIndex, cellIndex);
+    if (cachedRect) return cachedRect;
+
+    const noteElement = getTrackCellElement(voiceIndex, zone, rowIndex, cellIndex)
+      ?.querySelector<HTMLElement>('.placed-note.oval, .placed-note.circle');
+    const noteRect = noteElement?.getBoundingClientRect() ?? null;
+    return noteRect && noteRect.width > 0 && noteRect.height > 0 ? noteRect : null;
+  }
+
   function sourceRowIndexForCursor(cursor: GridCellRef): number {
     return cursor.zone === 'pickup' ? 0 : cursor.sourceRowIndex ?? cursor.rowIndex;
   }
@@ -6044,6 +6080,11 @@
     const startRect = getTrackCellRect(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex);
     if (!rowRect || !startRect) return null;
     if (rowRect.width <= 0 || startRect.width <= 0) return null;
+
+    const noteRect = getTrackNoteRect(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex);
+    if (noteRect && noteRect.width > 0) {
+      return (((noteRect.left + noteRect.right) / 2 - rowRect.left) / rowRect.width) * 100;
+    }
 
     let anchorLeftPx = startRect.left;
     let anchorRightPx = startRect.right;
@@ -7182,14 +7223,39 @@
     countInDisplayNumber = null;
   }
 
+  function refreshCountInAnchorsForPlaybackIndex(
+    anchors: Map<VoiceIndex, KaraokeAnchor>,
+    currentIndex: number,
+  ): Map<VoiceIndex, KaraokeAnchor> {
+    clearPlaybackKaraokeAnchorCache();
+    rebuildPlaybackGeometryCache();
+
+    const refreshedAnchors = new Map<VoiceIndex, KaraokeAnchor>();
+    for (const voiceIndex of visibleVoiceIndices()) {
+      const refreshedAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
+      if (refreshedAnchor) {
+        refreshedAnchors.set(voiceIndex, refreshedAnchor);
+      }
+    }
+
+    anchors.clear();
+    for (const [voiceIndex, anchor] of refreshedAnchors) {
+      anchors.set(voiceIndex, anchor);
+    }
+
+    return anchors;
+  }
+
   function triggerCountInBeat(
     firstAnchors: Map<VoiceIndex, KaraokeAnchor>,
+    currentIndex: number,
     index: number,
     beatMs: number,
     scheduledDelayMs: number | null = null,
     actualDelayMs: number | null = null,
     playAudio = true,
   ): void {
+    const refreshedAnchors = refreshCountInAnchorsForPlaybackIndex(firstAnchors, currentIndex);
     countInDisplayNumber = COUNT_IN_NUMBERS[index];
 
     const accented = index === ACCENTED_COUNT_IN_INDEX;
@@ -7207,7 +7273,7 @@
           : null,
     });
 
-    for (const [voiceIndex, anchor] of firstAnchors) {
+    for (const [voiceIndex, anchor] of refreshedAnchors) {
       voiceKaraokeAnchors[voiceIndex] = anchor;
 
       if (accented) {
@@ -7219,7 +7285,12 @@
     }
   }
 
-  function startCountIn(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, startupDelayMs = 0, playAudio = true): number {
+  function startCountIn(
+    firstAnchors: Map<VoiceIndex, KaraokeAnchor>,
+    currentIndex: number,
+    startupDelayMs = 0,
+    playAudio = true,
+  ): number {
     const beatMs = countInBeatIntervalMs();
     const sequenceStartedAt = performance.now();
 
@@ -7235,6 +7306,7 @@
         if (!isPlaying) return;
         triggerCountInBeat(
           firstAnchors,
+          currentIndex,
           index,
           beatMs,
           scheduledDelayMs,
@@ -7361,7 +7433,7 @@
     }
     const leadInMs = firstAnchors.size > 0
       ? shouldRunCountIn
-        ? startCountIn(firstAnchors, startupDelayMs, false)
+        ? startCountIn(firstAnchors, currentIndex, startupDelayMs, false)
         : shouldUseHorizontalPlaybackHighway
           ? (holdKaraokeAtFirstAnchors(firstAnchors), startupDelayMs)
           : startKaraokeLeadInWithDelay(firstAnchors, startupDelayMs)
