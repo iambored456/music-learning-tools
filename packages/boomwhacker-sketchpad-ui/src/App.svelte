@@ -196,6 +196,14 @@
     leftPercent: number;
   };
 
+  type KaraokeBallOverlayMetrics = {
+    leftPx: number;
+    topPx: number;
+    arcOffsetPx: number;
+    sizePx: number;
+    anchorY: string;
+  };
+
   type PlaybackHighlight = {
     zone: GridZone;
     rowIndex: number;
@@ -293,6 +301,7 @@
     scrollShellRect: RectSnapshot | null;
     rowRects: Map<string, RectSnapshot>;
     cellRects: Map<string, RectSnapshot>;
+    cellElements: Map<string, HTMLElement>;
     firstCellRects: Map<string, RectSnapshot>;
   };
 
@@ -572,6 +581,14 @@
   const TRACK_ZOOM_WHEEL_SENSITIVITY = 0.0016;
   const TEMPO_SHORTCUT_VALUES = [60, 65, 70, 75, 80, 85] as const;
   const AUDIO_SCHEDULE_START_DELAY_MS = 0;
+  const PLAYBACK_CELL_CLASS_NAMES = [
+    'playback-illuminated',
+    'playback-pulse-a',
+    'playback-pulse-b',
+    'playback-span-start',
+    'playback-span-continuation',
+  ] as const;
+  const PLAYED_NOTE_MUTED_CLASS = 'played-note-muted';
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
@@ -595,7 +612,7 @@
   let playbackVisualStartIndex = 0;
   let playbackVisualLastRenderedIndex = -1;
   let pendingPlaybackTimeouts = new Set<ReturnType<typeof setTimeout>>();
-  let voicePlaybackCursors: Array<GridCellRef | null> = VOICE_INDEXES.map(() => null);
+  let voicePlaybackCursorCellKeys: Array<string | null> = VOICE_INDEXES.map(() => null);
   let voiceKaraokeBallRowIndexes: Array<number | null> = VOICE_INDEXES.map(() => null);
   let voiceKaraokeBallLeftPercents: number[] = VOICE_INDEXES.map(() => 50);
   let voiceKaraokeBallPinnedLeftPxs: Array<number | null> = VOICE_INDEXES.map(() => null);
@@ -624,10 +641,11 @@
   let voiceHorizontalPlaybackLaneShiftFrames: Array<number | null> = VOICE_INDEXES.map(() => null);
   let voiceHorizontalPlaybackLaneShiftTokens: number[] = VOICE_INDEXES.map(() => 0);
   let voiceTrackRowElements: Array<Array<HTMLElement | null>> = VOICE_INDEXES.map(() => []);
-  let voicePlaybackHighlights: Array<PlaybackHighlight | null> = VOICE_INDEXES.map(() => null);
   let voicePlaybackHighlightAnchors: Array<KaraokeAnchor | null> = VOICE_INDEXES.map(() => null);
+  let voicePlaybackHighlightCellKeys: Array<Set<string>> = VOICE_INDEXES.map(() => new Set<string>());
   let voicePlaybackPulseFlips: boolean[] = VOICE_INDEXES.map(() => false);
-  let voicePlayedCellIndexes: Array<Set<number>> = VOICE_INDEXES.map(() => new Set<number>());
+  let voicePlayedCellKeys: Array<Set<string>> = VOICE_INDEXES.map(() => new Set<string>());
+  let playbackKaraokeAnchorCache: Array<Map<number, KaraokeAnchor | null>> = VOICE_INDEXES.map(() => new Map());
   let playbackGeometryCache: PlaybackGeometryCache | null = null;
   let karaokeBallElements: Array<HTMLElement | null> = VOICE_INDEXES.map(() => null);
 
@@ -2988,6 +3006,13 @@
   function invalidateCanvasLayout(): void {
     canvasScrollRevision += 1;
     playbackGeometryCache = null;
+    clearPlaybackKaraokeAnchorCache();
+  }
+
+  function clearPlaybackKaraokeAnchorCache(): void {
+    for (const cache of playbackKaraokeAnchorCache) {
+      cache.clear();
+    }
   }
 
   function rectSnapshot(rect: DOMRect): RectSnapshot {
@@ -3034,6 +3059,7 @@
 
     const rowRects = new Map<string, RectSnapshot>();
     const cellRects = new Map<string, RectSnapshot>();
+    const cellElements = new Map<string, HTMLElement>();
     const firstCellRects = new Map<string, RectSnapshot>();
 
     for (const voiceIndex of VOICE_INDEXES) {
@@ -3050,7 +3076,9 @@
           if (!Number.isInteger(parsedRowIndex) || !Number.isInteger(parsedCellIndex)) continue;
 
           const snapshot = rectSnapshot(cellElement.getBoundingClientRect());
-          cellRects.set(cellGeometryKey(voiceIndex, zone, parsedRowIndex, parsedCellIndex), snapshot);
+          const key = cellGeometryKey(voiceIndex, zone, parsedRowIndex, parsedCellIndex);
+          cellRects.set(key, snapshot);
+          cellElements.set(key, cellElement);
           const firstCellKey = rowGeometryKey(voiceIndex, parsedRowIndex);
           if (!firstCellRects.has(firstCellKey)) {
             firstCellRects.set(firstCellKey, snapshot);
@@ -3065,6 +3093,7 @@
       scrollShellRect: canvasScrollShellElement ? rectSnapshot(canvasScrollShellElement.getBoundingClientRect()) : null,
       rowRects,
       cellRects,
+      cellElements,
       firstCellRects,
     };
   }
@@ -3086,6 +3115,11 @@
 
   function handleCanvasScroll(): void {
     if (trackStyle === 'horizontal' && isPlaying && horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
+      return;
+    }
+
+    if (trackStyle === 'horizontal' && playbackGeometryCache) {
+      applyKaraokeBallElementStyles();
       return;
     }
 
@@ -4220,12 +4254,12 @@
     applyKaraokeBallElementStyle(voiceIndex);
   }
 
-  function karaokeBallOverlayStyleForState(
+  function karaokeBallOverlayMetricsForState(
     voiceIndex: VoiceIndex,
     rowIndex: number | null,
     leftPercent: number,
     arcOffsetPx: number,
-  ): string | null {
+  ): KaraokeBallOverlayMetrics | null {
     if (rowIndex === null || !isVoiceVisible(voiceIndex)) return null;
 
     const panel = canvasPanelElement;
@@ -4243,7 +4277,25 @@
     const topPx = laneRect.top - panelRect.top - panel.clientTop + horizontalLaneInsetPx;
     const anchorY = horizontalPlaybackActive ? '-50%' : '-100%';
 
-    return `left:${leftPx}px; top:${topPx}px; --karaoke-ball-y:${arcOffsetPx}px; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-ball-anchor-y:${anchorY};`;
+    return {
+      leftPx,
+      topPx,
+      arcOffsetPx,
+      sizePx: karaokeBallSizePx,
+      anchorY,
+    };
+  }
+
+  function karaokeBallOverlayStyleForState(
+    voiceIndex: VoiceIndex,
+    rowIndex: number | null,
+    leftPercent: number,
+    arcOffsetPx: number,
+  ): string | null {
+    const metrics = karaokeBallOverlayMetricsForState(voiceIndex, rowIndex, leftPercent, arcOffsetPx);
+    if (!metrics) return null;
+
+    return `left:${metrics.leftPx}px; top:${metrics.topPx}px; --karaoke-ball-y:${metrics.arcOffsetPx}px; --karaoke-ball-size-px:${metrics.sizePx}px; --karaoke-ball-anchor-y:${metrics.anchorY};`;
   }
 
   function applyKaraokeBallElementStyle(
@@ -4255,14 +4307,28 @@
     const element = karaokeBallElements[voiceIndex];
     if (!element) return;
 
-    const style = karaokeBallOverlayStyleForState(voiceIndex, rowIndex, leftPercent, arcOffsetPx);
-    if (!style) {
+    const metrics = karaokeBallOverlayMetricsForState(voiceIndex, rowIndex, leftPercent, arcOffsetPx);
+    if (!metrics) {
       element.style.display = 'none';
       return;
     }
 
-    element.style.cssText = style;
+    element.style.left = `${metrics.leftPx}px`;
+    element.style.top = `${metrics.topPx}px`;
+    element.style.setProperty('--karaoke-ball-y', `${metrics.arcOffsetPx}px`);
+    element.style.setProperty('--karaoke-ball-size-px', `${metrics.sizePx}px`);
+    element.style.setProperty('--karaoke-ball-anchor-y', metrics.anchorY);
     element.style.display = '';
+  }
+
+  function applyKaraokeBallArcOffsetStyle(voiceIndex: VoiceIndex, arcOffsetPx: number): void {
+    const element = karaokeBallElements[voiceIndex];
+    if (!element || element.style.display === 'none') {
+      applyKaraokeBallElementStyle(voiceIndex, undefined, undefined, arcOffsetPx);
+      return;
+    }
+
+    element.style.setProperty('--karaoke-ball-y', `${arcOffsetPx}px`);
   }
 
   function applyKaraokeBallElementStyles(): void {
@@ -5172,24 +5238,31 @@
   }
 
   function karaokePlaybackLaneRect(voiceIndex: VoiceIndex, rowIndex: number): DOMRect | null {
-    const highlight = voicePlaybackHighlights[voiceIndex];
-    if (highlight?.rowIndex === rowIndex) {
-      if (highlight.span === 1) {
-        return getTrackCellRect(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex);
-      }
+    let laneLeft = Number.POSITIVE_INFINITY;
+    let laneTop = Number.POSITIVE_INFINITY;
+    let laneRight = Number.NEGATIVE_INFINITY;
+    let laneBottom = Number.NEGATIVE_INFINITY;
 
-      const startRect = getTrackCellRect(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex);
-      const endRect = getTrackCellRect(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex + highlight.span - 1);
-      if (startRect && endRect) {
-        return DOMRect.fromRect({
-          x: Math.min(startRect.left, endRect.left),
-          y: Math.min(startRect.top, endRect.top),
-          width: Math.max(startRect.right, endRect.right) - Math.min(startRect.left, endRect.left),
-          height: Math.max(startRect.bottom, endRect.bottom) - Math.min(startRect.top, endRect.top),
-        });
-      }
+    for (const key of voicePlaybackHighlightCellKeys[voiceIndex]) {
+      const ref = playbackCellRefFromKey(key);
+      if (!ref || ref.rowIndex !== rowIndex) continue;
 
-      return startRect ?? endRect;
+      const rect = getTrackCellRect(ref.voiceIndex, ref.zone, ref.rowIndex, ref.cellIndex);
+      if (!rect) continue;
+
+      laneLeft = Math.min(laneLeft, rect.left);
+      laneTop = Math.min(laneTop, rect.top);
+      laneRight = Math.max(laneRight, rect.right);
+      laneBottom = Math.max(laneBottom, rect.bottom);
+    }
+
+    if (Number.isFinite(laneLeft) && Number.isFinite(laneTop) && laneRight > laneLeft && laneBottom > laneTop) {
+      return DOMRect.fromRect({
+        x: laneLeft,
+        y: laneTop,
+        width: laneRight - laneLeft,
+        height: laneBottom - laneTop,
+      });
     }
 
     const firstCellSnapshot = playbackGeometryCache?.firstCellRects.get(rowGeometryKey(voiceIndex, rowIndex));
@@ -5242,12 +5315,115 @@
     rowIndex: number,
     cellIndex: number,
   ): HTMLElement | null {
+    const cachedElement = playbackGeometryCache?.cellElements.get(cellGeometryKey(voiceIndex, zone, rowIndex, cellIndex));
+    if (cachedElement?.isConnected) return cachedElement;
+
     const rowElement = getTrackRowElement(voiceIndex, rowIndex);
     if (!rowElement) return null;
 
     return rowElement.querySelector<HTMLElement>(
       `.macrobeat-cell[data-voice-index="${voiceIndex}"][data-track-zone="${zone}"][data-row-index="${rowIndex}"][data-cell-index="${cellIndex}"]`,
     );
+  }
+
+  function playbackCellKey(voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): string {
+    return `${voiceIndex}:${zone}:${rowIndex}:${cellIndex}`;
+  }
+
+  function playbackCellRefFromKey(
+    key: string,
+  ): { voiceIndex: VoiceIndex; zone: GridZone; rowIndex: number; cellIndex: number } | null {
+    const [voiceIndexValue, zoneValue, rowIndexValue, cellIndexValue] = key.split(':');
+    const voiceIndex = Number(voiceIndexValue);
+    const rowIndex = Number(rowIndexValue);
+    const cellIndex = Number(cellIndexValue);
+
+    if (!VOICE_INDEXES.includes(voiceIndex as VoiceIndex)) return null;
+    if (zoneValue !== 'pickup' && zoneValue !== 'main') return null;
+    if (!Number.isInteger(rowIndex) || !Number.isInteger(cellIndex)) return null;
+
+    return { voiceIndex: voiceIndex as VoiceIndex, zone: zoneValue, rowIndex, cellIndex };
+  }
+
+  function getTrackCellElementFromKey(key: string): HTMLElement | null {
+    const ref = playbackCellRefFromKey(key);
+    return ref ? getTrackCellElement(ref.voiceIndex, ref.zone, ref.rowIndex, ref.cellIndex) : null;
+  }
+
+  function clearPlaybackCellClasses(element: HTMLElement | null): void {
+    element?.classList.remove(...PLAYBACK_CELL_CLASS_NAMES);
+  }
+
+  function setCellNotesMuted(element: HTMLElement | null, muted: boolean): void {
+    if (!element) return;
+
+    for (const noteElement of element.querySelectorAll<HTMLElement>('.placed-note:not(.drag-preview-note)')) {
+      noteElement.classList.toggle(PLAYED_NOTE_MUTED_CLASS, muted);
+    }
+  }
+
+  function clearPlaybackCursorClassForVoice(voiceIndex: VoiceIndex): void {
+    const previousKey = voicePlaybackCursorCellKeys[voiceIndex];
+    if (!previousKey) return;
+
+    getTrackCellElementFromKey(previousKey)?.classList.remove('playback-target');
+    voicePlaybackCursorCellKeys.splice(voiceIndex, 1, null);
+  }
+
+  function applyPlaybackCursorClass(voiceIndex: VoiceIndex, cursor: GridCellRef): void {
+    const key = playbackCellKey(voiceIndex, cursor.zone, cursor.rowIndex, cursor.cellIndex);
+    if (voicePlaybackCursorCellKeys[voiceIndex] === key) return;
+
+    clearPlaybackCursorClassForVoice(voiceIndex);
+    getTrackCellElementFromKey(key)?.classList.add('playback-target');
+    voicePlaybackCursorCellKeys.splice(voiceIndex, 1, key);
+  }
+
+  function clearPlaybackHighlightClassesForVoice(voiceIndex: VoiceIndex): void {
+    for (const key of voicePlaybackHighlightCellKeys[voiceIndex]) {
+      clearPlaybackCellClasses(getTrackCellElementFromKey(key));
+    }
+
+    voicePlaybackHighlightCellKeys[voiceIndex].clear();
+  }
+
+  function applyPlaybackHighlightClasses(voiceIndex: VoiceIndex, highlight: PlaybackHighlight): void {
+    clearPlaybackHighlightClassesForVoice(voiceIndex);
+
+    for (let offset = 0; offset < highlight.span; offset += 1) {
+      const cellIndex = highlight.startCellIndex + offset;
+      const key = playbackCellKey(voiceIndex, highlight.zone, highlight.rowIndex, cellIndex);
+      const element = getTrackCellElementFromKey(key);
+      if (!element) continue;
+
+      element.classList.add('playback-illuminated', highlight.pulseClass);
+      if (highlight.span === 2) {
+        element.classList.add(offset === 0 ? 'playback-span-start' : 'playback-span-continuation');
+      }
+      voicePlaybackHighlightCellKeys[voiceIndex].add(key);
+    }
+  }
+
+  function clearPlaybackDomClassesForVoice(voiceIndex: VoiceIndex): void {
+    clearPlaybackCursorClassForVoice(voiceIndex);
+    clearPlaybackHighlightClassesForVoice(voiceIndex);
+    voicePlaybackHighlightAnchors.splice(voiceIndex, 1, null);
+  }
+
+  function clearPlaybackDomClasses(): void {
+    for (const voiceIndex of VOICE_INDEXES) {
+      clearPlaybackDomClassesForVoice(voiceIndex);
+    }
+  }
+
+  function clearPlayedNoteMuteClasses(): void {
+    canvasPanelElement
+      ?.querySelectorAll<HTMLElement>(`.placed-note.${PLAYED_NOTE_MUTED_CLASS}`)
+      .forEach((element) => element.classList.remove(PLAYED_NOTE_MUTED_CLASS));
+
+    for (const voiceIndex of VOICE_INDEXES) {
+      voicePlayedCellKeys[voiceIndex].clear();
+    }
   }
 
   function getTrackCellRect(
@@ -5366,7 +5542,14 @@
     const endIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
     if (index < 0 || index >= endIndex) return null;
 
-    return resolveKaraokeAnchor(voiceIndex, cellRefFromPlaybackIndex(index, totalCells));
+    const cache = playbackKaraokeAnchorCache[voiceIndex];
+    if (cache.has(index)) {
+      return cache.get(index) ?? null;
+    }
+
+    const anchor = resolveKaraokeAnchor(voiceIndex, cellRefFromPlaybackIndex(index, totalCells));
+    cache.set(index, anchor);
+    return anchor;
   }
 
   function nextDistinctKaraokeAnchorTransition(
@@ -5518,7 +5701,7 @@
 
       const progress = Math.min(1, (now - startedAt) / motionDurationMs);
       const arcOffsetPx = -4 * arcHeightPx * progress * (1 - progress);
-      applyKaraokeBallElementStyle(voiceIndex, anchor.rowIndex, anchor.leftPercent, arcOffsetPx);
+      applyKaraokeBallArcOffsetStyle(voiceIndex, arcOffsetPx);
 
       if (progress >= 1) {
         setKaraokeBallToAnchor(voiceIndex, anchor);
@@ -5552,7 +5735,7 @@
 
       const progress = Math.min(1, (now - startedAt) / motionDurationMs);
       const arcOffsetPx = -4 * arcHeightPx * progress * (1 - progress);
-      applyKaraokeBallElementStyle(voiceIndex, currentAnchor.rowIndex, currentAnchor.leftPercent, arcOffsetPx);
+      applyKaraokeBallArcOffsetStyle(voiceIndex, arcOffsetPx);
 
       if (progress >= 1) {
         setKaraokeBallState(voiceIndex, nextAnchor.rowIndex, nextAnchor.leftPercent, 0);
@@ -5624,7 +5807,7 @@
 
       const progress = Math.min(1, (now - startedAt) / leadInMs);
       const arcOffsetPx = -karaokeArcHeightPx * (1 - progress * progress);
-      applyKaraokeBallElementStyle(voiceIndex, firstAnchor.rowIndex, firstAnchor.leftPercent, arcOffsetPx);
+      applyKaraokeBallArcOffsetStyle(voiceIndex, arcOffsetPx);
 
       if (progress >= 1) {
         setKaraokeBallToAnchor(voiceIndex, firstAnchor);
@@ -5762,8 +5945,8 @@
     const anchor = resolveKaraokeAnchor(voiceIndex, cursor);
     if (!anchor) {
       debugPlaybackHighlight('Clearing highlight: no resolved anchor for cursor.', { cursor });
-      voicePlaybackHighlights[voiceIndex] = null;
-      voicePlaybackHighlightAnchors[voiceIndex] = null;
+      clearPlaybackHighlightClassesForVoice(voiceIndex);
+      voicePlaybackHighlightAnchors.splice(voiceIndex, 1, null);
       return;
     }
 
@@ -5775,18 +5958,19 @@
     const nextHighlight = resolvePlaybackHighlightForCursor(voiceIndex, cursor);
     if (!nextHighlight) {
       debugPlaybackHighlight('Clearing highlight: failed to resolve highlight span.', { cursor, anchor });
-      voicePlaybackHighlights[voiceIndex] = null;
-      voicePlaybackHighlightAnchors[voiceIndex] = null;
+      clearPlaybackHighlightClassesForVoice(voiceIndex);
+      voicePlaybackHighlightAnchors.splice(voiceIndex, 1, null);
       return;
     }
 
     voicePlaybackPulseFlips[voiceIndex] = !voicePlaybackPulseFlips[voiceIndex];
-    voicePlaybackHighlights[voiceIndex] = {
+    const nextPlaybackHighlight: PlaybackHighlight = {
       ...nextHighlight,
       pulseClass: voicePlaybackPulseFlips[voiceIndex] ? 'playback-pulse-a' : 'playback-pulse-b',
     };
-    voicePlaybackHighlightAnchors[voiceIndex] = anchor;
-    debugPlaybackHighlight('Highlight updated.', { cursor, anchor, highlight: voicePlaybackHighlights[voiceIndex] });
+    applyPlaybackHighlightClasses(voiceIndex, nextPlaybackHighlight);
+    voicePlaybackHighlightAnchors.splice(voiceIndex, 1, anchor);
+    debugPlaybackHighlight('Highlight updated.', { cursor, anchor, highlight: nextPlaybackHighlight });
   }
 
   function clearPlaybackTimer(): void {
@@ -5949,26 +6133,19 @@
     const highlight = resolvePlaybackHighlightForCursor(voiceIndex, cursor);
     if (!highlight) return;
 
-    const nextPlayed = new Set(voicePlayedCellIndexes[voiceIndex]);
     for (let offset = 0; offset < highlight.span; offset += 1) {
-      const absoluteIndex = absolutePlaybackCellIndex(highlight.zone, highlight.rowIndex, highlight.startCellIndex + offset);
-      if (absoluteIndex === null) continue;
-      nextPlayed.add(absoluteIndex);
+      const cellIndex = highlight.startCellIndex + offset;
+      const key = playbackCellKey(voiceIndex, highlight.zone, highlight.rowIndex, cellIndex);
+      voicePlayedCellKeys[voiceIndex].add(key);
+      setCellNotesMuted(getTrackCellElementFromKey(key), true);
     }
 
-    voicePlayedCellIndexes[voiceIndex] = nextPlayed;
     debugPlayedNoteMuting('Marked cells as played.', {
       voice: voiceLabel(voiceIndex),
       cursor,
       highlight,
-      playedCount: voicePlayedCellIndexes[voiceIndex].size,
+      playedCount: voicePlayedCellKeys[voiceIndex].size,
     });
-  }
-
-  function isPlayedCell(playedIndexes: Set<number>, zone: GridZone, rowIndex: number, cellIndex: number): boolean {
-    const absoluteIndex = absolutePlaybackCellIndex(zone, rowIndex, cellIndex);
-    if (absoluteIndex === null) return false;
-    return playedIndexes.has(absoluteIndex);
   }
 
   function positiveModulo(value: number, modulus: number): number {
@@ -6192,26 +6369,15 @@
       }
 
       if (voicePlaybackHighlightAnchors[voiceIndex]) {
-        voicePlaybackHighlightAnchors[voiceIndex] = {
+        voicePlaybackHighlightAnchors.splice(voiceIndex, 1, {
           ...voicePlaybackHighlightAnchors[voiceIndex]!,
           rowIndex: Math.max(0, voicePlaybackHighlightAnchors[voiceIndex]!.rowIndex - rowShift),
-        };
-      }
-
-      if (voicePlaybackHighlights[voiceIndex]) {
-        voicePlaybackHighlights[voiceIndex] = {
-          ...voicePlaybackHighlights[voiceIndex]!,
-          rowIndex: Math.max(0, voicePlaybackHighlights[voiceIndex]!.rowIndex - rowShift),
-        };
-      }
-
-      if (voicePlaybackCursors[voiceIndex]) {
-        voicePlaybackCursors[voiceIndex] = {
-          ...voicePlaybackCursors[voiceIndex]!,
-          rowIndex: Math.max(0, voicePlaybackCursors[voiceIndex]!.rowIndex - rowShift),
-        };
+        });
       }
     }
+
+    clearPlaybackDomClasses();
+    clearPlayedNoteMuteClasses();
 
     const afterAnchor = karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, playbackIndex);
     const afterContentLeft = afterAnchor ? karaokeAnchorContentLeftPx(preferredVoiceIndex, afterAnchor) : null;
@@ -6248,7 +6414,7 @@
     }
 
     for (const voiceIndex of visibleVoiceIndices()) {
-      voicePlaybackCursors[voiceIndex] = cursor;
+      applyPlaybackCursorClass(voiceIndex, cursor);
       updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, traversalEndIndex, cursor, stepStartedAtMs);
       updatePlaybackHighlight(voiceIndex, cursor);
     }
@@ -6256,7 +6422,7 @@
     if (PLAYED_NOTE_MUTING_DEBUG && typeof window !== 'undefined' && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         debugPlayedNoteMuting('DOM muted-note classes.', {
-          playedCellCount: visibleVoiceIndices().reduce<number>((sum, voiceIndex) => sum + voicePlayedCellIndexes[voiceIndex].size, 0),
+          playedCellCount: visibleVoiceIndices().reduce<number>((sum, voiceIndex) => sum + voicePlayedCellKeys[voiceIndex].size, 0),
           mutedNoteCount: document.querySelectorAll('.placed-note.played-note-muted').length,
         });
       });
@@ -6274,6 +6440,8 @@
 
       if (isLooping) {
         queuePlaybackTimeout(() => {
+          clearPlaybackDomClasses();
+          clearPlayedNoteMuteClasses();
           playbackIndex = playbackResetIndex();
           restartPlaybackTimer();
         }, finalCellDurationMs);
@@ -6290,6 +6458,7 @@
 
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    clearPlaybackKaraokeAnchorCache();
     rebuildPlaybackGeometryCache();
     applyKaraokeBallElementStyles();
     const totalCells = totalPlaybackCells();
@@ -6415,12 +6584,10 @@
     clearTapPlacementSelection();
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    clearPlaybackDomClasses();
+    clearPlayedNoteMuteClasses();
     for (const voiceIndex of VOICE_INDEXES) {
       clearKaraokeAnimation(voiceIndex);
-      voicePlaybackHighlights[voiceIndex] = null;
-      voicePlaybackHighlightAnchors[voiceIndex] = null;
-      voicePlaybackCursors[voiceIndex] = null;
-      voicePlayedCellIndexes[voiceIndex] = new Set<number>();
     }
     clearCountInDisplay();
 
@@ -6439,6 +6606,7 @@
     setPlaybackUiState(true);
     playbackPaused = false;
     await tick();
+    clearPlaybackKaraokeAnchorCache();
     rebuildPlaybackGeometryCache();
 
     if (!isPlaying || playbackStartToken !== startToken) return;
@@ -6512,10 +6680,10 @@
     audio.stopScheduledPlaybackAudio();
     resetHorizontalPlaybackHighway();
     playbackGeometryCache = null;
+    clearPlaybackDomClasses();
+    clearPlayedNoteMuteClasses();
     for (const voiceIndex of VOICE_INDEXES) {
       clearKaraokeAnimation(voiceIndex);
-      voicePlaybackHighlights[voiceIndex] = null;
-      voicePlaybackHighlightAnchors[voiceIndex] = null;
     }
     clearCountInDisplay();
   }
@@ -6530,12 +6698,10 @@
     audio.stopScheduledPlaybackAudio();
     resetHorizontalPlaybackHighway();
     playbackGeometryCache = null;
+    clearPlaybackDomClasses();
+    clearPlayedNoteMuteClasses();
     for (const voiceIndex of VOICE_INDEXES) {
       clearKaraokeBallDisplay(voiceIndex);
-      voicePlaybackCursors[voiceIndex] = null;
-      voicePlaybackHighlights[voiceIndex] = null;
-      voicePlaybackHighlightAnchors[voiceIndex] = null;
-      voicePlayedCellIndexes[voiceIndex] = new Set<number>();
     }
     clearCountInDisplay();
     playbackIndex = playbackResetIndex();
@@ -6598,67 +6764,6 @@
         queueHorizontalPlaybackScroll(currentIndex, 'auto');
       });
     }
-  }
-
-  function isPlaybackCell(cursor: GridCellRef | null, rowIndex: number, cellIndex: number): boolean {
-    return cursor?.zone === 'main' && cursor?.rowIndex === rowIndex && cursor?.cellIndex === cellIndex;
-  }
-
-  function isPlaybackPickupCell(cursor: GridCellRef | null, rowIndex: number, cellIndex: number): boolean {
-    return cursor?.zone === 'pickup' && cursor?.rowIndex === rowIndex && cursor?.cellIndex === cellIndex;
-  }
-
-  function playbackHighlightMatches(
-    highlight: PlaybackHighlight | null,
-    zone: GridZone,
-    rowIndex: number,
-    cellIndex: number,
-  ): boolean {
-    if (!highlight || highlight.zone !== zone) return false;
-    if (highlight.rowIndex !== rowIndex) return false;
-
-    const start = highlight.startCellIndex;
-    return cellIndex >= start && cellIndex < start + highlight.span;
-  }
-
-  function isPlaybackHighlightCell(highlight: PlaybackHighlight | null, rowIndex: number, cellIndex: number): boolean {
-    return playbackHighlightMatches(highlight, 'main', rowIndex, cellIndex);
-  }
-
-  function isPlaybackPickupHighlightCell(highlight: PlaybackHighlight | null, rowIndex: number, cellIndex: number): boolean {
-    return playbackHighlightMatches(highlight, 'pickup', rowIndex, cellIndex);
-  }
-
-  function isPlaybackHighlightSpanStart(
-    highlight: PlaybackHighlight | null,
-    zone: GridZone,
-    rowIndex: number,
-    cellIndex: number,
-  ): boolean {
-    return playbackHighlightMatches(highlight, zone, rowIndex, cellIndex) && highlight?.span === 2 && highlight.startCellIndex === cellIndex;
-  }
-
-  function isPlaybackHighlightSpanContinuation(
-    highlight: PlaybackHighlight | null,
-    zone: GridZone,
-    rowIndex: number,
-    cellIndex: number,
-  ): boolean {
-    return (
-      playbackHighlightMatches(highlight, zone, rowIndex, cellIndex) &&
-      highlight?.span === 2 &&
-      highlight.startCellIndex + 1 === cellIndex
-    );
-  }
-
-  function isPlaybackPulseClass(
-    highlight: PlaybackHighlight | null,
-    zone: GridZone,
-    rowIndex: number,
-    cellIndex: number,
-    pulseClass: PlaybackHighlight['pulseClass'],
-  ): boolean {
-    return playbackHighlightMatches(highlight, zone, rowIndex, cellIndex) && highlight?.pulseClass === pulseClass;
   }
 
   function isDropTarget(target: GridDropTarget | null, voiceIndex: VoiceIndex, rowIndex: number, cellIndex: number): boolean {
@@ -7664,9 +7769,6 @@
         {@const sourceRowIndex = renderedRow.sourceRowIndex}
         {@const row = renderedRow.row}
         {@const pickupRow = renderedRow.pickupRow}
-        {@const playbackCursor = voicePlaybackCursors[voiceIndex]}
-        {@const playbackHighlight = voicePlaybackHighlights[voiceIndex]}
-        {@const playedCellIndexes = voicePlayedCellIndexes[voiceIndex]}
         {@const hasInlinePickup = renderedRow.includesPickup}
         <article
           class="track-row voice-track-row"
@@ -7735,12 +7837,6 @@
                     class:has-note={pickupCellHasNote(voiceIndex, cellIndex)}
                     class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex)}
                     class:drop-target={isPickupDropTarget(dragOverCell, voiceIndex, cellIndex)}
-                    class:playback-target={isPlaybackPickupCell(playbackCursor, rowIndex, cellIndex)}
-                    class:playback-illuminated={isPlaybackPickupHighlightCell(playbackHighlight, rowIndex, cellIndex)}
-                    class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'pickup', rowIndex, cellIndex, 'playback-pulse-a')}
-                    class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'pickup', rowIndex, cellIndex, 'playback-pulse-b')}
-                    class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'pickup', rowIndex, cellIndex)}
-                    class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'pickup', rowIndex, cellIndex)}
                     class:playback-start-selected={isPlaybackStartSelected('pickup', -1)}
                     class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < pickupMicrobeatCount() - 1}
                     data-voice-index={voiceIndex}
@@ -7763,7 +7859,6 @@
                         <button
                           type="button"
                           class="placed-note oval"
-                          class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', rowIndex, cellIndex)}
                           class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0))}
                           data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0)}
                           style={`--token-color:${cell.notes[0].color};`}
@@ -7791,7 +7886,6 @@
                         <button
                           type="button"
                           class="placed-note circle"
-                          class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', rowIndex, cellIndex)}
                           class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0))}
                           data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, 0)}
                           style={`--token-color:${cell.notes[0].color};`}
@@ -7823,7 +7917,6 @@
                                 <button
                                   type="button"
                                   class={`placed-note diamond sixteenth ${cell.notes[0] && cell.notes[1] ? 'split' : 'single'}`}
-                                  class:played-note-muted={isPlayedCell(playedCellIndexes, 'pickup', rowIndex, cellIndex)}
                                   class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, slotIndex))}
                                   data-selection-key={noteSelectionKey(voiceIndex, 'pickup', -1, cellIndex, slotIndex)}
                                   style={`--token-color:${diamondNote.color};`}
@@ -7938,12 +8031,6 @@
                 class:has-note={cellHasNote(voiceIndex, sourceRowIndex, cellIndex)}
                 class:circle-span-start={cell?.shape === 'circle' && cell.role === 'start' || isCircleDragPreviewSpanStart(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex)}
                 class:drop-target={isDropTarget(dragOverCell, voiceIndex, sourceRowIndex, cellIndex)}
-                class:playback-target={isPlaybackCell(playbackCursor, rowIndex, cellIndex)}
-                class:playback-illuminated={isPlaybackHighlightCell(playbackHighlight, rowIndex, cellIndex)}
-                class:playback-pulse-a={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-a')}
-                class:playback-pulse-b={isPlaybackPulseClass(playbackHighlight, 'main', rowIndex, cellIndex, 'playback-pulse-b')}
-                class:playback-span-start={isPlaybackHighlightSpanStart(playbackHighlight, 'main', rowIndex, cellIndex)}
-                class:playback-span-continuation={isPlaybackHighlightSpanContinuation(playbackHighlight, 'main', rowIndex, cellIndex)}
                 class:playback-start-selected={isPlaybackStartSelected('main', sourceRowIndex)}
                 class:two-based-divider={(cellIndex + 1) % 2 === 0 && cellIndex < GRID_COLUMNS - 1}
                 data-voice-index={voiceIndex}
@@ -7966,7 +8053,6 @@
                     <button
                       type="button"
                       class="placed-note oval"
-                      class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
                       class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0))}
                       data-selection-key={noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
                       style={`--token-color:${cell.notes[0].color};`}
@@ -7994,7 +8080,6 @@
                     <button
                       type="button"
                       class="placed-note circle"
-                      class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
                       class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0))}
                       data-selection-key={noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, 0)}
                       style={`--token-color:${cell.notes[0].color};`}
@@ -8026,7 +8111,6 @@
                             <button
                               type="button"
                               class={`placed-note diamond sixteenth ${cell.notes[0] && cell.notes[1] ? 'split' : 'single'}`}
-                              class:played-note-muted={isPlayedCell(playedCellIndexes, 'main', rowIndex, cellIndex)}
                               class:selected-note={selectedNoteKeys.has(noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex))}
                               data-selection-key={noteSelectionKey(voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex)}
                               style={`--token-color:${diamondNote.color};`}
