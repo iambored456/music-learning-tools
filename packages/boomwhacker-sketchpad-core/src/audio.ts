@@ -41,6 +41,28 @@ export type AudioCallbacks = {
   onPlaybackComplete?: () => void;
 };
 
+export type ScheduledPlaybackAudioEvent =
+  | {
+      type: 'note';
+      timeSeconds: number;
+      pitch: string;
+      duration?: Tone.Unit.Time;
+    }
+  | {
+      type: 'sample';
+      timeSeconds: number;
+      sampleId: string;
+    }
+  | {
+      type: 'countInCue';
+      timeSeconds: number;
+      accented?: boolean;
+    }
+  | {
+      type: 'macrobeatCue';
+      timeSeconds: number;
+    };
+
 export class BoomwhackerSketchpadAudioEngine {
   private initialized = false;
 
@@ -302,6 +324,18 @@ export class BoomwhackerSketchpadAudioEngine {
     }
   }
 
+  playNoteAt(pitchString: string, audioTime: number, duration: Tone.Unit.Time = '8n'): boolean {
+    if (!this.isReady() || !this.mainSynth) return false;
+
+    try {
+      this.mainSynth.set({ oscillator: { type: this.model.getMainPlaybackVoice() } });
+      this.mainSynth.triggerAttackRelease(pitchString, duration, audioTime);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   playCountInCueNow(accented = false): boolean {
     if (!this.isReady() || !this.metronomePlayers?.loaded) return false;
 
@@ -313,11 +347,33 @@ export class BoomwhackerSketchpadAudioEngine {
     }
   }
 
+  private playCountInCueAt(audioTime: number, accented = false): boolean {
+    if (!this.isReady() || !this.metronomePlayers?.loaded) return false;
+
+    try {
+      this.metronomePlayers.player(accented ? 'cueAccent' : 'cue')?.start(audioTime);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   playMacrobeatCueNow(): boolean {
     if (!this.isReady() || !this.metronomePlayers?.loaded) return false;
 
     try {
       this.metronomePlayers.player('macrobeat')?.start(Tone.now());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private playMacrobeatCueAt(audioTime: number): boolean {
+    if (!this.isReady() || !this.metronomePlayers?.loaded) return false;
+
+    try {
+      this.metronomePlayers.player('macrobeat')?.start(audioTime);
       return true;
     } catch {
       return false;
@@ -381,6 +437,63 @@ export class BoomwhackerSketchpadAudioEngine {
     } catch {
       return false;
     }
+  }
+
+  playSampleAt(sampleId: string, audioTime: number): boolean {
+    if (!this.isReady()) return false;
+
+    try {
+      const player = this.supplementalSamplePlayers.get(sampleId);
+      if (!player?.loaded) return false;
+
+      player.start(audioTime);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  schedulePlaybackAudio(events: ScheduledPlaybackAudioEvent[], startDelaySeconds = 0.03): boolean {
+    if (!this.isReady()) return false;
+
+    this.stopScheduledPlaybackAudio();
+    Tone.Transport.position = 0;
+
+    for (const event of events) {
+      if (!Number.isFinite(event.timeSeconds) || event.timeSeconds < 0) continue;
+
+      const eventId = Tone.Transport.scheduleOnce((audioTime) => {
+        if (event.type === 'note') {
+          this.playNoteAt(event.pitch, audioTime, event.duration ?? '8n');
+          return;
+        }
+
+        if (event.type === 'sample') {
+          this.playSampleAt(event.sampleId, audioTime);
+          return;
+        }
+
+        if (event.type === 'countInCue') {
+          this.playCountInCueAt(audioTime, event.accented ?? false);
+          return;
+        }
+
+        this.playMacrobeatCueAt(audioTime);
+      }, event.timeSeconds);
+
+      this.scheduledEventIds.push(eventId);
+    }
+
+    Tone.Transport.start(Tone.now() + Math.max(0, startDelaySeconds));
+    return true;
+  }
+
+  stopScheduledPlaybackAudio(): void {
+    if (!this.isReady()) return;
+
+    Tone.Transport.stop();
+    Tone.Transport.position = 0;
+    this.clearScheduledEvents();
   }
 
   playTransport(): boolean {

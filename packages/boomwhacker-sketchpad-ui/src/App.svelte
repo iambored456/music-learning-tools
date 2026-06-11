@@ -18,6 +18,7 @@
     getPitchNameForDisplay,
     type NoteDefinition,
     type BoomwhackerSketchpadState,
+    type ScheduledPlaybackAudioEvent,
     type TonicValue,
   } from '@mlt/boomwhacker-sketchpad-core';
   import {
@@ -263,11 +264,6 @@
     rowCount: number;
   };
 
-  type KaraokeOverlayBall = {
-    voiceIndex: VoiceIndex;
-    style: string | null;
-  };
-
   type KaraokeAnchorTransition = {
     anchor: KaraokeAnchor;
     targetIndex: number;
@@ -278,6 +274,26 @@
     activationIndex: number | null;
     pinnedVoiceIndex: VoiceIndex | null;
     referenceViewportLeftPx: number | null;
+  };
+
+  type RectSnapshot = {
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
+
+  type PlaybackGeometryCache = {
+    scrollLeft: number;
+    panelRect: RectSnapshot;
+    scrollShellRect: RectSnapshot | null;
+    rowRects: Map<string, RectSnapshot>;
+    cellRects: Map<string, RectSnapshot>;
+    firstCellRects: Map<string, RectSnapshot>;
   };
 
   type AudioReadinessResult = {
@@ -548,13 +564,14 @@
   const DEFAULT_TRACK_STYLE: TrackStyle = 'stacked';
   const VOICE_INDEXES = [0, 1, 2, 3] as const;
   const HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO = 0.34;
-  const HORIZONTAL_LOOP_RENDER_CYCLES = 5;
-  const HORIZONTAL_LOOP_ANCHOR_CYCLE = 2;
-  const HORIZONTAL_LOOP_RECENTER_CYCLE = 3;
+  const HORIZONTAL_LOOP_RENDER_CYCLES = 3;
+  const HORIZONTAL_LOOP_ANCHOR_CYCLE = 1;
+  const HORIZONTAL_LOOP_RECENTER_CYCLE = 2;
   const TRACK_ZOOM_MIN = 0.65;
   const TRACK_ZOOM_MAX = 1.8;
   const TRACK_ZOOM_WHEEL_SENSITIVITY = 0.0016;
   const TEMPO_SHORTCUT_VALUES = [60, 65, 70, 75, 80, 85] as const;
+  const AUDIO_SCHEDULE_START_DELAY_MS = 0;
 
   const voiceOptions: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
@@ -572,7 +589,11 @@
   let selectedNoteKeys = new Set<string>();
   let boxSelectionState: BoxSelectionState | null = null;
   let selectionClipboard: SelectionClipboard | null = null;
-  let playbackTimer: ReturnType<typeof setInterval> | null = null;
+  let playbackFrame: number | null = null;
+  let playbackVisualLoopToken = 0;
+  let playbackVisualStartedAtMs = 0;
+  let playbackVisualStartIndex = 0;
+  let playbackVisualLastRenderedIndex = -1;
   let pendingPlaybackTimeouts = new Set<ReturnType<typeof setTimeout>>();
   let voicePlaybackCursors: Array<GridCellRef | null> = VOICE_INDEXES.map(() => null);
   let voiceKaraokeBallRowIndexes: Array<number | null> = VOICE_INDEXES.map(() => null);
@@ -607,6 +628,8 @@
   let voicePlaybackHighlightAnchors: Array<KaraokeAnchor | null> = VOICE_INDEXES.map(() => null);
   let voicePlaybackPulseFlips: boolean[] = VOICE_INDEXES.map(() => false);
   let voicePlayedCellIndexes: Array<Set<number>> = VOICE_INDEXES.map(() => new Set<number>());
+  let playbackGeometryCache: PlaybackGeometryCache | null = null;
+  let karaokeBallElements: Array<HTMLElement | null> = VOICE_INDEXES.map(() => null);
 
   let dragPayload: DragPayload | null = null;
   let dragOverCell: GridDropTarget | null = null;
@@ -685,7 +708,6 @@
   let voiceRows: GridRow[][] = VOICE_INDEXES.map((voiceIndex) =>
     Array.from({ length: INITIAL_ROWS }, () => createEmptyRow(`row_${voiceKey(voiceIndex)}`)),
   );
-  let karaokeOverlayBalls: KaraokeOverlayBall[] = [];
   let renderedTrackRows: RenderedTrackRow[] = [];
   let canvasPersistenceReady = false;
 
@@ -721,21 +743,6 @@
         ? Math.max(0, scrollShellWidth - horizontalPlaybackHighway.referenceViewportLeftPx)
         : 0;
     trackPlaybackShellHeightPx = trackStyle === 'horizontal' && isPlaying ? Math.max(0, scrollShellHeight) : 0;
-  }
-  $: {
-    voiceKaraokeBallRowIndexes;
-    voiceKaraokeBallLeftPercents;
-    voiceKaraokeBallArcOffsetPxs;
-    karaokeBallSizePx;
-    canvasScrollRevision;
-    voiceCount;
-    trackStyle;
-    isPlaying;
-    voicePlaybackHighlights;
-    karaokeOverlayBalls = VOICE_INDEXES.map((voiceIndex) => ({
-      voiceIndex,
-      style: isVoiceVisible(voiceIndex) ? karaokeBallOverlayStyle(voiceIndex) : null,
-    }));
   }
   $: {
     voiceRows;
@@ -2980,6 +2987,101 @@
 
   function invalidateCanvasLayout(): void {
     canvasScrollRevision += 1;
+    playbackGeometryCache = null;
+  }
+
+  function rectSnapshot(rect: DOMRect): RectSnapshot {
+    return {
+      x: rect.x,
+      y: rect.y,
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+    };
+  }
+
+  function rectFromSnapshot(snapshot: RectSnapshot, offsetX = 0, offsetY = 0): DOMRect {
+    return DOMRect.fromRect({
+      x: snapshot.x + offsetX,
+      y: snapshot.y + offsetY,
+      width: snapshot.width,
+      height: snapshot.height,
+    });
+  }
+
+  function rowGeometryKey(voiceIndex: VoiceIndex, rowIndex: number): string {
+    return `${voiceIndex}:${rowIndex}`;
+  }
+
+  function cellGeometryKey(voiceIndex: VoiceIndex, zone: GridZone, rowIndex: number, cellIndex: number): string {
+    return `${voiceIndex}:${zone}:${rowIndex}:${cellIndex}`;
+  }
+
+  function cachedRectWithScrollOffset(snapshot: RectSnapshot): DOMRect {
+    const scrollDeltaX =
+      trackStyle === 'horizontal' && canvasScrollShellElement && playbackGeometryCache
+        ? canvasScrollShellElement.scrollLeft - playbackGeometryCache.scrollLeft
+        : 0;
+    return rectFromSnapshot(snapshot, -scrollDeltaX, 0);
+  }
+
+  function rebuildPlaybackGeometryCache(): void {
+    if (typeof document === 'undefined') return;
+    if (!canvasPanelElement) return;
+
+    const rowRects = new Map<string, RectSnapshot>();
+    const cellRects = new Map<string, RectSnapshot>();
+    const firstCellRects = new Map<string, RectSnapshot>();
+
+    for (const voiceIndex of VOICE_INDEXES) {
+      for (const [rowIndex, rowElement] of voiceTrackRowElements[voiceIndex].entries()) {
+        if (!rowElement) continue;
+
+        rowRects.set(rowGeometryKey(voiceIndex, rowIndex), rectSnapshot(rowElement.getBoundingClientRect()));
+
+        const cells = rowElement.querySelectorAll<HTMLElement>('.macrobeat-cell');
+        for (const cellElement of cells) {
+          const zone = cellElement.dataset.trackZone === 'pickup' ? 'pickup' : 'main';
+          const parsedRowIndex = Number(cellElement.dataset.rowIndex);
+          const parsedCellIndex = Number(cellElement.dataset.cellIndex);
+          if (!Number.isInteger(parsedRowIndex) || !Number.isInteger(parsedCellIndex)) continue;
+
+          const snapshot = rectSnapshot(cellElement.getBoundingClientRect());
+          cellRects.set(cellGeometryKey(voiceIndex, zone, parsedRowIndex, parsedCellIndex), snapshot);
+          const firstCellKey = rowGeometryKey(voiceIndex, parsedRowIndex);
+          if (!firstCellRects.has(firstCellKey)) {
+            firstCellRects.set(firstCellKey, snapshot);
+          }
+        }
+      }
+    }
+
+    playbackGeometryCache = {
+      scrollLeft: canvasScrollShellElement?.scrollLeft ?? 0,
+      panelRect: rectSnapshot(canvasPanelElement.getBoundingClientRect()),
+      scrollShellRect: canvasScrollShellElement ? rectSnapshot(canvasScrollShellElement.getBoundingClientRect()) : null,
+      rowRects,
+      cellRects,
+      firstCellRects,
+    };
+  }
+
+  function getCachedTrackRowRect(voiceIndex: VoiceIndex, rowIndex: number): DOMRect | null {
+    const snapshot = playbackGeometryCache?.rowRects.get(rowGeometryKey(voiceIndex, rowIndex));
+    return snapshot ? cachedRectWithScrollOffset(snapshot) : null;
+  }
+
+  function getCachedTrackCellRect(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): DOMRect | null {
+    const snapshot = playbackGeometryCache?.cellRects.get(cellGeometryKey(voiceIndex, zone, rowIndex, cellIndex));
+    return snapshot ? cachedRectWithScrollOffset(snapshot) : null;
   }
 
   function handleCanvasScroll(): void {
@@ -2988,6 +3090,8 @@
     }
 
     invalidateCanvasLayout();
+    rebuildPlaybackGeometryCache();
+    applyKaraokeBallElementStyles();
   }
 
   function handleTrackWheel(event: WheelEvent): void {
@@ -4100,19 +4204,80 @@
       voiceKaraokeAnimationFrames[voiceIndex] = null;
     }
 
-    voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
+    voiceKaraokeBallArcOffsetPxs.splice(voiceIndex, 1, 0);
+    applyKaraokeBallElementStyle(voiceIndex);
+  }
+
+  function setKaraokeBallState(
+    voiceIndex: VoiceIndex,
+    rowIndex: number | null,
+    leftPercent = voiceKaraokeBallLeftPercents[voiceIndex] ?? 50,
+    arcOffsetPx = 0,
+  ): void {
+    voiceKaraokeBallRowIndexes.splice(voiceIndex, 1, rowIndex);
+    voiceKaraokeBallLeftPercents.splice(voiceIndex, 1, leftPercent);
+    voiceKaraokeBallArcOffsetPxs.splice(voiceIndex, 1, arcOffsetPx);
+    applyKaraokeBallElementStyle(voiceIndex);
+  }
+
+  function karaokeBallOverlayStyleForState(
+    voiceIndex: VoiceIndex,
+    rowIndex: number | null,
+    leftPercent: number,
+    arcOffsetPx: number,
+  ): string | null {
+    if (rowIndex === null || !isVoiceVisible(voiceIndex)) return null;
+
+    const panel = canvasPanelElement;
+    const rowElement = getTrackRowElement(voiceIndex, rowIndex);
+    if (!panel || !rowElement) return null;
+
+    const panelRect = playbackGeometryCache ? rectFromSnapshot(playbackGeometryCache.panelRect) : panel.getBoundingClientRect();
+    const rowRect = getTrackRowRect(voiceIndex, rowIndex);
+    if (!rowRect) return null;
+    const pinnedLeftPx = trackStyle === 'horizontal' ? voiceKaraokeBallPinnedLeftPxs[voiceIndex] : null;
+    const leftPx = pinnedLeftPx ?? (rowRect.left - panelRect.left - panel.clientLeft + (leftPercent / 100) * rowRect.width);
+    const horizontalPlaybackActive = trackStyle === 'horizontal' && isPlaying;
+    const laneRect = horizontalPlaybackActive ? karaokePlaybackLaneRect(voiceIndex, rowIndex) ?? rowRect : rowRect;
+    const horizontalLaneInsetPx = horizontalPlaybackActive ? horizontalPlaybackKaraokeLaneInsetPx(laneRect.height) : 0;
+    const topPx = laneRect.top - panelRect.top - panel.clientTop + horizontalLaneInsetPx;
+    const anchorY = horizontalPlaybackActive ? '-50%' : '-100%';
+
+    return `left:${leftPx}px; top:${topPx}px; --karaoke-ball-y:${arcOffsetPx}px; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-ball-anchor-y:${anchorY};`;
+  }
+
+  function applyKaraokeBallElementStyle(
+    voiceIndex: VoiceIndex,
+    rowIndex = voiceKaraokeBallRowIndexes[voiceIndex],
+    leftPercent = voiceKaraokeBallLeftPercents[voiceIndex] ?? 50,
+    arcOffsetPx = voiceKaraokeBallArcOffsetPxs[voiceIndex] ?? 0,
+  ): void {
+    const element = karaokeBallElements[voiceIndex];
+    if (!element) return;
+
+    const style = karaokeBallOverlayStyleForState(voiceIndex, rowIndex, leftPercent, arcOffsetPx);
+    if (!style) {
+      element.style.display = 'none';
+      return;
+    }
+
+    element.style.cssText = style;
+    element.style.display = '';
+  }
+
+  function applyKaraokeBallElementStyles(): void {
+    for (const voiceIndex of VOICE_INDEXES) {
+      applyKaraokeBallElementStyle(voiceIndex);
+    }
   }
 
   function setKaraokeBallToAnchor(voiceIndex: VoiceIndex, anchor: KaraokeAnchor): void {
-    voiceKaraokeBallRowIndexes[voiceIndex] = anchor.rowIndex;
-    voiceKaraokeBallLeftPercents[voiceIndex] = anchor.leftPercent;
-    voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
+    setKaraokeBallState(voiceIndex, anchor.rowIndex, anchor.leftPercent, 0);
   }
 
   function clearKaraokeBallDisplay(voiceIndex: VoiceIndex): void {
     clearKaraokeAnimation(voiceIndex);
-    voiceKaraokeBallRowIndexes[voiceIndex] = null;
-    voiceKaraokeBallLeftPercents[voiceIndex] = 50;
+    setKaraokeBallState(voiceIndex, null, 50, 0);
     voiceKaraokeAnchors[voiceIndex] = null;
   }
 
@@ -4125,7 +4290,7 @@
   }
 
   function setHorizontalPlaybackLaneShiftPx(voiceIndex: VoiceIndex, shiftPx: number): void {
-    voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] = shiftPx;
+    voiceHorizontalPlaybackLaneShiftPxs.splice(voiceIndex, 1, shiftPx);
     applyHorizontalPlaybackLaneShiftStyle(voiceIndex, shiftPx);
   }
 
@@ -4751,7 +4916,9 @@
   }
 
   function getTrackRowRect(voiceIndex: VoiceIndex, rowIndex: number): DOMRect | null {
-    return voiceTrackRowElements[voiceIndex][rowIndex]?.getBoundingClientRect() ?? null;
+    return getCachedTrackRowRect(voiceIndex, rowIndex)
+      ?? voiceTrackRowElements[voiceIndex][rowIndex]?.getBoundingClientRect()
+      ?? null;
   }
 
   function getTrackRowElement(voiceIndex: VoiceIndex, rowIndex: number): HTMLElement | null {
@@ -4775,8 +4942,13 @@
     const referenceElement = relativeTo === 'panel' ? canvasPanelElement : canvasScrollShellElement;
     if (!rowElement || !referenceElement) return null;
 
-    const rowRect = rowElement.getBoundingClientRect();
-    const referenceRect = referenceElement.getBoundingClientRect();
+    const rowRect = getTrackRowRect(voiceIndex, anchor.rowIndex);
+    const cachedReferenceRect =
+      relativeTo === 'panel'
+        ? playbackGeometryCache ? rectFromSnapshot(playbackGeometryCache.panelRect) : null
+        : playbackGeometryCache?.scrollShellRect ? rectFromSnapshot(playbackGeometryCache.scrollShellRect) : null;
+    const referenceRect = cachedReferenceRect ?? referenceElement.getBoundingClientRect();
+    if (!rowRect) return null;
     const referenceBorder = relativeTo === 'panel' ? canvasPanelElement?.clientLeft ?? 0 : canvasScrollShellElement?.clientLeft ?? 0;
     return rowRect.left - referenceRect.left - referenceBorder + (anchor.leftPercent / 100) * rowRect.width;
   }
@@ -4991,39 +5163,23 @@
   function karaokeBallOverlayStyle(voiceIndex: VoiceIndex): string | null {
     canvasScrollRevision;
 
-    const rowIndex = voiceKaraokeBallRowIndexes[voiceIndex];
-    if (rowIndex === null) return null;
-
-    const panel = canvasPanelElement;
-    const rowElement = getTrackRowElement(voiceIndex, rowIndex);
-    if (!panel || !rowElement) return null;
-
-    const panelRect = panel.getBoundingClientRect();
-    const rowRect = rowElement.getBoundingClientRect();
-    const pinnedLeftPx = trackStyle === 'horizontal' ? voiceKaraokeBallPinnedLeftPxs[voiceIndex] : null;
-    const leftPx =
-      pinnedLeftPx ??
-      (rowRect.left - panelRect.left - panel.clientLeft + (voiceKaraokeBallLeftPercents[voiceIndex] / 100) * rowRect.width);
-    const horizontalPlaybackActive = trackStyle === 'horizontal' && isPlaying;
-    const laneRect = horizontalPlaybackActive ? karaokePlaybackLaneRect(voiceIndex, rowIndex) ?? rowRect : rowRect;
-    const horizontalLaneInsetPx = horizontalPlaybackActive ? horizontalPlaybackKaraokeLaneInsetPx(laneRect.height) : 0;
-    const topPx = laneRect.top - panelRect.top - panel.clientTop + horizontalLaneInsetPx;
-    const anchorY = horizontalPlaybackActive ? '-50%' : '-100%';
-
-    return `left:${leftPx}px; top:${topPx}px; --karaoke-ball-y:${voiceKaraokeBallArcOffsetPxs[voiceIndex]}px; --karaoke-ball-size-px:${karaokeBallSizePx}px; --karaoke-ball-anchor-y:${anchorY};`;
+    return karaokeBallOverlayStyleForState(
+      voiceIndex,
+      voiceKaraokeBallRowIndexes[voiceIndex],
+      voiceKaraokeBallLeftPercents[voiceIndex] ?? 50,
+      voiceKaraokeBallArcOffsetPxs[voiceIndex] ?? 0,
+    );
   }
 
   function karaokePlaybackLaneRect(voiceIndex: VoiceIndex, rowIndex: number): DOMRect | null {
     const highlight = voicePlaybackHighlights[voiceIndex];
     if (highlight?.rowIndex === rowIndex) {
-      const startCell = getTrackCellElement(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex);
       if (highlight.span === 1) {
-        return startCell?.getBoundingClientRect() ?? null;
+        return getTrackCellRect(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex);
       }
 
-      const endCell = getTrackCellElement(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex + highlight.span - 1);
-      const startRect = startCell?.getBoundingClientRect() ?? null;
-      const endRect = endCell?.getBoundingClientRect() ?? null;
+      const startRect = getTrackCellRect(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex);
+      const endRect = getTrackCellRect(voiceIndex, highlight.zone, rowIndex, highlight.startCellIndex + highlight.span - 1);
       if (startRect && endRect) {
         return DOMRect.fromRect({
           x: Math.min(startRect.left, endRect.left),
@@ -5035,6 +5191,9 @@
 
       return startRect ?? endRect;
     }
+
+    const firstCellSnapshot = playbackGeometryCache?.firstCellRects.get(rowGeometryKey(voiceIndex, rowIndex));
+    if (firstCellSnapshot) return cachedRectWithScrollOffset(firstCellSnapshot);
 
     const rowElement = getTrackRowElement(voiceIndex, rowIndex);
     return rowElement?.querySelector<HTMLElement>('.macrobeat-cell')?.getBoundingClientRect() ?? null;
@@ -5091,6 +5250,17 @@
     );
   }
 
+  function getTrackCellRect(
+    voiceIndex: VoiceIndex,
+    zone: GridZone,
+    rowIndex: number,
+    cellIndex: number,
+  ): DOMRect | null {
+    return getCachedTrackCellRect(voiceIndex, zone, rowIndex, cellIndex)
+      ?? getTrackCellElement(voiceIndex, zone, rowIndex, cellIndex)?.getBoundingClientRect()
+      ?? null;
+  }
+
   function sourceRowIndexForCursor(cursor: GridCellRef): number {
     return cursor.zone === 'pickup' ? 0 : cursor.sourceRowIndex ?? cursor.rowIndex;
   }
@@ -5102,19 +5272,15 @@
     anchorStartCellIndex: number,
     anchorSpan: 1 | 2,
   ): number | null {
-    const rowElement = getTrackRowElement(voiceIndex, anchorRowIndex);
-    const startCellElement = getTrackCellElement(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex);
-    if (!rowElement || !startCellElement) return null;
-
-    const rowRect = rowElement.getBoundingClientRect();
-    const startRect = startCellElement.getBoundingClientRect();
+    const rowRect = getTrackRowRect(voiceIndex, anchorRowIndex);
+    const startRect = getTrackCellRect(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex);
+    if (!rowRect || !startRect) return null;
     if (rowRect.width <= 0 || startRect.width <= 0) return null;
 
     let anchorLeftPx = startRect.left;
     let anchorRightPx = startRect.right;
     if (anchorSpan === 2) {
-      const endCellElement = getTrackCellElement(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex + 1);
-      const endRect = endCellElement?.getBoundingClientRect() ?? null;
+      const endRect = getTrackCellRect(voiceIndex, cursor.zone, cursor.rowIndex, anchorStartCellIndex + 1);
       if (endRect && endRect.width > 0) {
         anchorLeftPx = Math.min(anchorLeftPx, endRect.left);
         anchorRightPx = Math.max(anchorRightPx, endRect.right);
@@ -5250,7 +5416,8 @@
       onComplete: (() => void) | null = null,
       arcHeightPx: number = karaokeArcHeightPx,
     ): void => {
-      voiceKaraokeBallRowIndexes[voiceIndex] = rowIndex;
+      voiceKaraokeBallRowIndexes.splice(voiceIndex, 1, rowIndex);
+      applyKaraokeBallElementStyle(voiceIndex, rowIndex, startLeft, voiceKaraokeBallArcOffsetPxs[voiceIndex] ?? 0);
 
       const segmentStartedAt = performance.now();
       const deltaLeft = endLeft - startLeft;
@@ -5260,19 +5427,21 @@
         if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
         const progress = Math.min(1, (now - segmentStartedAt) / clampedSegmentMs);
-        voiceKaraokeBallLeftPercents[voiceIndex] = startLeft + deltaLeft * progress;
+        const leftPercent = startLeft + deltaLeft * progress;
+        let arcOffsetPx = 0;
 
         if (arcPhase === 'first-half') {
-          voiceKaraokeBallArcOffsetPxs[voiceIndex] = -arcHeightPx * (2 * progress - progress * progress);
+          arcOffsetPx = -arcHeightPx * (2 * progress - progress * progress);
         } else if (arcPhase === 'second-half') {
-          voiceKaraokeBallArcOffsetPxs[voiceIndex] = -arcHeightPx * (1 - progress * progress);
+          arcOffsetPx = -arcHeightPx * (1 - progress * progress);
         } else {
-          voiceKaraokeBallArcOffsetPxs[voiceIndex] = -4 * arcHeightPx * progress * (1 - progress);
+          arcOffsetPx = -4 * arcHeightPx * progress * (1 - progress);
         }
 
+        applyKaraokeBallElementStyle(voiceIndex, rowIndex, leftPercent, arcOffsetPx);
+
         if (progress >= 1) {
-          voiceKaraokeBallLeftPercents[voiceIndex] = endLeft;
-          voiceKaraokeBallArcOffsetPxs[voiceIndex] = arcPhase === 'first-half' ? -arcHeightPx : 0;
+          setKaraokeBallState(voiceIndex, rowIndex, endLeft, arcPhase === 'first-half' ? -arcHeightPx : 0);
           if (onComplete) {
             onComplete();
           } else {
@@ -5323,9 +5492,7 @@
       const incomingDurationMs = Math.max(20, transitionDurationMs - outgoingDurationMs);
       runArcSegment(transitionFrom.rowIndex, voiceKaraokeBallLeftPercents[voiceIndex], 100, outgoingDurationMs, 'first-half', () => {
         if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
-        voiceKaraokeBallRowIndexes[voiceIndex] = transitionTo.rowIndex;
-        voiceKaraokeBallLeftPercents[voiceIndex] = toRowLeftBoundary;
-        voiceKaraokeBallArcOffsetPxs[voiceIndex] = -arcHeightPx;
+        setKaraokeBallState(voiceIndex, transitionTo.rowIndex, toRowLeftBoundary, -arcHeightPx);
         runArcSegment(transitionTo.rowIndex, toRowLeftBoundary, transitionTo.leftPercent, incomingDurationMs, 'second-half', null, arcHeightPx);
       }, arcHeightPx);
     };
@@ -5340,8 +5507,7 @@
     arcHeightPx: number = karaokeArcHeightPx,
   ): void {
     clearKaraokeAnimation(voiceIndex);
-    voiceKaraokeBallRowIndexes[voiceIndex] = anchor.rowIndex;
-    voiceKaraokeBallLeftPercents[voiceIndex] = anchor.leftPercent;
+    setKaraokeBallState(voiceIndex, anchor.rowIndex, anchor.leftPercent, 0);
 
     const motionDurationMs = Math.max(80, Math.floor(durationMs));
     const token = voiceKaraokeAnimationTokens[voiceIndex];
@@ -5351,7 +5517,8 @@
       if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
       const progress = Math.min(1, (now - startedAt) / motionDurationMs);
-      voiceKaraokeBallArcOffsetPxs[voiceIndex] = -4 * arcHeightPx * progress * (1 - progress);
+      const arcOffsetPx = -4 * arcHeightPx * progress * (1 - progress);
+      applyKaraokeBallElementStyle(voiceIndex, anchor.rowIndex, anchor.leftPercent, arcOffsetPx);
 
       if (progress >= 1) {
         setKaraokeBallToAnchor(voiceIndex, anchor);
@@ -5374,8 +5541,7 @@
     startedAtMs: number = performance.now(),
   ): void {
     clearKaraokeAnimation(voiceIndex);
-    voiceKaraokeBallRowIndexes[voiceIndex] = currentAnchor.rowIndex;
-    voiceKaraokeBallLeftPercents[voiceIndex] = currentAnchor.leftPercent;
+    setKaraokeBallState(voiceIndex, currentAnchor.rowIndex, currentAnchor.leftPercent, 0);
 
     const motionDurationMs = Math.max(80, Math.floor(durationMs));
     const token = voiceKaraokeAnimationTokens[voiceIndex];
@@ -5385,12 +5551,11 @@
       if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
       const progress = Math.min(1, (now - startedAt) / motionDurationMs);
-      voiceKaraokeBallArcOffsetPxs[voiceIndex] = -4 * arcHeightPx * progress * (1 - progress);
+      const arcOffsetPx = -4 * arcHeightPx * progress * (1 - progress);
+      applyKaraokeBallElementStyle(voiceIndex, currentAnchor.rowIndex, currentAnchor.leftPercent, arcOffsetPx);
 
       if (progress >= 1) {
-        voiceKaraokeBallRowIndexes[voiceIndex] = nextAnchor.rowIndex;
-        voiceKaraokeBallLeftPercents[voiceIndex] = nextAnchor.leftPercent;
-        voiceKaraokeBallArcOffsetPxs[voiceIndex] = 0;
+        setKaraokeBallState(voiceIndex, nextAnchor.rowIndex, nextAnchor.leftPercent, 0);
         voiceKaraokeAnimationFrames[voiceIndex] = null;
         return;
       }
@@ -5449,9 +5614,7 @@
     const leadInMs = Math.max(40, Math.floor(playbackIntervalMs() / 2));
 
     clearKaraokeAnimation(voiceIndex);
-    voiceKaraokeBallRowIndexes[voiceIndex] = firstAnchor.rowIndex;
-    voiceKaraokeBallLeftPercents[voiceIndex] = firstAnchor.leftPercent;
-    voiceKaraokeBallArcOffsetPxs[voiceIndex] = -karaokeArcHeightPx;
+    setKaraokeBallState(voiceIndex, firstAnchor.rowIndex, firstAnchor.leftPercent, -karaokeArcHeightPx);
 
     const token = voiceKaraokeAnimationTokens[voiceIndex];
     const startedAt = performance.now();
@@ -5460,8 +5623,8 @@
       if (token !== voiceKaraokeAnimationTokens[voiceIndex]) return;
 
       const progress = Math.min(1, (now - startedAt) / leadInMs);
-      voiceKaraokeBallLeftPercents[voiceIndex] = firstAnchor.leftPercent;
-      voiceKaraokeBallArcOffsetPxs[voiceIndex] = -karaokeArcHeightPx * (1 - progress * progress);
+      const arcOffsetPx = -karaokeArcHeightPx * (1 - progress * progress);
+      applyKaraokeBallElementStyle(voiceIndex, firstAnchor.rowIndex, firstAnchor.leftPercent, arcOffsetPx);
 
       if (progress >= 1) {
         setKaraokeBallToAnchor(voiceIndex, firstAnchor);
@@ -5627,9 +5790,10 @@
   }
 
   function clearPlaybackTimer(): void {
-    if (playbackTimer !== null) {
-      clearInterval(playbackTimer);
-      playbackTimer = null;
+    playbackVisualLoopToken += 1;
+    if (playbackFrame !== null) {
+      cancelAnimationFrame(playbackFrame);
+      playbackFrame = null;
     }
   }
 
@@ -5647,6 +5811,55 @@
     }, delayMs);
 
     pendingPlaybackTimeouts.add(timeoutId);
+  }
+
+  function schedulePlaybackAudioRun(
+    startIndex: number,
+    traversalEndIndex: number,
+    timelineOffsetMs = 0,
+    includeCountIn = false,
+    countInStartupDelayMs = 0,
+  ): void {
+    const events = [
+      ...(includeCountIn ? buildCountInAudioEvents(countInStartupDelayMs) : []),
+      ...buildPlaybackAudioEvents(startIndex, traversalEndIndex, timelineOffsetMs),
+    ];
+    audio.schedulePlaybackAudio(events, AUDIO_SCHEDULE_START_DELAY_MS / 1000);
+  }
+
+  function startPlaybackVisualLoop(startIndex: number): void {
+    clearPlaybackTimer();
+    const loopToken = playbackVisualLoopToken;
+    playbackVisualStartedAtMs = performance.now();
+    playbackVisualStartIndex = startIndex;
+    playbackVisualLastRenderedIndex = startIndex - 1;
+
+    const step = (now: number): void => {
+      if (!isPlaying || loopToken !== playbackVisualLoopToken) {
+        playbackFrame = null;
+        return;
+      }
+
+      const intervalMs = playbackIntervalMs();
+      const elapsedSteps = Math.max(0, Math.floor((now - playbackVisualStartedAtMs) / intervalMs));
+      const targetIndex = playbackVisualStartIndex + elapsedSteps;
+      let renderedSteps = 0;
+
+      while (isPlaying && loopToken === playbackVisualLoopToken && playbackVisualLastRenderedIndex < targetIndex && renderedSteps < 4) {
+        playbackStep();
+        playbackVisualLastRenderedIndex += 1;
+        renderedSteps += 1;
+      }
+
+      if (!isPlaying || loopToken !== playbackVisualLoopToken) {
+        playbackFrame = null;
+        return;
+      }
+
+      playbackFrame = requestAnimationFrame(step);
+    };
+
+    playbackFrame = requestAnimationFrame(step);
   }
 
   function playbackIntervalMs(): number {
@@ -5842,6 +6055,94 @@
     };
   }
 
+  function cellForPlaybackVoice(voiceIndex: VoiceIndex, cellRef: GridCellRef): GridCellContent | null {
+    const sourceRowIndex = sourceRowIndexForCursor(cellRef);
+    return cellRef.zone === 'pickup'
+      ? pickupRowForVoice(voiceIndex).cells[cellRef.cellIndex] ?? null
+      : rowsForVoice(voiceIndex)[sourceRowIndex]?.cells[cellRef.cellIndex] ?? null;
+  }
+
+  function scheduledAudioEventForPlacedNote(note: PlacedNote, timeSeconds: number): ScheduledPlaybackAudioEvent | null {
+    const sampleId = noteSampleId(note.noteId);
+    if (sampleId) {
+      return { type: 'sample', timeSeconds, sampleId };
+    }
+
+    const pitch = getPitchNameForDisplay(model.getFullRootNote(), note.interval);
+    return pitch ? { type: 'note', timeSeconds, pitch } : null;
+  }
+
+  function appendScheduledCellAudioEvents(
+    events: ScheduledPlaybackAudioEvent[],
+    voiceIndex: VoiceIndex,
+    cellRef: GridCellRef,
+    timeSeconds: number,
+    microbeatSeconds: number,
+  ): void {
+    const cell = cellForPlaybackVoice(voiceIndex, cellRef);
+    if (!cell || !cellHasAnyNotes(cell)) return;
+
+    if (cell.shape === 'oval') {
+      const event = scheduledAudioEventForPlacedNote(cell.notes[0], timeSeconds);
+      if (event) events.push(event);
+      return;
+    }
+
+    if (cell.shape === 'circle') {
+      if (cell.role === 'continuation') return;
+
+      const event = scheduledAudioEventForPlacedNote(cell.notes[0], timeSeconds);
+      if (event) events.push(event);
+      return;
+    }
+
+    const [leftSixteenth, rightSixteenth] = cell.notes;
+    if (leftSixteenth) {
+      const event = scheduledAudioEventForPlacedNote(leftSixteenth, timeSeconds);
+      if (event) events.push(event);
+    }
+
+    if (rightSixteenth) {
+      const event = scheduledAudioEventForPlacedNote(rightSixteenth, timeSeconds + microbeatSeconds / 2);
+      if (event) events.push(event);
+    }
+  }
+
+  function buildPlaybackAudioEvents(
+    startIndex: number,
+    traversalEndIndex: number,
+    timelineOffsetMs: number,
+  ): ScheduledPlaybackAudioEvent[] {
+    const events: ScheduledPlaybackAudioEvent[] = [];
+    const intervalSeconds = playbackIntervalMs() / 1000;
+    const timelineOffsetSeconds = timelineOffsetMs / 1000;
+
+    for (let index = startIndex; index < traversalEndIndex; index += 1) {
+      const cellRef = cellRefFromPlaybackIndex(index);
+      const timeSeconds = timelineOffsetSeconds + (index - startIndex) * intervalSeconds;
+
+      if (macrobeatMetronomeEnabled && cellRef.cellIndex % MICROBEATS_PER_BEAT === 0) {
+        events.push({ type: 'macrobeatCue', timeSeconds });
+      }
+
+      for (const voiceIndex of visibleVoiceIndices()) {
+        if (!isVoiceAudible(voiceIndex)) continue;
+        appendScheduledCellAudioEvents(events, voiceIndex, cellRef, timeSeconds, intervalSeconds);
+      }
+    }
+
+    return events;
+  }
+
+  function buildCountInAudioEvents(startupDelayMs: number): ScheduledPlaybackAudioEvent[] {
+    const beatMs = countInBeatIntervalMs();
+    return COUNT_IN_NUMBERS.map((_, index) => ({
+      type: 'countInCue' as const,
+      timeSeconds: (startupDelayMs + beatMs * index) / 1000,
+      accented: index === ACCENTED_COUNT_IN_INDEX,
+    }));
+  }
+
   function playPlacedNote(note: PlacedNote): void {
     if (!audioReady) return;
 
@@ -5855,50 +6156,6 @@
     if (!pitch) return;
 
     audio.playNoteNow(pitch);
-  }
-
-  function playCellNote(voiceIndex: VoiceIndex, cellRef: GridCellRef): boolean {
-    const sourceRowIndex = sourceRowIndexForCursor(cellRef);
-    const cell =
-      cellRef.zone === 'pickup'
-        ? pickupRowForVoice(voiceIndex).cells[cellRef.cellIndex]
-        : rowsForVoice(voiceIndex)[sourceRowIndex]?.cells[cellRef.cellIndex];
-
-    if (!cell || !cellHasAnyNotes(cell)) return false;
-
-    if (cell.shape === 'oval') {
-      playPlacedNote(cell.notes[0]);
-      return false;
-    }
-
-    if (cell.shape === 'circle') {
-      if (cell.role === 'continuation') {
-        return false;
-      }
-
-      playPlacedNote(cell.notes[0]);
-      return false;
-    }
-
-    const [leftSixteenth, rightSixteenth] = cell.notes;
-    if (!leftSixteenth && !rightSixteenth) {
-      return false;
-    }
-
-    if (leftSixteenth) {
-      playPlacedNote(leftSixteenth);
-    }
-
-    if (!rightSixteenth || !isPlaying) {
-      return false;
-    }
-
-    queuePlaybackTimeout(() => {
-      if (!isPlaying) return;
-      playPlacedNote(rightSixteenth);
-    }, Math.max(20, Math.floor(playbackIntervalMs() / 2)));
-
-    return true;
   }
 
   function recenterHorizontalLoopPlaybackIfNeeded(totalCells: number): void {
@@ -5923,7 +6180,8 @@
     playbackIndex = nextPlaybackIndex;
     for (const voiceIndex of VOICE_INDEXES) {
       if (voiceKaraokeBallRowIndexes[voiceIndex] !== null) {
-        voiceKaraokeBallRowIndexes[voiceIndex] = Math.max(0, voiceKaraokeBallRowIndexes[voiceIndex]! - rowShift);
+        voiceKaraokeBallRowIndexes.splice(voiceIndex, 1, Math.max(0, voiceKaraokeBallRowIndexes[voiceIndex]! - rowShift));
+        applyKaraokeBallElementStyle(voiceIndex);
       }
 
       if (voiceKaraokeAnchors[voiceIndex]) {
@@ -5989,17 +6247,10 @@
       activateHorizontalPlaybackHighway(currentIndex);
     }
 
-    if (macrobeatMetronomeEnabled && cursor.cellIndex % MICROBEATS_PER_BEAT === 0) {
-      audio.playMacrobeatCueNow();
-    }
-
-    let hasSecondSixteenth = false;
     for (const voiceIndex of visibleVoiceIndices()) {
       voicePlaybackCursors[voiceIndex] = cursor;
       updateKaraokeAfterPlaybackStep(voiceIndex, currentIndex, traversalEndIndex, cursor, stepStartedAtMs);
       updatePlaybackHighlight(voiceIndex, cursor);
-      if (!isVoiceAudible(voiceIndex)) continue;
-      hasSecondSixteenth = playCellNote(voiceIndex, cursor) || hasSecondSixteenth;
     }
     queuePlaybackScrollForCurrentStep(currentIndex, traversalEndIndex, stepStartedAtMs);
     if (PLAYED_NOTE_MUTING_DEBUG && typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -6019,25 +6270,17 @@
 
     if (playbackIndex >= totalCells) {
       clearPlaybackTimer();
+      const finalCellDurationMs = playbackIntervalMs();
 
       if (isLooping) {
-        if (hasSecondSixteenth) {
-          queuePlaybackTimeout(() => {
-            playbackIndex = playbackResetIndex();
-            restartPlaybackTimer();
-          }, Math.max(24, Math.floor(playbackIntervalMs() / 2) + 8));
-        } else {
+        queuePlaybackTimeout(() => {
           playbackIndex = playbackResetIndex();
           restartPlaybackTimer();
-        }
+        }, finalCellDurationMs);
       } else {
-        if (hasSecondSixteenth) {
-          queuePlaybackTimeout(() => {
-            stopPlayback();
-          }, Math.max(24, Math.floor(playbackIntervalMs() / 2) + 8));
-        } else {
+        queuePlaybackTimeout(() => {
           stopPlayback();
-        }
+        }, finalCellDurationMs);
       }
     }
   }
@@ -6047,6 +6290,8 @@
 
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    rebuildPlaybackGeometryCache();
+    applyKaraokeBallElementStyles();
     const totalCells = totalPlaybackCells();
     const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, totalCells);
     const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
@@ -6054,7 +6299,8 @@
       prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
       queueHorizontalPlaybackScroll(currentIndex, 'auto');
     }
-    playbackTimer = setInterval(playbackStep, playbackIntervalMs());
+    schedulePlaybackAudioRun(currentIndex, traversalEndIndex);
+    startPlaybackVisualLoop(currentIndex);
   }
 
   function clearCountInDisplay(): void {
@@ -6067,11 +6313,12 @@
     beatMs: number,
     scheduledDelayMs: number | null = null,
     actualDelayMs: number | null = null,
+    playAudio = true,
   ): void {
     countInDisplayNumber = COUNT_IN_NUMBERS[index];
 
     const accented = index === ACCENTED_COUNT_IN_INDEX;
-    const played = audio.playCountInCueNow(accented);
+    const played = playAudio ? audio.playCountInCueNow(accented) : true;
     debugPlaybackStartup('Count-in beat fired.', {
       count: COUNT_IN_NUMBERS[index],
       accented,
@@ -6097,7 +6344,7 @@
     }
   }
 
-  function startCountIn(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, startupDelayMs = 0): number {
+  function startCountIn(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, startupDelayMs = 0, playAudio = true): number {
     const beatMs = countInBeatIntervalMs();
     const sequenceStartedAt = performance.now();
 
@@ -6117,6 +6364,7 @@
           beatMs,
           scheduledDelayMs,
           Math.round(performance.now() - sequenceStartedAt),
+          playAudio,
         );
       }, scheduledDelayMs);
     }
@@ -6191,6 +6439,7 @@
     setPlaybackUiState(true);
     playbackPaused = false;
     await tick();
+    rebuildPlaybackGeometryCache();
 
     if (!isPlaying || playbackStartToken !== startToken) return;
 
@@ -6224,11 +6473,13 @@
     });
     const leadInMs = firstAnchors.size > 0
       ? shouldRunCountIn
-        ? startCountIn(firstAnchors, startupDelayMs)
+        ? startCountIn(firstAnchors, startupDelayMs, false)
         : shouldUseHorizontalPlaybackHighway
           ? (holdKaraokeAtFirstAnchors(firstAnchors), startupDelayMs)
           : startKaraokeLeadInWithDelay(firstAnchors, startupDelayMs)
       : startupDelayMs;
+    schedulePlaybackAudioRun(currentIndex, traversalEndIndex, leadInMs, shouldRunCountIn, startupDelayMs);
+    applyKaraokeBallElementStyles();
     if (firstAnchors.size === 0) {
       for (const voiceIndex of visibleVoiceIndices()) {
         clearKaraokeBallDisplay(voiceIndex);
@@ -6243,11 +6494,7 @@
         actualDelayMs: Math.round(performance.now() - playbackRequestedAt),
       });
       clearCountInDisplay();
-      playbackStep();
-
-      if (isPlaying) {
-        playbackTimer = setInterval(playbackStep, playbackIntervalMs());
-      }
+      startPlaybackVisualLoop(currentIndex);
     }, leadInMs);
   }
 
@@ -6262,7 +6509,9 @@
     playbackIndex = pausedLogicalIndex;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    audio.stopScheduledPlaybackAudio();
     resetHorizontalPlaybackHighway();
+    playbackGeometryCache = null;
     for (const voiceIndex of VOICE_INDEXES) {
       clearKaraokeAnimation(voiceIndex);
       voicePlaybackHighlights[voiceIndex] = null;
@@ -6278,7 +6527,9 @@
     playbackPaused = false;
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
+    audio.stopScheduledPlaybackAudio();
     resetHorizontalPlaybackHighway();
+    playbackGeometryCache = null;
     for (const voiceIndex of VOICE_INDEXES) {
       clearKaraokeBallDisplay(voiceIndex);
       voicePlaybackCursors[voiceIndex] = null;
@@ -7900,22 +8151,21 @@
     {/if}
 
     <div class="karaoke-overlay" aria-hidden="true">
-      {#each karaokeOverlayBalls as overlayBall (overlayBall.voiceIndex)}
-        {#if overlayBall.style}
-          <div
-            class="karaoke-ball"
-            class:karaoke-ball--voice-a={voiceCount > 1 && overlayBall.voiceIndex === 0}
-            class:karaoke-ball--voice-b={voiceCount > 1 && overlayBall.voiceIndex === 1}
-            class:karaoke-ball--voice-c={voiceCount > 1 && overlayBall.voiceIndex === 2}
-            class:karaoke-ball--voice-d={voiceCount > 1 && overlayBall.voiceIndex === 3}
-            class:karaoke-ball--count-in={countInDisplayNumber !== null}
-            style={overlayBall.style}
-          >
-            {#if countInDisplayNumber !== null}
-              <span class="karaoke-ball-count">{countInDisplayNumber}</span>
-            {/if}
-          </div>
-        {/if}
+      {#each VOICE_INDEXES as overlayVoiceIndex (overlayVoiceIndex)}
+        <div
+          class="karaoke-ball"
+          class:karaoke-ball--voice-a={voiceCount > 1 && overlayVoiceIndex === 0}
+          class:karaoke-ball--voice-b={voiceCount > 1 && overlayVoiceIndex === 1}
+          class:karaoke-ball--voice-c={voiceCount > 1 && overlayVoiceIndex === 2}
+          class:karaoke-ball--voice-d={voiceCount > 1 && overlayVoiceIndex === 3}
+          class:karaoke-ball--count-in={countInDisplayNumber !== null}
+          bind:this={karaokeBallElements[overlayVoiceIndex]}
+          style={karaokeBallOverlayStyle(overlayVoiceIndex) ?? 'display:none;'}
+        >
+          {#if countInDisplayNumber !== null && isVoiceVisible(overlayVoiceIndex)}
+            <span class="karaoke-ball-count">{countInDisplayNumber}</span>
+          {/if}
+        </div>
       {/each}
     </div>
 
