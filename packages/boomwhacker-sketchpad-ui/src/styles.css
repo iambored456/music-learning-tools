@@ -516,7 +516,10 @@ body {
 .boomwhacker-sketchpad.playback-active .canvas-scroll-shell.track-style-horizontal,
 .canvas-scroll-shell.track-style-horizontal.playback-highway-active {
   scroll-snap-type: none;
-  will-change: scroll-position;
+}
+
+.boomwhacker-sketchpad.playback-active .rows-grid.track-style-horizontal {
+  will-change: transform;
 }
 
 .canvas-scroll-shell.track-style-horizontal.playback-highway-expanded {

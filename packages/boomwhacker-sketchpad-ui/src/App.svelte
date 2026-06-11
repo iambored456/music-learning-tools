@@ -576,9 +576,10 @@
   const DEFAULT_METRONOME_VOLUME = 0.72;
   const DEFAULT_VOICE_COUNT: VoiceCountMode = 1;
   const DEFAULT_VOICE_LAYOUT_MODE: VoiceLayoutMode = 'intertwined';
-  const DEFAULT_TRACK_STYLE: TrackStyle = 'stacked';
+  const DEFAULT_TRACK_STYLE: TrackStyle = 'horizontal';
   const VOICE_INDEXES = [0, 1, 2, 3] as const;
   const HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO = 0.34;
+  const HORIZONTAL_KARAOKE_BALL_NOTE_GAP_PX = 4;
   const HORIZONTAL_LOOP_RENDER_CYCLES = 3;
   const HORIZONTAL_LOOP_ANCHOR_CYCLE = 1;
   const HORIZONTAL_LOOP_RECENTER_CYCLE = 2;
@@ -641,12 +642,14 @@
   let horizontalPlaybackScrollFrame: number | null = null;
   let horizontalPlaybackScrollToken = 0;
   let horizontalPlaybackScrollAnimation: HorizontalPlaybackScrollAnimationState | null = null;
+  let horizontalPlaybackVirtualScrollLeft: number | null = null;
   let horizontalPlaybackRunwayPx = 0;
   let trackZoom = 1;
   let trackPlaybackShellHeightPx = 0;
   let voiceHorizontalPlaybackLaneShiftPxs: number[] = VOICE_INDEXES.map(() => 0);
   let voiceHorizontalPlaybackLaneShiftFrames: Array<number | null> = VOICE_INDEXES.map(() => null);
   let voiceHorizontalPlaybackLaneShiftTokens: number[] = VOICE_INDEXES.map(() => 0);
+  let rowsGridElement: HTMLElement | null = null;
   let voiceTrackRowElements: Array<Array<HTMLElement | null>> = VOICE_INDEXES.map(() => []);
   let voicePlaybackHighlightAnchors: Array<KaraokeAnchor | null> = VOICE_INDEXES.map(() => null);
   let voicePlaybackHighlightCellKeys: Array<Set<string>> = VOICE_INDEXES.map(() => new Set<string>());
@@ -1793,7 +1796,10 @@
     const rowsInput = Array.isArray(persisted.rows) ? persisted.rows : [];
     const storedVoiceCount = coerceVoiceCount(persisted.voiceCount);
     const storedVoiceLayoutMode = persisted.voiceLayoutMode === 'separate' ? 'separate' : 'intertwined';
-    const storedTrackStyle = persisted.trackStyle === 'horizontal' ? 'horizontal' : 'stacked';
+    const storedTrackStyle =
+      persisted.trackStyle === 'stacked' || persisted.trackStyle === 'horizontal'
+        ? persisted.trackStyle
+        : DEFAULT_TRACK_STYLE;
     const storedPercussionSamples = normalizePercussionSampleSelections(persisted.percussionSamples);
     const persistedVoices = Array.isArray(persisted.voices) ? persisted.voices : [];
     const primaryVoiceSource = (persistedVoices[0] as PersistedVoiceCanvas | undefined) ?? {
@@ -3052,10 +3058,26 @@
     return `${voiceIndex}:${zone}:${rowIndex}:${cellIndex}`;
   }
 
+  function isHorizontalPlaybackTransformScrollActive(): boolean {
+    return (
+      trackStyle === 'horizontal' &&
+      isPlaying &&
+      horizontalPlaybackHighway.referenceViewportLeftPx !== null &&
+      !!canvasScrollShellElement &&
+      !!rowsGridElement
+    );
+  }
+
+  function effectiveHorizontalPlaybackScrollLeft(): number {
+    return isHorizontalPlaybackTransformScrollActive() && horizontalPlaybackVirtualScrollLeft !== null
+      ? horizontalPlaybackVirtualScrollLeft
+      : canvasScrollShellElement?.scrollLeft ?? 0;
+  }
+
   function cachedRectWithScrollOffset(snapshot: RectSnapshot): DOMRect {
     const scrollDeltaX =
       trackStyle === 'horizontal' && canvasScrollShellElement && playbackGeometryCache
-        ? canvasScrollShellElement.scrollLeft - playbackGeometryCache.scrollLeft
+        ? effectiveHorizontalPlaybackScrollLeft() - playbackGeometryCache.scrollLeft
         : 0;
     return rectFromSnapshot(snapshot, -scrollDeltaX, 0);
   }
@@ -3121,6 +3143,14 @@
   }
 
   function handleCanvasScroll(): void {
+    if (isHorizontalPlaybackTransformScrollActive()) {
+      clearHorizontalPlaybackScrollAnimation();
+      horizontalPlaybackVirtualScrollLeft = canvasScrollShellElement?.scrollLeft ?? 0;
+      applyHorizontalPlaybackTrackTransform();
+      applyKaraokeBallElementStyles();
+      return;
+    }
+
     if (trackStyle === 'horizontal' && isPlaying && horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
       return;
     }
@@ -4280,9 +4310,12 @@
     const leftPx = pinnedLeftPx ?? (rowRect.left - panelRect.left - panel.clientLeft + (leftPercent / 100) * rowRect.width);
     const horizontalPlaybackActive = trackStyle === 'horizontal' && isPlaying;
     const laneRect = horizontalPlaybackActive ? karaokePlaybackLaneRect(voiceIndex, rowIndex) ?? rowRect : rowRect;
-    const horizontalLaneInsetPx = horizontalPlaybackActive ? horizontalPlaybackKaraokeLaneInsetPx(laneRect.height) : 0;
-    const topPx = laneRect.top - panelRect.top - panel.clientTop + horizontalLaneInsetPx;
-    const anchorY = horizontalPlaybackActive ? '-50%' : '-100%';
+    const topPx =
+      laneRect.top -
+      panelRect.top -
+      panel.clientTop -
+      (horizontalPlaybackActive ? HORIZONTAL_KARAOKE_BALL_NOTE_GAP_PX : 0);
+    const anchorY = '-100%';
 
     return {
       leftPx,
@@ -4380,6 +4413,53 @@
     }
   }
 
+  function maxHorizontalPlaybackScrollLeft(): number {
+    const container = canvasScrollShellElement;
+    return container ? Math.max(0, container.scrollWidth - container.clientWidth) : 0;
+  }
+
+  function clampHorizontalPlaybackScrollLeft(scrollLeft: number): number {
+    return clamp(scrollLeft, 0, maxHorizontalPlaybackScrollLeft());
+  }
+
+  function applyHorizontalPlaybackTrackTransform(): void {
+    const container = canvasScrollShellElement;
+    const grid = rowsGridElement;
+    if (!container || !grid || horizontalPlaybackVirtualScrollLeft === null) return;
+
+    const translateX = container.scrollLeft - horizontalPlaybackVirtualScrollLeft;
+    grid.style.transform = `translate3d(${translateX}px, 0, 0)`;
+    grid.style.willChange = 'transform';
+  }
+
+  function setHorizontalPlaybackScrollLeft(scrollLeft: number): void {
+    const container = canvasScrollShellElement;
+    if (!container) return;
+
+    const clampedScrollLeft = clampHorizontalPlaybackScrollLeft(scrollLeft);
+    if (isHorizontalPlaybackTransformScrollActive()) {
+      horizontalPlaybackVirtualScrollLeft = clampedScrollLeft;
+      applyHorizontalPlaybackTrackTransform();
+      return;
+    }
+
+    horizontalPlaybackVirtualScrollLeft = null;
+    container.scrollLeft = clampedScrollLeft;
+  }
+
+  function resetHorizontalPlaybackTrackTransform(commitVirtualScroll = false): void {
+    const container = canvasScrollShellElement;
+    if (commitVirtualScroll && container && horizontalPlaybackVirtualScrollLeft !== null) {
+      container.scrollLeft = clampHorizontalPlaybackScrollLeft(horizontalPlaybackVirtualScrollLeft);
+    }
+
+    horizontalPlaybackVirtualScrollLeft = null;
+    if (rowsGridElement) {
+      rowsGridElement.style.transform = '';
+      rowsGridElement.style.willChange = '';
+    }
+  }
+
   function clearHorizontalPlaybackLaneShiftAnimation(voiceIndex: VoiceIndex): void {
     voiceHorizontalPlaybackLaneShiftTokens[voiceIndex] += 1;
     if (voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] !== null) {
@@ -4394,8 +4474,9 @@
     }
   }
 
-  function resetHorizontalPlaybackHighway(): void {
+  function resetHorizontalPlaybackHighway(commitVirtualScroll = false): void {
     clearHorizontalPlaybackScrollAnimation();
+    resetHorizontalPlaybackTrackTransform(commitVirtualScroll);
     clearHorizontalPlaybackLaneShiftAnimations();
     horizontalPlaybackHighway = {
       activationIndex: null,
@@ -5033,7 +5114,7 @@
 
     const viewportLeft = karaokeAnchorViewportLeftPx(voiceIndex, anchor, 'scroll-shell');
     if (viewportLeft === null) return null;
-    return container.scrollLeft + viewportLeft;
+    return effectiveHorizontalPlaybackScrollLeft() + viewportLeft;
   }
 
   function scrollLeftForKaraokeAnchor(
@@ -5047,7 +5128,7 @@
     const anchorContentLeft = karaokeAnchorContentLeftPx(voiceIndex, anchor);
     if (anchorContentLeft === null) return null;
 
-    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    const maxScrollLeft = maxHorizontalPlaybackScrollLeft();
     return Math.max(0, Math.min(maxScrollLeft, anchorContentLeft - targetViewportLeftPx));
   }
 
@@ -5059,11 +5140,11 @@
     const container = canvasScrollShellElement;
     if (!container) return;
 
-    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-    const clampedTarget = Math.max(0, Math.min(maxScrollLeft, targetScrollLeft));
-    if (Math.abs(clampedTarget - container.scrollLeft) < 0.5) {
+    const clampedTarget = clampHorizontalPlaybackScrollLeft(targetScrollLeft);
+    const currentScrollLeft = effectiveHorizontalPlaybackScrollLeft();
+    if (Math.abs(clampedTarget - currentScrollLeft) < 0.5) {
       clearHorizontalPlaybackScrollAnimation();
-      container.scrollLeft = clampedTarget;
+      setHorizontalPlaybackScrollLeft(clampedTarget);
       return;
     }
 
@@ -5079,7 +5160,7 @@
 
     const token = horizontalPlaybackScrollToken;
     const startedAt = Math.min(startedAtMs, performance.now());
-    const startScrollLeft = container.scrollLeft;
+    const startScrollLeft = currentScrollLeft;
     const deltaScrollLeft = clampedTarget - startScrollLeft;
     const motionDurationMs = Math.max(24, Math.floor(durationMs));
     horizontalPlaybackScrollAnimation = {
@@ -5092,7 +5173,7 @@
       if (token !== horizontalPlaybackScrollToken) return;
 
       const progress = Math.min(1, (now - startedAt) / motionDurationMs);
-      container.scrollLeft = startScrollLeft + deltaScrollLeft * progress;
+      setHorizontalPlaybackScrollLeft(startScrollLeft + deltaScrollLeft * progress);
 
       if (progress >= 1) {
         horizontalPlaybackScrollFrame = null;
@@ -5124,7 +5205,7 @@
     const targetScrollLeft = scrollLeftForKaraokeAnchor(voiceIndex, anchor, resolvedViewportLeftPx);
     if (targetScrollLeft === null) return;
 
-    if (Math.abs(targetScrollLeft - container.scrollLeft) < 6) return;
+    if (Math.abs(targetScrollLeft - effectiveHorizontalPlaybackScrollLeft()) < 6) return;
     if (durationMs !== null) {
       animateHorizontalPlaybackScrollTo(targetScrollLeft, durationMs, startedAtMs ?? performance.now());
       return;
@@ -5132,7 +5213,7 @@
 
     clearHorizontalPlaybackScrollAnimation();
     if (isPlaying) {
-      container.scrollLeft = targetScrollLeft;
+      setHorizontalPlaybackScrollLeft(targetScrollLeft);
       return;
     }
 
@@ -5211,6 +5292,11 @@
       pinnedVoiceIndex: preferredReferenceViewportLeftPx !== null ? preferredVoiceIndex : fallbackVoiceIndex,
       referenceViewportLeftPx: preferredReferenceViewportLeftPx ?? fallbackReferenceViewportLeftPx,
     };
+
+    if (horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
+      horizontalPlaybackVirtualScrollLeft = container.scrollLeft;
+      applyHorizontalPlaybackTrackTransform();
+    }
   }
 
   function queuePlaybackScrollForCurrentStep(currentIndex: number, totalCells: number, stepStartedAtMs: number): void {
@@ -5298,13 +5384,6 @@
 
     const rowElement = getTrackRowElement(voiceIndex, rowIndex);
     return rowElement?.querySelector<HTMLElement>('.macrobeat-cell')?.getBoundingClientRect() ?? null;
-  }
-
-  function horizontalPlaybackKaraokeLaneInsetPx(laneHeightPx: number): number {
-    const preferredInsetPx = laneHeightPx * 0.09;
-    const minimumInsetPx = karaokeBallSizePx * 0.65;
-    const maximumInsetPx = Math.min(laneHeightPx * 0.24, karaokeBallSizePx * 1.6);
-    return clamp(preferredInsetPx, minimumInsetPx, Math.max(minimumInsetPx, maximumInsetPx));
   }
 
   function rowsAreOnSameVisualLine(voiceIndex: VoiceIndex, rowA: number, rowB: number): boolean {
@@ -6412,7 +6491,7 @@
 
     if (beforeContentLeft !== null && afterContentLeft !== null) {
       clearHorizontalPlaybackScrollAnimation();
-      container.scrollLeft += afterContentLeft - beforeContentLeft;
+      setHorizontalPlaybackScrollLeft(effectiveHorizontalPlaybackScrollLeft() + afterContentLeft - beforeContentLeft);
     }
 
     invalidateCanvasLayout();
@@ -6706,7 +6785,7 @@
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     audio.stopScheduledPlaybackAudio();
-    resetHorizontalPlaybackHighway();
+    resetHorizontalPlaybackHighway(true);
     playbackGeometryCache = null;
     clearPlaybackDomClasses();
     clearPlayedNoteMuteClasses();
@@ -6724,7 +6803,7 @@
     clearPlaybackTimer();
     clearPendingPlaybackTimeouts();
     audio.stopScheduledPlaybackAudio();
-    resetHorizontalPlaybackHighway();
+    resetHorizontalPlaybackHighway(true);
     playbackGeometryCache = null;
     clearPlaybackDomClasses();
     clearPlayedNoteMuteClasses();
@@ -6782,7 +6861,7 @@
 
     if (trackStyle === 'horizontal' && isPlaying && totalPlaybackCells() > 0) {
       playbackIndex = nextLooping ? horizontalLoopDisplayIndexForLogicalIndex(logicalIndex) : logicalIndex;
-      resetHorizontalPlaybackHighway();
+      resetHorizontalPlaybackHighway(true);
       void tick().then(() => {
         if (!isPlaying || trackStyle !== 'horizontal') return;
         const totalCells = totalPlaybackCells();
@@ -7786,6 +7865,7 @@
     >
       <div
         class="rows-grid"
+        bind:this={rowsGridElement}
         class:has-active-pickup={pickupBeats > 0}
         class:two-voice-mode={voiceCount > 1}
         class:track-style-horizontal={trackStyle === 'horizontal'}
