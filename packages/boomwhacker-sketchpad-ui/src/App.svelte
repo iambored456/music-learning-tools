@@ -290,6 +290,30 @@
     durationMs: number;
   };
 
+  type HorizontalScrollDiagnosticsState = {
+    id: number;
+    startedAtMs: number;
+    startScrollLeft: number;
+    targetScrollLeft: number;
+    deltaScrollLeft: number;
+    durationMs: number;
+    lastFrameAtMs: number | null;
+    lastScrollLeft: number;
+    frameCount: number;
+    slowFrameCount: number;
+    longApplyCount: number;
+    positionErrorCount: number;
+    transformMismatchCount: number;
+    maxFrameDeltaMs: number;
+    maxStepDeltaPx: number;
+    maxVelocityPxPerSecond: number;
+    maxPositionErrorPx: number;
+    maxTransformMismatchPx: number;
+    maxApplyDurationMs: number;
+    totalApplyDurationMs: number;
+    loggedFrameCount: number;
+  };
+
   type RectSnapshot = {
     x: number;
     y: number;
@@ -535,6 +559,14 @@
   const PICKUP_RENDER_DEBUG = false;
   const MOBILE_LAYOUT_DEBUG = false;
   const TEMPO_SLIDER_LAYOUT_DEBUG = false;
+  const HORIZONTAL_SCROLL_DEBUG_STORAGE_KEY = 'boomwhackerHorizontalScrollDebug';
+  const HORIZONTAL_SCROLL_DEBUG_VERBOSE_STORAGE_KEY = 'boomwhackerHorizontalScrollDebugVerbose';
+  const HORIZONTAL_SCROLL_DEBUG_QUERY_PARAM = 'horizontalScrollDebug';
+  const HORIZONTAL_SCROLL_DEBUG_SLOW_FRAME_MS = 24;
+  const HORIZONTAL_SCROLL_DEBUG_LONG_APPLY_MS = 4;
+  const HORIZONTAL_SCROLL_DEBUG_POSITION_ERROR_PX = 0.75;
+  const HORIZONTAL_SCROLL_DEBUG_TRANSFORM_MISMATCH_PX = 0.75;
+  const HORIZONTAL_PLAYBACK_LANE_SHIFT_SNAP_THRESHOLD_PX = 12;
   const AUDIO_RESUME_STABILIZATION_MS = 120;
   const CANVAS_PANEL_REPOSITION_MS = 240;
   const BANK_TOUCH_TAP_MAX_MOVEMENT_PX = 12;
@@ -583,7 +615,7 @@
   const HORIZONTAL_LOOP_RENDER_CYCLES = 3;
   const HORIZONTAL_LOOP_ANCHOR_CYCLE = 1;
   const HORIZONTAL_LOOP_RECENTER_CYCLE = 2;
-  const TRACK_ZOOM_MIN = 0.65;
+  const TRACK_ZOOM_MIN = 0.45;
   const TRACK_ZOOM_MAX = 1.8;
   const TRACK_ZOOM_WHEEL_SENSITIVITY = 0.0016;
   const TEMPO_SHORTCUT_VALUES = [60, 65, 70, 75, 80, 85] as const;
@@ -642,6 +674,11 @@
   let horizontalPlaybackScrollFrame: number | null = null;
   let horizontalPlaybackScrollToken = 0;
   let horizontalPlaybackScrollAnimation: HorizontalPlaybackScrollAnimationState | null = null;
+  let horizontalScrollDebugEnabled = false;
+  let horizontalScrollDebugVerbose = false;
+  let horizontalScrollDebugAnimationId = 0;
+  let horizontalScrollDiagnostics: HorizontalScrollDiagnosticsState | null = null;
+  let horizontalScrollDebugLastVisualFrameAtMs: number | null = null;
   let horizontalPlaybackVirtualScrollLeft: number | null = null;
   let horizontalPlaybackRunwayPx = 0;
   let trackZoom = 1;
@@ -855,6 +892,8 @@
   }
 
   onMount(() => {
+    refreshHorizontalScrollDebugFlags();
+
     void (async () => {
       const loadedFromShare = await tryLoadShareFragment();
       if (!loadedFromShare) {
@@ -3144,7 +3183,12 @@
 
   function handleCanvasScroll(): void {
     if (isHorizontalPlaybackTransformScrollActive()) {
-      clearHorizontalPlaybackScrollAnimation();
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Native scroll event interrupted transform scroll.', horizontalScrollDiagnosticsSnapshot({
+          eventScrollLeft: roundedMetric(canvasScrollShellElement?.scrollLeft ?? null),
+        }));
+      }
+      clearHorizontalPlaybackScrollAnimation('interrupted by native scroll event');
       horizontalPlaybackVirtualScrollLeft = canvasScrollShellElement?.scrollLeft ?? 0;
       applyHorizontalPlaybackTrackTransform();
       applyKaraokeBallElementStyles();
@@ -4387,7 +4431,8 @@
     voiceKaraokeAnchors[voiceIndex] = null;
   }
 
-  function clearHorizontalPlaybackScrollAnimation(): void {
+  function clearHorizontalPlaybackScrollAnimation(reason = 'cancelled'): void {
+    finishHorizontalScrollDiagnostics(reason);
     horizontalPlaybackScrollToken += 1;
     horizontalPlaybackScrollAnimation = null;
     if (horizontalPlaybackScrollFrame !== null) {
@@ -4403,7 +4448,15 @@
 
   function applyHorizontalPlaybackLaneShiftStyle(voiceIndex: VoiceIndex, shiftPx: number): void {
     for (const rowElement of voiceTrackRowElements[voiceIndex]) {
-      rowElement?.style.setProperty('--horizontal-playback-lane-shift-px', `${shiftPx}px`);
+      if (!rowElement) continue;
+
+      if (Math.abs(shiftPx) < 0.01) {
+        rowElement.style.transform = '';
+        rowElement.style.willChange = '';
+      } else {
+        rowElement.style.transform = `translate3d(${shiftPx}px, 0, 0)`;
+        rowElement.style.willChange = 'transform';
+      }
     }
   }
 
@@ -4437,6 +4490,13 @@
     if (!container) return;
 
     const clampedScrollLeft = clampHorizontalPlaybackScrollLeft(scrollLeft);
+    if (horizontalScrollDebugEnabled && Math.abs(clampedScrollLeft - scrollLeft) > 0.5) {
+      debugHorizontalScroll('Requested horizontal scroll was clamped.', {
+        requestedScrollLeft: roundedMetric(scrollLeft),
+        clampedScrollLeft: roundedMetric(clampedScrollLeft),
+        maxScrollLeft: roundedMetric(maxHorizontalPlaybackScrollLeft()),
+      });
+    }
     if (isHorizontalPlaybackTransformScrollActive()) {
       horizontalPlaybackVirtualScrollLeft = clampedScrollLeft;
       applyHorizontalPlaybackTrackTransform();
@@ -4449,6 +4509,11 @@
 
   function resetHorizontalPlaybackTrackTransform(commitVirtualScroll = false): void {
     const container = canvasScrollShellElement;
+    if (horizontalScrollDebugEnabled && (horizontalPlaybackVirtualScrollLeft !== null || rowsGridElement?.style.transform)) {
+      debugHorizontalScroll('Resetting transform scroll state.', horizontalScrollDiagnosticsSnapshot({
+        commitVirtualScroll,
+      }));
+    }
     if (commitVirtualScroll && container && horizontalPlaybackVirtualScrollLeft !== null) {
       container.scrollLeft = clampHorizontalPlaybackScrollLeft(horizontalPlaybackVirtualScrollLeft);
     }
@@ -4499,6 +4564,14 @@
       pinnedVoiceIndex: resolvePlaybackScrollVoiceIndex(),
       referenceViewportLeftPx: null,
     };
+    if (horizontalScrollDebugEnabled) {
+      debugHorizontalScroll('Horizontal playback highway prepared.', {
+        startIndex,
+        totalCells,
+        activationIndex,
+        pinnedVoiceIndex: horizontalPlaybackHighway.pinnedVoiceIndex,
+      });
+    }
   }
 
   function debugPlaybackHighlight(message: string, details?: Record<string, unknown>): void {
@@ -4529,6 +4602,313 @@
   function debugPlaybackStartup(message: string, details?: Record<string, unknown>): void {
     if (!PLAYBACK_STARTUP_DEBUG) return;
     console.info(`[BoomwhackerSketchpad][PlaybackStartup] ${message}`, details ?? {});
+  }
+
+  function safeLocalStorageGet(key: string): string | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizedDebugFlag(value: string | null): string {
+    return (value ?? '').trim().toLowerCase();
+  }
+
+  function isHorizontalScrollDebugTruthy(value: string | null): boolean {
+    return ['1', 'true', 'yes', 'on', 'debug', 'verbose', 'all', 'frames'].includes(normalizedDebugFlag(value));
+  }
+
+  function isHorizontalScrollDebugVerboseValue(value: string | null): boolean {
+    return ['verbose', 'all', 'frames'].includes(normalizedDebugFlag(value));
+  }
+
+  function refreshHorizontalScrollDebugFlags(): void {
+    if (typeof window === 'undefined') return;
+
+    const wasEnabled = horizontalScrollDebugEnabled;
+    let queryHasFlag = false;
+    let queryValue: string | null = null;
+    try {
+      const query = new URLSearchParams(window.location.search);
+      queryHasFlag = query.has(HORIZONTAL_SCROLL_DEBUG_QUERY_PARAM);
+      queryValue = query.get(HORIZONTAL_SCROLL_DEBUG_QUERY_PARAM);
+    } catch {
+      queryHasFlag = false;
+      queryValue = null;
+    }
+
+    const storageValue = safeLocalStorageGet(HORIZONTAL_SCROLL_DEBUG_STORAGE_KEY);
+    const verboseStorageValue = safeLocalStorageGet(HORIZONTAL_SCROLL_DEBUG_VERBOSE_STORAGE_KEY);
+    const debugValue = queryHasFlag ? queryValue : storageValue;
+    const verboseValue = queryHasFlag ? queryValue : verboseStorageValue ?? storageValue;
+
+    horizontalScrollDebugVerbose = isHorizontalScrollDebugVerboseValue(verboseValue);
+    horizontalScrollDebugEnabled = isHorizontalScrollDebugTruthy(debugValue) || horizontalScrollDebugVerbose;
+
+    if (horizontalScrollDebugEnabled && !wasEnabled) {
+      console.info('[BoomwhackerSketchpad][HorizontalScroll] Diagnostics enabled.', {
+        verbose: horizontalScrollDebugVerbose,
+        enableCommand: `localStorage.setItem("${HORIZONTAL_SCROLL_DEBUG_STORAGE_KEY}", "true")`,
+        verboseCommand: `localStorage.setItem("${HORIZONTAL_SCROLL_DEBUG_STORAGE_KEY}", "verbose")`,
+        queryParam: `?${HORIZONTAL_SCROLL_DEBUG_QUERY_PARAM}=verbose`,
+      });
+    }
+  }
+
+  function debugHorizontalScroll(message: string, details?: Record<string, unknown>): void {
+    if (!horizontalScrollDebugEnabled) return;
+    console.info(`[BoomwhackerSketchpad][HorizontalScroll] ${message}`, details ?? {});
+  }
+
+  function debugHorizontalScrollFrame(message: string, details?: Record<string, unknown>): void {
+    if (!horizontalScrollDebugEnabled) return;
+    console.debug(`[BoomwhackerSketchpad][HorizontalScroll] ${message}`, details ?? {});
+  }
+
+  function roundedMetric(value: number | null | undefined): number | null {
+    return Number.isFinite(value) ? roundTo2(value as number) : null;
+  }
+
+  function parseInlineTranslateX(transform: string): number | null {
+    const match = transform.match(/translate(?:3d|x)?\(\s*(-?\d+(?:\.\d+)?)px/i);
+    if (!match) return null;
+
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function activeAnimationFrameCounts(): Record<string, unknown> {
+    return {
+      karaokeBallFrames: voiceKaraokeAnimationFrames.filter((frame) => frame !== null).length,
+      laneShiftFrames: voiceHorizontalPlaybackLaneShiftFrames.filter((frame) => frame !== null).length,
+      scrollFrameActive: horizontalPlaybackScrollFrame !== null,
+      playbackFrameActive: playbackFrame !== null,
+      pendingPlaybackTimeouts: pendingPlaybackTimeouts.size,
+    };
+  }
+
+  function horizontalScrollDiagnosticsSnapshot(extra: Record<string, unknown> = {}): Record<string, unknown> {
+    const container = canvasScrollShellElement;
+    const grid = rowsGridElement;
+    const gridRect = grid?.getBoundingClientRect() ?? null;
+    const inlineTranslateX = parseInlineTranslateX(grid?.style.transform ?? '');
+    const nativeScrollLeft = container?.scrollLeft ?? null;
+    const virtualScrollLeft = horizontalPlaybackVirtualScrollLeft;
+    const effectiveScrollLeft = container ? effectiveHorizontalPlaybackScrollLeft() : null;
+    const expectedTranslateX =
+      nativeScrollLeft !== null && effectiveScrollLeft !== null
+        ? nativeScrollLeft - effectiveScrollLeft
+        : null;
+
+    return {
+      ...extra,
+      trackStyle,
+      isPlaying,
+      isLooping,
+      voiceCount,
+      visibleVoices: visibleVoiceIndices(),
+      activeCanvasVoiceIndex,
+      trackZoom: roundedMetric(trackZoom),
+      tempo: state.microbeatTempo,
+      playbackIntervalMs: playbackIntervalMs(),
+      totalPlaybackCells: totalPlaybackCells(),
+      sharedRows: sharedRowCount(),
+      devicePixelRatio: typeof window !== 'undefined' ? roundedMetric(window.devicePixelRatio || 1) : null,
+      transformScrollActive: isHorizontalPlaybackTransformScrollActive(),
+      nativeScrollLeft: roundedMetric(nativeScrollLeft),
+      virtualScrollLeft: roundedMetric(virtualScrollLeft),
+      effectiveScrollLeft: roundedMetric(effectiveScrollLeft),
+      maxScrollLeft: roundedMetric(maxHorizontalPlaybackScrollLeft()),
+      expectedTranslateX: roundedMetric(expectedTranslateX),
+      inlineTranslateX: roundedMetric(inlineTranslateX),
+      transformMismatchPx:
+        inlineTranslateX !== null && expectedTranslateX !== null
+          ? roundedMetric(Math.abs(inlineTranslateX - expectedTranslateX))
+          : null,
+      container: container
+        ? {
+            clientWidth: roundedMetric(container.clientWidth),
+            scrollWidth: roundedMetric(container.scrollWidth),
+            clientHeight: roundedMetric(container.clientHeight),
+            scrollHeight: roundedMetric(container.scrollHeight),
+          }
+        : null,
+      rowsGrid: grid
+        ? {
+            inlineTransform: grid.style.transform || null,
+            inlineWillChange: grid.style.willChange || null,
+            rectWidth: roundedMetric(gridRect?.width),
+            rectLeft: roundedMetric(gridRect?.left),
+          }
+        : null,
+      highway: {
+        activationIndex: horizontalPlaybackHighway.activationIndex,
+        pinnedVoiceIndex: horizontalPlaybackHighway.pinnedVoiceIndex,
+        referenceViewportLeftPx: roundedMetric(horizontalPlaybackHighway.referenceViewportLeftPx),
+      },
+      geometryCache: playbackGeometryCache
+        ? {
+            cachedScrollLeft: roundedMetric(playbackGeometryCache.scrollLeft),
+            rowRects: playbackGeometryCache.rowRects.size,
+            cellRects: playbackGeometryCache.cellRects.size,
+            cellElements: playbackGeometryCache.cellElements.size,
+          }
+        : null,
+      activeAnimationFrames: activeAnimationFrameCounts(),
+    };
+  }
+
+  function beginHorizontalScrollDiagnostics(
+    startScrollLeft: number,
+    targetScrollLeft: number,
+    deltaScrollLeft: number,
+    durationMs: number,
+    startedAtMs: number,
+  ): HorizontalScrollDiagnosticsState | null {
+    if (!horizontalScrollDebugEnabled) return null;
+
+    const diagnostics: HorizontalScrollDiagnosticsState = {
+      id: ++horizontalScrollDebugAnimationId,
+      startedAtMs,
+      startScrollLeft,
+      targetScrollLeft,
+      deltaScrollLeft,
+      durationMs,
+      lastFrameAtMs: null,
+      lastScrollLeft: startScrollLeft,
+      frameCount: 0,
+      slowFrameCount: 0,
+      longApplyCount: 0,
+      positionErrorCount: 0,
+      transformMismatchCount: 0,
+      maxFrameDeltaMs: 0,
+      maxStepDeltaPx: 0,
+      maxVelocityPxPerSecond: 0,
+      maxPositionErrorPx: 0,
+      maxTransformMismatchPx: 0,
+      maxApplyDurationMs: 0,
+      totalApplyDurationMs: 0,
+      loggedFrameCount: 0,
+    };
+    horizontalScrollDiagnostics = diagnostics;
+    debugHorizontalScroll('Scroll animation scheduled.', horizontalScrollDiagnosticsSnapshot({
+      animationId: diagnostics.id,
+      startScrollLeft: roundedMetric(startScrollLeft),
+      targetScrollLeft: roundedMetric(targetScrollLeft),
+      deltaScrollLeft: roundedMetric(deltaScrollLeft),
+      durationMs,
+    }));
+    return diagnostics;
+  }
+
+  function recordHorizontalScrollDiagnosticsFrame(
+    diagnostics: HorizontalScrollDiagnosticsState | null,
+    now: number,
+    requestedScrollLeft: number,
+    previousScrollLeft: number,
+    applyDurationMs: number,
+  ): void {
+    if (!horizontalScrollDebugEnabled || !diagnostics) return;
+
+    const appliedScrollLeft = effectiveHorizontalPlaybackScrollLeft();
+    const nativeScrollLeft = canvasScrollShellElement?.scrollLeft ?? null;
+    const inlineTranslateX = parseInlineTranslateX(rowsGridElement?.style.transform ?? '');
+    const expectedTranslateX = nativeScrollLeft !== null ? nativeScrollLeft - appliedScrollLeft : null;
+    const transformMismatchPx =
+      inlineTranslateX !== null && expectedTranslateX !== null
+        ? Math.abs(inlineTranslateX - expectedTranslateX)
+        : 0;
+    const positionErrorPx = Math.abs(appliedScrollLeft - requestedScrollLeft);
+    const frameDeltaMs = diagnostics.lastFrameAtMs === null ? null : now - diagnostics.lastFrameAtMs;
+    const stepDeltaPx = appliedScrollLeft - previousScrollLeft;
+    const velocityPxPerSecond =
+      frameDeltaMs !== null && frameDeltaMs > 0
+        ? Math.abs(stepDeltaPx) / (frameDeltaMs / 1000)
+        : 0;
+
+    diagnostics.frameCount += 1;
+    diagnostics.lastFrameAtMs = now;
+    diagnostics.lastScrollLeft = appliedScrollLeft;
+    diagnostics.maxStepDeltaPx = Math.max(diagnostics.maxStepDeltaPx, Math.abs(stepDeltaPx));
+    diagnostics.maxVelocityPxPerSecond = Math.max(diagnostics.maxVelocityPxPerSecond, velocityPxPerSecond);
+    diagnostics.maxPositionErrorPx = Math.max(diagnostics.maxPositionErrorPx, positionErrorPx);
+    diagnostics.maxTransformMismatchPx = Math.max(diagnostics.maxTransformMismatchPx, transformMismatchPx);
+    diagnostics.maxApplyDurationMs = Math.max(diagnostics.maxApplyDurationMs, applyDurationMs);
+    diagnostics.totalApplyDurationMs += applyDurationMs;
+
+    const slowFrame = frameDeltaMs !== null && frameDeltaMs > HORIZONTAL_SCROLL_DEBUG_SLOW_FRAME_MS;
+    const longApply = applyDurationMs > HORIZONTAL_SCROLL_DEBUG_LONG_APPLY_MS;
+    const positionError = positionErrorPx > HORIZONTAL_SCROLL_DEBUG_POSITION_ERROR_PX;
+    const transformMismatch = transformMismatchPx > HORIZONTAL_SCROLL_DEBUG_TRANSFORM_MISMATCH_PX;
+
+    if (frameDeltaMs !== null) diagnostics.maxFrameDeltaMs = Math.max(diagnostics.maxFrameDeltaMs, frameDeltaMs);
+    if (slowFrame) diagnostics.slowFrameCount += 1;
+    if (longApply) diagnostics.longApplyCount += 1;
+    if (positionError) diagnostics.positionErrorCount += 1;
+    if (transformMismatch) diagnostics.transformMismatchCount += 1;
+
+    const shouldLogFrame = horizontalScrollDebugVerbose || slowFrame || longApply || positionError || transformMismatch;
+    if (!shouldLogFrame) return;
+
+    diagnostics.loggedFrameCount += 1;
+    debugHorizontalScrollFrame('Scroll animation frame.', {
+      animationId: diagnostics.id,
+      frameCount: diagnostics.frameCount,
+      frameDeltaMs: roundedMetric(frameDeltaMs),
+      requestedScrollLeft: roundedMetric(requestedScrollLeft),
+      appliedScrollLeft: roundedMetric(appliedScrollLeft),
+      nativeScrollLeft: roundedMetric(nativeScrollLeft),
+      virtualScrollLeft: roundedMetric(horizontalPlaybackVirtualScrollLeft),
+      stepDeltaPx: roundedMetric(stepDeltaPx),
+      velocityPxPerSecond: roundedMetric(velocityPxPerSecond),
+      applyDurationMs: roundedMetric(applyDurationMs),
+      positionErrorPx: roundedMetric(positionErrorPx),
+      expectedTranslateX: roundedMetric(expectedTranslateX),
+      inlineTranslateX: roundedMetric(inlineTranslateX),
+      transformMismatchPx: roundedMetric(transformMismatchPx),
+      slowFrame,
+      longApply,
+      positionError,
+      transformMismatch,
+    });
+  }
+
+  function finishHorizontalScrollDiagnostics(reason: string): void {
+    const diagnostics = horizontalScrollDiagnostics;
+    if (!horizontalScrollDebugEnabled || !diagnostics) {
+      horizontalScrollDiagnostics = null;
+      return;
+    }
+
+    const elapsedMs = performance.now() - diagnostics.startedAtMs;
+    debugHorizontalScroll(`Scroll animation ${reason}.`, horizontalScrollDiagnosticsSnapshot({
+      animationId: diagnostics.id,
+      elapsedMs: roundedMetric(elapsedMs),
+      frameCount: diagnostics.frameCount,
+      loggedFrameCount: diagnostics.loggedFrameCount,
+      slowFrameCount: diagnostics.slowFrameCount,
+      longApplyCount: diagnostics.longApplyCount,
+      positionErrorCount: diagnostics.positionErrorCount,
+      transformMismatchCount: diagnostics.transformMismatchCount,
+      maxFrameDeltaMs: roundedMetric(diagnostics.maxFrameDeltaMs),
+      maxStepDeltaPx: roundedMetric(diagnostics.maxStepDeltaPx),
+      maxVelocityPxPerSecond: roundedMetric(diagnostics.maxVelocityPxPerSecond),
+      maxPositionErrorPx: roundedMetric(diagnostics.maxPositionErrorPx),
+      maxTransformMismatchPx: roundedMetric(diagnostics.maxTransformMismatchPx),
+      maxApplyDurationMs: roundedMetric(diagnostics.maxApplyDurationMs),
+      averageApplyDurationMs:
+        diagnostics.frameCount > 0
+          ? roundedMetric(diagnostics.totalApplyDurationMs / diagnostics.frameCount)
+          : null,
+      startScrollLeft: roundedMetric(diagnostics.startScrollLeft),
+      targetScrollLeft: roundedMetric(diagnostics.targetScrollLeft),
+      deltaScrollLeft: roundedMetric(diagnostics.deltaScrollLeft),
+      durationMs: diagnostics.durationMs,
+    }));
+    horizontalScrollDiagnostics = null;
   }
 
   function queueCanvasPanelReposition(previousRect: DOMRect | null): void {
@@ -5143,7 +5523,13 @@
     const clampedTarget = clampHorizontalPlaybackScrollLeft(targetScrollLeft);
     const currentScrollLeft = effectiveHorizontalPlaybackScrollLeft();
     if (Math.abs(clampedTarget - currentScrollLeft) < 0.5) {
-      clearHorizontalPlaybackScrollAnimation();
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Skipping scroll animation: target already reached.', {
+          currentScrollLeft: roundedMetric(currentScrollLeft),
+          targetScrollLeft: roundedMetric(clampedTarget),
+        });
+      }
+      clearHorizontalPlaybackScrollAnimation('target already reached');
       setHorizontalPlaybackScrollLeft(clampedTarget);
       return;
     }
@@ -5153,10 +5539,15 @@
       horizontalPlaybackScrollAnimation &&
       Math.abs(horizontalPlaybackScrollAnimation.targetScrollLeft - clampedTarget) < 0.5
     ) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Keeping existing scroll animation: target unchanged.', {
+          targetScrollLeft: roundedMetric(clampedTarget),
+        });
+      }
       return;
     }
 
-    clearHorizontalPlaybackScrollAnimation();
+    clearHorizontalPlaybackScrollAnimation('replaced by new scroll animation');
 
     const token = horizontalPlaybackScrollToken;
     const startedAt = Math.min(startedAtMs, performance.now());
@@ -5168,16 +5559,29 @@
       startedAtMs: startedAt,
       durationMs: motionDurationMs,
     };
+    const diagnostics = beginHorizontalScrollDiagnostics(
+      startScrollLeft,
+      clampedTarget,
+      deltaScrollLeft,
+      motionDurationMs,
+      startedAt,
+    );
 
     const step = (now: number): void => {
       if (token !== horizontalPlaybackScrollToken) return;
 
       const progress = Math.min(1, (now - startedAt) / motionDurationMs);
-      setHorizontalPlaybackScrollLeft(startScrollLeft + deltaScrollLeft * progress);
+      const previousScrollLeft = effectiveHorizontalPlaybackScrollLeft();
+      const requestedScrollLeft = startScrollLeft + deltaScrollLeft * progress;
+      const applyStartedAt = horizontalScrollDebugEnabled ? performance.now() : 0;
+      setHorizontalPlaybackScrollLeft(requestedScrollLeft);
+      const applyDurationMs = horizontalScrollDebugEnabled ? performance.now() - applyStartedAt : 0;
+      recordHorizontalScrollDiagnosticsFrame(diagnostics, now, requestedScrollLeft, previousScrollLeft, applyDurationMs);
 
       if (progress >= 1) {
         horizontalPlaybackScrollFrame = null;
         horizontalPlaybackScrollAnimation = null;
+        finishHorizontalScrollDiagnostics('completed');
         return;
       }
 
@@ -5203,16 +5607,51 @@
 
     const resolvedViewportLeftPx = targetViewportLeftPx ?? container.clientWidth * HORIZONTAL_PLAYBACK_SCROLL_AHEAD_RATIO;
     const targetScrollLeft = scrollLeftForKaraokeAnchor(voiceIndex, anchor, resolvedViewportLeftPx);
-    if (targetScrollLeft === null) return;
+    if (targetScrollLeft === null) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Unable to resolve scroll target for karaoke anchor.', {
+          voiceIndex,
+          anchor,
+          resolvedViewportLeftPx: roundedMetric(resolvedViewportLeftPx),
+        });
+      }
+      return;
+    }
 
-    if (Math.abs(targetScrollLeft - effectiveHorizontalPlaybackScrollLeft()) < 6) return;
+    const currentScrollLeft = effectiveHorizontalPlaybackScrollLeft();
+    if (horizontalScrollDebugEnabled) {
+      debugHorizontalScroll('Resolved horizontal scroll target.', {
+        voiceIndex,
+        anchor,
+        behavior,
+        durationMs,
+        targetViewportLeftPx: roundedMetric(resolvedViewportLeftPx),
+        currentScrollLeft: roundedMetric(currentScrollLeft),
+        targetScrollLeft: roundedMetric(targetScrollLeft),
+        distancePx: roundedMetric(targetScrollLeft - currentScrollLeft),
+      });
+    }
+
+    if (Math.abs(targetScrollLeft - currentScrollLeft) < 6) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Skipping horizontal scroll: target distance below threshold.', {
+          distancePx: roundedMetric(targetScrollLeft - currentScrollLeft),
+        });
+      }
+      return;
+    }
     if (durationMs !== null) {
       animateHorizontalPlaybackScrollTo(targetScrollLeft, durationMs, startedAtMs ?? performance.now());
       return;
     }
 
-    clearHorizontalPlaybackScrollAnimation();
+    clearHorizontalPlaybackScrollAnimation('replaced by immediate scroll');
     if (isPlaying) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Applying immediate horizontal scroll while playback is active.', {
+          targetScrollLeft: roundedMetric(targetScrollLeft),
+        });
+      }
       setHorizontalPlaybackScrollLeft(targetScrollLeft);
       return;
     }
@@ -5296,6 +5735,18 @@
     if (horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
       horizontalPlaybackVirtualScrollLeft = container.scrollLeft;
       applyHorizontalPlaybackTrackTransform();
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Horizontal playback highway activated.', horizontalScrollDiagnosticsSnapshot({
+          currentIndex,
+          preferredVoiceIndex,
+          resolvedPinnedLeftPx: roundedMetric(resolvedPinnedLeftPx),
+        }));
+      }
+    } else if (horizontalScrollDebugEnabled) {
+      debugHorizontalScroll('Horizontal playback highway activation could not resolve an anchor.', {
+        currentIndex,
+        preferredVoiceIndex,
+      });
     }
   }
 
@@ -5304,11 +5755,37 @@
     if (typeof window === 'undefined') return;
 
     const referenceViewportLeftPx = horizontalPlaybackHighway.referenceViewportLeftPx;
-    if (referenceViewportLeftPx === null) return;
+    if (referenceViewportLeftPx === null) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Skipping playback scroll: highway reference is not active yet.', {
+          currentIndex,
+          totalCells,
+          activationIndex: horizontalPlaybackHighway.activationIndex,
+        });
+      }
+      return;
+    }
 
-    if (voiceCount > 1) return;
+    if (voiceCount > 1) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Skipping main strip scroll in multi-voice mode; lane-shift animations control alignment.', {
+          currentIndex,
+          totalCells,
+          voiceCount,
+        });
+      }
+      return;
+    }
 
-    if (currentIndex + 1 >= totalCells) return;
+    if (currentIndex + 1 >= totalCells) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Skipping playback scroll: final cell has no next transition.', {
+          currentIndex,
+          totalCells,
+        });
+      }
+      return;
+    }
 
     const preferredVoiceIndex = horizontalPlaybackHighway.pinnedVoiceIndex ?? resolvePlaybackScrollVoiceIndex();
     const preferredTransition = nextDistinctKaraokeAnchorTransition(preferredVoiceIndex, currentIndex, totalCells);
@@ -5337,6 +5814,14 @@
         );
         return;
       }
+    }
+
+    if (horizontalScrollDebugEnabled) {
+      debugHorizontalScroll('Skipping playback scroll: no distinct next karaoke anchor transition.', {
+        currentIndex,
+        totalCells,
+        preferredVoiceIndex,
+      });
     }
   }
 
@@ -5870,27 +6355,104 @@
 
     const startShiftPx = voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0;
     const normalizedStartShiftPx = startShiftPx + pinnedLeftPx - currentAnchorViewportLeftPx;
+    const alignmentDriftPx = pinnedLeftPx - currentAnchorViewportLeftPx;
+    const shouldSnapStart = Math.abs(alignmentDriftPx) > HORIZONTAL_PLAYBACK_LANE_SHIFT_SNAP_THRESHOLD_PX;
+    const animationStartShiftPx = shouldSnapStart ? normalizedStartShiftPx : startShiftPx;
     const targetShiftPx = startShiftPx + pinnedLeftPx - targetAnchorViewportLeftPx;
-    setHorizontalPlaybackLaneShiftPx(voiceIndex, normalizedStartShiftPx);
-    if (Math.abs(targetShiftPx - normalizedStartShiftPx) < 0.25) {
+    if (shouldSnapStart) {
+      setHorizontalPlaybackLaneShiftPx(voiceIndex, animationStartShiftPx);
+    }
+    if (Math.abs(targetShiftPx - animationStartShiftPx) < 0.25) {
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Skipping lane-shift animation: target shift already reached.', {
+          voiceIndex,
+          normalizedStartShiftPx: roundedMetric(normalizedStartShiftPx),
+          animationStartShiftPx: roundedMetric(animationStartShiftPx),
+          targetShiftPx: roundedMetric(targetShiftPx),
+          alignmentDriftPx: roundedMetric(alignmentDriftPx),
+          shouldSnapStart,
+        });
+      }
       setHorizontalPlaybackLaneShiftPx(voiceIndex, targetShiftPx);
       return;
     }
 
     const motionDurationMs = Math.max(24, Math.floor(durationMs));
     const token = voiceHorizontalPlaybackLaneShiftTokens[voiceIndex];
+    let frameCount = 0;
+    let slowFrameCount = 0;
+    let longApplyCount = 0;
+    let maxFrameDeltaMs = 0;
+    let maxApplyDurationMs = 0;
+    let lastFrameAtMs: number | null = null;
+
+    if (horizontalScrollDebugEnabled) {
+      debugHorizontalScroll('Lane-shift animation scheduled.', {
+        voiceIndex,
+        currentAnchorViewportLeftPx: roundedMetric(currentAnchorViewportLeftPx),
+        targetAnchorViewportLeftPx: roundedMetric(targetAnchorViewportLeftPx),
+        pinnedLeftPx: roundedMetric(pinnedLeftPx),
+        startShiftPx: roundedMetric(startShiftPx),
+        normalizedStartShiftPx: roundedMetric(normalizedStartShiftPx),
+        animationStartShiftPx: roundedMetric(animationStartShiftPx),
+        targetShiftPx: roundedMetric(targetShiftPx),
+        deltaShiftPx: roundedMetric(targetShiftPx - animationStartShiftPx),
+        alignmentDriftPx: roundedMetric(alignmentDriftPx),
+        snapThresholdPx: HORIZONTAL_PLAYBACK_LANE_SHIFT_SNAP_THRESHOLD_PX,
+        shouldSnapStart,
+        durationMs: motionDurationMs,
+      });
+    }
 
     const step = (now: number): void => {
       if (token !== voiceHorizontalPlaybackLaneShiftTokens[voiceIndex]) return;
 
       const progress = Math.min(1, (now - startedAtMs) / motionDurationMs);
+      const frameDeltaMs = lastFrameAtMs === null ? null : now - lastFrameAtMs;
+      const nextShiftPx = animationStartShiftPx + (targetShiftPx - animationStartShiftPx) * progress;
+      const applyStartedAt = horizontalScrollDebugEnabled ? performance.now() : 0;
       setHorizontalPlaybackLaneShiftPx(
         voiceIndex,
-        normalizedStartShiftPx + (targetShiftPx - normalizedStartShiftPx) * progress,
+        nextShiftPx,
       );
+      const applyDurationMs = horizontalScrollDebugEnabled ? performance.now() - applyStartedAt : 0;
+
+      if (horizontalScrollDebugEnabled) {
+        frameCount += 1;
+        lastFrameAtMs = now;
+        if (frameDeltaMs !== null) maxFrameDeltaMs = Math.max(maxFrameDeltaMs, frameDeltaMs);
+        maxApplyDurationMs = Math.max(maxApplyDurationMs, applyDurationMs);
+        const slowFrame = frameDeltaMs !== null && frameDeltaMs > HORIZONTAL_SCROLL_DEBUG_SLOW_FRAME_MS;
+        const longApply = applyDurationMs > HORIZONTAL_SCROLL_DEBUG_LONG_APPLY_MS;
+        if (slowFrame) slowFrameCount += 1;
+        if (longApply) longApplyCount += 1;
+        if (horizontalScrollDebugVerbose || slowFrame || longApply) {
+          debugHorizontalScrollFrame('Lane-shift animation frame.', {
+            voiceIndex,
+            frameCount,
+            frameDeltaMs: roundedMetric(frameDeltaMs),
+            progress: roundedMetric(progress),
+            shiftPx: roundedMetric(nextShiftPx),
+            applyDurationMs: roundedMetric(applyDurationMs),
+            slowFrame,
+            longApply,
+          });
+        }
+      }
 
       if (progress >= 1) {
         voiceHorizontalPlaybackLaneShiftFrames[voiceIndex] = null;
+        if (horizontalScrollDebugEnabled) {
+          debugHorizontalScroll('Lane-shift animation completed.', {
+            voiceIndex,
+            frameCount,
+            slowFrameCount,
+            longApplyCount,
+            maxFrameDeltaMs: roundedMetric(maxFrameDeltaMs),
+            maxApplyDurationMs: roundedMetric(maxApplyDurationMs),
+            targetShiftPx: roundedMetric(targetShiftPx),
+          });
+        }
         return;
       }
 
@@ -6124,6 +6686,7 @@
     playbackVisualStartedAtMs = performance.now();
     playbackVisualStartIndex = startIndex;
     playbackVisualLastRenderedIndex = startIndex - 1;
+    horizontalScrollDebugLastVisualFrameAtMs = null;
 
     const step = (now: number): void => {
       if (!isPlaying || loopToken !== playbackVisualLoopToken) {
@@ -6135,11 +6698,37 @@
       const elapsedSteps = Math.max(0, Math.floor((now - playbackVisualStartedAtMs) / intervalMs));
       const targetIndex = playbackVisualStartIndex + elapsedSteps;
       let renderedSteps = 0;
+      const visualFrameDeltaMs = horizontalScrollDebugLastVisualFrameAtMs === null
+        ? null
+        : now - horizontalScrollDebugLastVisualFrameAtMs;
+      const frameWorkStartedAt = horizontalScrollDebugEnabled ? performance.now() : 0;
+      horizontalScrollDebugLastVisualFrameAtMs = now;
 
       while (isPlaying && loopToken === playbackVisualLoopToken && playbackVisualLastRenderedIndex < targetIndex && renderedSteps < 4) {
         playbackStep();
         playbackVisualLastRenderedIndex += 1;
         renderedSteps += 1;
+      }
+
+      if (horizontalScrollDebugEnabled && trackStyle === 'horizontal') {
+        const frameWorkDurationMs = performance.now() - frameWorkStartedAt;
+        const slowFrame = visualFrameDeltaMs !== null && visualFrameDeltaMs > HORIZONTAL_SCROLL_DEBUG_SLOW_FRAME_MS;
+        const catchUpFrame = renderedSteps > 1;
+        const longWork = frameWorkDurationMs > 8;
+        if (horizontalScrollDebugVerbose || slowFrame || catchUpFrame || longWork) {
+          debugHorizontalScrollFrame('Playback visual loop frame.', {
+            frameDeltaMs: roundedMetric(visualFrameDeltaMs),
+            frameWorkDurationMs: roundedMetric(frameWorkDurationMs),
+            intervalMs,
+            elapsedSteps,
+            targetIndex,
+            playbackVisualLastRenderedIndex,
+            renderedSteps,
+            slowFrame,
+            catchUpFrame,
+            longWork,
+          });
+        }
       }
 
       if (!isPlaying || loopToken !== playbackVisualLoopToken) {
@@ -6490,7 +7079,17 @@
     const afterContentLeft = afterAnchor ? karaokeAnchorContentLeftPx(preferredVoiceIndex, afterAnchor) : null;
 
     if (beforeContentLeft !== null && afterContentLeft !== null) {
-      clearHorizontalPlaybackScrollAnimation();
+      if (horizontalScrollDebugEnabled) {
+        debugHorizontalScroll('Recentering horizontal loop playback.', horizontalScrollDiagnosticsSnapshot({
+          shiftCycles,
+          rowShift,
+          beforeContentLeft: roundedMetric(beforeContentLeft),
+          afterContentLeft: roundedMetric(afterContentLeft),
+          scrollAdjustmentPx: roundedMetric(afterContentLeft - beforeContentLeft),
+          nextPlaybackIndex,
+        }));
+      }
+      clearHorizontalPlaybackScrollAnimation('horizontal loop recenter');
       setHorizontalPlaybackScrollLeft(effectiveHorizontalPlaybackScrollLeft() + afterContentLeft - beforeContentLeft);
     }
 
@@ -6682,6 +7281,7 @@
   async function startPlayback(readiness: AudioReadinessResult): Promise<void> {
     if (isPlaying) return;
 
+    refreshHorizontalScrollDebugFlags();
     playbackStartToken += 1;
     const startToken = playbackStartToken;
     debugPlaybackHighlight('Starting playback.', { playbackIndex, totalCells: totalPlaybackCells() });
@@ -6746,6 +7346,19 @@
       stabilizationDelayMs: startupDelayMs,
       startElapsedMs: readiness.startElapsedMs,
     });
+    if (horizontalScrollDebugEnabled && trackStyle === 'horizontal') {
+      debugHorizontalScroll('Playback horizontal scroll diagnostics snapshot.', horizontalScrollDiagnosticsSnapshot({
+        playbackIndex,
+        currentIndex,
+        traversalEndIndex,
+        shouldRunCountIn,
+        shouldUseHorizontalPlaybackHighway,
+        firstAnchorCount: firstAnchors.size,
+        resumedAudioContext: readiness.resumedAudioContext,
+        stabilizationDelayMs: readiness.stabilizationDelayMs,
+        audioStartElapsedMs: readiness.startElapsedMs,
+      }));
+    }
     const leadInMs = firstAnchors.size > 0
       ? shouldRunCountIn
         ? startCountIn(firstAnchors, startupDelayMs, false)
@@ -7891,7 +8504,6 @@
           bind:this={voiceTrackRowElements[voiceIndex][rowIndex]}
           use:notifyCanvasLayoutChange
           style:--track-row-column={trackStyle === 'horizontal' && voiceCount > 1 ? `${rowIndex + 1}` : null}
-          style:--horizontal-playback-lane-shift-px={trackStyle === 'horizontal' && voiceCount > 1 ? `${voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0}px` : null}
           on:pointerdown={() => setActiveCanvasVoice(voiceIndex)}
         >
           {#if voiceCount > 1}

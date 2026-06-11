@@ -1830,8 +1830,6 @@ body {
   grid-column: var(--track-row-column, auto);
   width: var(--horizontal-track-segment-width);
   max-width: var(--horizontal-track-segment-width);
-  transform: translateX(var(--horizontal-playback-lane-shift-px, 0px));
-  will-change: transform;
 }
 
 .track-row--loop-copy {
