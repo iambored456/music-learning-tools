@@ -626,6 +626,7 @@
   const HORIZONTAL_LOOP_RENDER_CYCLES = 3;
   const HORIZONTAL_LOOP_ANCHOR_CYCLE = 1;
   const HORIZONTAL_LOOP_RECENTER_CYCLE = 2;
+  const PLAYBACK_TRACK_ZOOM = 1;
   const TRACK_ZOOM_MIN = 0.45;
   const TRACK_ZOOM_MAX = 1.8;
   const TRACK_ZOOM_WHEEL_SENSITIVITY = 0.0016;
@@ -3361,6 +3362,7 @@
 
   function handleTrackWheel(event: WheelEvent): void {
     if (!event.ctrlKey) return;
+    if (isPlaying) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -8050,7 +8052,7 @@
   class:viewport-fit={viewportFitMode}
   class:track-style-horizontal={trackStyle === 'horizontal'}
   class:playback-active={isPlaying}
-  style={`${rootInlineStyle()};--track-zoom:${trackZoom};--track-playback-shell-height-px:${trackPlaybackShellHeightPx};--playback-highway-height-percent:${playbackHighwayHeightPercent};`}
+  style={`${rootInlineStyle()};--track-zoom:${trackZoom};--playback-track-zoom:${PLAYBACK_TRACK_ZOOM};--track-playback-shell-height-px:${trackPlaybackShellHeightPx};--playback-highway-height-percent:${playbackHighwayHeightPercent};`}
   on:dragover={handleCursorGhostDragOver}
 >
   <div class="top-toolbar" class:playback-compact={isPlaying} class:eighth-bank-visible={showToolbarEighthBank && !isPlaying}>

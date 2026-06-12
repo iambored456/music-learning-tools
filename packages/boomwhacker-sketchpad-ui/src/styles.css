@@ -49,6 +49,7 @@ body {
   --adaptive-rows-gap-px: 14;
   --playback-highway-height-percent: 70;
   --track-zoom: 1;
+  --playback-track-zoom: 1;
   --track-playback-shell-height-px: 0;
 
   width: min(1320px, 100%);
@@ -182,8 +183,9 @@ body {
 
 .tempo-stack {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: max-content max-content;
   align-items: center;
+  justify-content: start;
   gap: 5px;
   min-width: 0;
   min-height: 0;
@@ -211,7 +213,8 @@ body {
 
 .tempo-shortcut-buttons {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-self: center;
   gap: 3px;
 }
 
@@ -278,19 +281,11 @@ body {
 }
 
 .transport-btn.active {
-  background-color: rgba(100, 149, 237, 0.3);
+  background-color: rgba(255, 214, 83, 0.28);
 }
 
 .transport-btn.active:hover {
-  background-color: rgba(100, 149, 237, 0.45);
-}
-
-.transport-btn.eraser-btn.active {
-  background-color: rgba(220, 53, 69, 0.28);
-}
-
-.transport-btn.eraser-btn.active:hover {
-  background-color: rgba(220, 53, 69, 0.42);
+  background-color: rgba(255, 214, 83, 0.42);
 }
 
 .transport-icon {
@@ -321,7 +316,7 @@ body {
   object-fit: contain;
   border-radius: 2px;
   filter: none;
-  background: #fff;
+  background: transparent;
 }
 
 .transport-icon-mask {
@@ -527,7 +522,7 @@ body {
   --playback-highway-shell-height: max(1px, calc(var(--track-playback-shell-height-px) * 1px));
   --playback-highway-content-height: max(1px, calc(var(--playback-highway-shell-height) - var(--horizontal-scrollbar-height, 18px)));
   --playback-highway-row-height: max(1px, calc(var(--playback-highway-content-height) - var(--playback-highway-label-space)));
-  --playback-highway-measure-width: calc(var(--playback-highway-row-height) * 4 * var(--track-zoom));
+  --playback-highway-measure-width: calc(var(--playback-highway-row-height) * 4 * var(--playback-track-zoom, 1));
   --horizontal-note-glyph-row-height: var(--playback-highway-row-height);
   --horizontal-track-segment-width: var(--playback-highway-measure-width);
   height: 100%;
@@ -545,7 +540,7 @@ body {
 .canvas-scroll-shell.track-style-horizontal.playback-highway-expanded .rows-grid.track-style-horizontal.two-voice-mode {
   --playback-highway-voice-track-gap: max(26px, calc(var(--karaoke-ball-size-px, 40px) + var(--karaoke-arc-height-px, 64px) + 8px));
   --playback-highway-row-height: max(1px, calc((var(--playback-highway-content-height) - var(--playback-highway-label-space) - (var(--playback-highway-voice-track-gap) * (var(--visible-voice-count, 2) - 1))) / var(--visible-voice-count, 2)));
-  --playback-highway-measure-width: calc(var(--playback-highway-row-height) * 4 * var(--track-zoom));
+  --playback-highway-measure-width: calc(var(--playback-highway-row-height) * 4 * var(--playback-track-zoom, 1));
   --horizontal-note-glyph-row-height: var(--playback-highway-row-height);
   --horizontal-track-segment-width: calc(var(--playback-highway-measure-width) + 54px);
   grid-template-rows: repeat(var(--visible-voice-count, 2), var(--playback-highway-row-height));
