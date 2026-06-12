@@ -121,6 +121,14 @@
     voices?: PersistedVoiceCanvas[];
   };
 
+  type PlaybackPreferenceKey = 'microbeatTempo' | 'mainVolume' | 'metronomeVolume';
+
+  type PlaybackPreferenceSnapshot = Partial<Record<PlaybackPreferenceKey, number>>;
+
+  type PersistedPlaybackPreferences = PlaybackPreferenceSnapshot & {
+    version: 1;
+  };
+
   type CanvasHistorySnapshot = {
     pickupBeats: number;
     voiceCount: VoiceCountMode;
@@ -522,6 +530,8 @@
   const SHARE_ROUTE_VERSION = 'v1';
   const SHARE_URL_WARN_LENGTH = 2000;
   const SHARE_URL_SEVERE_LENGTH = 4000;
+  const PLAYBACK_PREFERENCES_KEY = 'boomwhacker-sketchpad-ui:playback-preferences:v1';
+  const PLAYBACK_PREFERENCES_VERSION = 1;
   const KARAOKE_ARC_HEIGHT_MIN = 0;
   const KARAOKE_ARC_HEIGHT_MAX = 100;
   const KARAOKE_BALL_SIZE_MIN = 8;
@@ -735,9 +745,14 @@
   let libraryFileName = '';
   let libraryEntries: Array<SketchpadLibraryEntry<LibrarySketchDocument>> = [];
   let librarySelectedEntryId: string | null = null;
+  let selectedLibraryEntryForActions: SketchpadLibraryEntry<LibrarySketchDocument> | null = null;
   let libraryPendingAction: { type: 'open' | 'delete'; entryId: string } | null = null;
   let currentLibraryEntryId: string | null = null;
   let currentLibraryName: string | null = null;
+
+  $: selectedLibraryEntryForActions = librarySelectedEntryId
+    ? libraryEntries.find((entry) => entry.id === librarySelectedEntryId) ?? null
+    : null;
 
   let studentViewModalOpen = false;
   let studentViewSettings: StudentViewSettings = {};
@@ -759,6 +774,7 @@
   let canvasHistory: CanvasHistorySnapshot[] = [];
   let canvasHistoryPointer = -1;
   let suppressCanvasHistoryTracking = false;
+  let activePlaybackPreferenceKeys = new Set<PlaybackPreferenceKey>();
   let bankNativeDragEnabled = true;
   let canvasPanelRepositionAnimation: Animation | null = null;
   let canvasPanelRepositionToken = 0;
@@ -900,6 +916,7 @@
       if (!loadedFromShare) {
         loadPersistedCanvasState();
       }
+      applyPlaybackPreferences(readStoredPlaybackPreferences());
       canvasPersistenceReady = true;
     })();
 
@@ -1828,10 +1845,9 @@
     const pickupValue = Number(persisted.pickupBeats);
     const nextPickupBeats =
       Number.isFinite(pickupValue) ? Math.max(0, Math.min(PICKUP_MAX_BEATS, Math.round(pickupValue))) : 0;
-    const persistedTempoValue = Number(persisted.microbeatTempo);
-    const nextMicrobeatTempo = Number.isFinite(persistedTempoValue)
-      ? Math.max(MICROBEAT_TEMPO_MIN, Math.min(MICROBEAT_TEMPO_MAX, Math.round(persistedTempoValue)))
-      : DEFAULTS.MICROBEAT_TEMPO;
+    const playbackPreferences = activePlaybackPreferencesSnapshot();
+    const nextMicrobeatTempo = playbackPreferences.microbeatTempo
+      ?? clampMicrobeatTempo(persisted.microbeatTempo);
 
     const rowsInput = Array.isArray(persisted.rows) ? persisted.rows : [];
     const storedVoiceCount = coerceVoiceCount(persisted.voiceCount);
@@ -1864,6 +1880,7 @@
     trackStyle = storedTrackStyle;
     activeCanvasVoiceIndex = 0;
     model.setMicrobeatTempo(nextMicrobeatTempo);
+    applyPlaybackPreferences(playbackPreferences);
     resetCanvasHistoryToCurrent();
   }
 
@@ -1871,6 +1888,105 @@
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return fallback;
     return Math.max(0, Math.min(1, numericValue));
+  }
+
+  function clampMicrobeatTempo(value: unknown, fallback: number = DEFAULTS.MICROBEAT_TEMPO): number {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.max(MICROBEAT_TEMPO_MIN, Math.min(MICROBEAT_TEMPO_MAX, Math.round(numericValue)));
+  }
+
+  function normalizePlaybackPreferences(value: unknown): PlaybackPreferenceSnapshot {
+    if (!value || typeof value !== 'object') return {};
+    const source = value as Record<string, unknown>;
+    if (source.version !== PLAYBACK_PREFERENCES_VERSION) return {};
+
+    const preferences: PlaybackPreferenceSnapshot = {};
+    if (source.microbeatTempo !== undefined) {
+      preferences.microbeatTempo = clampMicrobeatTempo(source.microbeatTempo);
+    }
+    if (source.mainVolume !== undefined) {
+      preferences.mainVolume = clampUnitInterval(source.mainVolume, state.mainVolume);
+    }
+    if (source.metronomeVolume !== undefined) {
+      preferences.metronomeVolume = clampUnitInterval(source.metronomeVolume, DEFAULT_METRONOME_VOLUME);
+    }
+
+    return preferences;
+  }
+
+  function readStoredPlaybackPreferences(): PlaybackPreferenceSnapshot {
+    if (typeof window === 'undefined') return {};
+
+    try {
+      const rawPreferences = window.localStorage.getItem(PLAYBACK_PREFERENCES_KEY);
+      return rawPreferences ? normalizePlaybackPreferences(JSON.parse(rawPreferences)) : {};
+    } catch (error) {
+      console.warn('Simple Notation playback preference load failed.', error);
+      return {};
+    }
+  }
+
+  function markPlaybackPreferencesActive(preferences: PlaybackPreferenceSnapshot): void {
+    for (const key of ['microbeatTempo', 'mainVolume', 'metronomeVolume'] as const) {
+      if (preferences[key] !== undefined) {
+        activePlaybackPreferenceKeys.add(key);
+      }
+    }
+  }
+
+  function activePlaybackPreferencesSnapshot(): PlaybackPreferenceSnapshot {
+    const storedPreferences = readStoredPlaybackPreferences();
+    const preferences: PlaybackPreferenceSnapshot = { ...storedPreferences };
+
+    if (activePlaybackPreferenceKeys.has('microbeatTempo')) {
+      preferences.microbeatTempo = state.microbeatTempo;
+    }
+    if (activePlaybackPreferenceKeys.has('mainVolume')) {
+      preferences.mainVolume = state.mainVolume;
+    }
+    if (activePlaybackPreferenceKeys.has('metronomeVolume')) {
+      preferences.metronomeVolume = metronomeVolume;
+    }
+
+    markPlaybackPreferencesActive(preferences);
+    return preferences;
+  }
+
+  function persistPlaybackPreferences(overrides: PlaybackPreferenceSnapshot = {}): void {
+    if (typeof window === 'undefined') return;
+
+    const preferences: PlaybackPreferenceSnapshot = {
+      ...activePlaybackPreferencesSnapshot(),
+      ...overrides,
+    };
+    markPlaybackPreferencesActive(preferences);
+
+    const persistedPreferences: PersistedPlaybackPreferences = {
+      version: 1,
+      ...preferences,
+    };
+
+    try {
+      window.localStorage.setItem(PLAYBACK_PREFERENCES_KEY, JSON.stringify(persistedPreferences));
+    } catch (error) {
+      console.warn('Simple Notation playback preference save failed.', error);
+    }
+  }
+
+  function applyPlaybackPreferences(preferences: PlaybackPreferenceSnapshot): void {
+    markPlaybackPreferencesActive(preferences);
+
+    if (preferences.microbeatTempo !== undefined) {
+      model.setMicrobeatTempo(preferences.microbeatTempo);
+    }
+    if (preferences.mainVolume !== undefined) {
+      model.setMainVolume(preferences.mainVolume);
+    }
+    if (preferences.metronomeVolume !== undefined) {
+      metronomeVolume = preferences.metronomeVolume;
+      audio.setMetronomeVolume(metronomeVolume);
+    }
   }
 
   function clampPlaybackHighwayHeightPercent(value: unknown, fallback = PLAYBACK_HIGHWAY_HEIGHT_PERCENT_DEFAULT): number {
@@ -1949,12 +2065,16 @@
   }
 
   function loadFromLibrarySketchDocument(document: LibrarySketchDocument): void {
-    loadFromShareDocument(document.composition, { preserveLibraryContext: true });
+    const playbackPreferences = activePlaybackPreferencesSnapshot();
+    loadFromShareDocument(document.composition, {
+      preserveLibraryContext: true,
+      playbackPreferences,
+    });
 
     const settings = normalizeLibrarySketchSettings(document.settings);
     countInEnabled = settings.countInEnabled;
     macrobeatMetronomeEnabled = settings.macrobeatMetronomeEnabled;
-    metronomeVolume = settings.metronomeVolume;
+    metronomeVolume = playbackPreferences.metronomeVolume ?? settings.metronomeVolume;
     audio.setMetronomeVolume(metronomeVolume);
     colorPaletteMode = settings.colorPaletteMode;
     showAccidentals = settings.showAccidentals;
@@ -1963,7 +2083,8 @@
     playbackHighwayHeightPercent = clampPlaybackHighwayHeightPercent(settings.playbackHighwayHeightPercent);
     applyPaletteToPlacedNotes();
     model.setMainPlaybackVoice(settings.mainPlaybackVoice);
-    model.setMainVolume(settings.mainVolume);
+    model.setMainVolume(playbackPreferences.mainVolume ?? settings.mainVolume);
+    applyPlaybackPreferences(playbackPreferences);
   }
 
   function buildSuggestedLibraryName(): string {
@@ -2033,8 +2154,7 @@
   }
 
   function selectedLibraryEntry(): SketchpadLibraryEntry<LibrarySketchDocument> | null {
-    if (!librarySelectedEntryId) return null;
-    return libraryEntries.find((entry) => entry.id === librarySelectedEntryId) ?? null;
+    return selectedLibraryEntryForActions;
   }
 
   async function refreshLibraryEntries(preferredEntryId: string | null = librarySelectedEntryId): Promise<void> {
@@ -2353,8 +2473,13 @@
 
   function loadFromShareDocument(
     doc: ShareDocument,
-    options: { preserveLibraryContext?: boolean } = {},
+    options: { preserveLibraryContext?: boolean; playbackPreferences?: PlaybackPreferenceSnapshot | null } = {},
   ): void {
+    const playbackPreferences =
+      options.playbackPreferences === undefined
+        ? activePlaybackPreferencesSnapshot()
+        : options.playbackPreferences;
+
     if (isPlaying) {
       stopPlayback();
     }
@@ -2364,7 +2489,7 @@
     }
 
     model.setRootNoteTonic(doc.tonic);
-    model.setMicrobeatTempo(doc.tempo);
+    model.setMicrobeatTempo(playbackPreferences?.microbeatTempo ?? doc.tempo);
 
     const clampedPickupBeats = Math.max(0, Math.min(PICKUP_MAX_BEATS, Math.round(doc.pickupBeats)));
     const nextVoiceCount = coerceVoiceCount(doc.voiceCount);
@@ -2401,6 +2526,10 @@
     } else {
       isStudentView = false;
       activeStudentView = {};
+    }
+
+    if (playbackPreferences) {
+      applyPlaybackPreferences(playbackPreferences);
     }
   }
 
@@ -3068,14 +3197,14 @@
     }
   }
 
-  function rectSnapshot(rect: DOMRect): RectSnapshot {
+  function rectSnapshot(rect: DOMRect, offsetX = 0, offsetY = 0): RectSnapshot {
     return {
-      x: rect.x,
-      y: rect.y,
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
+      x: rect.x + offsetX,
+      y: rect.y + offsetY,
+      left: rect.left + offsetX,
+      top: rect.top + offsetY,
+      right: rect.right + offsetX,
+      bottom: rect.bottom + offsetY,
       width: rect.width,
       height: rect.height,
     };
@@ -3133,10 +3262,11 @@
     const firstCellRects = new Map<string, RectSnapshot>();
 
     for (const voiceIndex of VOICE_INDEXES) {
+      const laneShiftOffsetX = -(voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0);
       for (const [rowIndex, rowElement] of voiceTrackRowElements[voiceIndex].entries()) {
         if (!rowElement) continue;
 
-        rowRects.set(rowGeometryKey(voiceIndex, rowIndex), rectSnapshot(rowElement.getBoundingClientRect()));
+        rowRects.set(rowGeometryKey(voiceIndex, rowIndex), rectSnapshot(rowElement.getBoundingClientRect(), laneShiftOffsetX));
 
         const cells = rowElement.querySelectorAll<HTMLElement>('.macrobeat-cell');
         for (const cellElement of cells) {
@@ -3145,7 +3275,7 @@
           const parsedCellIndex = Number(cellElement.dataset.cellIndex);
           if (!Number.isInteger(parsedRowIndex) || !Number.isInteger(parsedCellIndex)) continue;
 
-          const snapshot = rectSnapshot(cellElement.getBoundingClientRect());
+          const snapshot = rectSnapshot(cellElement.getBoundingClientRect(), laneShiftOffsetX);
           const key = cellGeometryKey(voiceIndex, zone, parsedRowIndex, parsedCellIndex);
           cellRects.set(key, snapshot);
           cellElements.set(key, cellElement);
@@ -3153,7 +3283,7 @@
           if (noteElement) {
             const noteRect = noteElement.getBoundingClientRect();
             if (noteRect.width > 0 && noteRect.height > 0) {
-              noteRects.set(key, rectSnapshot(noteRect));
+              noteRects.set(key, rectSnapshot(noteRect, laneShiftOffsetX));
             }
           }
           const firstCellKey = rowGeometryKey(voiceIndex, parsedRowIndex);
@@ -3165,7 +3295,7 @@
     }
 
     playbackGeometryCache = {
-      scrollLeft: canvasScrollShellElement?.scrollLeft ?? 0,
+      scrollLeft: canvasScrollShellElement ? effectiveHorizontalPlaybackScrollLeft() : 0,
       panelRect: rectSnapshot(canvasPanelElement.getBoundingClientRect()),
       scrollShellRect: canvasScrollShellElement ? rectSnapshot(canvasScrollShellElement.getBoundingClientRect()) : null,
       rowRects,
@@ -3722,7 +3852,9 @@
 
   function setMainVolume(event: Event): void {
     const target = event.target as HTMLInputElement;
-    model.setMainVolume(Number(target.value) / 100);
+    const nextVolume = clampUnitInterval(Number(target.value) / 100, state.mainVolume);
+    model.setMainVolume(nextVolume);
+    persistPlaybackPreferences({ mainVolume: nextVolume });
   }
 
   function setMetronomeVolume(event: Event): void {
@@ -3734,6 +3866,7 @@
 
     metronomeVolume = nextValue / 100;
     audio.setMetronomeVolume(metronomeVolume);
+    persistPlaybackPreferences({ metronomeVolume });
   }
 
   function handleVoiceCountModeChange(event: Event): void {
@@ -3857,7 +3990,9 @@
   }
 
   function handleQuarterTempoChange(quarterTempo: number): void {
-    model.setMicrobeatTempo(quarterTempo * 2);
+    const nextMicrobeatTempo = clampMicrobeatTempo(quarterTempo * 2, state.microbeatTempo);
+    model.setMicrobeatTempo(nextMicrobeatTempo);
+    persistPlaybackPreferences({ microbeatTempo: nextMicrobeatTempo });
 
     if (isPlaying) {
       restartPlaybackTimer();
@@ -4576,7 +4711,7 @@
   function prepareHorizontalPlaybackHighway(startIndex: number, totalCells: number): void {
     resetHorizontalPlaybackHighway();
     if (trackStyle !== 'horizontal') return;
-    const activationIndex = startIndex + MICROBEATS_PER_BEAT;
+    const activationIndex = startIndex;
     if (activationIndex >= totalCells) return;
 
     horizontalPlaybackHighway = {
@@ -4591,6 +4726,29 @@
         activationIndex,
         pinnedVoiceIndex: horizontalPlaybackHighway.pinnedVoiceIndex,
       });
+    }
+  }
+
+  function alignHorizontalPlaybackStartToAnchor(
+    currentIndex: number,
+    firstAnchors: Map<VoiceIndex, KaraokeAnchor> | null = null,
+  ): void {
+    if (trackStyle !== 'horizontal') return;
+
+    const preferredVoiceIndex = resolvePlaybackScrollVoiceIndex();
+    const preferredAnchor = firstAnchors?.get(preferredVoiceIndex)
+      ?? karaokeAnchorFromPlaybackIndex(preferredVoiceIndex, currentIndex);
+    if (preferredAnchor) {
+      scrollHorizontalTrackToAnchor(preferredVoiceIndex, preferredAnchor, 'auto');
+      return;
+    }
+
+    for (const voiceIndex of visibleVoiceIndices()) {
+      const anchor = firstAnchors?.get(voiceIndex) ?? karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
+      if (!anchor) continue;
+
+      scrollHorizontalTrackToAnchor(voiceIndex, anchor, 'auto');
+      return;
     }
   }
 
@@ -5704,10 +5862,15 @@
     });
   }
 
-  function activateHorizontalPlaybackHighway(currentIndex: number): void {
+  function activateHorizontalPlaybackHighway(
+    currentIndex: number,
+    anchors: Map<VoiceIndex, KaraokeAnchor> | null = null,
+    forceRefresh = false,
+  ): void {
     if (trackStyle !== 'horizontal') return;
-    if (horizontalPlaybackHighway.activationIndex !== currentIndex) return;
-    if (horizontalPlaybackHighway.referenceViewportLeftPx !== null) return;
+    const highwayAlreadyActive = horizontalPlaybackHighway.referenceViewportLeftPx !== null;
+    if (horizontalPlaybackHighway.activationIndex !== currentIndex && !highwayAlreadyActive) return;
+    if (highwayAlreadyActive && !forceRefresh) return;
 
     const panel = canvasPanelElement;
     const container = canvasScrollShellElement;
@@ -5719,15 +5882,18 @@
     let fallbackPinnedLeftPx: number | null = null;
     let preferredReferenceViewportLeftPx: number | null = null;
     let preferredPinnedLeftPx: number | null = null;
+    const voiceAnchorPanelLeftPxs = new Map<VoiceIndex, number>();
+    const startupLaneAlignments: Array<Record<string, unknown>> = [];
 
     for (const voiceIndex of visibleVoiceIndices()) {
-      const anchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
+      const anchor = anchors?.get(voiceIndex) ?? karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
       if (!anchor) continue;
 
       const panelLeftPx = karaokeAnchorViewportLeftPx(voiceIndex, anchor, 'panel');
       const containerLeftPx = karaokeAnchorViewportLeftPx(voiceIndex, anchor, 'scroll-shell');
       if (panelLeftPx === null || containerLeftPx === null) continue;
 
+      voiceAnchorPanelLeftPxs.set(voiceIndex, panelLeftPx);
       voiceKaraokeBallPinnedLeftPxs[voiceIndex] = panelLeftPx;
       if (fallbackReferenceViewportLeftPx === null) {
         fallbackReferenceViewportLeftPx = containerLeftPx;
@@ -5744,6 +5910,24 @@
     if (resolvedPinnedLeftPx !== null) {
       for (const voiceIndex of visibleVoiceIndices()) {
         voiceKaraokeBallPinnedLeftPxs[voiceIndex] = resolvedPinnedLeftPx;
+        const anchorPanelLeftPx = voiceAnchorPanelLeftPxs.get(voiceIndex);
+        if (anchorPanelLeftPx === undefined) {
+          setHorizontalPlaybackLaneShiftPx(voiceIndex, 0);
+          startupLaneAlignments.push({
+            voiceIndex,
+            anchorPanelLeftPx: null,
+            initialLaneShiftPx: 0,
+          });
+          continue;
+        }
+
+        const initialLaneShiftPx = resolvedPinnedLeftPx - anchorPanelLeftPx;
+        setHorizontalPlaybackLaneShiftPx(voiceIndex, initialLaneShiftPx);
+        startupLaneAlignments.push({
+          voiceIndex,
+          anchorPanelLeftPx: roundedMetric(anchorPanelLeftPx),
+          initialLaneShiftPx: roundedMetric(initialLaneShiftPx),
+        });
       }
     }
 
@@ -5754,13 +5938,15 @@
     };
 
     if (horizontalPlaybackHighway.referenceViewportLeftPx !== null) {
-      horizontalPlaybackVirtualScrollLeft = container.scrollLeft;
+      horizontalPlaybackVirtualScrollLeft = effectiveHorizontalPlaybackScrollLeft();
       applyHorizontalPlaybackTrackTransform();
       if (horizontalScrollDebugEnabled) {
         debugHorizontalScroll('Horizontal playback highway activated.', horizontalScrollDiagnosticsSnapshot({
           currentIndex,
+          forceRefresh,
           preferredVoiceIndex,
           resolvedPinnedLeftPx: roundedMetric(resolvedPinnedLeftPx),
+          startupLaneAlignments,
         }));
       }
     } else if (horizontalScrollDebugEnabled) {
@@ -6395,11 +6581,11 @@
     clearHorizontalPlaybackLaneShiftAnimation(voiceIndex);
 
     const startShiftPx = voiceHorizontalPlaybackLaneShiftPxs[voiceIndex] ?? 0;
-    const normalizedStartShiftPx = startShiftPx + pinnedLeftPx - currentAnchorViewportLeftPx;
-    const alignmentDriftPx = pinnedLeftPx - currentAnchorViewportLeftPx;
+    const desiredCurrentShiftPx = pinnedLeftPx - currentAnchorViewportLeftPx;
+    const targetShiftPx = pinnedLeftPx - targetAnchorViewportLeftPx;
+    const alignmentDriftPx = startShiftPx - desiredCurrentShiftPx;
     const shouldSnapStart = Math.abs(alignmentDriftPx) > HORIZONTAL_PLAYBACK_LANE_SHIFT_SNAP_THRESHOLD_PX;
-    const animationStartShiftPx = shouldSnapStart ? normalizedStartShiftPx : startShiftPx;
-    const targetShiftPx = startShiftPx + pinnedLeftPx - targetAnchorViewportLeftPx;
+    const animationStartShiftPx = shouldSnapStart ? desiredCurrentShiftPx : startShiftPx;
     if (shouldSnapStart) {
       setHorizontalPlaybackLaneShiftPx(voiceIndex, animationStartShiftPx);
     }
@@ -6407,7 +6593,7 @@
       if (horizontalScrollDebugEnabled) {
         debugHorizontalScroll('Skipping lane-shift animation: target shift already reached.', {
           voiceIndex,
-          normalizedStartShiftPx: roundedMetric(normalizedStartShiftPx),
+          desiredCurrentShiftPx: roundedMetric(desiredCurrentShiftPx),
           animationStartShiftPx: roundedMetric(animationStartShiftPx),
           targetShiftPx: roundedMetric(targetShiftPx),
           alignmentDriftPx: roundedMetric(alignmentDriftPx),
@@ -6434,7 +6620,7 @@
         targetAnchorViewportLeftPx: roundedMetric(targetAnchorViewportLeftPx),
         pinnedLeftPx: roundedMetric(pinnedLeftPx),
         startShiftPx: roundedMetric(startShiftPx),
-        normalizedStartShiftPx: roundedMetric(normalizedStartShiftPx),
+        desiredCurrentShiftPx: roundedMetric(desiredCurrentShiftPx),
         animationStartShiftPx: roundedMetric(animationStartShiftPx),
         targetShiftPx: roundedMetric(targetShiftPx),
         deltaShiftPx: roundedMetric(targetShiftPx - animationStartShiftPx),
@@ -7213,7 +7399,8 @@
     const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
     if (currentIndex === playbackResetIndex() || isHorizontalLoopPlaybackActive()) {
       prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
-      queueHorizontalPlaybackScroll(currentIndex, 'auto');
+      alignHorizontalPlaybackStartToAnchor(currentIndex);
+      activateHorizontalPlaybackHighway(currentIndex);
     }
     schedulePlaybackAudioRun(currentIndex, traversalEndIndex);
     startPlaybackVisualLoop(currentIndex);
@@ -7246,6 +7433,18 @@
     return anchors;
   }
 
+  function refreshAndAlignStartupKaraokeAnchors(
+    anchors: Map<VoiceIndex, KaraokeAnchor>,
+    currentIndex: number,
+  ): Map<VoiceIndex, KaraokeAnchor> {
+    const refreshedAnchors = refreshCountInAnchorsForPlaybackIndex(anchors, currentIndex);
+    if (trackStyle === 'horizontal' && refreshedAnchors.size > 0) {
+      activateHorizontalPlaybackHighway(currentIndex, refreshedAnchors, true);
+    }
+
+    return refreshedAnchors;
+  }
+
   function triggerCountInBeat(
     firstAnchors: Map<VoiceIndex, KaraokeAnchor>,
     currentIndex: number,
@@ -7255,7 +7454,7 @@
     actualDelayMs: number | null = null,
     playAudio = true,
   ): void {
-    const refreshedAnchors = refreshCountInAnchorsForPlaybackIndex(firstAnchors, currentIndex);
+    const refreshedAnchors = refreshAndAlignStartupKaraokeAnchors(firstAnchors, currentIndex);
     countInDisplayNumber = COUNT_IN_NUMBERS[index];
 
     const accented = index === ACCENTED_COUNT_IN_INDEX;
@@ -7293,8 +7492,9 @@
   ): number {
     const beatMs = countInBeatIntervalMs();
     const sequenceStartedAt = performance.now();
+    const currentAnchors = refreshAndAlignStartupKaraokeAnchors(firstAnchors, currentIndex);
 
-    for (const [voiceIndex, anchor] of firstAnchors) {
+    for (const [voiceIndex, anchor] of currentAnchors) {
       clearKaraokeAnimation(voiceIndex);
       setKaraokeBallToAnchor(voiceIndex, anchor);
       voiceKaraokeAnchors[voiceIndex] = anchor;
@@ -7319,8 +7519,9 @@
     return startupDelayMs + beatMs * COUNT_IN_NUMBERS.length;
   }
 
-  function holdKaraokeAtFirstAnchors(firstAnchors: Map<VoiceIndex, KaraokeAnchor>): void {
-    for (const [voiceIndex, anchor] of firstAnchors) {
+  function holdKaraokeAtFirstAnchors(firstAnchors: Map<VoiceIndex, KaraokeAnchor>, currentIndex: number): void {
+    const currentAnchors = refreshAndAlignStartupKaraokeAnchors(firstAnchors, currentIndex);
+    for (const [voiceIndex, anchor] of currentAnchors) {
       clearKaraokeAnimation(voiceIndex);
       setKaraokeBallToAnchor(voiceIndex, anchor);
       voiceKaraokeAnchors[voiceIndex] = anchor;
@@ -7398,9 +7599,6 @@
 
     const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, layoutTotalCells);
     const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(layoutTotalCells) : layoutTotalCells;
-    prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
-    queueHorizontalPlaybackScroll(currentIndex, 'auto');
-
     const firstAnchors = new Map<VoiceIndex, KaraokeAnchor>();
     for (const voiceIndex of visibleVoiceIndices()) {
       const firstAnchor = karaokeAnchorFromPlaybackIndex(voiceIndex, currentIndex);
@@ -7411,6 +7609,13 @@
     const shouldRunCountIn = countInEnabled && !resumingPlayback;
     const startupDelayMs = readiness.stabilizationDelayMs;
     const shouldUseHorizontalPlaybackHighway = trackStyle === 'horizontal' && firstAnchors.size > 0;
+    prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
+    if (trackStyle === 'horizontal') {
+      alignHorizontalPlaybackStartToAnchor(currentIndex, firstAnchors);
+      if (shouldUseHorizontalPlaybackHighway) {
+        activateHorizontalPlaybackHighway(currentIndex);
+      }
+    }
     debugPlaybackStartup('Playback requested.', {
       playbackIndex,
       shouldRunCountIn,
@@ -7435,7 +7640,7 @@
       ? shouldRunCountIn
         ? startCountIn(firstAnchors, currentIndex, startupDelayMs, false)
         : shouldUseHorizontalPlaybackHighway
-          ? (holdKaraokeAtFirstAnchors(firstAnchors), startupDelayMs)
+          ? (holdKaraokeAtFirstAnchors(firstAnchors, currentIndex), startupDelayMs)
           : startKaraokeLeadInWithDelay(firstAnchors, startupDelayMs)
       : startupDelayMs;
     schedulePlaybackAudioRun(currentIndex, traversalEndIndex, leadInMs, shouldRunCountIn, startupDelayMs);
@@ -7553,7 +7758,8 @@
         const currentIndex = isHorizontalLoopPlaybackActive() ? playbackIndex : positiveModulo(playbackIndex, totalCells);
         const traversalEndIndex = isHorizontalLoopPlaybackActive() ? horizontalLoopDisplayEndIndex(totalCells) : totalCells;
         prepareHorizontalPlaybackHighway(currentIndex, traversalEndIndex);
-        queueHorizontalPlaybackScroll(currentIndex, 'auto');
+        alignHorizontalPlaybackStartToAnchor(currentIndex);
+        activateHorizontalPlaybackHighway(currentIndex);
       });
     }
   }
@@ -9340,20 +9546,6 @@
         {/if}
       </section>
 
-      {#if selectedLibraryEntry()}
-        <div class="library-actions">
-          <button type="button" class="load-code-open-btn" on:click={() => requestLibraryAction('open')} disabled={libraryBusy}>
-            Open
-          </button>
-          <button type="button" class="load-code-open-btn" on:click={handleLibraryExport} disabled={libraryBusy}>
-            Export
-          </button>
-          <button type="button" class="library-delete-btn" on:click={() => requestLibraryAction('delete')} disabled={libraryBusy}>
-            Delete
-          </button>
-        </div>
-      {/if}
-
       {#if libraryPendingAction}
         {@const pendingLibraryEntryName = libraryEntries.find((entry) => entry.id === libraryPendingAction?.entryId)?.name ?? 'this sketch'}
         <div class="library-confirm-panel" role="alert">
@@ -9374,6 +9566,18 @@
           </div>
         </div>
       {/if}
+
+      <div class="library-actions" aria-label="Selected sketch actions">
+        <button type="button" class="load-code-open-btn" on:click={() => requestLibraryAction('open')} disabled={libraryBusy || !selectedLibraryEntryForActions}>
+          Open
+        </button>
+        <button type="button" class="load-code-open-btn" on:click={handleLibraryExport} disabled={libraryBusy || !selectedLibraryEntryForActions}>
+          Export
+        </button>
+        <button type="button" class="library-delete-btn" on:click={() => requestLibraryAction('delete')} disabled={libraryBusy || !selectedLibraryEntryForActions}>
+          Delete
+        </button>
+      </div>
     </div>
   </div>
 {/if}

@@ -2872,15 +2872,19 @@ body {
 
 .library-modal {
   max-width: 560px;
-  max-height: min(86vh, 760px);
+  max-height: min(calc(100vh - 32px), 760px);
+  max-height: min(calc(100dvh - 32px), 760px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .library-modal-body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 14px;
+  min-height: 0;
   padding: 16px 18px 18px;
   overflow-y: auto;
 }
@@ -2891,6 +2895,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.library-list-panel {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .library-panel-label {
@@ -2941,8 +2950,9 @@ body {
 .library-entry-list {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 8px;
-  max-height: 280px;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -3000,6 +3010,17 @@ body {
   flex-wrap: wrap;
 }
 
+.library-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 0 -18px -18px;
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--ui-border);
+  background: var(--surface-1);
+  box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.24);
+}
+
 .library-delete-btn {
   padding: 7px 14px;
   border: 1px solid rgba(224, 108, 117, 0.55);
@@ -3016,6 +3037,21 @@ body {
 .library-delete-btn:hover {
   background: rgba(224, 108, 117, 0.18);
   border-color: rgba(224, 108, 117, 0.75);
+}
+
+.load-code-open-btn:disabled,
+.library-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.load-code-open-btn:disabled:hover {
+  background: transparent;
+}
+
+.library-delete-btn:disabled:hover {
+  background: rgba(224, 108, 117, 0.12);
+  border-color: rgba(224, 108, 117, 0.55);
 }
 
 .library-confirm-panel {
