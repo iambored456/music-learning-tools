@@ -129,6 +129,14 @@
     version: 1;
   };
 
+  type DisplayPreferenceKey = 'showEighthsBank' | 'showSixteenthsBank';
+
+  type DisplayPreferenceSnapshot = Partial<Record<DisplayPreferenceKey, boolean>>;
+
+  type PersistedDisplayPreferences = DisplayPreferenceSnapshot & {
+    version: 1;
+  };
+
   type CanvasHistorySnapshot = {
     pickupBeats: number;
     voiceCount: VoiceCountMode;
@@ -532,6 +540,8 @@
   const SHARE_URL_SEVERE_LENGTH = 4000;
   const PLAYBACK_PREFERENCES_KEY = 'boomwhacker-sketchpad-ui:playback-preferences:v1';
   const PLAYBACK_PREFERENCES_VERSION = 1;
+  const DISPLAY_PREFERENCES_KEY = 'boomwhacker-sketchpad-ui:display-preferences:v1';
+  const DISPLAY_PREFERENCES_VERSION = 1;
   const KARAOKE_ARC_HEIGHT_MIN = 0;
   const KARAOKE_ARC_HEIGHT_MAX = 100;
   const KARAOKE_BALL_SIZE_MIN = 8;
@@ -729,6 +739,8 @@
   let showAccidentals = false;
   let showEighthsBank = true;
   let showSixteenthsBank = false;
+  let utilityMenuOpen = false;
+  let utilityMenuWrapper: HTMLDivElement | null = null;
   let settingsOpen = false;
   let settingsDialog: HTMLDialogElement | undefined;
   let shareModalOpen = false;
@@ -767,6 +779,8 @@
   let volumeControlWrapper: HTMLDivElement | null = null;
   let audioSamplesPopupOpen = false;
   let audioSamplesControlWrapper: HTMLDivElement | null = null;
+  let audioSamplesPopupElement: HTMLDivElement | null = null;
+  let audioSamplesAnchorRect: DOMRect | null = null;
   let audioSamplesPopupStyle = '';
   let canvasPanelElement: HTMLElement | null = null;
   let canvasScrollShellElement: HTMLDivElement | null = null;
@@ -802,7 +816,9 @@
   let bankLatticeRowsOval: BankLatticeRows = buildBankLatticeRows(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_OVAL);
   let bankLatticeRowsDiamond: BankLatticeRows = buildBankLatticeRows(true, BANK_LATTICE_COMPRESSED_NO_ACCIDENTAL_ADVANCE_TIGHT);
   let showToolbarEighthBank = true;
-  let showLowerSixteenthBank = false;
+  let showToolbarSixteenthBank = false;
+  let showTempoRows = true;
+  let showTempoSliderControl = true;
 
   $: {
     colorPaletteMode;
@@ -813,7 +829,9 @@
 
   $: activePreviewPayload = isPlaying ? null : dragPayload ?? tapPlacementPayload;
   $: showToolbarEighthBank = (!isStudentView || !activeStudentView.hideEighthBank) && showEighthsBank;
-  $: showLowerSixteenthBank = (!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank;
+  $: showToolbarSixteenthBank = (!isStudentView || !activeStudentView.hideSixteenthBank) && showSixteenthsBank;
+  $: showTempoRows = !isStudentView || !activeStudentView.hideQuarterTempo;
+  $: showTempoSliderControl = !isStudentView || !activeStudentView.hideTempoSlider;
   $: {
     trackStyle;
     isPlaying;
@@ -905,6 +923,7 @@
     || settingsOpen
     || libraryModalOpen
   ) {
+    utilityMenuOpen = false;
     volumePopupOpen = false;
     audioSamplesPopupOpen = false;
   }
@@ -918,6 +937,7 @@
         loadPersistedCanvasState();
       }
       applyPlaybackPreferences(readStoredPlaybackPreferences());
+      applyDisplayPreferences(readStoredDisplayPreferences());
       canvasPersistenceReady = true;
     })();
 
@@ -1987,6 +2007,59 @@
     if (preferences.metronomeVolume !== undefined) {
       metronomeVolume = preferences.metronomeVolume;
       audio.setMetronomeVolume(metronomeVolume);
+    }
+  }
+
+  function normalizeDisplayPreferences(value: unknown): DisplayPreferenceSnapshot {
+    if (!value || typeof value !== 'object') return {};
+    const source = value as Record<string, unknown>;
+    if (source.version !== DISPLAY_PREFERENCES_VERSION) return {};
+
+    const preferences: DisplayPreferenceSnapshot = {};
+    if (typeof source.showEighthsBank === 'boolean') {
+      preferences.showEighthsBank = source.showEighthsBank;
+    }
+    if (typeof source.showSixteenthsBank === 'boolean') {
+      preferences.showSixteenthsBank = source.showSixteenthsBank;
+    }
+
+    return preferences;
+  }
+
+  function readStoredDisplayPreferences(): DisplayPreferenceSnapshot {
+    if (typeof window === 'undefined') return {};
+
+    try {
+      const rawPreferences = window.localStorage.getItem(DISPLAY_PREFERENCES_KEY);
+      return rawPreferences ? normalizeDisplayPreferences(JSON.parse(rawPreferences)) : {};
+    } catch (error) {
+      console.warn('Simple Notation display preference load failed.', error);
+      return {};
+    }
+  }
+
+  function persistDisplayPreferences(overrides: DisplayPreferenceSnapshot): void {
+    if (typeof window === 'undefined') return;
+
+    const persistedPreferences: PersistedDisplayPreferences = {
+      version: 1,
+      ...readStoredDisplayPreferences(),
+      ...overrides,
+    };
+
+    try {
+      window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(persistedPreferences));
+    } catch (error) {
+      console.warn('Simple Notation display preference save failed.', error);
+    }
+  }
+
+  function applyDisplayPreferences(preferences: DisplayPreferenceSnapshot): void {
+    if (preferences.showEighthsBank !== undefined) {
+      showEighthsBank = preferences.showEighthsBank;
+    }
+    if (preferences.showSixteenthsBank !== undefined) {
+      showSixteenthsBank = preferences.showSixteenthsBank;
     }
   }
 
@@ -3847,6 +3920,22 @@
     }
   }
 
+  function handleEighthsBankVisibilityChange(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLInputElement)) return;
+
+    showEighthsBank = target.checked;
+    persistDisplayPreferences({ showEighthsBank });
+  }
+
+  function handleSixteenthsBankVisibilityChange(event: Event): void {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLInputElement)) return;
+
+    showSixteenthsBank = target.checked;
+    persistDisplayPreferences({ showSixteenthsBank });
+  }
+
   function setMainVoice(event: Event): void {
     const target = event.target as HTMLSelectElement;
     model.setMainPlaybackVoice(target.value as OscillatorType);
@@ -3923,6 +4012,58 @@
     }
   }
 
+  function toggleUtilityMenu(event: Event): void {
+    event.stopPropagation();
+    utilityMenuOpen = !utilityMenuOpen;
+    if (utilityMenuOpen) {
+      volumePopupOpen = false;
+      audioSamplesPopupOpen = false;
+    }
+  }
+
+  function closeUtilityMenu(): void {
+    utilityMenuOpen = false;
+  }
+
+  function handleUtilityShareClick(event: Event): void {
+    event.stopPropagation();
+    closeUtilityMenu();
+    void handleShare();
+  }
+
+  function handleUtilityLibraryClick(event: Event): void {
+    event.stopPropagation();
+    closeUtilityMenu();
+    void openLibraryModal();
+  }
+
+  function handleUtilityHomeClick(event: Event): void {
+    event.stopPropagation();
+    closeUtilityMenu();
+    navigateHome();
+  }
+
+  function handleUtilityLoopClick(event: Event): void {
+    event.stopPropagation();
+    toggleLoop();
+  }
+
+  function handleUtilityMetronomeClick(event: Event): void {
+    event.stopPropagation();
+    toggleMacrobeatMetronome();
+  }
+
+  function handleUtilityCountInClick(event: Event): void {
+    event.stopPropagation();
+    toggleCountIn();
+  }
+
+  function handleUtilitySettingsClick(event: Event): void {
+    event.stopPropagation();
+    closeUtilityMenu();
+    settingsOpen = true;
+  }
+
   function toggleEraserMode(): void {
     eraserMode = !eraserMode;
     clearTapPlacementSelection();
@@ -3936,19 +4077,28 @@
     }
   }
 
-  function handleAudioSamplesIconClick(event: Event): void {
+  function openAudioSamplesPopupFromElement(anchorElement: HTMLElement | null): void {
+    audioSamplesAnchorRect = anchorElement?.getBoundingClientRect() ?? null;
+    audioSamplesPopupOpen = true;
+    volumePopupOpen = false;
+    void tick().then(updateAudioSamplesPopupPlacement);
+  }
+
+  function handleUtilityAudioSamplesClick(event: Event): void {
     event.stopPropagation();
-    audioSamplesPopupOpen = !audioSamplesPopupOpen;
-    if (audioSamplesPopupOpen) {
-      volumePopupOpen = false;
-      void tick().then(updateAudioSamplesPopupPlacement);
-    } else {
-      audioSamplesPopupStyle = '';
-    }
+    const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    closeUtilityMenu();
+    openAudioSamplesPopupFromElement(target);
   }
 
   function updateAudioSamplesPopupPlacement(): void {
-    if (!audioSamplesPopupOpen || typeof window === 'undefined' || !audioSamplesControlWrapper) {
+    if (!audioSamplesPopupOpen || typeof window === 'undefined') {
+      audioSamplesPopupStyle = '';
+      return;
+    }
+
+    const controlRect = audioSamplesControlWrapper?.getBoundingClientRect() ?? audioSamplesAnchorRect;
+    if (!controlRect) {
       audioSamplesPopupStyle = '';
       return;
     }
@@ -3957,7 +4107,6 @@
     const minPopupHeight = 240;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const controlRect = audioSamplesControlWrapper.getBoundingClientRect();
     const width = Math.min(720, Math.max(280, viewportWidth - margin * 2));
     const left = clamp(controlRect.right - width, margin, Math.max(margin, viewportWidth - width - margin));
     const preferredTop = controlRect.bottom + 6;
@@ -3982,7 +4131,14 @@
       volumePopupOpen = false;
     }
 
-    if (audioSamplesPopupOpen && !audioSamplesControlWrapper?.contains(target)) {
+    if (utilityMenuOpen && !utilityMenuWrapper?.contains(target)) {
+      utilityMenuOpen = false;
+    }
+
+    const isAudioSamplesTarget =
+      audioSamplesControlWrapper?.contains(target)
+      || audioSamplesPopupElement?.contains(target);
+    if (audioSamplesPopupOpen && !isAudioSamplesTarget) {
       audioSamplesPopupOpen = false;
     }
   }
@@ -5583,7 +5739,7 @@
           topToolbar: elementLayoutSnapshot('.top-toolbar'),
           controlsPanel: elementLayoutSnapshot('.controls-panel'),
           toolbarNotebankPanel: elementLayoutSnapshot('.toolbar-notebank-panel'),
-          lowerNotebankPanel: elementLayoutSnapshot('.lower-notebank-panel'),
+          toolbarSixteenthNotebankPanel: elementLayoutSnapshot('.toolbar-sixteenth-notebank-panel'),
           canvasPanel: elementLayoutSnapshot('.canvas-panel'),
           rowsGrid: elementLayoutSnapshot('.rows-grid'),
           firstTrackRow: elementLayoutSnapshot('.track-row'),
@@ -5592,16 +5748,14 @@
       };
 
       const topToolbarRect = document.querySelector<HTMLElement>('.top-toolbar')?.getBoundingClientRect() ?? null;
-      const lowerNotebankRect = document.querySelector<HTMLElement>('.lower-notebank-panel')?.getBoundingClientRect() ?? null;
       const firstTrackRowRect = document.querySelector<HTMLElement>('.track-row')?.getBoundingClientRect() ?? null;
       const appGapPx =
         Number.parseFloat(window.getComputedStyle(document.querySelector<HTMLElement>('#boomwhacker-sketchpad-app') ?? document.body).rowGap || '0') || 0;
       const fitViewportHeight = visualViewport?.height ?? viewportHeight;
       const estimatedHeightForTwoRows =
         (topToolbarRect?.height ?? 0) +
-        (lowerNotebankRect?.height ?? 0) +
         (firstTrackRowRect?.height ?? 0) * 2 +
-        appGapPx * (lowerNotebankRect ? 2 : 1);
+        appGapPx;
       const fitHeuristic = {
         fitViewportHeight: roundTo2(fitViewportHeight),
         estimatedHeightForTwoRows: roundTo2(estimatedHeightForTwoRows),
@@ -7935,6 +8089,11 @@
       return;
     }
 
+    if (event.key === 'Escape' && utilityMenuOpen) {
+      utilityMenuOpen = false;
+      return;
+    }
+
     if (event.key === 'Escape' && volumePopupOpen) {
       volumePopupOpen = false;
       return;
@@ -8055,7 +8214,12 @@
   style={`${rootInlineStyle()};--track-zoom:${trackZoom};--playback-track-zoom:${PLAYBACK_TRACK_ZOOM};--track-playback-shell-height-px:${trackPlaybackShellHeightPx};--playback-highway-height-percent:${playbackHighwayHeightPercent};`}
   on:dragover={handleCursorGhostDragOver}
 >
-  <div class="top-toolbar" class:playback-compact={isPlaying} class:eighth-bank-visible={showToolbarEighthBank && !isPlaying}>
+  <div
+    class="top-toolbar"
+    class:playback-compact={isPlaying}
+    class:sixteenth-bank-visible={showToolbarSixteenthBank && !isPlaying}
+    class:eighth-bank-visible={showToolbarEighthBank && !isPlaying}
+  >
   <section class="panel controls-panel">
     <div class="controls-group transport-group">
       <div class="transport-actions">
@@ -8083,40 +8247,6 @@
               <rect x="5" y="5" width="14" height="14" rx="3" ry="3" />
             </svg>
           </button>
-          {#if !isPlaying}
-          <button
-            type="button"
-            class="transport-btn count-in-btn"
-            class:active={countInEnabled}
-            on:click={toggleCountIn}
-            title={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
-            aria-label={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
-            aria-pressed={countInEnabled}
-          >
-            <img src={countInIconUrl} alt="" class="transport-icon transport-icon--count-in" />
-          </button>
-          <button
-            type="button"
-            class="transport-btn"
-            class:active={macrobeatMetronomeEnabled}
-            on:click={toggleMacrobeatMetronome}
-            title={macrobeatMetronomeEnabled ? 'Disable macrobeat click' : 'Enable macrobeat click'}
-            aria-label={macrobeatMetronomeEnabled ? 'Disable macrobeat click' : 'Enable macrobeat click'}
-            aria-pressed={macrobeatMetronomeEnabled}
-          >
-            <img src={metronomeIconUrl} alt="" class="transport-icon transport-icon--metronome" />
-          </button>
-          <button
-            type="button"
-            class="transport-btn"
-            class:active={isLooping}
-            on:click={toggleLoop}
-            title={isLooping ? 'Disable Loop' : 'Enable Loop'}
-            aria-label={isLooping ? 'Disable Loop' : 'Enable Loop'}
-          >
-            <img src={loopIconUrl} alt="Loop" class="transport-icon" />
-          </button>
-          {/if}
           {#if !isStudentView || !activeStudentView.hideVolumeSlider}
           <div class="volume-control-wrapper" bind:this={volumeControlWrapper}>
             <button
@@ -8145,6 +8275,129 @@
                 aria-label="Main volume"
               />
             </div>
+          </div>
+          {/if}
+          {#if !isStudentView || !activeStudentView.hideGearSettings}
+          <div class="utility-menu-wrapper" bind:this={utilityMenuWrapper}>
+            <button
+              type="button"
+              class="transport-btn settings-gear-btn utility-menu-launcher-btn"
+              class:settings-open={utilityMenuOpen}
+              on:click={toggleUtilityMenu}
+              title="Utilities"
+              aria-label="Open utility menu"
+              aria-expanded={utilityMenuOpen}
+              aria-haspopup="menu"
+              aria-controls="utility-submenu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+              </svg>
+            </button>
+            {#if utilityMenuOpen}
+              <div id="utility-submenu" class="utility-submenu" role="menu" aria-label="Utility menu">
+                <button
+                  type="button"
+                  class="transport-btn settings-gear-btn utility-menu-item"
+                  class:settings-open={settingsOpen}
+                  on:click={handleUtilitySettingsClick}
+                  title="Settings"
+                  aria-label="Open settings"
+                  role="menuitem"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+                  </svg>
+                </button>
+                <button type="button" class="transport-btn share-btn utility-menu-item" on:click={handleUtilityShareClick} title="Share composition" aria-label="Share composition" role="menuitem">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="18" cy="5" r="3"/>
+                    <circle cx="6" cy="12" r="3"/>
+                    <circle cx="18" cy="19" r="3"/>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                  </svg>
+                </button>
+                {#if !isStudentView}
+                <button
+                  type="button"
+                  class="transport-btn library-btn utility-menu-item"
+                  class:active={libraryModalOpen}
+                  on:click={handleUtilityLibraryClick}
+                  title="Open sketch library"
+                  aria-label="Open sketch library"
+                  role="menuitem"
+                >
+                  <span class="transport-icon-mask library-btn-icon" aria-hidden="true"></span>
+                </button>
+                {/if}
+                <button
+                  type="button"
+                  class="transport-btn home-btn utility-menu-item"
+                  on:click={handleUtilityHomeClick}
+                  title="Back to home"
+                  aria-label="Back to home"
+                  role="menuitem"
+                >
+                  <span class="transport-icon-mask home-btn-icon" aria-hidden="true"></span>
+                </button>
+                {#if !isStudentView}
+                <div class="audio-samples-control-wrapper" bind:this={audioSamplesControlWrapper}>
+                  <button
+                    type="button"
+                    class="transport-btn audio-samples-btn utility-menu-item"
+                    class:active={audioSamplesPopupOpen}
+                    on:click={handleUtilityAudioSamplesClick}
+                    title="Audio samples"
+                    aria-label="Audio samples"
+                    aria-expanded={audioSamplesPopupOpen}
+                    aria-controls="audio-samples-popup"
+                    role="menuitem"
+                  >
+                    <img src={audioSamplesIconUrl} alt="" class="transport-icon transport-icon--audio-samples" />
+                  </button>
+                </div>
+                {/if}
+                <button
+                  type="button"
+                  class="transport-btn utility-menu-item utility-toggle-menu-item"
+                  class:active={isLooping}
+                  on:click={handleUtilityLoopClick}
+                  title={isLooping ? 'Disable Loop' : 'Enable Loop'}
+                  aria-label={isLooping ? 'Disable Loop' : 'Enable Loop'}
+                  aria-checked={isLooping}
+                  role="menuitemcheckbox"
+                >
+                  <img src={loopIconUrl} alt="Loop" class="transport-icon" />
+                </button>
+                <button
+                  type="button"
+                  class="transport-btn utility-menu-item utility-toggle-menu-item"
+                  class:active={macrobeatMetronomeEnabled}
+                  on:click={handleUtilityMetronomeClick}
+                  title={macrobeatMetronomeEnabled ? 'Disable macrobeat click' : 'Enable macrobeat click'}
+                  aria-label={macrobeatMetronomeEnabled ? 'Disable macrobeat click' : 'Enable macrobeat click'}
+                  aria-checked={macrobeatMetronomeEnabled}
+                  role="menuitemcheckbox"
+                >
+                  <img src={metronomeIconUrl} alt="" class="transport-icon transport-icon--metronome" />
+                </button>
+                <button
+                  type="button"
+                  class="transport-btn count-in-btn utility-menu-item utility-toggle-menu-item"
+                  class:active={countInEnabled}
+                  on:click={handleUtilityCountInClick}
+                  title={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
+                  aria-label={countInEnabled ? 'Disable count-in' : 'Enable count-in'}
+                  aria-checked={countInEnabled}
+                  role="menuitemcheckbox"
+                >
+                  <img src={countInIconUrl} alt="" class="transport-icon transport-icon--count-in" />
+                </button>
+              </div>
+            {/if}
           </div>
           {/if}
         </div>
@@ -8195,167 +8448,59 @@
           >
             <img src={eraserIconUrl} alt="Eraser" class="transport-icon" />
           </button>
-          {#if !isStudentView}
-          <div class="audio-samples-control-wrapper" bind:this={audioSamplesControlWrapper}>
-            <button
-              type="button"
-              class="transport-btn audio-samples-btn"
-              class:active={audioSamplesPopupOpen}
-              on:click={handleAudioSamplesIconClick}
-              title="Audio samples"
-              aria-label="Audio samples"
-              aria-expanded={audioSamplesPopupOpen}
-              aria-controls="audio-samples-popup"
-            >
-              <img src={audioSamplesIconUrl} alt="" class="transport-icon transport-icon--audio-samples" />
-            </button>
-            {#if audioSamplesPopupOpen}
-              {@const activeSample = selectedPercussionSample(activeSamplePickerNoteId)}
-              <div
-                id="audio-samples-popup"
-                class="audio-samples-popup"
-                role="dialog"
-                aria-label="Audio samples"
-                style={audioSamplesPopupStyle}
-              >
-                <div class="audio-samples-note-tabs" role="tablist" aria-label="Percussion notes">
-                  {#each PERCUSSION_NOTE_IDS as noteId (noteId)}
-                    <button
-                      type="button"
-                      class="audio-samples-note-tab"
-                      class:active={activeSamplePickerNoteId === noteId}
-                      style={`--sample-note-color:${noteColor(noteId)};`}
-                      role="tab"
-                      aria-selected={activeSamplePickerNoteId === noteId}
-                      title={selectedPercussionSampleLabel(noteId)}
-                      on:click={() => (activeSamplePickerNoteId = noteId)}
-                    >
-                      <span class="audio-samples-note-color" aria-hidden="true"></span>
-                      <span class="audio-samples-note-name">{displayLabelFromId(noteId)}</span>
-                      <span class="audio-samples-note-sample">{selectedPercussionSample(noteId)?.label ?? 'Default'}</span>
-                    </button>
-                  {/each}
-                </div>
-                <div class="audio-samples-current">
-                  <span class="audio-samples-current-note">{displayLabelFromId(activeSamplePickerNoteId)}</span>
-                  <span class="audio-samples-current-sample">{activeSample ? `${activeSample.machineLabel} / ${activeSample.label}` : 'Default'}</span>
-                </div>
-                <div class="audio-sample-tree" role="tree" aria-label="Audio sample folders">
-                  {#each LOCAL_DRUM_SAMPLE_GROUPS as group (group.machineId)}
-                    <details class="audio-sample-folder" open={group.samples.some((sample) => sample.id === percussionSampleSelections[activeSamplePickerNoteId])}>
-                      <summary>
-                        <span class="audio-sample-folder-name">{group.machineLabel}</span>
-                        <span class="audio-sample-folder-count">{group.samples.length}</span>
-                      </summary>
-                      <div class="audio-sample-list">
-                        {#each group.samples as sample (sample.id)}
-                          {@const sampleSelected = percussionSampleSelections[activeSamplePickerNoteId] === sample.id}
-                          <div class="audio-sample-row" class:selected={sampleSelected} role="treeitem" aria-selected={sampleSelected}>
-                            <button
-                              type="button"
-                              class="audio-sample-preview-btn"
-                              title={`Preview ${sample.label}`}
-                              aria-label={`Preview ${sample.label}`}
-                              on:click={() => void previewAudioSample(sample.id)}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M8 5.8v12.4c0 .72.8 1.15 1.4.75l9.3-6.2a.9.9 0 0 0 0-1.5L9.4 5.05A.9.9 0 0 0 8 5.8Z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              class="audio-sample-use-btn"
-                              class:selected={sampleSelected}
-                              disabled={sampleSelected}
-                              title={`Use ${sample.label} for ${displayLabelFromId(activeSamplePickerNoteId)}`}
-                              aria-label={`Use ${sample.label} for ${displayLabelFromId(activeSamplePickerNoteId)}`}
-                              on:click={() => setPercussionSample(activeSamplePickerNoteId, sample.id)}
-                            >
-                              <span class="audio-sample-label">{sample.label}</span>
-                              <span class="audio-sample-meta">{sample.voiceMetadata?.description ?? sample.fileName}</span>
-                              <span class="audio-sample-use-state">{sampleSelected ? 'Selected' : 'Use'}</span>
-                            </button>
-                          </div>
-                        {/each}
-                      </div>
-                    </details>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          </div>
-          {/if}
-          <button
-            type="button"
-            class="transport-btn home-btn"
-            on:click={navigateHome}
-            title="Back to home"
-            aria-label="Back to home"
-          >
-            <span class="transport-icon-mask home-btn-icon" aria-hidden="true"></span>
-          </button>
-          {#if !isStudentView}
-          <button
-            type="button"
-            class="transport-btn library-btn"
-            class:active={libraryModalOpen}
-            on:click={() => void openLibraryModal()}
-            title="Open sketch library"
-            aria-label="Open sketch library"
-            aria-pressed={libraryModalOpen}
-          >
-            <span class="transport-icon-mask library-btn-icon" aria-hidden="true"></span>
-          </button>
-          {/if}
-          <button type="button" class="transport-btn share-btn" on:click={handleShare} title="Share composition" aria-label="Share composition">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="18" cy="5" r="3"/>
-              <circle cx="6" cy="12" r="3"/>
-              <circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-          </button>
-          {#if !isStudentView || !activeStudentView.hideGearSettings}
-          <button type="button" class="transport-btn settings-gear-btn" class:settings-open={settingsOpen} on:click={() => (settingsOpen = true)} title="Settings" aria-label="Open settings">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09A1.65 1.65 0 0 0 19.4 15z"/>
-            </svg>
-          </button>
-          {/if}
         </div>
         {/if}
       </div>
 
-      {#if !isPlaying && ((!isStudentView || !activeStudentView.hideTempoSlider) || (!isStudentView || !activeStudentView.hideQuarterTempo))}
+      {#if !isPlaying && (showTempoSliderControl || showTempoRows)}
       <div class="tempo-inline-group">
-        <div class="tempo-stack">
-          <TempoControls
-            quarterTempo={state.microbeatTempo / 2}
-            minQuarter={MICROBEAT_TEMPO_MIN / 2}
-            maxQuarter={MICROBEAT_TEMPO_MAX / 2}
-            step={1}
-            sliderOrientation="vertical"
-            onchange={handleQuarterTempoChange}
-            showEighth={false}
-            showQuarter={!isStudentView || !activeStudentView.hideQuarterTempo}
-            showDottedQuarter={false}
-            showRows={!isStudentView || !activeStudentView.hideQuarterTempo}
-            showSlider={!isStudentView || !activeStudentView.hideTempoSlider}
-          />
-          <div class="tempo-shortcut-buttons" aria-label="Tempo shortcuts">
-            {#each TEMPO_SHORTCUT_VALUES as tempoValue}
-              <button
-                type="button"
-                class:active={Math.round(state.microbeatTempo / 2) === tempoValue}
-                on:click={() => setQuarterTempoShortcut(tempoValue)}
-                aria-pressed={Math.round(state.microbeatTempo / 2) === tempoValue}
-              >
-                {tempoValue}
-              </button>
-            {/each}
+        <div class="tempo-stack" class:tempo-stack--slider-hidden={!showTempoSliderControl}>
+          <div class="tempo-left-stack">
+            {#if showTempoRows}
+              <TempoControls
+                quarterTempo={state.microbeatTempo / 2}
+                minQuarter={MICROBEAT_TEMPO_MIN / 2}
+                maxQuarter={MICROBEAT_TEMPO_MAX / 2}
+                step={1}
+                sliderOrientation="vertical"
+                onchange={handleQuarterTempoChange}
+                showEighth={false}
+                showQuarter={true}
+                showDottedQuarter={false}
+                showRows={true}
+                showSlider={false}
+              />
+            {/if}
+            <div class="tempo-shortcut-buttons" aria-label="Tempo shortcuts">
+              {#each TEMPO_SHORTCUT_VALUES as tempoValue}
+                <button
+                  type="button"
+                  class:active={Math.round(state.microbeatTempo / 2) === tempoValue}
+                  on:click={() => setQuarterTempoShortcut(tempoValue)}
+                  aria-pressed={Math.round(state.microbeatTempo / 2) === tempoValue}
+                >
+                  {tempoValue}
+                </button>
+              {/each}
+            </div>
           </div>
+          {#if showTempoSliderControl}
+            <div class="tempo-slider-column">
+              <TempoControls
+                quarterTempo={state.microbeatTempo / 2}
+                minQuarter={MICROBEAT_TEMPO_MIN / 2}
+                maxQuarter={MICROBEAT_TEMPO_MAX / 2}
+                step={1}
+                sliderOrientation="vertical"
+                onchange={handleQuarterTempoChange}
+                showEighth={false}
+                showQuarter={false}
+                showDottedQuarter={false}
+                showRows={false}
+                showSlider={true}
+              />
+            </div>
+          {/if}
         </div>
       </div>
       {/if}
@@ -8495,6 +8640,141 @@
       </div>
   </section>
 
+  {#if showToolbarSixteenthBank}
+  <section class="panel notebank-panel toolbar-notebank-panel toolbar-sixteenth-notebank-panel" class:playback-content-hidden={isPlaying}>
+      <div class="toolbar-notebank-stack">
+        <div class="toolbar-bank-row">
+          <div class="bank-row-wrap">
+            <span class="bank-row-corner-label">Sixteenths</span>
+            <div class="bank-row-main">
+            <div class="bank-lattice diamond-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_DIAMOND};`}>
+              {#if showAccidentals}
+              <div class="bank-lattice-row top">
+                {#each bankLatticeRowsDiamond.top as token (token.noteId)}
+                  <div
+                    class="bank-token-shell diamond sharp-token"
+                    class:keyboard-highlight={tokenIsHighlighted(token.noteId)}
+                    style={bankTokenInlineStyle(token)}
+                  >
+                    <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                      <path d={BANK_SIXTEENTH_HEX_PATH} />
+                    </svg>
+                    <button
+                      type="button"
+                      class="token-hitbox single sharp"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                      draggable={bankNativeDragEnabled}
+                      title={noteBankTokenTitle(token.noteId)}
+                      aria-label={`Add ${token.label} sixteenth sharp`}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
+                      on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
+                      on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
+                      on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
+                      on:dragend={handleAnyDragEnd}
+                    >
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
+                    </button>
+                  </div>
+                {/each}
+              </div>
+              {/if}
+
+              <div class="bank-lattice-row middle">
+                {#each bankLatticeRowsDiamond.middle as token (token.noteId)}
+                  <div
+                    class="bank-token-shell diamond natural-token"
+                    class:keyboard-highlight={tokenIsHighlighted(token.noteId)}
+                    style={bankTokenInlineStyle(token)}
+                  >
+                    <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                      <path d={BANK_SIXTEENTH_HEX_PATH} />
+                    </svg>
+                    <button
+                      type="button"
+                      class="token-hitbox single natural"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                      draggable={bankNativeDragEnabled}
+                      title={noteBankTokenTitle(token.noteId)}
+                      aria-label={`Add ${token.label} sixteenth`}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
+                      on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
+                      on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
+                      on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
+                      on:dragend={handleAnyDragEnd}
+                    >
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
+                    </button>
+                  </div>
+                {/each}
+              </div>
+
+              {#if showAccidentals}
+              <div class="bank-lattice-row bottom">
+                {#each bankLatticeRowsDiamond.bottom as token (token.noteId)}
+                  <div
+                    class="bank-token-shell diamond flat-token"
+                    class:keyboard-highlight={tokenIsHighlighted(token.noteId)}
+                    style={bankTokenInlineStyle(token)}
+                  >
+                    <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                      <path d={BANK_SIXTEENTH_HEX_PATH} />
+                    </svg>
+                    <button
+                      type="button"
+                      class="token-hitbox single flat"
+                      class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                      draggable={bankNativeDragEnabled}
+                      title={noteBankTokenTitle(token.noteId)}
+                      aria-label={`Add ${token.label} sixteenth flat`}
+                      aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
+                      on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
+                      on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
+                      on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
+                      on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
+                      on:dragend={handleAnyDragEnd}
+                    >
+                      <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
+                    </button>
+                  </div>
+                {/each}
+              </div>
+              {/if}
+            </div>
+            <div class="supplemental-note-bank supplemental-note-bank--diamond" class:accidentals-hidden={!showAccidentals}>
+              {#each PERCUSSION_NOTE_IDS as noteId}
+                <div class="bank-token-shell diamond supplemental-token">
+                  <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false" style={`--token-color:${noteColor(noteId)};`}>
+                    <path d={BANK_SIXTEENTH_HEX_PATH} />
+                  </svg>
+                  <button
+                    type="button"
+                    class="token-hitbox single natural"
+                    class:selection-armed={tapPlacementSelectionMatches(noteId, 'diamond')}
+                    draggable={bankNativeDragEnabled}
+                    title={noteBankTokenTitle(noteId)}
+                    aria-label={`Add ${displayLabelFromId(noteId)} sixteenth`}
+                    aria-pressed={tapPlacementSelectionMatches(noteId, 'diamond')}
+                    on:click={(event) => handleBankTokenClick(event, noteId, 'diamond')}
+                    on:pointerdown={(event) => handleBankTokenPointerDown(event, noteId, 'diamond')}
+                    on:mousedown={(event) => handleBankTokenMouseDown(event, noteId, 'diamond')}
+                    on:dragstart={(event) => handleBankDragStart(event, noteId, 'diamond')}
+                    on:dragend={handleAnyDragEnd}
+                    style={`--token-color:${noteColor(noteId)};`}
+                  >
+                    <NoteGlyph label={displayLabelFromId(noteId)} markerClass={scaleDegreeOneMarkerClass(noteId)} iconClass={noteIconClass(noteId)} />
+                  </button>
+                </div>
+              {/each}
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+  </section>
+  {/if}
+
   {#if showToolbarEighthBank}
   <section class="panel notebank-panel toolbar-notebank-panel toolbar-eighth-notebank-panel" class:playback-content-hidden={isPlaying}>
       <div class="toolbar-notebank-stack">
@@ -8630,109 +8910,6 @@
   </section>
   {/if}
   </div>
-
-  {#if showLowerSixteenthBank}
-  <section class="panel notebank-panel lower-notebank-panel" class:playback-content-hidden={isPlaying}>
-    <div class="bank-row-wrap">
-      <span class="bank-row-corner-label">Sixteenths</span>
-      <div class="bank-lattice diamond-row" class:accidentals-hidden={!showAccidentals} style={`--lattice-columns:${BANK_LATTICE_COLUMN_COUNT_DIAMOND};`}>
-        {#if showAccidentals}
-        <div class="bank-lattice-row top">
-          {#each bankLatticeRowsDiamond.top as token (token.noteId)}
-            <div
-              class="bank-token-shell diamond sharp-token"
-              class:keyboard-highlight={tokenIsHighlighted(token.noteId)}
-              style={bankTokenInlineStyle(token)}
-            >
-              <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                <path d={BANK_SIXTEENTH_HEX_PATH} />
-              </svg>
-              <button
-                type="button"
-                class="token-hitbox single sharp"
-                class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
-                draggable={bankNativeDragEnabled}
-                title={noteBankTokenTitle(token.noteId)}
-                aria-label={`Add ${token.label} sixteenth sharp`}
-                aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
-                on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
-                on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
-                on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
-                on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
-                on:dragend={handleAnyDragEnd}
-              >
-                <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
-              </button>
-            </div>
-          {/each}
-        </div>
-        {/if}
-
-        <div class="bank-lattice-row middle">
-          {#each bankLatticeRowsDiamond.middle as token (token.noteId)}
-            <div
-              class="bank-token-shell diamond natural-token"
-              class:keyboard-highlight={tokenIsHighlighted(token.noteId)}
-              style={bankTokenInlineStyle(token)}
-            >
-              <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                <path d={BANK_SIXTEENTH_HEX_PATH} />
-              </svg>
-              <button
-                type="button"
-                class="token-hitbox single natural"
-                class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
-                draggable={bankNativeDragEnabled}
-                title={noteBankTokenTitle(token.noteId)}
-                aria-label={`Add ${token.label} sixteenth`}
-                aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
-                on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
-                on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
-                on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
-                on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
-                on:dragend={handleAnyDragEnd}
-              >
-                <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
-              </button>
-            </div>
-          {/each}
-        </div>
-
-        {#if showAccidentals}
-        <div class="bank-lattice-row bottom">
-          {#each bankLatticeRowsDiamond.bottom as token (token.noteId)}
-            <div
-              class="bank-token-shell diamond flat-token"
-              class:keyboard-highlight={tokenIsHighlighted(token.noteId)}
-              style={bankTokenInlineStyle(token)}
-            >
-              <svg class="token-glyph diamond" viewBox="0 0 120 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                <path d={BANK_SIXTEENTH_HEX_PATH} />
-              </svg>
-              <button
-                type="button"
-                class="token-hitbox single flat"
-                class:selection-armed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
-                draggable={bankNativeDragEnabled}
-                title={noteBankTokenTitle(token.noteId)}
-                aria-label={`Add ${token.label} sixteenth flat`}
-                aria-pressed={tapPlacementSelectionMatches(token.noteId, 'diamond')}
-                on:click={(event) => handleBankTokenClick(event, token.noteId, 'diamond')}
-                on:pointerdown={(event) => handleBankTokenPointerDown(event, token.noteId, 'diamond')}
-                on:mousedown={(event) => handleBankTokenMouseDown(event, token.noteId, 'diamond')}
-                on:dragstart={(event) => handleBankDragStart(event, token.noteId, 'diamond')}
-                on:dragend={handleAnyDragEnd}
-              >
-                <NoteGlyph label={token.label} markerClass={scaleDegreeOneMarkerClass(token.noteId)} iconClass={noteIconClass(token.noteId)} />
-              </button>
-            </div>
-          {/each}
-        </div>
-        {/if}
-      </div>
-    </div>
-  </section>
-  {/if}
 
   <section
     class="panel canvas-panel"
@@ -8910,7 +9087,7 @@
                           </span>
                         </button>
                       {:else if cell.shape === 'diamond'}
-                        <div class="placed-sixteenth-pair">
+                        <div class="placed-sixteenth-pair" class:split-pair={cell.notes[0] && cell.notes[1]}>
                           {#each cell.notes as diamondNote, slotIndex}
                             <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(activePreviewPayload, dragOverCell, voiceIndex, 'pickup', -1, cellIndex, slotIndex)}>
                               {#if diamondNote}
@@ -9104,7 +9281,7 @@
                       </span>
                     </button>
                   {:else if cell.shape === 'diamond'}
-                    <div class="placed-sixteenth-pair">
+                    <div class="placed-sixteenth-pair" class:split-pair={cell.notes[0] && cell.notes[1]}>
                       {#each cell.notes as diamondNote, slotIndex}
                         <div class="sixteenth-slot" class:slot-drop-target={isSixteenthSlotDropTarget(activePreviewPayload, dragOverCell, voiceIndex, 'main', sourceRowIndex, cellIndex, slotIndex)}>
                           {#if diamondNote}
@@ -9293,6 +9470,82 @@
   {/if}
 </main>
 
+{#if audioSamplesPopupOpen}
+  {@const activeSample = selectedPercussionSample(activeSamplePickerNoteId)}
+  <div
+    bind:this={audioSamplesPopupElement}
+    id="audio-samples-popup"
+    class="audio-samples-popup"
+    role="dialog"
+    aria-label="Audio samples"
+    style={audioSamplesPopupStyle}
+  >
+    <div class="audio-samples-note-tabs" role="tablist" aria-label="Percussion notes">
+      {#each PERCUSSION_NOTE_IDS as noteId (noteId)}
+        <button
+          type="button"
+          class="audio-samples-note-tab"
+          class:active={activeSamplePickerNoteId === noteId}
+          style={`--sample-note-color:${noteColor(noteId)};`}
+          role="tab"
+          aria-selected={activeSamplePickerNoteId === noteId}
+          title={selectedPercussionSampleLabel(noteId)}
+          on:click={() => (activeSamplePickerNoteId = noteId)}
+        >
+          <span class="audio-samples-note-color" aria-hidden="true"></span>
+          <span class="audio-samples-note-name">{displayLabelFromId(noteId)}</span>
+          <span class="audio-samples-note-sample">{selectedPercussionSample(noteId)?.label ?? 'Default'}</span>
+        </button>
+      {/each}
+    </div>
+    <div class="audio-samples-current">
+      <span class="audio-samples-current-note">{displayLabelFromId(activeSamplePickerNoteId)}</span>
+      <span class="audio-samples-current-sample">{activeSample ? `${activeSample.machineLabel} / ${activeSample.label}` : 'Default'}</span>
+    </div>
+    <div class="audio-sample-tree" role="tree" aria-label="Audio sample folders">
+      {#each LOCAL_DRUM_SAMPLE_GROUPS as group (group.machineId)}
+        <details class="audio-sample-folder" open={group.samples.some((sample) => sample.id === percussionSampleSelections[activeSamplePickerNoteId])}>
+          <summary>
+            <span class="audio-sample-folder-name">{group.machineLabel}</span>
+            <span class="audio-sample-folder-count">{group.samples.length}</span>
+          </summary>
+          <div class="audio-sample-list">
+            {#each group.samples as sample (sample.id)}
+              {@const sampleSelected = percussionSampleSelections[activeSamplePickerNoteId] === sample.id}
+              <div class="audio-sample-row" class:selected={sampleSelected} role="treeitem" aria-selected={sampleSelected}>
+                <button
+                  type="button"
+                  class="audio-sample-preview-btn"
+                  title={`Preview ${sample.label}`}
+                  aria-label={`Preview ${sample.label}`}
+                  on:click={() => void previewAudioSample(sample.id)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M8 5.8v12.4c0 .72.8 1.15 1.4.75l9.3-6.2a.9.9 0 0 0 0-1.5L9.4 5.05A.9.9 0 0 0 8 5.8Z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="audio-sample-use-btn"
+                  class:selected={sampleSelected}
+                  disabled={sampleSelected}
+                  title={`Use ${sample.label} for ${displayLabelFromId(activeSamplePickerNoteId)}`}
+                  aria-label={`Use ${sample.label} for ${displayLabelFromId(activeSamplePickerNoteId)}`}
+                  on:click={() => setPercussionSample(activeSamplePickerNoteId, sample.id)}
+                >
+                  <span class="audio-sample-label">{sample.label}</span>
+                  <span class="audio-sample-meta">{sample.voiceMetadata?.description ?? sample.fileName}</span>
+                  <span class="audio-sample-use-state">{sampleSelected ? 'Selected' : 'Use'}</span>
+                </button>
+              </div>
+            {/each}
+          </div>
+        </details>
+      {/each}
+    </div>
+  </div>
+{/if}
+
 <dialog
   bind:this={settingsDialog}
   class="settings-dialog"
@@ -9367,13 +9620,13 @@
         </div>
         <div class="settings-field settings-checkbox-field">
           <label>
-            <input type="checkbox" bind:checked={showEighthsBank} />
+            <input type="checkbox" checked={showEighthsBank} on:change={handleEighthsBankVisibilityChange} />
             Eighths bank
           </label>
         </div>
         <div class="settings-field settings-checkbox-field">
           <label>
-            <input type="checkbox" bind:checked={showSixteenthsBank} />
+            <input type="checkbox" checked={showSixteenthsBank} on:change={handleSixteenthsBankVisibilityChange} />
             Sixteenths bank
           </label>
         </div>
