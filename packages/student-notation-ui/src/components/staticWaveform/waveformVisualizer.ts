@@ -9,6 +9,11 @@ import {
   getAnimationEffectsManager,
   registerWaveformVisualizer
 } from '@services/runtimeGlobals.ts';
+import {
+  buildCanvasFont,
+  getSemanticTextColor,
+  TYPOGRAPHY_CHANGED_EVENT
+} from '@services/typographyService.ts';
 
 interface NoteChangedPayload {
   newNote?: {
@@ -104,6 +109,8 @@ class StaticWaveformVisualizer {
   }
 
   private setupEventListeners(): void {
+    document.addEventListener(TYPOGRAPHY_CHANGED_EVENT, () => this.draw());
+
     store.on('noteChanged', (payload: NoteChangedPayload = {}) => {
       const nextColor = payload.newNote?.color;
       if (nextColor && nextColor !== this.currentColor) {
@@ -558,8 +565,8 @@ class StaticWaveformVisualizer {
     const labels = isExtended ? ['0°', '90°', '180°', '270°', '360°', '450°'] : ['0°', '90°', '180°', '270°', '360°'];
     const degrees = isExtended ? [0, 90, 180, 270, 360, 450] : [0, 90, 180, 270, 360];
 
-    ctx.fillStyle = '#666666';
-    ctx.font = '12px "Atkinson Hyperlegible Next", system-ui, sans-serif';
+    ctx.fillStyle = getSemanticTextColor('secondary');
+    ctx.font = buildCanvasFont('caption');
     ctx.textAlign = 'center';
 
     labels.forEach((label, index) => {

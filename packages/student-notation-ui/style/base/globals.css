@@ -1,19 +1,7 @@
 /* ==========================================================================
-   FONT DEFINITION & GLOBAL STYLES
+   GLOBAL STYLES
+   Font faces are registered by @mlt/font-atkinson.
    ========================================================================= */
-@font-face {
-  font-family: 'Atkinson Hyperlegible Next';
-  src: url('../../public/fonts/atkinsonHyperlegibleNextRegular.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'Atkinson Hyperlegible Next';
-  src: url('../../public/fonts/atkinsonHyperlegibleNextBold.otf') format('opentype');
-  font-weight: bold;
-  font-style: normal;
-}
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -26,9 +14,9 @@ html, body {
   width: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
-  font-family: var(--main-font);
+  font-family: var(--typography-body-font-family);
   background-color: var(--c-bg);
-  color: var(--c-text);
+  color: var(--text-color-primary);
   display: flex;
 }
 
@@ -43,12 +31,10 @@ html, body {
 
 button {
   background-color: var(--c-accent);
-  color: var(--c-surface);
+  color: var(--text-color-on-accent);
   border: none;
   border-radius: var(--border-radius-md);
   padding: var(--space-025) var(--space-050);
-  font-family: var(--main-font);
-  font-size: 14px;
   cursor: pointer;
   transition: background-color 0.2s ease, opacity 0.2s ease;
 }

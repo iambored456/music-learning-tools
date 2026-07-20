@@ -1,6 +1,7 @@
 // js/components/Canvas/PitchGrid/renderers/annotationRenderer.ts
 import store from '@state/initStore.ts';
 import annotationService from '../../../../services/annotationService.ts';
+import { buildCanvasFont, getSemanticTypography } from '@services/typographyService.ts';
 import { getColumnX, getRowY } from './rendererUtils.ts';
 import type {
   Annotation,
@@ -30,6 +31,18 @@ interface UnknownAnnotation { type?: string }
 
 type RenderableAnnotation = Annotation | UnknownAnnotation;
 type RenderableTempAnnotation = TempAnnotation | UnknownAnnotation;
+
+function getAnnotationFont(settings: TextAnnotationSettings, fontSize: number): string {
+  return buildCanvasFont('annotation', {
+    fontSizePx: fontSize,
+    fontWeight: settings.bold ? 700 : 400,
+    fontStyle: settings.italic ? 'italic' : 'normal'
+  });
+}
+
+function getAnnotationLineHeight(fontSize: number): number {
+  return fontSize * getSemanticTypography('annotation').lineHeightRatio;
+}
 
 function isArrowAnnotation(annotation: RenderableTempAnnotation | null | undefined): annotation is ArrowAnnotation {
   if (annotation?.type !== 'arrow') {return false;}
@@ -285,18 +298,14 @@ function drawText(ctx: CanvasRenderingContext2D, annotation: TextAnnotation, isS
   // Set text baseline to 'top' to match DOM input positioning
   ctx.textBaseline = 'top';
 
-  // Get the actual font family from CSS variable
-  const computedStyle = window.getComputedStyle(document.documentElement);
-  const mainFont = computedStyle.getPropertyValue('--main-font').trim() || '"Atkinson Hyperlegible Next", Arial, sans-serif';
-
   const fontSize = settings.size;
-  const lineHeight = fontSize * 1.2;
+  const lineHeight = getAnnotationLineHeight(fontSize);
 
   // Match the padding from the text input (4px top/bottom, 8px left/right)
   const paddingHorizontal = settings.background ? 8 : 4;
   const paddingVertical = 4;
   const availableWidth = width - (paddingHorizontal * 2);
-  const lines = wrapText(ctx, text, availableWidth, fontSize, settings, mainFont);
+  const lines = wrapText(ctx, text, availableWidth, fontSize, settings);
 
   // Draw background if enabled
   if (settings.background) {
@@ -321,7 +330,7 @@ function drawText(ctx: CanvasRenderingContext2D, annotation: TextAnnotation, isS
 
   lines.forEach((line, i) => {
     const lineY = y + paddingVertical + i * lineHeight;
-    drawTextWithFormatting(ctx, line, x + paddingHorizontal, lineY, fontSize, settings, mainFont);
+    drawTextWithFormatting(ctx, line, x + paddingHorizontal, lineY, fontSize, settings);
   });
 
   // Draw resize handles if selected
@@ -337,10 +346,9 @@ function wrapText(
   text: string,
   maxWidth: number,
   fontSize: number,
-  settings: TextAnnotationSettings,
-  fontFamily: string
+  settings: TextAnnotationSettings
 ): string[] {
-  ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${fontSize}px ${fontFamily}`;
+  ctx.font = getAnnotationFont(settings, fontSize);
 
   const paragraphs = text.split('\n');
   const wrappedLines: string[] = [];
@@ -380,15 +388,14 @@ function drawTextWithFormatting(
   x: number,
   y: number,
   fontSize: number,
-  settings: TextAnnotationSettings,
-  fontFamily: string
+  settings: TextAnnotationSettings
 ): void {
   // If entire text is superscript or subscript from toolbar settings
   if (settings.superscript || settings.subscript) {
     ctx.save();
     const smallerSize = fontSize * 0.6;
     const offset = settings.superscript ? -fontSize * 0.4 : fontSize * 0.3;
-    ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${smallerSize}px ${fontFamily}`;
+    ctx.font = getAnnotationFont(settings, smallerSize);
     ctx.fillText(text, x, y + offset);
 
     if (settings.underline) {
@@ -396,8 +403,8 @@ function drawTextWithFormatting(
       ctx.beginPath();
       ctx.strokeStyle = settings.color;
       ctx.lineWidth = 1;
-      ctx.moveTo(x, y + offset + smallerSize * 1.2 - 2);
-      ctx.lineTo(x + metrics.width, y + offset + smallerSize * 1.2 - 2);
+      ctx.moveTo(x, y + offset + getAnnotationLineHeight(smallerSize) - 2);
+      ctx.lineTo(x + metrics.width, y + offset + getAnnotationLineHeight(smallerSize) - 2);
       ctx.stroke();
     }
 
@@ -415,17 +422,17 @@ function drawTextWithFormatting(
     if (segment.format === 'superscript') {
       const superSize = fontSize * 0.6;
       const superOffset = -fontSize * 0.4;
-      ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${superSize}px ${fontFamily}`;
+      ctx.font = getAnnotationFont(settings, superSize);
       ctx.fillText(segment.text, currentX, y + superOffset);
       currentX += ctx.measureText(segment.text).width;
     } else if (segment.format === 'subscript') {
       const subSize = fontSize * 0.6;
       const subOffset = fontSize * 0.3;
-      ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${subSize}px ${fontFamily}`;
+      ctx.font = getAnnotationFont(settings, subSize);
       ctx.fillText(segment.text, currentX, y + subOffset);
       currentX += ctx.measureText(segment.text).width;
     } else {
-      ctx.font = `${settings.italic ? 'italic ' : ''}${settings.bold ? 'bold ' : ''}${fontSize}px ${fontFamily}`;
+      ctx.font = getAnnotationFont(settings, fontSize);
       ctx.fillText(segment.text, currentX, y);
 
       if (settings.underline) {
@@ -433,8 +440,8 @@ function drawTextWithFormatting(
         ctx.beginPath();
         ctx.strokeStyle = settings.color;
         ctx.lineWidth = 1;
-        ctx.moveTo(currentX, y + fontSize * 1.2 - 2);
-        ctx.lineTo(currentX + metrics.width, y + fontSize * 1.2 - 2);
+        ctx.moveTo(currentX, y + getAnnotationLineHeight(fontSize) - 2);
+        ctx.lineTo(currentX + metrics.width, y + getAnnotationLineHeight(fontSize) - 2);
         ctx.stroke();
       }
 

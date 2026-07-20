@@ -273,12 +273,13 @@
   border: 1px solid var(--c-border);
   border-radius: var(--border-radius-sm);
   background: var(--c-surface);
-  color: var(--c-text);
+  color: var(--text-color-primary);
   cursor: pointer;
-  font-family: 'Atkinson Hyperlegible Next', sans-serif;
+  font-family: var(--typography-notation-label-font-family);
   font-size: calc(var(--drum-row-height, 30px) * 0.42);
-  line-height: 1;
-  font-weight: 600;
+  line-height: var(--typography-notation-label-line-height);
+  font-weight: var(--typography-notation-label-font-weight);
+  letter-spacing: var(--typography-notation-label-letter-spacing);
   text-align: center;
   padding-inline: clamp(3px, calc(var(--drum-row-height, 30px) * 0.16), 10px);
   overflow: hidden;
@@ -338,8 +339,11 @@
 
 .drum-layer-sample-modal__title {
   margin: 0;
-  font-size: clamp(1.05rem, 2.3vw, 1.35rem);
-  font-weight: 700;
+  font-family: var(--typography-dialog-title-font-family);
+  font-size: var(--typography-dialog-title-font-size);
+  font-weight: var(--typography-dialog-title-font-weight);
+  line-height: var(--typography-dialog-title-line-height);
+  letter-spacing: var(--typography-dialog-title-letter-spacing);
 }
 
 .drum-layer-sample-modal__close {
@@ -350,9 +354,11 @@
   width: 2.1rem;
   height: 2.1rem;
   cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1;
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--line-height-solid);
+  letter-spacing: var(--typography-control-letter-spacing);
 }
 
 .drum-layer-sample-modal__close:hover {
@@ -361,8 +367,12 @@
 
 .drum-layer-sample-modal__subtitle {
   margin: 0 0 var(--space-3);
-  color: var(--c-text-muted);
-  font-size: 0.92rem;
+  color: var(--text-color-secondary);
+  font-family: var(--typography-small-body-font-family);
+  font-size: var(--typography-small-body-font-size);
+  font-weight: var(--typography-small-body-font-weight);
+  line-height: var(--typography-small-body-line-height);
+  letter-spacing: var(--typography-small-body-letter-spacing);
 }
 
 .drum-layer-sample-modal__layout {
@@ -391,8 +401,11 @@
   color: var(--c-text);
   cursor: pointer;
   padding: 0.55rem 0.7rem;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
   text-align: left;
   transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
 }
@@ -411,9 +424,12 @@
   border-radius: 999px;
   padding: 0.05rem 0.5rem;
   background: color-mix(in srgb, var(--c-surface) 85%, var(--c-border) 15%);
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--c-text-muted);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__content {
@@ -445,10 +461,13 @@
 
 .drum-layer-sample-modal__assignment-track {
   margin: 0;
-  font-size: 0.78rem;
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  line-height: var(--typography-label-line-height);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--c-text-muted);
+  letter-spacing: var(--typography-label-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__track-preview-button {
@@ -457,8 +476,11 @@
   background: var(--c-surface);
   color: var(--c-text);
   cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-family: var(--typography-dense-control-font-family);
+  font-size: var(--typography-dense-control-font-size);
+  font-weight: var(--typography-dense-control-font-weight);
+  line-height: var(--typography-dense-control-line-height);
+  letter-spacing: var(--typography-dense-control-letter-spacing);
   padding: 0.16rem 0.42rem;
 }
 
@@ -468,9 +490,12 @@
 
 .drum-layer-sample-modal__assignment-value {
   margin: 0.42rem 0 0;
-  font-size: 0.79rem;
-  line-height: 1.3;
-  color: var(--c-text);
+  font-family: var(--typography-small-body-font-family);
+  font-size: var(--typography-small-body-font-size);
+  font-weight: var(--typography-small-body-font-weight);
+  line-height: var(--typography-small-body-line-height);
+  letter-spacing: var(--typography-small-body-letter-spacing);
+  color: var(--text-color-primary);
 }
 
 .drum-layer-sample-modal__browser-header {
@@ -484,13 +509,21 @@
 
 .drum-layer-sample-modal__browser-title {
   margin: 0;
-  font-size: 0.96rem;
+  font-family: var(--typography-section-title-font-family);
+  font-size: var(--typography-section-title-font-size);
+  font-weight: var(--typography-section-title-font-weight);
+  line-height: var(--typography-section-title-line-height);
+  letter-spacing: var(--typography-section-title-letter-spacing);
 }
 
 .drum-layer-sample-modal__browser-hint {
   margin: 0;
-  font-size: 0.77rem;
-  color: var(--c-text-muted);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__sample-list {
@@ -504,8 +537,12 @@
 
 .drum-layer-sample-modal__empty {
   margin: 0;
-  font-size: 0.88rem;
-  color: var(--c-text-muted);
+  font-family: var(--typography-small-body-font-family);
+  font-size: var(--typography-small-body-font-size);
+  font-weight: var(--typography-small-body-font-weight);
+  line-height: var(--typography-small-body-line-height);
+  letter-spacing: var(--typography-small-body-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__machine-group {
@@ -515,10 +552,13 @@
 
 .drum-layer-sample-modal__machine-title {
   margin: 0;
-  font-size: 0.82rem;
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  line-height: var(--typography-label-line-height);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--c-text-muted);
+  letter-spacing: var(--typography-label-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__cards {
@@ -538,14 +578,21 @@
 
 .drum-layer-sample-modal__sample-name {
   margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.2;
+  font-family: var(--typography-value-font-family);
+  font-size: var(--typography-value-font-size);
+  font-weight: var(--typography-value-font-weight);
+  line-height: var(--typography-value-line-height);
+  letter-spacing: var(--typography-value-letter-spacing);
 }
 
 .drum-layer-sample-modal__sample-details {
   margin: 0;
-  font-size: 0.75rem;
-  color: var(--c-text-muted);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__sample-controls {
@@ -562,8 +609,11 @@
   color: var(--c-text);
   cursor: pointer;
   padding: 0.2rem 0.6rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-family: var(--typography-dense-control-font-family);
+  font-size: var(--typography-dense-control-font-size);
+  font-weight: var(--typography-dense-control-font-weight);
+  line-height: var(--typography-dense-control-line-height);
+  letter-spacing: var(--typography-dense-control-letter-spacing);
   white-space: nowrap;
 }
 
@@ -585,8 +635,11 @@
   color: var(--c-text);
   cursor: pointer;
   padding: 0.2rem 0.35rem;
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-family: var(--typography-dense-control-font-family);
+  font-size: var(--typography-dense-control-font-size);
+  font-weight: var(--typography-dense-control-font-weight);
+  line-height: var(--typography-dense-control-line-height);
+  letter-spacing: var(--typography-dense-control-letter-spacing);
 }
 
 .drum-layer-sample-modal__assign-button:hover {
@@ -602,8 +655,12 @@
 .drum-layer-sample-modal__status {
   min-height: 1.2rem;
   margin: var(--space-2) 0 0;
-  font-size: 0.85rem;
-  color: var(--c-text-muted);
+  font-family: var(--typography-small-body-font-family);
+  font-size: var(--typography-small-body-font-size);
+  font-weight: var(--typography-small-body-font-weight);
+  line-height: var(--typography-small-body-line-height);
+  letter-spacing: var(--typography-small-body-letter-spacing);
+  color: var(--text-color-secondary);
 }
 
 .drum-layer-sample-modal__actions {
@@ -618,7 +675,11 @@
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   padding: 0.45rem 0.85rem;
-  font-size: 0.9rem;
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
 }
 
 .drum-layer-sample-modal__button:disabled {
@@ -638,7 +699,7 @@
 .drum-layer-sample-modal__button--primary {
   border-color: var(--c-accent-general);
   background: var(--c-accent-general);
-  color: #ffffff;
+  color: var(--text-color-on-accent);
 }
 
 .drum-layer-sample-modal__button--primary:hover:not(:disabled) {
@@ -780,10 +841,11 @@
   border: 1px solid var(--c-border);
   border-radius: var(--border-radius-sm);
   background-color: var(--c-surface-overlay);
-  color: var(--c-text-muted);
+  color: var(--text-color-secondary);
+  font-family: var(--typography-notation-label-font-family);
   font-size: clamp(1rem, 2.55cqi, 1.55rem);
   line-height: 0.92;
-  font-weight: 600;
+  font-weight: var(--typography-notation-label-font-weight);
   letter-spacing: 0.05em;
   box-shadow: var(--box-shadow-sm);
 }
@@ -856,9 +918,12 @@
   padding: 2px 6px;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.75);
-  color: #ffffff;
-  font-size: 11px;
-  line-height: 1.2;
+  color: var(--text-color-inverse);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
   white-space: nowrap;
   transition: opacity 120ms ease;
 }

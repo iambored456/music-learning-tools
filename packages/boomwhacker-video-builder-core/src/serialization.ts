@@ -1,5 +1,4 @@
-import type { NoteShape } from '@mlt/types';
-
+import { getBoomwhackerLane } from './lanes.js';
 import { createBoomwhackerVideoBuilderProject } from './project.js';
 import {
   BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION,
@@ -7,26 +6,28 @@ import {
   type AudioProcessingState,
   type AudioStorageStrategy,
   type BackgroundConfig,
-  type BeatPin,
+  type BoomwhackerNoteShape,
   type BoomwhackerGridNote,
   type BoomwhackerVideoBuilderProject,
   type ExportState,
   type GridSubdivisionState,
-  type LocalMacrobeatGroupingOverride,
-  type PlaybackMixMode,
   type PlaybackState,
   type ProjectAudio,
   type ProjectMetadata,
   type SectionMarker,
+  type SongTimingState,
   type TimelineAnnotation,
   type TitleCardOptions,
   type ViewState,
 } from './types.js';
 
-const NOTE_SHAPES = new Set<NoteShape>(['circle', 'oval', 'diamond']);
+const NOTE_SHAPES = new Set<BoomwhackerNoteShape>(['circle', 'oval', 'diamond']);
 const AUDIO_STORAGE_STRATEGIES = new Set<AudioStorageStrategy>(['embedded', 'file-handle', 'external-file']);
-const PLAYBACK_MIX_MODES = new Set<PlaybackMixMode>(['source-only', 'source-and-synth', 'notes-only']);
-const ACTIVE_TABS = new Set<ViewState['activeTab']>(['setup', 'editor', 'beats', 'export']);
+const ACTIVE_TABS = new Set<ViewState['activeTab']>(['editor', 'export']);
+
+interface LegacyBeatTime {
+  timeSec: number;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' ? value as Record<string, unknown> : null;
@@ -103,7 +104,7 @@ function normalizeAudioProcessingState(value: unknown): AudioProcessingState {
   };
 }
 
-function normalizeBeatPin(value: unknown, index: number): BeatPin | null {
+function normalizeLegacyBeatTime(value: unknown): LegacyBeatTime | null {
   const source = asRecord(value);
   const timeSec = asFiniteNumber(source?.timeSec);
   if (timeSec === null) {
@@ -111,42 +112,63 @@ function normalizeBeatPin(value: unknown, index: number): BeatPin | null {
   }
 
   return {
-    id: asString(source?.id) ?? `beat-${index + 1}`,
     timeSec: Math.max(0, timeSec),
-    confidence: asFiniteNumber(source?.confidence) ?? undefined,
-    annotationIds: Array.isArray(source?.annotationIds)
-      ? source.annotationIds.map((entry) => asString(entry)).filter((entry): entry is string => entry !== null)
-      : [],
-    label: asString(source?.label) ?? undefined,
+  };
+}
+
+function estimateTempoFromLegacyBeatTimes(legacyBeatTimes: LegacyBeatTime[]): number | null {
+  const orderedBeatTimes = [...legacyBeatTimes].sort((left, right) => left.timeSec - right.timeSec);
+  if (orderedBeatTimes.length < 2) {
+    return null;
+  }
+
+  const intervals: number[] = [];
+  for (let index = 1; index < orderedBeatTimes.length; index += 1) {
+    const interval = orderedBeatTimes[index].timeSec - orderedBeatTimes[index - 1].timeSec;
+    if (interval > 0) {
+      intervals.push(interval);
+    }
+  }
+
+  if (intervals.length === 0) {
+    return null;
+  }
+
+  const sortedIntervals = [...intervals].sort((left, right) => left - right);
+  const medianInterval = sortedIntervals[Math.floor(sortedIntervals.length / 2)] ?? intervals[0];
+  return medianInterval > 0 ? 60 / medianInterval : null;
+}
+
+function normalizeSongTiming(value: unknown, legacyBeatTimes: LegacyBeatTime[] = []): SongTimingState {
+  const source = asRecord(value);
+  const base = createBoomwhackerVideoBuilderProject().songTiming;
+  const legacyTempoBpm = estimateTempoFromLegacyBeatTimes(legacyBeatTimes);
+  const legacyFirstBeatOffsetSec = legacyBeatTimes[0]?.timeSec;
+  const legacyBeatCount = Math.max(0, legacyBeatTimes.length - 1);
+
+  return {
+    tempoBpm: Math.max(
+      20,
+      Math.min(320, asFiniteNumber(source?.tempoBpm) ?? legacyTempoBpm ?? base.tempoBpm),
+    ),
+    firstBeatOffsetSec: Math.max(
+      0,
+      asFiniteNumber(source?.firstBeatOffsetSec) ?? legacyFirstBeatOffsetSec ?? base.firstBeatOffsetSec,
+    ),
+    beatCount: clampInteger(source?.beatCount, 1, 1024, legacyBeatCount || base.beatCount),
+    countInBeats: clampInteger(source?.countInBeats, 0, 32, base.countInBeats),
+    timeSignatureNumerator: clampInteger(source?.timeSignatureNumerator, 1, 16, base.timeSignatureNumerator),
+    timeSignatureDenominator: [2, 4, 8, 16].includes(asFiniteNumber(source?.timeSignatureDenominator) ?? 0)
+      ? asFiniteNumber(source?.timeSignatureDenominator) as SongTimingState['timeSignatureDenominator']
+      : base.timeSignatureDenominator,
   };
 }
 
 function normalizeGrid(value: unknown): GridSubdivisionState {
   const source = asRecord(value);
-  const localMacrobeatGroupings = Array.isArray(source?.localMacrobeatGroupings)
-    ? source.localMacrobeatGroupings
-      .map((entry) => normalizeLocalGrouping(entry))
-      .filter((entry): entry is LocalMacrobeatGroupingOverride => entry !== null)
-    : [];
-
   const defaultMacrobeatGrouping = source?.defaultMacrobeatGrouping === 3 ? 3 : 2;
   return {
     defaultMacrobeatGrouping,
-    localMacrobeatGroupings,
-  };
-}
-
-function normalizeLocalGrouping(value: unknown): LocalMacrobeatGroupingOverride | null {
-  const source = asRecord(value);
-  const beatIndex = asFiniteNumber(source?.beatIndex);
-  if (beatIndex === null) {
-    return null;
-  }
-
-  const grouping = source?.grouping === 3 ? 3 : 2;
-  return {
-    beatIndex: Math.max(0, Math.round(beatIndex)),
-    grouping,
   };
 }
 
@@ -174,16 +196,23 @@ function normalizeNote(value: unknown, index: number): BoomwhackerGridNote | nul
 
   const normalizedStartSlotIndex = Math.max(0, Math.round(startSlotIndex));
   const normalizedEndSlotIndex = Math.max(normalizedStartSlotIndex, Math.round(endSlotIndex));
+  const normalizedRow = clampInteger(row, 0, 7, 0);
+  const lane = getBoomwhackerLane(normalizedRow);
+  const normalizedShape = shape === 'sustain'
+    ? 'circle'
+    : NOTE_SHAPES.has(shape as BoomwhackerNoteShape)
+      ? shape as BoomwhackerNoteShape
+      : 'circle';
 
   return {
     id: asString(source?.id) ?? `note-${index + 1}`,
-    row: clampInteger(row, 0, 7, 0),
+    row: normalizedRow,
     startSlotIndex: normalizedStartSlotIndex,
     endSlotIndex: normalizedEndSlotIndex,
-    shape: NOTE_SHAPES.has(shape as NoteShape) ? shape as NoteShape : 'circle',
-    color,
-    noteId,
-    pitchInterval,
+    shape: normalizedShape,
+    color: lane?.color ?? color,
+    noteId: lane?.noteId ?? noteId,
+    pitchInterval: lane?.pitchInterval ?? pitchInterval,
     lyric: asString(source?.lyric) ?? undefined,
     tonicNumber: asFiniteNumber(source?.tonicNumber),
   };
@@ -192,15 +221,14 @@ function normalizeNote(value: unknown, index: number): BoomwhackerGridNote | nul
 function normalizeSectionMarker(value: unknown, index: number): SectionMarker | null {
   const source = asRecord(value);
   const label = asString(source?.label);
-  const startBeatPinId = asString(source?.startBeatPinId);
-  if (!label || !startBeatPinId) {
+  if (!label) {
     return null;
   }
 
   return {
     id: asString(source?.id) ?? `section-${index + 1}`,
     label,
-    startBeatPinId,
+    startSlotIndex: Math.max(0, Math.round(asFiniteNumber(source?.startSlotIndex) ?? 0)),
     color: asString(source?.color) ?? undefined,
   };
 }
@@ -216,7 +244,6 @@ function normalizeTimelineAnnotation(value: unknown, index: number): TimelineAnn
   return {
     id: asString(source?.id) ?? `annotation-${index + 1}`,
     text,
-    beatPinId: asString(source?.beatPinId) ?? undefined,
     slotIndex: slotIndex === null ? undefined : Math.max(0, Math.round(slotIndex)),
   };
 }
@@ -248,6 +275,14 @@ function normalizeViewState(value: unknown): ViewState {
     laneHeight: Math.max(28, asFiniteNumber(source?.laneHeight) ?? base.laneHeight),
     activeTab: ACTIVE_TABS.has(activeTab as ViewState['activeTab']) ? activeTab as ViewState['activeTab'] : base.activeTab,
     scrollSlotIndex: Math.max(0, Math.round(asFiniteNumber(source?.scrollSlotIndex) ?? base.scrollSlotIndex)),
+    selectedBeatIndex: Math.max(0, Math.round(asFiniteNumber(source?.selectedBeatIndex) ?? base.selectedBeatIndex)),
+    playbackStartBeatIndex: source?.playbackStartBeatIndex === null
+      ? null
+      : asFiniteNumber(source?.playbackStartBeatIndex) === null
+        ? base.playbackStartBeatIndex
+        : Math.max(0, Math.round(asFiniteNumber(source?.playbackStartBeatIndex) ?? 0)),
+    showNoteOutlines: asBoolean(source?.showNoteOutlines) ?? base.showNoteOutlines,
+    showMeasureLabels: asBoolean(source?.showMeasureLabels) ?? base.showMeasureLabels,
   };
 }
 
@@ -255,11 +290,7 @@ function normalizePlaybackState(value: unknown): PlaybackState {
   const source = asRecord(value);
   const base = createBoomwhackerVideoBuilderProject().previewState;
   const mixMode = asString(source?.mixMode);
-  const legacyPlayAudio = mixMode === 'notes-only'
-    ? false
-    : PLAYBACK_MIX_MODES.has(mixMode as PlaybackMixMode)
-      ? true
-      : base.playAudio;
+  const legacyPlayAudio = mixMode === 'notes-only' ? false : base.playAudio;
   const playAudio = asBoolean(source?.playAudio) ?? legacyPlayAudio;
   let playGrid = asBoolean(source?.playGrid) ?? base.playGrid;
   if (!playAudio && !playGrid) {
@@ -272,6 +303,7 @@ function normalizePlaybackState(value: unknown): PlaybackState {
     audioVolume: clampUnitInterval(source?.audioVolume, base.audioVolume),
     synthVolume: clampUnitInterval(source?.synthVolume, base.synthVolume),
     playbackOffsetSec: asFiniteNumber(source?.playbackOffsetSec) ?? base.playbackOffsetSec,
+    previewOriginalAudio: asBoolean(source?.previewOriginalAudio) ?? base.previewOriginalAudio,
   };
 }
 
@@ -333,10 +365,10 @@ export function normalizeBoomwhackerVideoBuilderProject(input: unknown): Boomwha
   const rawMetadata = asRecord(source?.metadata);
   const fallbackTitle = asString(rawMetadata?.title) ?? 'Imported Boomwhacker Video';
   const metadata = normalizeMetadata(rawMetadata, fallbackTitle);
-  const beatPins = Array.isArray(asRecord(source?.beatMap)?.beatPins)
+  const legacyBeatTimes = Array.isArray(asRecord(source?.beatMap)?.beatPins)
     ? (asRecord(source?.beatMap)?.beatPins as unknown[])
-      .map((entry, index) => normalizeBeatPin(entry, index))
-      .filter((entry): entry is BeatPin => entry !== null)
+      .map((entry) => normalizeLegacyBeatTime(entry))
+      .filter((entry): entry is LegacyBeatTime => entry !== null)
       .sort((left, right) => left.timeSec - right.timeSec)
     : [];
 
@@ -344,9 +376,7 @@ export function normalizeBoomwhackerVideoBuilderProject(input: unknown): Boomwha
     metadata,
     audio: normalizeAudio(source?.audio),
     audioProcessing: normalizeAudioProcessingState(source?.audioProcessing),
-    beatMap: {
-      beatPins,
-    },
+    songTiming: normalizeSongTiming(source?.songTiming, legacyBeatTimes),
     grid: normalizeGrid(source?.grid),
     notes: {
       placedNotes: Array.isArray(asRecord(source?.notes)?.placedNotes)

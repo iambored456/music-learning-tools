@@ -9,7 +9,7 @@
   import store from '@state/initStore.ts';
   import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.ts';
   import domCache from '@services/domCache.ts';
-  import notificationSystem from '@components/ui/notificationSystem.ts';
+  import { notificationSystem } from '../ui/NotificationModal.svelte';
   import clefRangeController from '@components/clefWheels/clefRangeController.ts';
   import logger from '@utils/logger.ts';
   import { initToolSubtabState } from './toolSubtabState.ts';
@@ -318,13 +318,18 @@
   }
 
   // UI sync functions
-  const setAccidentalButtonsLocked = (locked: boolean): void => {
-    // Hz mode disables Flat, Sharp, and Octaves buttons (all pitch label options)
-    [flatBtn, sharpBtn, octaveToggleBtn].forEach((btn) => {
-      if (!btn) return;
-      btn.classList.toggle('accidental-btn--disabled', locked);
-      btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
-    });
+  const syncNonFrequencyLabelUiState = (): void => {
+    const frequencyModeActive = store.state.showFrequencyLabels;
+    const syncButton = (button: HTMLElement | null, enabled: boolean): void => {
+      if (!button) return;
+      const visiblyEnabled = !frequencyModeActive && enabled;
+      button.classList.toggle('active', visiblyEnabled);
+      button.setAttribute('aria-pressed', visiblyEnabled ? 'true' : 'false');
+    };
+
+    syncButton(flatBtn, store.state.accidentalMode.flat);
+    syncButton(sharpBtn, store.state.accidentalMode.sharp);
+    syncButton(octaveToggleBtn, store.state.showOctaveLabels);
   };
 
   const syncFrequencyUiState = (showFrequencyLabels?: boolean): void => {
@@ -333,14 +338,12 @@
       frequencyBtn.classList.toggle('active', showFrequencyLabels);
       frequencyBtn.setAttribute('aria-pressed', showFrequencyLabels ? 'true' : 'false');
     }
-    setAccidentalButtonsLocked(showFrequencyLabels);
+    syncNonFrequencyLabelUiState();
   };
 
   const syncOctaveUiState = (showOctaveLabels?: boolean): void => {
     if (showOctaveLabels === undefined) return;
-    if (!octaveToggleBtn) return;
-    octaveToggleBtn.classList.toggle('active', showOctaveLabels);
-    octaveToggleBtn.setAttribute('aria-pressed', showOctaveLabels ? 'true' : 'false');
+    syncNonFrequencyLabelUiState();
   };
 
   const syncFocusColoursUiState = (focusColoursEnabled: boolean): void => {
@@ -411,8 +414,19 @@
 
   function handleAccidentalModeChanged(accidentalMode?: { sharp: boolean; flat: boolean }) {
     if (!accidentalMode) return;
-    sharpBtn?.classList.toggle('active', accidentalMode.sharp);
-    flatBtn?.classList.toggle('active', accidentalMode.flat);
+    syncNonFrequencyLabelUiState();
+  }
+
+  function selectNonFrequencyLabelOption(isEnabled: () => boolean, toggle: () => void): void {
+    if (store.state.showFrequencyLabels) {
+      // Leaving Hz mode reveals the preserved Flat, Sharp, and Octaves state.
+      // The option selected to leave Hz mode must be enabled as part of that restore.
+      store.toggleFrequencyLabels();
+      if (!isEnabled()) toggle();
+      return;
+    }
+
+    toggle();
   }
 
   function handleFocusColoursChanged(focusColoursEnabled?: boolean): void {
@@ -705,16 +719,20 @@
     // Accidental buttons
     if (flatBtn) {
       flatBtn.addEventListener('click', () => {
-        if (store.state.showFrequencyLabels) store.toggleFrequencyLabels();
-        store.toggleAccidentalMode('flat');
+        selectNonFrequencyLabelOption(
+          () => store.state.accidentalMode.flat,
+          () => store.toggleAccidentalMode('flat')
+        );
         flatBtn?.blur();
       });
     }
 
     if (sharpBtn) {
       sharpBtn.addEventListener('click', () => {
-        if (store.state.showFrequencyLabels) store.toggleFrequencyLabels();
-        store.toggleAccidentalMode('sharp');
+        selectNonFrequencyLabelOption(
+          () => store.state.accidentalMode.sharp,
+          () => store.toggleAccidentalMode('sharp')
+        );
         sharpBtn?.blur();
       });
     }
@@ -728,11 +746,10 @@
 
     if (octaveToggleBtn) {
       octaveToggleBtn.addEventListener('click', () => {
-        // Toggling octaves automatically turns off Hz mode (consistent with flat/sharp)
-        if (store.state.showFrequencyLabels) {
-          store.toggleFrequencyLabels();
-        }
-        store.toggleOctaveLabels();
+        selectNonFrequencyLabelOption(
+          () => store.state.showOctaveLabels,
+          () => store.toggleOctaveLabels()
+        );
         octaveToggleBtn?.blur();
       });
     }

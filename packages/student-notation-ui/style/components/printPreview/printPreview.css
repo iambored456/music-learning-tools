@@ -37,7 +37,14 @@
   border-bottom: 1px solid var(--c-border);
   flex-shrink: 0;
 }
-.print-preview-header h2 { margin: 0; font-size: 18px; }
+.print-preview-header h2 {
+  margin: 0;
+  font-family: var(--typography-dialog-title-font-family);
+  font-size: var(--typography-dialog-title-font-size);
+  font-weight: var(--typography-dialog-title-font-weight);
+  line-height: var(--typography-dialog-title-line-height);
+  letter-spacing: var(--typography-dialog-title-letter-spacing);
+}
 .print-preview-content {
   flex-grow: 1;
   display: flex;
@@ -78,8 +85,20 @@
   display: grid; grid-template-columns: 90px 40px 1fr;
   align-items: center; gap: 10px;
 }
-.print-option-row label { font-weight: bold; }
-.print-option-row span { font-family: monospace; font-size: 12px; }
+.print-option-row label {
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  line-height: var(--typography-label-line-height);
+  letter-spacing: var(--typography-label-letter-spacing);
+}
+.print-option-row span {
+  font-family: var(--typography-diagnostic-font-family);
+  font-size: var(--typography-diagnostic-font-size);
+  font-weight: var(--typography-diagnostic-font-weight);
+  line-height: var(--typography-diagnostic-line-height);
+  letter-spacing: var(--typography-diagnostic-letter-spacing);
+}
 .print-select {
   grid-column: 2 / -1;
   width: 100%;
@@ -92,16 +111,26 @@
 .print-preview-options h3 { 
     margin-top: 10px; margin-bottom: 5px; 
     border-bottom: 1px solid var(--c-gridline); padding-bottom: 5px;
+    font-family: var(--typography-section-title-font-family);
+    font-size: var(--typography-section-title-font-size);
+    font-weight: var(--typography-section-title-font-weight);
+    line-height: var(--typography-section-title-line-height);
+    letter-spacing: var(--typography-section-title-letter-spacing);
 }
 .print-preview-footer {
   padding: 10px 20px; border-top: 1px solid var(--c-border);
   text-align: right; flex-shrink: 0;
 }
 .close-button {
-  background: none; border: none; font-size: 24px; line-height: 1;
+  background: none; border: none;
+  font-family: var(--typography-control-font-family);
+  font-size: var(--font-size-500);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--line-height-solid);
+  letter-spacing: var(--typography-control-letter-spacing);
   padding: 0 5px; color: var(--c-text-muted); cursor: pointer;
 }
-.confirm-button { background-color: #28a745; font-weight: bold; }
+.confirm-button { background-color: #28a745; }
 .confirm-button:hover { background-color: #218838; }
 .toggle-button { width: 100%; grid-column: 2 / -1; }
 .toggle-button.active { background-color: var(--c-accent); }
@@ -113,8 +142,11 @@
   border: 1px solid var(--c-border);
   border-radius: 4px;
   padding: 12px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-family: var(--typography-small-body-font-family);
+  font-size: var(--typography-small-body-font-size);
+  font-weight: var(--typography-small-body-font-weight);
+  line-height: var(--typography-small-body-line-height);
+  letter-spacing: var(--typography-small-body-letter-spacing);
 }
 .print-info-box p {
   margin: 0 0 8px 0;
@@ -123,6 +155,10 @@
   margin-bottom: 0;
 }
 .print-info-box small {
-  font-size: 11px;
-  color: var(--c-text-muted);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  color: var(--text-color-secondary);
 }

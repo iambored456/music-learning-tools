@@ -382,7 +382,7 @@ const scrollingGridData = {
 
 ## Next Steps
 
-- See `CLAUDE.md` for build commands
+- See `AGENTS.md` for repository workflow and build guidance
 - Check `packages/student-notation-engine/src/highway/` for source code
 - Look at `packages/ui-components/src/canvas/PitchGrid/` for rendering
 - Review the implementation plan in the Git history

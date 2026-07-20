@@ -5,7 +5,7 @@
 
 :root {
   --buttonGrid-ui-button-size: 1.25rem;
-  --buttonGrid-ui-button-font-size: var(--font-size-sm);
+  --buttonGrid-ui-button-font-size: var(--typography-dense-control-font-size);
   --buttonGrid-boundary-color: #3a3a3a;
 }
 
@@ -46,13 +46,16 @@
   --buttonGrid-ui-button-height: var(--buttonGrid-ui-button-size);
   --buttonGrid-ui-button-radius: 999px;
   background-color: var(--c-surface-overlay);
-  color: var(--c-text);
+  color: var(--text-color-primary);
   border: 1px solid var(--c-border);
   width: var(--buttonGrid-ui-button-width);
   height: var(--buttonGrid-ui-button-height);
   border-radius: var(--buttonGrid-ui-button-radius);
   font-size: var(--buttonGrid-ui-button-font-size);
-  font-weight: 600;
+  font-family: var(--typography-dense-control-font-family);
+  font-weight: var(--typography-dense-control-font-weight);
+  line-height: var(--typography-dense-control-line-height);
+  letter-spacing: var(--typography-dense-control-letter-spacing);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -158,9 +161,11 @@
   border: none;
   background-color: transparent;
   color: var(--c-text);
-  font-size: clamp(1.35rem, 3.2cqi, 2rem);
-  font-weight: 600;
-  line-height: 0.9;
+  font-family: var(--typography-notation-label-font-family);
+  font-size: clamp(var(--font-size-500), 3.2cqi, var(--font-size-700));
+  font-weight: var(--typography-notation-label-font-weight);
+  line-height: var(--typography-notation-label-line-height);
+  letter-spacing: var(--typography-notation-label-letter-spacing);
   cursor: pointer;
   padding: 0;
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -307,9 +312,12 @@
 .time-signature-label {
   background: var(--c-surface-overlay);
   border-radius: 12px;
-  font-weight: bold;
+  font-family: var(--typography-notation-label-font-family);
+  font-weight: var(--typography-notation-label-font-weight);
   font-size: var(--buttonGrid-ui-button-font-size);
-  color: var(--c-text-muted);
+  line-height: var(--typography-notation-label-line-height);
+  letter-spacing: var(--typography-notation-label-letter-spacing);
+  color: var(--text-color-secondary);
   user-select: none;
   position: absolute;
   top: 0;
@@ -336,9 +344,12 @@
 }
 
 .bracket-label {
-  font-weight: bold;
-  font-size: 0.85em;
-  color: var(--c-text-muted);
+  font-family: var(--typography-notation-label-font-family);
+  font-size: var(--typography-notation-label-font-size);
+  font-weight: var(--typography-notation-label-font-weight);
+  line-height: var(--typography-notation-label-line-height);
+  letter-spacing: var(--typography-notation-label-letter-spacing);
+  color: var(--text-color-secondary);
   user-select: none;
   pointer-events: none;
   white-space: nowrap;

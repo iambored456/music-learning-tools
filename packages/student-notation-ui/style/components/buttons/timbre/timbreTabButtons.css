@@ -52,7 +52,7 @@
     opacity: 1;
     background-color: var(--c-surface);
     color: var(--c-text);
-    font-weight: 600;
+    font-weight: var(--typography-control-font-weight);
     border-color: var(--c-border);
 }
 
@@ -100,9 +100,9 @@
     border: var(--preset-tab-border-width) solid var(--c-border);
     border-bottom: none;
     color: var(--c-text-muted);
-    font-family: var(--main-font);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-family: var(--typography-fluid-tab-font-family);
+    font-size: var(--typography-fluid-tab-font-size);
+    font-weight: var(--typography-fluid-tab-font-weight);
     cursor: pointer;
     text-align: center;
     transition: all 0.2s ease;
@@ -115,7 +115,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1.2;
+    line-height: var(--typography-fluid-tab-line-height);
+    letter-spacing: var(--typography-fluid-tab-letter-spacing);
     white-space: nowrap;
 }
 
@@ -136,7 +137,6 @@
 .preset-tab-button.active {
     background-color: var(--c-surface);
     color: var(--c-text);
-    font-weight: 600; 
     border-color: var(--c-border);
     border-bottom-color: transparent;
     z-index: 2;
@@ -328,8 +328,11 @@
   height: auto;
   min-height: 0;
   padding: clamp(0.06rem, 0.18dvh, 0.16rem) clamp(0.14rem, 0.28dvw, 0.28rem);
-  line-height: 1.05;
-  font-size: clamp(0.8rem, 1.8dvh, 1.1rem);
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
 }
 .preset-button {
   width: 100%;
@@ -340,7 +343,11 @@
   padding: clamp(0.08rem, 0.2dvh, 0.2rem) clamp(0.14rem, 0.3dvw, 0.28rem);
   height: clamp(1.5rem, 3.5dvh, 3rem);
   min-height: 0;
-  font-size: clamp(0.75rem, 1.45dvh, 0.95rem);
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
   background-color: var(--c-surface);
   color: var(--c-text);
   border: 1px solid var(--c-border);
@@ -356,7 +363,7 @@
     background-color: var(--c-accent-light, #63a9fd) !important;
     color: var(--c-text, #212529) !important;
     border-color: var(--c-accent, #4A90E2) !important;
-    font-weight: 600 !important;
+    font-weight: var(--typography-control-font-weight) !important;
     box-shadow: 0 0 0 1px var(--c-accent, #4A90E2) !important;
     transform: scale(0.98) !important;
     opacity: 1 !important;
@@ -372,7 +379,7 @@
     margin-bottom: 0;
 }
 
-.effect-button { 
+.effect-button {
     width: 4.5rem; 
     justify-content: center; 
     display: flex; 
@@ -382,7 +389,11 @@
     color: var(--c-text); 
     border: 1px solid var(--c-border); 
     border-radius: var(--border-radius-sm);
-    font-size: 13px;
+    font-family: var(--typography-dense-control-font-family);
+    font-size: var(--typography-dense-control-font-size);
+    font-weight: var(--typography-dense-control-font-weight);
+    line-height: var(--typography-dense-control-line-height);
+    letter-spacing: var(--typography-dense-control-letter-spacing);
     white-space: nowrap; 
     overflow: hidden; 
     text-overflow: ellipsis;
@@ -397,7 +408,6 @@
     background-color: var(--c-accent-light, #63a9fd);
     color: var(--c-text, #212529);
     border-color: var(--c-accent, #4A90E2);
-    font-weight: 600;
     box-shadow: 0 0 0 2px var(--c-accent, rgba(74, 144, 226, 0.2));
     transform: scale(0.98);
 }
@@ -435,11 +445,13 @@
 }
 
 .effect-control-label {
-    font-size: 0.5rem;
+    font-family: var(--typography-label-font-family);
+    font-size: var(--typography-label-font-size);
+    line-height: var(--typography-label-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 500;
+    letter-spacing: var(--typography-label-letter-spacing);
+    font-weight: var(--typography-label-font-weight);
 }
 
 .effect-control-slider {
@@ -475,9 +487,30 @@
 }
 
 .effect-control-value {
-    font-size: 0.75rem;
+    font-family: var(--typography-value-font-family);
+    font-size: var(--typography-value-font-size);
+    line-height: var(--typography-value-line-height);
     color: var(--c-text);
-    font-weight: 600;
+    font-weight: var(--typography-value-font-weight);
+    letter-spacing: var(--typography-value-letter-spacing);
     min-width: 30px;
     text-align: center;
+}
+
+.effect-slider-label {
+    color: var(--text-color-primary);
+    font-family: var(--typography-label-font-family);
+    font-size: var(--typography-label-font-size);
+    font-weight: var(--typography-label-font-weight);
+    line-height: var(--typography-label-line-height);
+    letter-spacing: var(--typography-label-letter-spacing);
+}
+
+.effect-slider-value {
+    color: var(--text-color-secondary);
+    font-family: var(--typography-value-font-family);
+    font-size: var(--typography-value-font-size);
+    font-weight: var(--typography-value-font-weight);
+    line-height: var(--typography-value-line-height);
+    letter-spacing: var(--typography-value-letter-spacing);
 }

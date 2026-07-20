@@ -4,9 +4,9 @@ import type {
   DerivedTimingModel,
   TimedBoomwhackerNote,
 } from '@mlt/boomwhacker-video-builder-core';
-import { MAIN_PLAYBACK_SYNTH_PROFILE } from '../../../boomwhacker-sketchpad-core/src/constants.ts';
+import { MAIN_PLAYBACK_SYNTH_PROFILE } from '../../../simple-notation-core/src/constants.ts';
 
-import { getExportTotalDurationSec, renderExportFrame } from './exportRenderer.js';
+import { getExportStartTimeSec, getExportTotalDurationSec, renderExportFrame } from './exportRenderer.js';
 
 const DEFAULT_EXPORT_SAMPLE_RATE = 48_000;
 const SYNTH_ROOT_MIDI = 60;
@@ -166,6 +166,7 @@ function createOfflineAudioContext(
 function scheduleSourceAudio(
   context: OfflineAudioContext,
   project: BoomwhackerVideoBuilderProject,
+  timing: DerivedTimingModel,
   sourceAudioBuffer: AudioBuffer,
 ): void {
   const sourceNode = context.createBufferSource();
@@ -174,12 +175,13 @@ function scheduleSourceAudio(
   gainNode.gain.value = project.exportState.includeSynthPlayback ? 0.88 : 1;
   sourceNode.connect(gainNode);
   gainNode.connect(context.destination);
-  sourceNode.start(project.exportState.leadInDurationSec);
+  sourceNode.start(Math.max(0, -getExportStartTimeSec(project, timing)));
 }
 
 function scheduleSynthNotes(
   context: OfflineAudioContext,
   project: BoomwhackerVideoBuilderProject,
+  timing: DerivedTimingModel,
   timedNotes: TimedBoomwhackerNote[],
   durationSec: number,
 ): void {
@@ -190,11 +192,12 @@ function scheduleSynthNotes(
   const synthMasterGainNode = context.createGain();
   synthMasterGainNode.gain.value = 0.24;
   synthMasterGainNode.connect(context.destination);
+  const exportStartTimeSec = getExportStartTimeSec(project, timing);
 
   for (const note of timedNotes) {
-    const noteStartSec = project.exportState.leadInDurationSec + note.startTimeSec;
+    const noteStartSec = note.startTimeSec - exportStartTimeSec;
     const sustainEndSec = clamp(
-      project.exportState.leadInDurationSec + note.endTimeSec,
+      note.endTimeSec - exportStartTimeSec,
       noteStartSec + 0.04,
       Math.max(noteStartSec + 0.04, durationSec - 0.01),
     );
@@ -230,6 +233,47 @@ function scheduleSynthNotes(
   }
 }
 
+function scheduleCountInClicks(
+  context: OfflineAudioContext,
+  project: BoomwhackerVideoBuilderProject,
+  timing: DerivedTimingModel,
+  durationSec: number,
+): void {
+  const countInBeats = Math.max(0, Math.round(project.songTiming.countInBeats));
+  if (countInBeats <= 0 || timing.secondsPerBeat <= 0) {
+    return;
+  }
+
+  const countInLeadInBeats = Math.max(0, Math.round(timing.countInLeadInBeats));
+  const exportStartTimeSec = getExportStartTimeSec(project, timing);
+  const clickMasterGainNode = context.createGain();
+  clickMasterGainNode.gain.value = 0.28;
+  clickMasterGainNode.connect(context.destination);
+
+  for (let visibleIndex = 0; visibleIndex < countInBeats; visibleIndex += 1) {
+    const countInIndex = visibleIndex + countInLeadInBeats;
+    const songTimeSec = timing.countInStartTimeSec + (countInIndex * timing.secondsPerBeat);
+    const clickStartSec = songTimeSec - exportStartTimeSec;
+    const clickEndSec = Math.min(durationSec, clickStartSec + 0.12);
+    if (clickStartSec < 0 || clickStartSec >= durationSec || clickEndSec <= clickStartSec) {
+      continue;
+    }
+
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    const isFinalCountInBeat = visibleIndex === countInBeats - 1;
+    oscillator.type = isFinalCountInBeat ? 'square' : 'triangle';
+    oscillator.frequency.setValueAtTime(isFinalCountInBeat ? 1568 : 1046.5, clickStartSec);
+    gainNode.gain.setValueAtTime(SYNTH_FLOOR_GAIN, clickStartSec);
+    gainNode.gain.exponentialRampToValueAtTime(0.12, Math.min(clickEndSec, clickStartSec + 0.01));
+    gainNode.gain.exponentialRampToValueAtTime(SYNTH_FLOOR_GAIN, clickEndSec);
+    oscillator.connect(gainNode);
+    gainNode.connect(clickMasterGainNode);
+    oscillator.start(clickStartSec);
+    oscillator.stop(Math.min(durationSec, clickEndSec + 0.01));
+  }
+}
+
 async function renderExportAudioBuffer(
   project: BoomwhackerVideoBuilderProject,
   timing: DerivedTimingModel,
@@ -238,7 +282,8 @@ async function renderExportAudioBuffer(
 ): Promise<AudioBuffer | null> {
   const shouldIncludeSource = Boolean(sourceAudioBuffer);
   const shouldIncludeSynth = project.exportState.includeSynthPlayback && timedNotes.length > 0;
-  if (!shouldIncludeSource && !shouldIncludeSynth) {
+  const shouldIncludeCountIn = project.songTiming.countInBeats > 0;
+  if (!shouldIncludeSource && !shouldIncludeSynth && !shouldIncludeCountIn) {
     return null;
   }
 
@@ -247,10 +292,11 @@ async function renderExportAudioBuffer(
   const context = createOfflineAudioContext(durationSec, sampleRate);
 
   if (sourceAudioBuffer) {
-    scheduleSourceAudio(context, project, sourceAudioBuffer);
+    scheduleSourceAudio(context, project, timing, sourceAudioBuffer);
   }
+  scheduleCountInClicks(context, project, timing, durationSec);
   if (shouldIncludeSynth) {
-    scheduleSynthNotes(context, project, timedNotes, durationSec);
+    scheduleSynthNotes(context, project, timing, timedNotes, durationSec);
   }
 
   return context.startRendering();

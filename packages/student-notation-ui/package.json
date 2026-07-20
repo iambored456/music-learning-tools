@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@mlt/audio-samples": "workspace:*",
+    "@mlt/font-atkinson": "workspace:*",
     "@mlt/handoff": "workspace:*",
     "@mlt/notation-glyphs": "workspace:*",
     "@mlt/pitch-viewport": "workspace:*",

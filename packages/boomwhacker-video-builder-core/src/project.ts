@@ -1,9 +1,9 @@
 import { getBoomwhackerLane } from './lanes.js';
 import { deriveTimingModel } from './timing.js';
 import type {
-  AudioProcessingState,
   AnnotationState,
-  BeatPin,
+  AudioProcessingState,
+  BoomwhackerNoteShape,
   BoomwhackerGridNote,
   BoomwhackerVideoBuilderProject,
   ExportState,
@@ -11,6 +11,7 @@ import type {
   PlaybackState,
   ProjectAudio,
   ProjectMetadata,
+  SongTimingState,
   ViewState,
 } from './types.js';
 import { BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION } from './types.js';
@@ -25,35 +26,17 @@ function createId(prefix: string): string {
   return `${prefix}-${randomPart}`;
 }
 
-export function createConstantTempoBeatPins(options: {
-  bpm: number;
-  beatCount: number;
-  startTimeSec?: number;
-}): BeatPin[] {
-  const bpm = Number.isFinite(options.bpm) ? options.bpm : Number.NaN;
-  const beatCount = Number.isFinite(options.beatCount) ? Math.trunc(options.beatCount) : Number.NaN;
-  const startTimeSec = Number.isFinite(options.startTimeSec) ? options.startTimeSec ?? 0 : 0;
-
-  if (!(bpm > 0)) {
-    throw new Error(`BPM must be greater than 0. Received: ${options.bpm}`);
-  }
-
-  if (!(beatCount >= 1)) {
-    throw new Error(`Beat count must be at least 1. Received: ${options.beatCount}`);
-  }
-
-  const secondsPerBeat = 60 / bpm;
-  return Array.from({ length: beatCount + 1 }, (_, index) => ({
-    id: createId('beat'),
-    timeSec: Number((startTimeSec + (index * secondsPerBeat)).toFixed(4)),
-    confidence: 1,
-    annotationIds: [],
-  }));
-}
-
 export const DEFAULT_GRID_STATE: GridSubdivisionState = {
   defaultMacrobeatGrouping: 2,
-  localMacrobeatGroupings: [],
+};
+
+export const DEFAULT_SONG_TIMING_STATE: SongTimingState = {
+  tempoBpm: 120,
+  firstBeatOffsetSec: 0,
+  beatCount: 64,
+  countInBeats: 4,
+  timeSignatureNumerator: 4,
+  timeSignatureDenominator: 4,
 };
 
 export const DEFAULT_AUDIO_PROCESSING_STATE: AudioProcessingState = {
@@ -66,6 +49,10 @@ export const DEFAULT_VIEW_STATE: ViewState = {
   laneHeight: 52,
   activeTab: 'editor',
   scrollSlotIndex: 0,
+  selectedBeatIndex: 0,
+  playbackStartBeatIndex: null,
+  showNoteOutlines: true,
+  showMeasureLabels: true,
 };
 
 export const DEFAULT_PREVIEW_STATE: PlaybackState = {
@@ -75,6 +62,7 @@ export const DEFAULT_PREVIEW_STATE: PlaybackState = {
   audioVolume: 1,
   synthVolume: 1,
   playbackOffsetSec: 0,
+  previewOriginalAudio: false,
 };
 
 export const DEFAULT_EXPORT_STATE: ExportState = {
@@ -122,9 +110,7 @@ export function createBoomwhackerVideoBuilderProject(options?: {
     metadata: createProjectMetadata(title, options?.appVersion ?? DEFAULT_APP_VERSION),
     audio: options?.audio ?? null,
     audioProcessing: { ...DEFAULT_AUDIO_PROCESSING_STATE },
-    beatMap: {
-      beatPins: [],
-    },
+    songTiming: { ...DEFAULT_SONG_TIMING_STATE },
     grid: { ...DEFAULT_GRID_STATE },
     notes: {
       placedNotes: [],
@@ -148,7 +134,7 @@ function createLaneNote(
   row: number,
   startSlotIndex: number,
   endSlotIndex: number,
-  shape: BoomwhackerGridNote['shape'],
+  shape: BoomwhackerNoteShape,
 ): BoomwhackerGridNote {
   const lane = getBoomwhackerLane(row);
   if (!lane) {
@@ -173,28 +159,17 @@ export function createSampleBoomwhackerVideoBuilderProject(): BoomwhackerVideoBu
     audio: null,
   });
 
-  project.beatMap.beatPins = [
-    0,
-    0.54,
-    1.07,
-    1.6,
-    2.12,
-    2.67,
-    3.2,
-    3.74,
-    4.29,
-  ].map((timeSec, index) => ({
-    id: createId('beat'),
-    timeSec,
-    confidence: index === 0 ? 1 : 0.78,
-    annotationIds: [],
-  }));
+  project.songTiming = {
+    tempoBpm: 112,
+    firstBeatOffsetSec: 0.25,
+    beatCount: 12,
+    countInBeats: 4,
+    timeSignatureNumerator: 4,
+    timeSignatureDenominator: 4,
+  };
 
   project.grid = {
     defaultMacrobeatGrouping: 2,
-    localMacrobeatGroupings: [
-      { beatIndex: 4, grouping: 3 },
-    ],
   };
 
   project.notes.placedNotes = [
@@ -209,33 +184,14 @@ export function createSampleBoomwhackerVideoBuilderProject(): BoomwhackerVideoBu
   ];
 
   project.annotations = {
-    sections: [
-      {
-        id: createId('section'),
-        label: 'Verse',
-        startBeatPinId: project.beatMap.beatPins[0]?.id ?? '',
-        color: '#8bc4ff',
-      },
-      {
-        id: createId('section'),
-        label: 'Bridge',
-        startBeatPinId: project.beatMap.beatPins[4]?.id ?? '',
-        color: '#ffd36a',
-      },
-    ],
-    timelineNotes: [
-      {
-        id: createId('annotation'),
-        text: 'Local 3-based override starts here.',
-        beatPinId: project.beatMap.beatPins[4]?.id,
-      },
-    ],
+    sections: [],
+    timelineNotes: [],
   };
 
   project.viewState.activeTab = 'editor';
   project.exportState.leadInDurationSec = 2.25;
 
-  const timing = deriveTimingModel(project.beatMap.beatPins, project.grid);
+  const timing = deriveTimingModel(project.songTiming, project.grid);
   project.viewState.scrollSlotIndex = Math.min(12, timing.totalSlotCount);
 
   return project;

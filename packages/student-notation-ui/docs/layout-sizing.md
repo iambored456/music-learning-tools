@@ -46,7 +46,7 @@ Each layout pass does this in order:
 7. Apply total width to wrappers (`button`, `pitch`, `drum`).
 8. Resize pitch canvases and legend canvases to measured pitch container height.
 9. Size drum grid from `passCellWidth`:
-   - `drumRowHeight = round(passCellWidth)` (1:1 square constraint)
+   - `drumRowHeight = round(passCellHeight * 0.618)` (61.8% of a pitch row)
    - `drumHeight = DRUM_ROW_COUNT * drumRowHeight`
 10. Re-check pitch container height after drum sizing and resync pitch/legend canvas heights if it changed.
 11. Run deferred and frame-end safety resyncs (see below).

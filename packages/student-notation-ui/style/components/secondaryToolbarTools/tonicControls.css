@@ -136,14 +136,16 @@
 .tonic-mode-label {
     flex: 1 1 auto;
     min-width: 0;
+    font-family: var(--typography-notation-label-font-family);
     font-size: var(--tonic-mode-label-size);
-    font-weight: 600;
+    font-weight: var(--typography-notation-label-font-weight);
     color: var(--c-text);
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.05;
+    line-height: var(--typography-notation-label-line-height);
+    letter-spacing: var(--typography-notation-label-letter-spacing);
 }
 
 .tonic-mode-button:hover {
@@ -169,7 +171,6 @@
 
 .tonic-mode-button.selected .tonic-mode-label {
     color: var(--c-text);
-    font-weight: 700;
 }
 
 .tonic-mode-button.selected:focus {

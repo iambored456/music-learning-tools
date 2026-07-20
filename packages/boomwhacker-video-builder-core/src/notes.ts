@@ -1,6 +1,5 @@
-import type { NoteShape } from '@mlt/types';
-
 import type {
+  BoomwhackerNoteShape,
   BoomwhackerGridNote,
   DerivedBeatSpan,
   DerivedTimingModel,
@@ -39,7 +38,7 @@ export function getMacrobeatSlotSpanAtSlotIndex(
 export function getDefaultSlotRangeForShape(
   timing: DerivedTimingModel,
   slotIndex: number,
-  shape: NoteShape,
+  shape: BoomwhackerNoteShape,
 ): {
   startSlotIndex: number;
   endSlotIndex: number;
@@ -81,7 +80,7 @@ export function getDefaultSlotRangeForShape(
 }
 
 export function getMinimumSlotSpanForShape(
-  shape: NoteShape,
+  shape: BoomwhackerNoteShape,
   timing?: DerivedTimingModel,
   startSlotIndex = 0,
 ): number {
@@ -108,7 +107,7 @@ export function getMinimumSlotSpanForShape(
 export function clampNoteEndSlotIndex(
   startSlotIndex: number,
   endSlotIndex: number,
-  shape: NoteShape,
+  shape: BoomwhackerNoteShape,
   maxSlotIndex: number,
   timing?: DerivedTimingModel,
 ): number {

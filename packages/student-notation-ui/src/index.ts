@@ -9,6 +9,7 @@ export type StudentNotationInstance = {
 const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const publicPrefix = '../public/';
 const THEME_STORAGE_KEY = 'app.themeMode';
+const TYPOGRAPHY_SPECIMEN_QUERY_PARAM = 'typographySpecimen';
 
 function resolvePublicAsset(path: string): string {
   const [pathWithNoHash, hashFragment = ''] = path.split('#', 2);
@@ -69,9 +70,50 @@ function applyStoredThemeModeClass(): void {
   document.body.classList.toggle('dark-mode', isDarkMode);
 }
 
+function shouldMountTypographySpecimen(): boolean {
+  return import.meta.env.DEV
+    && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get(TYPOGRAPHY_SPECIMEN_QUERY_PARAM) === '1';
+}
+
+function mountDevelopmentTypographySpecimen(container: HTMLElement): StudentNotationInstance {
+  let destroyed = false;
+  let destroySpecimen: (() => void) | undefined;
+  const stageOneWindow = window as Window & { __clearStage1Progress?: () => void };
+
+  stageOneWindow.__clearStage1Progress?.();
+  delete stageOneWindow.__clearStage1Progress;
+  document.getElementById('app-loading-screen')?.remove();
+  container.innerHTML = '';
+
+  void import('./dev/mountTypographySpecimen.ts')
+    .then(({ mountTypographySpecimen }) => {
+      if (destroyed) {return;}
+      destroySpecimen = mountTypographySpecimen(container);
+    })
+    .catch((error: unknown) => {
+      if (!destroyed) {
+        console.error('Unable to mount the typography specimen.', error);
+      }
+    });
+
+  return {
+    destroy: () => {
+      destroyed = true;
+      destroySpecimen?.();
+      container.innerHTML = '';
+    },
+  };
+}
+
 export function mountStudentNotation(container: HTMLElement): StudentNotationInstance {
   applyStoredThemeModeClass();
   ensureMountContainerLayout(container);
+
+  if (shouldMountTypographySpecimen()) {
+    return mountDevelopmentTypographySpecimen(container);
+  }
+
   container.innerHTML = template;
 
   rewriteAssetUrls(container);

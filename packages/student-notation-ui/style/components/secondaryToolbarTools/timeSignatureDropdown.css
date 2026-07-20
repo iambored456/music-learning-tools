@@ -41,11 +41,13 @@
 }
 
 .dropdown-category-header {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--c-text-muted);
+    font-family: var(--typography-section-title-font-family);
+    font-size: var(--typography-section-title-font-size);
+    font-weight: var(--typography-section-title-font-weight);
+    line-height: var(--typography-section-title-line-height);
+    color: var(--text-color-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--typography-section-title-letter-spacing);
     margin-bottom: var(--space-025);
     padding-bottom: var(--space-015);
     border-bottom: 1px solid var(--c-gridline);
@@ -70,13 +72,20 @@
 }
 
 .dropdown-label {
-    font-weight: 600;
-    font-size: var(--font-size-base);
-    color: var(--c-text);
+    font-family: var(--typography-value-font-family);
+    font-size: var(--typography-value-font-size);
+    font-weight: var(--typography-value-font-weight);
+    line-height: var(--typography-value-line-height);
+    letter-spacing: var(--typography-value-letter-spacing);
+    color: var(--text-color-primary);
 }
 
 .dropdown-description {
-    font-size: var(--font-size-sm);
-    color: var(--c-text-muted);
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
+    letter-spacing: var(--typography-caption-letter-spacing);
+    color: var(--text-color-secondary);
     margin-top: 2px;
 }

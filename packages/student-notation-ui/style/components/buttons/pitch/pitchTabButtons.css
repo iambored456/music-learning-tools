@@ -41,10 +41,10 @@
     background-color: var(--c-surface-muted);
     border: var(--pitch-tab-border-width) solid var(--c-border);
     border-bottom: none;
-    color: var(--c-text-muted);
-    font-family: var(--main-font); 
-    font-size: var(--font-size-sm);
-    font-weight: 500;
+    color: var(--text-color-secondary);
+    font-family: var(--typography-fluid-tab-font-family);
+    font-size: var(--typography-fluid-tab-font-size);
+    font-weight: var(--typography-fluid-tab-font-weight);
     cursor: pointer; 
     text-align: center;
     transition: all 0.2s ease; 
@@ -57,7 +57,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    line-height: 1.2;
+    line-height: var(--typography-fluid-tab-line-height);
+    letter-spacing: var(--typography-fluid-tab-letter-spacing);
     white-space: nowrap;
 }
 
@@ -72,8 +73,7 @@
 
 .pitch-tab-button.active {
     background-color: var(--c-surface);
-    color: var(--c-text);
-    font-weight: 600; 
+    color: var(--text-color-primary);
     border-color: var(--c-border);
     border-bottom-color: transparent;
     z-index: 2;
@@ -164,17 +164,19 @@
 }
 .harmony-preset-button {
     background-color: transparent;
-    color: var(--c-text);
+    color: var(--text-color-notation);
     border: 1px solid var(--c-border);
     border-radius: var(--border-radius-sm);
-    font-size: clamp(14px, 2.4dvh, 22px);
-    font-weight: bold;
+    font-family: var(--typography-notation-label-font-family);
+    font-size: clamp(var(--font-size-200), 2.4dvh, var(--font-size-500));
+    font-weight: var(--typography-notation-label-font-weight);
     min-height: clamp(28px, 3.5dvh, 40px);
     padding: clamp(2px, 0.3dvh, 4px);
-    line-height: 1.1;
+    line-height: var(--typography-notation-label-line-height);
+    letter-spacing: var(--typography-notation-label-letter-spacing);
 }
 .chords-grid-6col .harmony-preset-button {
-    font-size: clamp(14px, 2.4dvh, 18px);
+    font-size: clamp(var(--font-size-200), 2.4dvh, var(--font-size-400));
     min-height: clamp(20px, 2.5dvh, 32px);
     padding: clamp(1px, 0.2dvh, 2px) clamp(2px, 0.3dvw, 4px);
 }
@@ -343,10 +345,13 @@
     position: absolute;
     left: 100%;
     top: 0;
-    font-size: 0.6em;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--typography-caption-letter-spacing);
 }
 
 .state-label {
@@ -413,10 +418,13 @@
     position: absolute;
     left: 100%;
     top: 0;
-    font-size: 0.6em;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--typography-caption-letter-spacing);
 }
 
 .state-labels-4 .state-label {
@@ -491,10 +499,13 @@
     position: absolute;
     left: 100%;
     top: 0;
-    font-size: 0.6em;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--typography-caption-letter-spacing);
 }
 
 .state-labels-5 .state-label {
@@ -584,10 +595,13 @@
     position: absolute;
     left: 100%;
     top: 0;
-    font-size: 0.6em;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--typography-caption-letter-spacing);
 }
 
 .state-labels-6 .state-label {
@@ -707,10 +721,13 @@
     align-items: center;
     height: 100%;
     min-height: 0;
-    font-size: 0.6em;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--typography-caption-letter-spacing);
     flex-shrink: 0;
 }
 
@@ -730,10 +747,13 @@
     align-items: center;
     height: 100%;
     min-height: 0;
-    font-size: 0.6em;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
     color: var(--c-text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: var(--typography-caption-letter-spacing);
     flex-shrink: 0;
 }
 
@@ -785,10 +805,12 @@
 .panel-section-title {
     margin: 0;
     color: var(--c-text-muted);
-    font-size: clamp(0.55rem, 1dvh, 0.75rem);
+    font-family: var(--typography-label-font-family);
+    font-size: var(--typography-label-font-size);
+    line-height: var(--typography-label-line-height);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
-    font-weight: 600;
+    letter-spacing: var(--typography-label-letter-spacing);
+    font-weight: var(--typography-label-font-weight);
 }
 
 /* --- Utility Classes --- */
@@ -852,7 +874,6 @@
     background-color: var(--c-accent-light, #63a9fd);
     color: var(--c-text, #212529);
     border-color: var(--c-accent, #4A90E2);
-    font-weight: 600;
 }
 
 /* Style for partial chord matches - lighter highlighting */
@@ -860,7 +881,7 @@
     background-color: var(--harmony-partial-bg, rgba(99, 169, 253, 0.25)); /* 25% opacity of --c-accent-light */
     color: var(--c-text, #212529);
     border-color: var(--harmony-partial-border, rgba(74, 144, 226, 0.4)); /* 40% opacity of --c-accent */
-    font-weight: 500;
+    font-weight: var(--typography-body-font-weight);
     opacity: 0.7;
 }
 

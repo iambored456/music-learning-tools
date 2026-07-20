@@ -1,4 +1,4 @@
-import { MAIN_PLAYBACK_SYNTH_PROFILE } from '../../../boomwhacker-sketchpad-core/src/constants.ts';
+import { MAIN_PLAYBACK_SYNTH_PROFILE } from '../../../simple-notation-core/src/constants.ts';
 
 const DEFAULT_ROOT_MIDI = 60;
 const DEFAULT_NOTE_GAIN = 0.08;

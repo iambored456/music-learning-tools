@@ -1,3 +1,5 @@
+import { buildCanvasFont } from '@services/typographyService.ts';
+
 export type LegendTextMeasureContext = Pick<CanvasRenderingContext2D, 'font' | 'measureText'>;
 
 export type LegendTextRegime = 'stroke';
@@ -30,7 +32,7 @@ export function snapToDevicePixel(value: number, pixelRatio: number): number {
 }
 
 export function getLegendFontDeclaration(fontSize: number): string {
-  return `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
+  return buildCanvasFont('notation-label', { fontSizePx: fontSize });
 }
 
 function clamp(value: number, min: number, max: number): number {

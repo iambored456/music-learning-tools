@@ -115,12 +115,14 @@ export default class DraggableNumber {
         `width:${w}px`,
         `height:${h}px`,
         'background-color: var(--c-surface)',
-        'color: var(--c-text)',
+        'color: var(--text-color-primary)',
         'border: 1px solid var(--c-border)',
         'border-radius: var(--border-radius-sm)',
-        'font-family: var(--main-font)',
-        'font-weight: 400',
-        'font-size: 14px',
+        'font-family: var(--typography-value-font-family)',
+        'font-weight: var(--typography-value-font-weight)',
+        'font-size: var(--typography-value-font-size)',
+        'line-height: var(--typography-value-line-height)',
+        'letter-spacing: var(--typography-value-letter-spacing)',
         'text-align: center',
         'outline: none',
         'padding: 0',
@@ -134,9 +136,11 @@ export default class DraggableNumber {
         `height:${h}px`,
         `background-color:${this.colors.fill}`,
         `color:${this.colors.dark}`,
-        'font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif',
-        'font-weight:500',
+        'font-family: var(--typography-value-font-family)',
+        'font-weight: var(--typography-value-font-weight)',
         `font-size:${this._minDimension / 2}px`,
+        'line-height: var(--typography-value-line-height)',
+        'letter-spacing: var(--typography-value-letter-spacing)',
         'border: none',
         'outline: none',
         `padding:${this._minDimension / 4}px ${this._minDimension / 4}px`,
@@ -207,7 +211,7 @@ export default class DraggableNumber {
     this.element.addEventListener('blur', () => {
       if (this.settings.useAppStyling) {
         this.element.style.backgroundColor = 'var(--c-surface)';
-        this.element.style.color = 'var(--c-text)';
+        this.element.style.color = 'var(--text-color-primary)';
       } else {
         this.element.style.backgroundColor = this.colors.fill;
         this.element.style.color = this.colors.dark;
@@ -278,7 +282,7 @@ export default class DraggableNumber {
       this.element.setSelectionRange(0, this.element.value.length);
       if (this.settings.useAppStyling) {
         this.element.style.backgroundColor = 'var(--c-accent)';
-        this.element.style.color = 'var(--c-surface)';
+        this.element.style.color = 'var(--text-color-on-accent)';
       } else {
         this.element.style.backgroundColor = this.colors.accent;
         this.element.style.color = this.colors.light;

@@ -6,6 +6,7 @@ import { initPitchGridInteraction } from './interactors/pitchGridInteractor.ts';
 import { initLegendPitchRangeDragInteraction } from './interactors/legendPitchRangeDragInteractor.ts';
 import { initDrumGridInteraction } from '../drumGrid/drumGridInteractor.ts';
 import logger from '@utils/logger.ts';
+import { TYPOGRAPHY_CHANGED_EVENT } from '@services/typographyService.ts';
 
 
 /**
@@ -21,6 +22,11 @@ const GridManager = {
 
     // Listen for canvas resize events from layoutService
     document.addEventListener('canvasResized', () => {
+      this.renderPitchGrid();
+      this.renderDrumGrid();
+    });
+
+    document.addEventListener(TYPOGRAPHY_CHANGED_EVENT, () => {
       this.renderPitchGrid();
       this.renderDrumGrid();
     });

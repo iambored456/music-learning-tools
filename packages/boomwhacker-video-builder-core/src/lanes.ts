@@ -1,7 +1,7 @@
 import {
-  COLOR_PALETTE,
+  CHROMANOTES_PALETTE,
   findNoteDefinitionById,
-} from '@mlt/boomwhacker-sketchpad-core';
+} from '@mlt/simple-notation-core';
 
 import type { BoomwhackerLane } from './types.js';
 
@@ -17,7 +17,7 @@ function requireLaneDefinition(noteId: (typeof LANE_NOTE_IDS)[number]) {
 
 export const BOOMWHACKER_LANES: BoomwhackerLane[] = LANE_NOTE_IDS.map((noteId, row) => {
   const definition = requireLaneDefinition(noteId);
-  const color = (COLOR_PALETTE as Record<string, string>)[definition.colorId] ?? '#ffffff';
+  const color = (CHROMANOTES_PALETTE as Record<string, string>)[definition.colorId] ?? '#ffffff';
 
   return {
     row,

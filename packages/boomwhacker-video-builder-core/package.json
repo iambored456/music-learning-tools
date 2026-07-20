@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit -p ./tsconfig.json"
   },
   "dependencies": {
-    "@mlt/boomwhacker-sketchpad-core": "workspace:*",
+    "@mlt/simple-notation-core": "workspace:*",
     "@mlt/types": "workspace:*"
   },
   "devDependencies": {

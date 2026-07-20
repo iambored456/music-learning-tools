@@ -158,8 +158,11 @@ body.dark-mode .waveform-display-wrapper.live-mode {
 
 .waveform-speed-btn {
     padding: var(--space-005);
-    font-size: 0.6rem;
-    font-weight: 500;
+    font-family: var(--typography-dense-control-font-family);
+    font-size: var(--typography-dense-control-font-size);
+    font-weight: var(--typography-dense-control-font-weight);
+    line-height: var(--typography-dense-control-line-height);
+    letter-spacing: var(--typography-dense-control-letter-spacing);
     background-color: var(--c-surface);
     color: var(--c-text);
     border: 1px solid var(--c-border);
@@ -181,7 +184,6 @@ body.dark-mode .waveform-display-wrapper.live-mode {
     background-color: var(--c-accent-neutral-light, #ffd54f) !important;
     color: var(--c-text, #212529) !important;
     border-color: var(--c-accent-neutral, #ffc107) !important;
-    font-weight: 600 !important;
     box-shadow: 0 0 0 1px var(--c-accent-neutral, #ffc107) !important;
     transform: scale(0.98) !important;
 }

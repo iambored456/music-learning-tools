@@ -16,6 +16,7 @@ import {
   resolveLegendTextLayout,
   snapToDevicePixel
 } from './legendTextRendering.ts';
+import { getSemanticTextColor } from '@services/typographyService.ts';
 
 type ExtendedPitchRow = PitchRowData & { isDummy?: boolean };
 
@@ -52,7 +53,7 @@ function drawLegendText(
   textX: number,
   textY: number,
   textAlpha: string,
-  pixelRatio: number,
+  _pixelRatio: number,
   options: {
     font: string;
     outlineWidthPx: number;
@@ -68,14 +69,17 @@ function drawLegendText(
 
   const alpha = Math.max(0, Math.min(1, Number.parseInt(textAlpha, 16) / 255));
 
+  ctx.save();
+  ctx.globalAlpha *= alpha;
   ctx.lineJoin = 'round';
   ctx.miterLimit = 2;
   ctx.lineWidth = options.outlineWidthPx;
-  ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`;
+  ctx.strokeStyle = getSemanticTextColor('notation-outline');
   ctx.strokeText(label, textX, textY);
 
-  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.fillStyle = getSemanticTextColor('notation-inverse');
   ctx.fillText(label, textX, textY);
+  ctx.restore();
 }
 
 function fillLegendCell(

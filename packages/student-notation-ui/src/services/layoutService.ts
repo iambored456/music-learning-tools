@@ -13,8 +13,7 @@ import store from '@state/initStore.ts';
 import { getColumnX as getColumnXFromPixelMap, getTotalPixelWidth } from './pixelMapService.ts';
 import logger from '@utils/logger.ts';
 import {
-  DEFAULT_SCROLL_POSITION, GRID_WIDTH_RATIO,  BASE_DRUM_ROW_HEIGHT,
-  DRUM_HEIGHT_SCALE_FACTOR, DRUM_ROW_COUNT,
+  DEFAULT_SCROLL_POSITION,
   RESIZE_DEBOUNCE_DELAY,
   BASE_ABSTRACT_UNIT
 } from '@/core/constants.ts';
@@ -42,15 +41,13 @@ import {
   roundDebugValue
 } from './layout/layoutDiagnostics.ts';
 import {
-  calculateZoomToFitRowCount,
   getHorizontalScrollbarBlockSize,
   getMinimumCellHeightForViewportCoverage,
   getPitchViewportCoverageMetrics,
-  quantizeWithHysteresis,
   rangeFromCenterAndSpan,
   resolveZoomAnimationDuration
 } from './layout/pitchRangeState.ts';
-import { getDrumRowHeightFromCellWidth } from '@utils/drumGridSizing.ts';
+import { resolveNotationAssemblySizing } from './layout/assemblySizing.ts';
 
 
 
@@ -100,17 +97,16 @@ let beatLineWidthWarningShown = false;
 let hasResolvedInitialLayout = false;
 let deferredPitchResizeTimeout: ReturnType<typeof setTimeout> | null = null;
 let postFramePitchHeightSyncFrame: number | null = null;
+let gridsWrapperResizeObserver: ResizeObserver | null = null;
 let pitchContainerResizeObserver: ResizeObserver | null = null;
 let pitchContainerResizeSyncFrame: number | null = null;
 let pitchCoverageRecalcFrame: number | null = null;
+let lastObservedGridsWrapperSize: { width: number; height: number } | null = null;
 let lastObservedPitchContainerHeight: number | null = null;
 let pitchRangeAnimationFrame: number | null = null;
 let pitchRangeAnimationToken = 0;
 let zoomReferenceContainerHeight: number | null = null;
 let resolveInitialLayout: (() => void) | null = null;
-let pendingFinalRecalc = false;
-let finalRecalcAttempts = 0;
-const MAX_FINAL_RECALC_ATTEMPTS = 3;
 let layoutPassCounter = 0;
 let lastLayoutTriggerSource = 'init';
 let lastLayoutTriggerMeta: Record<string, unknown> | null = null;
@@ -124,7 +120,6 @@ let lastCalculatedButtonGridHeight = 0;
 let lockedButtonGridHeight: number | null = null;
 const ENABLE_ZOOM_ANIMATION = false;
 const ENABLE_LAYOUT_DIAGNOSTICS = false;
-const BUTTON_GRID_ROW_COUNT = 2;
 
 function getNormalizedPitchRange(): PitchRange {
   const totalRanks = store.state.fullRowData.length;
@@ -207,8 +202,6 @@ function cancelPitchRangeAnimation(): void {
   pitchRangeAnimationToken += 1;
   isZooming = false;
   zoomReferenceContainerHeight = null;
-  pendingFinalRecalc = false;
-  finalRecalcAttempts = 0;
 }
 
 function applyPitchRange(nextRange: PitchRange, source: string): void {
@@ -219,9 +212,6 @@ function applyPitchRange(nextRange: PitchRange, source: string): void {
   if (normalizedNext.topIndex === prevRange.topIndex && normalizedNext.bottomIndex === prevRange.bottomIndex) {
     return;
   }
-
-  pendingFinalRecalc = false;
-  finalRecalcAttempts = 0;
 
   const prevTop = prevRange.topIndex;
   const prevSpan = getSpan(prevRange);
@@ -450,6 +440,69 @@ function schedulePitchContainerHeightSync(
   });
 }
 
+function setupGridsWrapperResizeObserver(): void {
+  if (gridsWrapperResizeObserver) {
+    gridsWrapperResizeObserver.disconnect();
+    gridsWrapperResizeObserver = null;
+  }
+  if (typeof ResizeObserver === 'undefined') {
+    return;
+  }
+
+  const gridsWrapper = document.getElementById('grids-wrapper');
+  if (!gridsWrapper) {
+    return;
+  }
+
+  lastObservedGridsWrapperSize = {
+    width: gridsWrapper.clientWidth || 0,
+    height: gridsWrapper.clientHeight || 0
+  };
+
+  gridsWrapperResizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0];
+    const nextWidth = gridsWrapper.clientWidth || entry?.contentRect?.width || 0;
+    const nextHeight = gridsWrapper.clientHeight || entry?.contentRect?.height || 0;
+
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight) || nextHeight <= 0) {
+      return;
+    }
+
+    if (
+      lastObservedGridsWrapperSize !== null
+      && Math.abs(nextWidth - lastObservedGridsWrapperSize.width) <= 0.5
+      && Math.abs(nextHeight - lastObservedGridsWrapperSize.height) <= 0.5
+    ) {
+      return;
+    }
+
+    const previousSize = lastObservedGridsWrapperSize;
+    lastObservedGridsWrapperSize = {
+      width: nextWidth,
+      height: nextHeight
+    };
+
+    const recalculateForObservedSize = () => {
+      setLayoutTrigger('grids-wrapper-resize-observer', {
+        observedWidth: roundDebugValue(nextWidth),
+        observedHeight: roundDebugValue(nextHeight),
+        previousObservedWidth: roundDebugValue(previousSize?.width ?? null),
+        previousObservedHeight: roundDebugValue(previousSize?.height ?? null)
+      });
+      recalcAndApplyLayout();
+    };
+
+    requestAnimationFrame(() => {
+      if (isRecalculating) {
+        requestAnimationFrame(recalculateForObservedSize);
+        return;
+      }
+      recalculateForObservedSize();
+    });
+  });
+  gridsWrapperResizeObserver.observe(gridsWrapper);
+}
+
 function setupPitchContainerResizeObserver(): void {
   if (pitchContainerResizeObserver) {
     pitchContainerResizeObserver.disconnect();
@@ -598,43 +651,28 @@ function recalcAndApplyLayout() {
   // const viewportWidth = containerWidth;  // Unused variable
 
 
-  // cellHeight is the fundamental abstract unit, scaled only by zoom
-
-
-  const baseCellHeight = BASE_ABSTRACT_UNIT;
-
-
-  const baseCellWidth = baseCellHeight * GRID_WIDTH_RATIO;
-
   // RANGE-AUTHORITATIVE VIEWPORT:
-  // `pitchRange` endpoints define the vertical span; zoom is derived to fit that span into the container.
+  // `pitchRange` endpoints define the vertical span; one integer cell size is derived
+  // from the full button + pitch + drum vertical budget.
   const normalizedRange = getNormalizedPitchRange();
   const gridsWrapper = document.getElementById('grids-wrapper');
   const horizontalScrollbarBlockSize = getHorizontalScrollbarBlockSize(gridsWrapper);
   const liveContainerHeight = getPitchGridContainerHeight();
-  const effectiveContainerHeight = liveContainerHeight + horizontalScrollbarBlockSize;
-  const zoomContainerHeight = isZooming
-    && typeof zoomReferenceContainerHeight === 'number'
-    && zoomReferenceContainerHeight > 0
-    ? zoomReferenceContainerHeight
-    : null;
-  const containerHeight = zoomContainerHeight ?? effectiveContainerHeight;
+  const assemblyAvailableHeight = gridsWrapper?.clientHeight
+    || pitchGridWrapper.parentElement?.clientHeight
+    || pitchGridWrapper.clientHeight
+    || (windowHeight * 0.7);
   const rowCount = Math.max(1, getSpan(normalizedRange));
-  currentZoomLevel = calculateZoomToFitRowCount(containerHeight, rowCount);
+  const assemblySizing = resolveNotationAssemblySizing({
+    availableHeight: assemblyAvailableHeight,
+    rowCount
+  });
+  currentZoomLevel = assemblySizing.zoomLevel;
 
-  // Keep X and Y scaling coupled so pitch cells remain square under zoom.
-  // Scrollbar feedback is handled structurally by taking the proxy out of layout flow.
-  const rawCellHeight = baseCellHeight * currentZoomLevel;
-  const previousCellHeight = Number.isFinite(store.state.cellHeight) && (store.state.cellHeight ?? 0) > 0
-    ? (store.state.cellHeight as number)
-    : null;
-  const quantizedCellHeight = quantizeWithHysteresis(rawCellHeight, previousCellHeight, isZooming ? 0.08 : 0.24);
-  const minimumCellHeightForCoverage = getMinimumCellHeightForViewportCoverage(containerHeight, rowCount);
-  const newCellHeight = Math.max(quantizedCellHeight, minimumCellHeightForCoverage);
-  const newCellWidth = Math.round(newCellHeight * GRID_WIDTH_RATIO);
-  const effectiveHalfUnit = newCellHeight / 2;
-  const coveredBottomEdgePx = (rowCount + 1) * effectiveHalfUnit;
-  const rowCoverageGapPx = containerHeight - coveredBottomEdgePx;
+  const newCellHeight = assemblySizing.cellHeight;
+  const newCellWidth = assemblySizing.cellWidth;
+  const coveredBottomEdgePx = assemblySizing.pitchViewportHeight;
+  const rowCoverageGapPx = assemblySizing.pitchViewportHeight - coveredBottomEdgePx;
 
   store.setLayoutConfig({
     cellHeight: newCellHeight,
@@ -697,6 +735,7 @@ function recalcAndApplyLayout() {
 
 
   const targetWidth = totalCanvasWidthPx + 'px';
+  const pitchViewportHeightPx = `${assemblySizing.pitchViewportHeight}px`;
 
   logLayoutSizingSnapshot('pre-width-assignment', {
     pass: layoutPassId,
@@ -706,18 +745,22 @@ function recalcAndApplyLayout() {
     passCellWidth,
     storeCellWidth: store.state.cellWidth,
     newCellHeight,
-    quantizedCellHeight,
-    minimumCellHeightForCoverage,
     newCellWidth,
     totalCanvasWidthPx,
     targetWidth,
     liveContainerHeight,
     coveredBottomEdgePx,
     rowCoverageGapPx,
-    effectiveContainerHeight,
+    assemblyAvailableHeight,
+    assemblyHeight: assemblySizing.assemblyHeight,
+    pitchViewportHeight: assemblySizing.pitchViewportHeight,
+    buttonGridHeight: assemblySizing.buttonGridHeight,
+    drumCanvasHeight: assemblySizing.drumCanvasHeight,
+    bottomRemainderHeight: assemblySizing.bottomRemainderHeight,
+    fitsAvailableHeight: assemblySizing.fitsAvailableHeight,
     horizontalScrollbarBlockSize,
     zoomReferenceContainerHeight,
-    containerHeight
+    containerHeight: assemblySizing.pitchViewportHeight
   });
 
 
@@ -728,6 +771,8 @@ function recalcAndApplyLayout() {
 
   if (pitchGridContainer) {
     pitchGridContainer.style.width = targetWidth;
+    pitchGridContainer.style.height = pitchViewportHeightPx;
+    pitchGridContainer.style.flex = `0 0 ${pitchViewportHeightPx}`;
   }
 
 
@@ -738,6 +783,9 @@ function recalcAndApplyLayout() {
 
 
     pitchGridWrapper.style.width = targetWidth;
+    pitchGridWrapper.style.height = pitchViewportHeightPx;
+    pitchGridWrapper.style.minHeight = '0px';
+    pitchGridWrapper.style.flex = `0 0 ${pitchViewportHeightPx}`;
 
 
   }
@@ -790,16 +838,18 @@ function recalcAndApplyLayout() {
     isZooming,
     hasResolvedInitialLayout,
     viewportHeight,
-    containerHeight,
+    containerHeight: assemblySizing.pitchViewportHeight,
     liveContainerHeight,
-    effectiveContainerHeight,
+    assemblyAvailableHeight,
+    assemblyHeight: assemblySizing.assemblyHeight,
+    buttonGridHeight: assemblySizing.buttonGridHeight,
+    drumCanvasHeight: assemblySizing.drumCanvasHeight,
+    bottomRemainderHeight: assemblySizing.bottomRemainderHeight,
+    fitsAvailableHeight: assemblySizing.fitsAvailableHeight,
     horizontalScrollbarBlockSize,
     zoomReferenceContainerHeight,
     rowCount,
-    rawCellHeight: Math.round(rawCellHeight * 1000) / 1000,
     newCellHeight,
-    quantizedCellHeight,
-    minimumCellHeightForCoverage,
     newCellWidth,
     storeCellWidth: store.state.cellWidth,
     coveredBottomEdgePx,
@@ -816,21 +866,9 @@ function recalcAndApplyLayout() {
 
 
 
-  // Keep button grid height stable across zoom frames. Drum grid remains zoom-coupled.
-  const zoomResponsiveButtonRowHeight = Math.max(BASE_DRUM_ROW_HEIGHT, DRUM_HEIGHT_SCALE_FACTOR * store.state.cellHeight);
-  const zoomResponsiveButtonGridHeight = BUTTON_GRID_ROW_COUNT * zoomResponsiveButtonRowHeight;
-  const shouldRefreshLockedButtonHeight =
-    lockedButtonGridHeight === null
-    || layoutTriggerSource.startsWith('init:')
-    || layoutTriggerSource.startsWith('window:')
-    || layoutTriggerSource.startsWith('api:')
-    || layoutTriggerSource.startsWith('animatePitchRangeTo:complete')
-    || layoutTriggerSource.startsWith('recalc:final-pass');
-  if (shouldRefreshLockedButtonHeight) {
-    lockedButtonGridHeight = zoomResponsiveButtonGridHeight;
-  }
-
-  const buttonGridHeight = lockedButtonGridHeight ?? zoomResponsiveButtonGridHeight;
+  const buttonGridHeight = assemblySizing.buttonGridHeight;
+  const shouldRefreshLockedButtonHeight = lockedButtonGridHeight !== buttonGridHeight;
+  lockedButtonGridHeight = buttonGridHeight;
 
 
   const buttonGridHeightPx = `${buttonGridHeight}px`;
@@ -1355,10 +1393,10 @@ function recalcAndApplyLayout() {
 
   // Both pitch and drum canvases now use the same unified width.
   // Drum rows are taller than they are wide; hit symbols keep a square cell-width drawing box.
-  const drumRowHeight = getDrumRowHeightFromCellWidth(passCellWidth);
+  const drumRowHeight = assemblySizing.drumRowHeight;
 
 
-  const drumCanvasHeight = DRUM_ROW_COUNT * drumRowHeight;
+  const drumCanvasHeight = assemblySizing.drumCanvasHeight;
 
 
   const drumHeightPx = `${drumCanvasHeight}px`;
@@ -1376,39 +1414,7 @@ function recalcAndApplyLayout() {
   // ============================================================================
 
   // Calculate musical-only width (excluding left and right legends)
-  const pitchContainerHeight = pitchGridContainer?.clientHeight || 0;
-  const finalContainerHeightForZoom = pitchContainerHeight + horizontalScrollbarBlockSize;
-
-  // Keep a single width/height basis per layout pass.
-  // If post-reflow container height implies a different zoom, queue one full follow-up pass
-  // rather than mutating `cellWidth`/`cellHeight` mid-pass.
-  if (!isZooming && pitchContainerHeight > 0) {
-    const finalRowCount = Math.max(1, getSpan(normalizedRange));
-    const recalculatedZoom = calculateZoomToFitRowCount(finalContainerHeightForZoom, finalRowCount);
-    const rawFinalCellHeight = baseCellHeight * recalculatedZoom;
-    const quantizedFinalCellHeight = quantizeWithHysteresis(rawFinalCellHeight, newCellHeight, 0.24);
-    const minimumFinalCellHeightForCoverage = getMinimumCellHeightForViewportCoverage(finalContainerHeightForZoom, finalRowCount);
-    const finalCellHeight = Math.max(quantizedFinalCellHeight, minimumFinalCellHeightForCoverage);
-    const finalCellWidth = Math.round(finalCellHeight * GRID_WIDTH_RATIO);
-
-    if (finalCellHeight !== newCellHeight || finalCellWidth !== newCellWidth) {
-      pendingFinalRecalc = true;
-      logLayoutFlowSnapshot('queued-final-pass-for-height-settle', {
-        pass: layoutPassId,
-        passCellHeight: newCellHeight,
-        passCellWidth: newCellWidth,
-        settledCellHeight: finalCellHeight,
-        settledCellWidth: finalCellWidth,
-        rawFinalCellHeight: Math.round(rawFinalCellHeight * 1000) / 1000,
-        quantizedFinalCellHeight,
-        minimumFinalCellHeightForCoverage,
-        finalContainerHeightForZoom,
-        horizontalScrollbarBlockSize,
-        pitchContainerHeight,
-        initialContainerHeight: containerHeight
-      });
-    }
-  }
+  const pitchContainerHeight = pitchGridContainer?.clientHeight || assemblySizing.pitchViewportHeight;
 
   const pitchCanvasTargets = [
     { element: canvas, context: ctx },
@@ -1559,38 +1565,6 @@ function recalcAndApplyLayout() {
     });
   }
 
-  if (!isZooming && settledPitchContainerHeight > 0) {
-    const settledContainerHeightForZoom = settledPitchContainerHeight + horizontalScrollbarBlockSize;
-    const heightDeltaAfterDrumSizing = Math.abs(settledContainerHeightForZoom - containerHeight);
-    if (heightDeltaAfterDrumSizing > 0.5) {
-      const settledRowCount = Math.max(1, getSpan(normalizedRange));
-      const settledZoom = calculateZoomToFitRowCount(settledContainerHeightForZoom, settledRowCount);
-      const rawSettledCellHeight = baseCellHeight * settledZoom;
-      const quantizedSettledCellHeight = quantizeWithHysteresis(rawSettledCellHeight, newCellHeight, 0.24);
-      const minimumSettledCellHeightForCoverage = getMinimumCellHeightForViewportCoverage(settledContainerHeightForZoom, settledRowCount);
-      const settledCellHeight = Math.max(quantizedSettledCellHeight, minimumSettledCellHeightForCoverage);
-      const settledCellWidth = Math.round(settledCellHeight * GRID_WIDTH_RATIO);
-
-      if (settledCellHeight !== newCellHeight || settledCellWidth !== newCellWidth) {
-        pendingFinalRecalc = true;
-        logLayoutFlowSnapshot('queued-final-pass-for-post-drum-height-settle', {
-          pass: layoutPassId,
-          passCellHeight: newCellHeight,
-          passCellWidth: newCellWidth,
-          settledCellHeight,
-          settledCellWidth,
-          rawSettledCellHeight: Math.round(rawSettledCellHeight * 1000) / 1000,
-          quantizedSettledCellHeight,
-          minimumSettledCellHeightForCoverage,
-          settledContainerHeightForZoom,
-          horizontalScrollbarBlockSize,
-          settledPitchContainerHeight,
-          initialContainerHeight: containerHeight
-        });
-      }
-    }
-  }
-
   logLayoutSizingSnapshot('post-drum-sizing', {
     pass: layoutPassId,
     passCellWidth,
@@ -1628,108 +1602,63 @@ function recalcAndApplyLayout() {
   if (deferredPitchResizeTimeout) {
     clearTimeout(deferredPitchResizeTimeout);
   }
-  const shouldRunDeferredResize = !isZooming && !pendingFinalRecalc && (
+  const shouldRunDeferredResize = !isZooming && (
     !hadResolvedInitialLayout ||
     layoutTriggerSource.startsWith('window:') ||
     layoutTriggerSource.startsWith('init:') ||
-    layoutTriggerSource.startsWith('recalc:final-pass') ||
     layoutTriggerSource.startsWith('animatePitchRangeTo:complete')
   );
-  if (!shouldRunDeferredResize && !isZooming && pendingFinalRecalc) {
-    logGridSeamSnapshot('deferred-resize-skipped', {
-      pass: layoutPassId,
-      reason: 'final-pass-pending',
-      pendingFinalRecalc,
-      finalRecalcAttempts,
-      triggerSource: layoutTriggerSource
-    });
-  }
   if (shouldRunDeferredResize) {
     deferredPitchResizeTimeout = setTimeout(() => {
       deferredPitchResizeTimeout = null;
 
-      if (pendingFinalRecalc || finalRecalcAttempts > 0) {
-        logGridSeamSnapshot('deferred-resize-skipped', {
-          pass: layoutPassId,
-          reason: 'stale-deferred-while-final-pass-active',
-          pendingFinalRecalc,
-          finalRecalcAttempts,
-          triggerSource: layoutTriggerSource
-        });
-        return;
-      }
+      const finalPitchGridContainer = document.getElementById('pitch-grid-container');
+      const finalContainerHeight = finalPitchGridContainer?.clientHeight || 0;
 
+      pitchCanvasTargets.forEach(({ element, context }) => {
+        resizeCanvasForPixelRatio(element, scheduledPitchWidth, finalContainerHeight, scheduledPixelRatio, context);
 
-    const finalPitchGridContainer = document.getElementById('pitch-grid-container');
+        // Re-apply positioning after resize
+        if (element) {
+          element.style.left = `${leftLegendWidthPx}px`;
+        }
+      });
 
+      // IMPORTANT: Resizing is done twice during init because container height can change after the
+      // initial layout pass (fonts, toolbars, and other DOM settling). We must also resize the
+      // pitch Y-axis label canvases (aka "legend" canvases) here; otherwise they retain the earlier
+      // height and can show a blank band at the bottom even when the pitch viewport is mid-gamut.
+      resizeCanvasForPixelRatio(legendLeftCanvas, leftLegendWidthPx, finalContainerHeight, scheduledPixelRatio, null);
+      resizeCanvasForPixelRatio(legendRightCanvas, rightLegendWidthPx, finalContainerHeight, scheduledPixelRatio, null);
 
-    const finalContainerHeight = finalPitchGridContainer?.clientHeight || 0;
+      logViewportDebug('deferredResize', {
+        finalContainerHeight,
+        pitchCanvasLogicalHeight: canvas?.dataset?.['logicalHeight'],
+        legendLeftLogicalHeight: legendLeftCanvas?.dataset?.['logicalHeight'],
+        legendRightLogicalHeight: legendRightCanvas?.dataset?.['logicalHeight']
+      });
 
+      logGridSeamSnapshot('deferred-post-canvas-resize', {
+        pass: layoutPassId,
+        scheduledPitchWidth,
+        leftLegendWidthPx,
+        rightLegendWidthPx,
+        finalContainerHeight
+      });
 
+      logLayoutSizingSnapshot('deferred-post-canvas-resize', {
+        pass: layoutPassId,
+        scheduledPitchWidth,
+        leftLegendWidthPx,
+        rightLegendWidthPx,
+        finalContainerHeight,
+        scheduledPixelRatio
+      });
 
-
-
-    pitchCanvasTargets.forEach(({ element, context }) => {
-
-
-      resizeCanvasForPixelRatio(element, scheduledPitchWidth, finalContainerHeight, scheduledPixelRatio, context);
-
-      // Re-apply positioning after resize
-      if (element) {
-        element.style.left = `${leftLegendWidthPx}px`;
-      }
-
-
+      document.dispatchEvent(new CustomEvent('canvasResized', {
+        detail: { source: 'layoutService-deferred' }
+      }));
     });
-
-
-
-
-
-    // IMPORTANT: Resizing is done twice during init because container height can change after the
-    // initial layout pass (fonts, toolbars, and other DOM settling). We must also resize the
-    // pitch Y-axis label canvases (aka "legend" canvases) here; otherwise they retain the earlier
-    // height and can show a blank band at the bottom even when the pitch viewport is mid-gamut.
-    resizeCanvasForPixelRatio(legendLeftCanvas, leftLegendWidthPx, finalContainerHeight, scheduledPixelRatio, null);
-    resizeCanvasForPixelRatio(legendRightCanvas, rightLegendWidthPx, finalContainerHeight, scheduledPixelRatio, null);
-
-    logViewportDebug('deferredResize', {
-      finalContainerHeight,
-      pitchCanvasLogicalHeight: canvas?.dataset?.['logicalHeight'],
-      legendLeftLogicalHeight: legendLeftCanvas?.dataset?.['logicalHeight'],
-      legendRightLogicalHeight: legendRightCanvas?.dataset?.['logicalHeight']
-    });
-
-    logGridSeamSnapshot('deferred-post-canvas-resize', {
-      pass: layoutPassId,
-      scheduledPitchWidth,
-      leftLegendWidthPx,
-      rightLegendWidthPx,
-      finalContainerHeight
-    });
-
-    logLayoutSizingSnapshot('deferred-post-canvas-resize', {
-      pass: layoutPassId,
-      scheduledPitchWidth,
-      leftLegendWidthPx,
-      rightLegendWidthPx,
-      finalContainerHeight,
-      scheduledPixelRatio
-    });
-
-    document.dispatchEvent(new CustomEvent('canvasResized', {
-
-
-      detail: { source: 'layoutService-deferred' }
-
-
-    }));
-
-
-
-
-
-    } );
   }
 
   // Final per-frame safety net: if flex/scrollbar resolution changes pitch container height
@@ -1745,9 +1674,7 @@ function recalcAndApplyLayout() {
     }
     syncPitchCanvasHeightsToContainer('post-frame-height-sync', {
       pass: layoutPassId,
-      triggerSource: layoutTriggerSource,
-      pendingFinalRecalc,
-      finalRecalcAttempts
+      triggerSource: layoutTriggerSource
     });
   });
 
@@ -1775,25 +1702,6 @@ function recalcAndApplyLayout() {
 
 
   isRecalculating = false;
-
-  if (pendingFinalRecalc) {
-    pendingFinalRecalc = false;
-    if (finalRecalcAttempts < MAX_FINAL_RECALC_ATTEMPTS) {
-      finalRecalcAttempts += 1;
-      setLayoutTrigger('recalc:final-pass', {
-        attempt: finalRecalcAttempts
-      });
-      requestAnimationFrame(recalcAndApplyLayout);
-    } else {
-      logger.warn('LayoutService', 'Skipped additional layout pass after repeated final zoom adjustments.', {
-        finalRecalcAttempts,
-        maxFinalRecalcAttempts: MAX_FINAL_RECALC_ATTEMPTS
-      }, 'layout');
-      finalRecalcAttempts = 0;
-    }
-  } else {
-    finalRecalcAttempts = 0;
-  }
 
 
 }
@@ -1826,6 +1734,7 @@ const LayoutService = {
     ctx = dom.ctx;
     drumCtx = dom.drumCtx;
     const { legendLeftCtx, legendRightCtx } = dom;
+    setupGridsWrapperResizeObserver();
     setupPitchContainerResizeObserver();
 
 

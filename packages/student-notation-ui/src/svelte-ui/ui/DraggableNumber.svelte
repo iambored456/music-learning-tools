@@ -178,7 +178,7 @@
   style:--text={useAppStyling ? 'var(--c-text)' : mergedColors.dark}
   style:--accent={useAppStyling ? 'var(--c-accent)' : mergedColors.accent}
   style:--light={mergedColors.light}
-  style:--font-size={useAppStyling ? '14px' : `${minDimension / 2}px`}
+  style:--font-size={useAppStyling ? 'var(--typography-value-font-size)' : `${minDimension / 2}px`}
   style:--padding={useAppStyling ? '0' : `${minDimension / 4}px`}
   oninput={handleInput}
   onmousedown={handleMouseDown}
@@ -191,9 +191,11 @@
   input {
     background-color: var(--fill);
     color: var(--text);
-    font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
-    font-weight: 500;
+    font-family: var(--typography-value-font-family);
+    font-weight: var(--typography-value-font-weight);
     font-size: var(--font-size);
+    line-height: var(--typography-value-line-height);
+    letter-spacing: var(--typography-value-letter-spacing);
     border: none;
     outline: none;
     padding: var(--padding);
@@ -204,12 +206,12 @@
 
   input.app-styling {
     background-color: var(--c-surface);
-    color: var(--c-text);
+    color: var(--text-color-primary);
     border: 1px solid var(--c-border);
     border-radius: var(--border-radius-sm);
-    font-family: var(--main-font);
-    font-weight: 400;
-    font-size: 14px;
+    font-family: var(--typography-value-font-family);
+    font-weight: var(--typography-value-font-weight);
+    font-size: var(--typography-value-font-size);
   }
 
   input.editing {
@@ -219,6 +221,6 @@
 
   input.app-styling.editing {
     background-color: var(--c-accent);
-    color: var(--c-surface);
+    color: var(--text-color-on-accent);
   }
 </style>

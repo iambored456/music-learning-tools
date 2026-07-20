@@ -7,7 +7,7 @@ import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/
 import { isPlayableColumn } from '@services/columnMapService.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
-import { getDrumRowHeightFromCellWidth, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
+import { getDrumRowHeightFromCellHeight, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
 import {
   getDrumVolumeNode,
   invokeInitAudioHandler
@@ -382,7 +382,7 @@ const getModulatedCellWidth = (colIndex: number): number => {
 };
 
 const getDrumRowHeight = (): number =>
-  getDrumRowHeightFromCellWidth(store.state.cellWidth);
+  getDrumRowHeightFromCellHeight(store.state.cellHeight);
 
 const getDrumShapeBoxHeight = (): number =>
   getDrumShapeBoxHeightFromCellWidth(store.state.cellWidth);

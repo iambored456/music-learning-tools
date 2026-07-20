@@ -1,10 +1,10 @@
 import type { NoteShape } from '@mlt/types';
 
-export const BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION = 3 as const;
+export const BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION = 5 as const;
 export type BoomwhackerSchemaVersion = typeof BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION;
 export type MacrobeatGrouping = 2 | 3;
 export type AudioStorageStrategy = 'embedded' | 'file-handle' | 'external-file';
-export type PlaybackMixMode = 'source-only' | 'source-and-synth' | 'notes-only';
+export type BoomwhackerNoteShape = NoteShape;
 
 export interface ProjectMetadata {
   id: string;
@@ -26,26 +26,21 @@ export interface ProjectAudio {
   externalFileToken?: string | null;
 }
 
+export interface SongTimingState {
+  tempoBpm: number;
+  firstBeatOffsetSec: number;
+  beatCount: number;
+  countInBeats: number;
+  timeSignatureNumerator: number;
+  timeSignatureDenominator: number;
+}
+
 export interface AudioProcessingState {
   transposeSemitones: number;
 }
 
-export interface BeatPin {
-  id: string;
-  timeSec: number;
-  confidence?: number;
-  annotationIds: string[];
-  label?: string;
-}
-
-export interface LocalMacrobeatGroupingOverride {
-  beatIndex: number;
-  grouping: MacrobeatGrouping;
-}
-
 export interface GridSubdivisionState {
   defaultMacrobeatGrouping: MacrobeatGrouping;
-  localMacrobeatGroupings: LocalMacrobeatGroupingOverride[];
 }
 
 export interface BoomwhackerGridNote {
@@ -53,7 +48,7 @@ export interface BoomwhackerGridNote {
   row: number;
   startSlotIndex: number;
   endSlotIndex: number;
-  shape: NoteShape;
+  shape: BoomwhackerNoteShape;
   color: string;
   noteId: string;
   pitchInterval: number;
@@ -64,14 +59,13 @@ export interface BoomwhackerGridNote {
 export interface SectionMarker {
   id: string;
   label: string;
-  startBeatPinId: string;
+  startSlotIndex: number;
   color?: string;
 }
 
 export interface TimelineAnnotation {
   id: string;
   text: string;
-  beatPinId?: string;
   slotIndex?: number;
 }
 
@@ -88,8 +82,12 @@ export interface ViewState {
   zoom: number;
   waveformHeight: number;
   laneHeight: number;
-  activeTab: 'setup' | 'editor' | 'beats' | 'export';
+  activeTab: 'editor' | 'export';
   scrollSlotIndex: number;
+  selectedBeatIndex: number;
+  playbackStartBeatIndex: number | null;
+  showNoteOutlines: boolean;
+  showMeasureLabels: boolean;
 }
 
 export interface PlaybackState {
@@ -99,6 +97,7 @@ export interface PlaybackState {
   audioVolume: number;
   synthVolume: number;
   playbackOffsetSec: number;
+  previewOriginalAudio: boolean;
 }
 
 export type BackgroundConfig =
@@ -139,9 +138,7 @@ export interface BoomwhackerVideoBuilderProject {
   metadata: ProjectMetadata;
   audio: ProjectAudio | null;
   audioProcessing: AudioProcessingState;
-  beatMap: {
-    beatPins: BeatPin[];
-  };
+  songTiming: SongTimingState;
   grid: GridSubdivisionState;
   notes: ProjectNotesState;
   annotations: AnnotationState;
@@ -162,8 +159,8 @@ export interface BoomwhackerLane {
 
 export interface DerivedBeatSpan {
   beatIndex: number;
-  beatPinId: string;
-  nextBeatPinId: string;
+  beatId: string;
+  nextBeatId: string;
   startTimeSec: number;
   endTimeSec: number;
   durationSec: number;
@@ -187,6 +184,13 @@ export interface DerivedTimingModel {
   slotBoundaries: DerivedSlotBoundary[];
   totalSlotCount: number;
   totalDurationSec: number;
+  secondsPerBeat: number;
+  countInBeats: number;
+  countInLeadInBeats: number;
+  countInDurationSec: number;
+  countInStartTimeSec: number;
+  timeSignatureNumerator: number;
+  timeSignatureDenominator: number;
 }
 
 export interface DerivedGuideLine {
@@ -194,8 +198,10 @@ export interface DerivedGuideLine {
   timeSec: number;
   beatIndex: number;
   slotIndex: number;
-  kind: 'beat' | 'subdivision';
-  emphasis: 'dashed' | 'light';
+  kind: 'measure' | 'beat' | 'subdivision' | 'count-in';
+  emphasis: 'solid' | 'dashed' | 'light';
+  measureIndex?: number;
+  label?: string;
 }
 
 export interface TimedBoomwhackerNote {
@@ -211,6 +217,6 @@ export interface TimedBoomwhackerNote {
   endTimeSec: number;
   durationSec: number;
   color: string;
-  shape: NoteShape;
+  shape: BoomwhackerNoteShape;
   lyric?: string;
 }

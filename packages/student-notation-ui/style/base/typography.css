@@ -5,29 +5,176 @@
 :root {
   /* Set the base font size. 100% = 16px by default. */
   font-size: 100%;
+
+  /* Semantic typography
+   *
+   * Each role maps purpose to the primitive scale. Components consume these
+   * properties independently so DOM, SVG, and canvas paths can share values.
+   */
+
+  /* Display text */
+  --typography-display-font-family: var(--font-family-sans);
+  --typography-display-font-size: var(--font-size-700);
+  --typography-display-font-weight: var(--font-weight-bold);
+  --typography-display-line-height: var(--line-height-tight);
+  --typography-display-letter-spacing: var(--letter-spacing-normal);
+
+  /* Dialog titles */
+  --typography-dialog-title-font-family: var(--font-family-sans);
+  --typography-dialog-title-font-size: var(--font-size-500);
+  --typography-dialog-title-font-weight: var(--font-weight-bold);
+  --typography-dialog-title-line-height: var(--line-height-tight);
+  --typography-dialog-title-letter-spacing: var(--letter-spacing-normal);
+
+  /* Section titles */
+  --typography-section-title-font-family: var(--font-family-sans);
+  --typography-section-title-font-size: var(--font-size-200);
+  --typography-section-title-font-weight: var(--font-weight-bold);
+  --typography-section-title-line-height: var(--line-height-tight);
+  --typography-section-title-letter-spacing: var(--letter-spacing-label);
+
+  /* Body text */
+  --typography-body-font-family: var(--font-family-sans);
+  --typography-body-font-size: var(--font-size-300);
+  --typography-body-font-weight: var(--font-weight-regular);
+  --typography-body-line-height: var(--line-height-reading);
+  --typography-body-letter-spacing: var(--letter-spacing-normal);
+
+  /* Small body text */
+  --typography-small-body-font-family: var(--font-family-sans);
+  --typography-small-body-font-size: var(--font-size-200);
+  --typography-small-body-font-weight: var(--font-weight-regular);
+  --typography-small-body-line-height: var(--line-height-reading);
+  --typography-small-body-letter-spacing: var(--letter-spacing-normal);
+
+  /* Standard controls */
+  --typography-control-font-family: var(--font-family-sans);
+  --typography-control-font-size: var(--font-size-200);
+  --typography-control-font-weight: var(--font-weight-bold);
+  --typography-control-line-height: var(--line-height-tight);
+  --typography-control-letter-spacing: var(--letter-spacing-normal);
+
+  /* Dense controls */
+  --typography-dense-control-font-family: var(--font-family-sans);
+  --typography-dense-control-font-size: var(--font-size-100);
+  --typography-dense-control-font-weight: var(--font-weight-bold);
+  --typography-dense-control-line-height: var(--line-height-tight);
+  --typography-dense-control-letter-spacing: var(--letter-spacing-normal);
+
+  /* Labels */
+  --typography-label-font-family: var(--font-family-sans);
+  --typography-label-font-size: var(--font-size-100);
+  --typography-label-font-weight: var(--font-weight-bold);
+  --typography-label-line-height: var(--line-height-tight);
+  --typography-label-letter-spacing: var(--letter-spacing-label);
+
+  /* Values */
+  --typography-value-font-family: var(--font-family-sans);
+  --typography-value-font-size: var(--font-size-200);
+  --typography-value-font-weight: var(--font-weight-bold);
+  --typography-value-line-height: var(--line-height-tight);
+  --typography-value-letter-spacing: var(--letter-spacing-normal);
+
+  /* Captions */
+  --typography-caption-font-family: var(--font-family-sans);
+  --typography-caption-font-size: var(--font-size-100);
+  --typography-caption-font-weight: var(--font-weight-regular);
+  --typography-caption-line-height: var(--line-height-normal);
+  --typography-caption-letter-spacing: var(--letter-spacing-normal);
+
+  /* Monospace diagnostics */
+  --typography-diagnostic-font-family: var(--font-family-mono);
+  --typography-diagnostic-font-size: var(--font-size-100);
+  --typography-diagnostic-font-weight: var(--font-weight-regular);
+  --typography-diagnostic-line-height: var(--line-height-normal);
+  --typography-diagnostic-letter-spacing: var(--letter-spacing-normal);
+
+  /* Fluid tabs. The cqi preferred value responds to the nearest inline-size
+   * query container, with the small and large UI sizes as bounds.
+   */
+  --typography-fluid-tab-font-family: var(--font-family-sans);
+  --typography-fluid-tab-font-size: clamp(
+    var(--font-size-200),
+    min(2.2dvh, 5cqi),
+    var(--font-size-400)
+  );
+  --typography-fluid-tab-font-weight: var(--font-weight-bold);
+  --typography-fluid-tab-line-height: var(--line-height-tight);
+  --typography-fluid-tab-letter-spacing: var(--letter-spacing-normal);
+
+  /* Notation labels */
+  --typography-notation-label-font-family: var(--font-family-sans);
+  --typography-notation-label-font-size: var(--font-size-200);
+  --typography-notation-label-font-weight: var(--font-weight-bold);
+  --typography-notation-label-line-height: var(--line-height-solid);
+  --typography-notation-label-letter-spacing: var(--letter-spacing-normal);
+
+  /* User-configurable annotations. The font size is the default only; stored
+   * annotation settings remain authoritative in the editor and renderer.
+   */
+  --typography-annotation-font-family: var(--font-family-sans);
+  --typography-annotation-font-size: var(--font-size-300);
+  --typography-annotation-font-weight: var(--font-weight-regular);
+  --typography-annotation-line-height: var(--line-height-tight);
+  --typography-annotation-letter-spacing: var(--letter-spacing-normal);
 }
 
-/* Base element styles using our new font-size variables */
+/* Base document roles */
 body {
-  font-size: var(--font-size-base);
+  font-family: var(--typography-body-font-family);
+  font-size: var(--typography-body-font-size);
+  font-weight: var(--typography-body-font-weight);
+  line-height: var(--typography-body-line-height);
+  letter-spacing: var(--typography-body-letter-spacing);
+  color: var(--text-color-primary);
 }
 
 button {
-  font-size: var(--font-size-sm);
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
+}
+
+input,
+select,
+textarea {
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-body-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
 }
 
 .slider-label {
-  font-size: var(--font-size-base);
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  line-height: var(--typography-label-line-height);
+  letter-spacing: var(--typography-label-letter-spacing);
 }
 
 .tempo-input {
-  font-size: var(--font-size-sm);
+  font-family: var(--typography-value-font-family);
+  font-size: var(--typography-value-font-size);
+  font-weight: var(--typography-value-font-weight);
+  line-height: var(--typography-value-line-height);
+  letter-spacing: var(--typography-value-letter-spacing);
 }
 
 .app-title {
-  font-size: var(--font-size-base);
+  font-family: var(--typography-section-title-font-family);
+  font-size: var(--typography-section-title-font-size);
+  font-weight: var(--typography-section-title-font-weight);
+  line-height: var(--typography-section-title-line-height);
+  letter-spacing: var(--typography-section-title-letter-spacing);
 }
 
 .tonic-sign-button {
-    font-size: var(--font-size-lg);
+  font-family: var(--typography-notation-label-font-family);
+  font-size: var(--typography-notation-label-font-size);
+  font-weight: var(--typography-notation-label-font-weight);
+  line-height: var(--typography-notation-label-line-height);
+  letter-spacing: var(--typography-notation-label-letter-spacing);
 }

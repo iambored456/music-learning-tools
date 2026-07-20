@@ -24,7 +24,7 @@
     "@mlt/grand-frequency-staff-ui": "workspace:*",
     "@mlt/diatonic-compass-ui": "workspace:*",
     "@mlt/pitch-utils": "workspace:*",
-    "@mlt/boomwhacker-sketchpad-ui": "workspace:*",
+    "@mlt/simple-notation-ui": "workspace:*",
     "@mlt/boomwhacker-video-builder-ui": "workspace:*",
     "@mlt/singing-trainer-ui": "workspace:*",
     "@mlt/student-notation-ui": "workspace:*",

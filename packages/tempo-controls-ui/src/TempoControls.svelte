@@ -235,6 +235,9 @@
 
   .tempo-controls.vertical.with-slider:not(.with-rows) {
     grid-template-columns: var(--tempo-controls-slider-shell-width);
+    width: var(--tempo-controls-slider-shell-width);
+    max-width: var(--tempo-controls-slider-shell-width);
+    justify-self: start;
   }
 
   .tempo-controls.vertical.with-slider:not(.fill-available-height).with-rows {
@@ -362,6 +365,10 @@
     min-height: 0;
     padding: var(--tempo-controls-slider-shell-padding) 0;
     overflow: hidden;
+  }
+
+  .tempo-controls.vertical.with-slider:not(.with-rows) .tempo-slider-container {
+    grid-column: 1;
   }
 
   .tempo-controls.vertical.with-slider.fill-available-height .tempo-slider-container {

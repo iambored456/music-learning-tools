@@ -9,6 +9,7 @@
   import store from '@state/initStore.ts';
   import LayoutService from '@services/layoutService.ts';
   import { preloadDrumSamples } from '@services/transport/drumManager.ts';
+  import { notificationSystem } from '../ui/NotificationModal.svelte';
   import {
     convertToSnapshot,
     validateForExport,
@@ -253,38 +254,12 @@
 
   // Handoff handlers
   function showHandoffNotification(title: string, message: string, details: string[] = []): void {
-    const overlay = document.getElementById('notification-overlay');
-    const messageEl = overlay?.querySelector('.notification-message');
-    const titleEl = overlay?.querySelector('.notification-title');
-
-    if (!overlay || !messageEl) {
-      // Fallback to alert
-      alert(`${title}\n\n${message}${details.length > 0 ? '\n\n' + details.join('\n') : ''}`);
-      return;
-    }
-
-    if (titleEl) {
-      titleEl.textContent = title;
-    }
-
-    const formattedDetails = details.length > 0
-      ? `<ul style="text-align: left; margin-top: 8px; padding-left: 20px;">${details.map(d => `<li style="margin-bottom: 4px;">${d.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`).join('')}</ul>`
-      : '';
-
-    messageEl.innerHTML = `<p>${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>${formattedDetails}`;
-    overlay.classList.add('visible');
-
-    const closeBtn = overlay.querySelector('.notification-close');
-    const okBtn = overlay.querySelector('.notification-button');
-
-    const closeHandler = (): void => {
-      overlay.classList.remove('visible');
-      closeBtn?.removeEventListener('click', closeHandler);
-      okBtn?.removeEventListener('click', closeHandler);
-    };
-
-    closeBtn?.addEventListener('click', closeHandler);
-    okBtn?.addEventListener('click', closeHandler);
+    notificationSystem.show({
+      title,
+      message,
+      details,
+      buttons: [{ text: 'OK', primary: true }],
+    });
   }
 
   function hasPitchNotes(): boolean {

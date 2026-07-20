@@ -88,11 +88,50 @@
   --box-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --box-shadow-md: 0 3px 6px rgba(15, 23, 42, 0.12);
 
-  /* Font */
-  --main-font: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
-  --font-size-sm: 0.875rem;   /* 14px */
-  --font-size-base: 1rem;       /* 16px */
-  --font-size-lg: 1.125rem;    /* 18px */
+  /* Primitive typography
+   *
+   * These values are the raw scale used by the semantic mappings in
+   * typography.css. Compatibility aliases remain for external/legacy readers.
+   */
+  --font-family-sans: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas,
+    'Courier New', monospace;
+
+  --font-size-100: 0.75rem;
+  --font-size-200: 0.875rem;
+  --font-size-300: 1rem;
+  --font-size-400: 1.125rem;
+  --font-size-500: 1.25rem;
+  --font-size-600: 1.5rem;
+  --font-size-700: 2rem;
+
+  --font-weight-regular: 400;
+  --font-weight-bold: 700;
+
+  --line-height-solid: 1;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.4;
+  --line-height-reading: 1.5;
+
+  --letter-spacing-normal: 0;
+  --letter-spacing-label: 0.04em;
+  --letter-spacing-status: 0.06em;
+
+  /* Compatibility aliases for renderer and legacy extension consumers. */
+  --main-font: var(--font-family-sans);
+  --font-size-sm: var(--font-size-200);
+  --font-size-base: var(--font-size-300);
+  --font-size-lg: var(--font-size-400);
+
+  /* Semantic text colours */
+  --text-color-primary: var(--c-text);
+  --text-color-secondary: var(--c-text-muted);
+  --text-color-on-accent: #fff;
+  --text-color-inverse: #fff;
+  --text-color-danger: var(--c-danger);
+  --text-color-notation: #212529;
+  --text-color-notation-inverse: #fff;
+  --text-color-notation-outline: #000;
 }
 
 /* Explicit dark-mode palette controlled by sidebar toggle */
@@ -111,5 +150,8 @@ body.dark-mode {
   --c-anacrusis-accent: #9fb0c0;
   --box-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
   --box-shadow-md: 0 6px 14px rgba(0, 0, 0, 0.45);
+  --text-color-primary: var(--c-text);
+  --text-color-secondary: var(--c-text-muted);
+  --text-color-danger: var(--c-danger);
   color-scheme: dark;
 }

@@ -13,8 +13,11 @@
 #x-chord-shape-tool {
   width: 40px;
   height: 40px;
-  font-size: 20px;
-  font-weight: bold;
+  font-family: var(--typography-notation-label-font-family);
+  font-size: var(--font-size-500);
+  font-weight: var(--typography-notation-label-font-weight);
+  line-height: var(--typography-notation-label-line-height);
+  letter-spacing: var(--typography-notation-label-letter-spacing);
   padding: 0;
   border: 1px solid var(--c-border);
   background-color: var(--c-surface);
@@ -72,7 +75,7 @@
   background: none;
   border: none;
   color: var(--c-text-muted);
-  font-size: 16px;
+  font-size: var(--typography-control-font-size);
   width: 24px;
   height: 24px;
   display: flex;

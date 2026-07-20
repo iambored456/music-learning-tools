@@ -75,7 +75,7 @@ function syncTabBridge(
   activeContentBox.style.setProperty(widthVarName, `${bridgeWidth.toFixed(2)}px`);
 }
 
-function measureTabLabelWidths(button: HTMLElement): { regular: number; bold: number; delta: number } | null {
+function measureTabLabelWidth(button: HTMLElement): number | null {
   if (!document.body) {
     return null;
   }
@@ -98,25 +98,18 @@ function measureTabLabelWidths(button: HTMLElement): { regular: number; bold: nu
   probe.style.fontVariant = computed.fontVariant;
   probe.style.letterSpacing = computed.letterSpacing;
   probe.style.textTransform = computed.textTransform;
-  probe.style.fontWeight = '500';
+  probe.style.fontWeight = computed.fontWeight;
   document.body.appendChild(probe);
-  const regular = probe.getBoundingClientRect().width;
-  probe.style.fontWeight = '600';
-  const bold = probe.getBoundingClientRect().width;
+  const width = probe.getBoundingClientRect().width;
   probe.remove();
-
-  return {
-    regular: Number(regular.toFixed(2)),
-    bold: Number(bold.toFixed(2)),
-    delta: Number((bold - regular).toFixed(2))
-  };
+  return Number(width.toFixed(2));
 }
 
 function stabilizeTabButtonWidths(selector: string): void {
   const buttonNodes = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
   for (const button of buttonNodes) {
-    const measuredLabel = measureTabLabelWidths(button);
-    if (!measuredLabel) {
+    const measuredLabelWidth = measureTabLabelWidth(button);
+    if (!measuredLabelWidth) {
       continue;
     }
 
@@ -125,8 +118,7 @@ function stabilizeTabButtonWidths(selector: string): void {
     const paddingRight = Number.parseFloat(computed.paddingRight) || 0;
     const borderLeft = Number.parseFloat(computed.borderLeftWidth) || 0;
     const borderRight = Number.parseFloat(computed.borderRightWidth) || 0;
-    const targetLabelWidth = Math.max(measuredLabel.regular, measuredLabel.bold);
-    const targetWidth = Math.ceil(targetLabelWidth + paddingLeft + paddingRight + borderLeft + borderRight);
+    const targetWidth = Math.ceil(measuredLabelWidth + paddingLeft + paddingRight + borderLeft + borderRight);
     const targetWidthValue = `${targetWidth}px`;
 
     if (button.style.minWidth !== targetWidthValue) {
@@ -147,8 +139,8 @@ function stabilizeMainTabButtonWidths(): void {
 
   let targetWidth = 0;
   for (const button of buttonNodes) {
-    const measuredLabel = measureTabLabelWidths(button);
-    if (!measuredLabel) {
+    const measuredLabelWidth = measureTabLabelWidth(button);
+    if (!measuredLabelWidth) {
       continue;
     }
 
@@ -157,8 +149,7 @@ function stabilizeMainTabButtonWidths(): void {
     const paddingRight = Number.parseFloat(computed.paddingRight) || 0;
     const borderLeft = Number.parseFloat(computed.borderLeftWidth) || 0;
     const borderRight = Number.parseFloat(computed.borderRightWidth) || 0;
-    const labelWidth = Math.max(measuredLabel.regular, measuredLabel.bold);
-    const buttonTargetWidth = Math.ceil(labelWidth + paddingLeft + paddingRight + borderLeft + borderRight);
+    const buttonTargetWidth = Math.ceil(measuredLabelWidth + paddingLeft + paddingRight + borderLeft + borderRight);
     targetWidth = Math.max(targetWidth, buttonTargetWidth);
   }
 

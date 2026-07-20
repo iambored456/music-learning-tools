@@ -25,20 +25,18 @@ Output files are written to `apps/hub/public/previews/<app>.png`.
 `pnpm -w build:hub` is wired to rebuild the Hub preview screenshot automatically (`--only hub`) after a Hub build.
 `pnpm -w build:pages` now refreshes all Hub preview screenshots before assembling the Pages output.
 
-## Simple Notation (Refactor)
+## Simple Notation
 
-Legacy source was imported into the original legacy source folder.
+Monorepo targets:
 
-Refactored monorepo targets:
-
-- `apps/boomwhacker-sketchpad`
-- `packages/boomwhacker-sketchpad-core`
-- `packages/boomwhacker-sketchpad-ui`
+- `apps/simple-notation`
+- `packages/simple-notation-core`
+- `packages/simple-notation-ui`
 
 Run locally:
 
 ```bash
-pnpm --filter boomwhacker-sketchpad run dev
+pnpm --filter simple-notation run dev
 ```
 
 ## Boomwhacker Video Builder Audio Import

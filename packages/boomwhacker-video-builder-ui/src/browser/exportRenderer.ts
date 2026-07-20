@@ -1,5 +1,6 @@
 import {
   BOOMWHACKER_LANES,
+  getMinimumSlotSpanForShape,
   type BoomwhackerVideoBuilderProject,
   type DerivedGuideLine,
   type DerivedTimingModel,
@@ -9,7 +10,6 @@ import {
   getActiveHighwayBeatSpan,
   getHighwayJudgmentAreaWidthPx,
   getHighwayNoteLayout,
-  shouldRenderGuideAsBeat,
 } from '../highwayLayout.js';
 
 const backgroundImageCache = new Map<string, Promise<HTMLImageElement>>();
@@ -79,18 +79,49 @@ function drawLaneMarker(
   x: number,
   y: number,
   width: number,
+  thickness = 2,
 ): void {
   if (marker === 'none') {
     return;
   }
 
   const lineY = marker === 'underline' ? y + 9 : y - 21;
+  context.save();
   context.beginPath();
   context.moveTo(x - (width / 2), lineY);
   context.lineTo(x + (width / 2), lineY);
-  context.lineWidth = 2;
-  context.strokeStyle = 'rgba(237, 244, 255, 0.92)';
+  context.lineCap = 'round';
+  context.lineWidth = thickness;
+  context.strokeStyle = '#ffffff';
   context.stroke();
+  context.restore();
+}
+
+function drawNoteLabelMarker(
+  context: CanvasRenderingContext2D,
+  marker: 'underline' | 'overline' | 'none',
+  x: number,
+  baselineY: number,
+  fontSizePx: number,
+): void {
+  if (marker === 'none') {
+    return;
+  }
+
+  const width = Math.max(8, fontSizePx * 0.72);
+  const thickness = Math.max(1.5, fontSizePx * 0.075);
+  const lineY = marker === 'underline'
+    ? baselineY + (fontSizePx * 0.16)
+    : baselineY - (fontSizePx * 0.86);
+  context.save();
+  context.beginPath();
+  context.moveTo(x - (width / 2), lineY);
+  context.lineTo(x + (width / 2), lineY);
+  context.lineCap = 'round';
+  context.lineWidth = thickness;
+  context.strokeStyle = '#ffffff';
+  context.stroke();
+  context.restore();
 }
 
 function drawBackgroundCard(
@@ -108,6 +139,34 @@ function drawBackgroundCard(
   context.lineWidth = 1;
   context.strokeStyle = strokeStyle;
   context.stroke();
+}
+
+function drawPlaybackHighlightCell(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  context.save();
+  roundRectPath(context, x, y, width, height, 6);
+  context.fillStyle = 'rgba(255, 249, 225, 0.46)';
+  context.fill();
+
+  const inset = 1;
+  const innerWidth = Math.max(0, width - inset * 2);
+  const innerHeight = Math.max(0, height - inset * 2);
+  if (innerWidth > 0 && innerHeight > 0) {
+    context.globalAlpha = 0.82;
+    roundRectPath(context, x + inset, y + inset, innerWidth, innerHeight, 6);
+    context.fillStyle = 'rgba(255, 214, 83, 0.48)';
+    context.fill();
+  }
+  context.restore();
 }
 
 async function renderBackground(
@@ -167,18 +226,22 @@ function renderTitleCard(
   width: number,
   height: number,
   project: BoomwhackerVideoBuilderProject,
+  timing: DerivedTimingModel,
   frameTimeSec: number,
 ): void {
-  const { leadInDurationSec, titleCard } = project.exportState;
-  if (!titleCard.enabled || frameTimeSec >= leadInDurationSec) {
+  const { titleCard } = project.exportState;
+  const songTimeSec = getExportSongTimeSec(project, timing, frameTimeSec);
+  const countInStartTimeSec = timing.countInStartTimeSec;
+  const firstBeatTimeSec = project.songTiming.firstBeatOffsetSec;
+  if (!titleCard.enabled || songTimeSec < countInStartTimeSec || songTimeSec >= firstBeatTimeSec) {
     return;
   }
 
-  const songTimeSec = getExportSongTimeSec(project, frameTimeSec);
-  const fadeOutDurationSec = Math.min(0.45, Math.max(0.18, leadInDurationSec * 0.2));
-  const fadeAlpha = songTimeSec < -fadeOutDurationSec
+  const fadeOutDurationSec = Math.min(0.45, Math.max(0.18, timing.countInDurationSec * 0.2));
+  const timeUntilFirstBeatSec = firstBeatTimeSec - songTimeSec;
+  const fadeAlpha = timeUntilFirstBeatSec > fadeOutDurationSec
     ? 1
-    : clamp((-songTimeSec) / Math.max(0.001, fadeOutDurationSec), 0, 1);
+    : clamp(timeUntilFirstBeatSec / Math.max(0.001, fadeOutDurationSec), 0, 1);
 
   const cardWidth = Math.min(width * 0.72, 940);
   const cardHeight = Math.min(height * 0.22, 250);
@@ -215,9 +278,7 @@ function renderTitleCard(
   context.fillStyle = 'rgba(121, 187, 255, 0.9)';
   context.font = `600 ${Math.round(cardHeight * 0.14)}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
   context.fillText(
-    songTimeSec < 0
-      ? `Starting in ${Math.max(0, -songTimeSec).toFixed(1)}s`
-      : 'Starting',
+    `Starting in ${Math.max(0, timeUntilFirstBeatSec).toFixed(1)}s`,
     width / 2,
     cardY + cardHeight * 0.88,
   );
@@ -256,32 +317,84 @@ function drawNoteShapePath(
   y: number,
   width: number,
   height: number,
+  isSustained: boolean,
 ): void {
   if (note.shape === 'diamond') {
     context.beginPath();
-    context.moveTo(x + width * 0.14, y + height / 2);
-    context.lineTo(x + width / 2, y + height * 0.04);
-    context.lineTo(x + width * 0.86, y + height / 2);
-    context.lineTo(x + width / 2, y + height * 0.96);
+    context.moveTo(x + width / 2, y + height * 0.02);
+    context.lineTo(x, y + height * 0.145);
+    context.lineTo(x, y + height * 0.855);
+    context.lineTo(x + width / 2, y + height * 0.98);
+    context.lineTo(x + width, y + height * 0.855);
+    context.lineTo(x + width, y + height * 0.145);
     context.closePath();
     return;
   }
 
-  roundRectPath(context, x, y, width, height, note.shape === 'oval' ? height * 0.34 : height / 2);
+  if (note.shape === 'circle') {
+    if (isSustained) {
+      roundRectPath(context, x, y, width, height, height / 2);
+      return;
+    }
+    context.beginPath();
+    context.ellipse(x + width / 2, y + height / 2, width * 0.47, height * 0.47, 0, 0, Math.PI * 2);
+    context.closePath();
+    return;
+  }
+
+  if (note.shape === 'oval') {
+    context.beginPath();
+    context.ellipse(x + width / 2, y + height / 2, width * 0.47, height * (77 / 160), 0, 0, Math.PI * 2);
+    context.closePath();
+    return;
+  }
+
+  roundRectPath(context, x, y, width, height, height / 2);
+}
+
+function isSustainedCircleNote(note: TimedBoomwhackerNote, timing: DerivedTimingModel): boolean {
+  if (note.shape !== 'circle') {
+    return false;
+  }
+
+  const minimumEndSlotIndex = note.startSlotIndex + getMinimumSlotSpanForShape(note.shape, timing, note.startSlotIndex) - 1;
+  return note.endSlotIndex > minimumEndSlotIndex;
+}
+
+function getNoteShapeStrokeWidth(note: TimedBoomwhackerNote, width: number, height: number): number {
+  if (note.shape === 'diamond') {
+    return Math.max(1, width * (4 / 25));
+  }
+
+  if (note.shape === 'circle' || note.shape === 'oval') {
+    return Math.max(1, Math.min(width, height) * 0.06);
+  }
+
+  return Math.max(1, height * (6 / 80));
+}
+
+export function getExportStartTimeSec(
+  _project: BoomwhackerVideoBuilderProject,
+  timing: DerivedTimingModel,
+): number {
+  return Math.min(0, timing.countInStartTimeSec);
 }
 
 export function getExportTotalDurationSec(
   project: BoomwhackerVideoBuilderProject,
   timing: DerivedTimingModel,
 ): number {
-  return project.exportState.leadInDurationSec + Math.max(project.audio?.durationSec ?? 0, timing.totalDurationSec);
+  const exportStartTimeSec = getExportStartTimeSec(project, timing);
+  const exportEndTimeSec = Math.max(project.audio?.durationSec ?? 0, timing.totalDurationSec);
+  return Math.max(0.001, exportEndTimeSec - exportStartTimeSec);
 }
 
 export function getExportSongTimeSec(
   project: BoomwhackerVideoBuilderProject,
+  timing: DerivedTimingModel,
   frameTimeSec: number,
 ): number {
-  return frameTimeSec - project.exportState.leadInDurationSec;
+  return getExportStartTimeSec(project, timing) + frameTimeSec;
 }
 
 export async function renderExportFrame(params: ExportFrameRenderParams): Promise<void> {
@@ -311,7 +424,7 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
 
   const totalDurationSec = getExportTotalDurationSec(project, timing);
   renderHeader(context, width, frameTimeSec, project, totalDurationSec);
-  renderTitleCard(context, width, height, project, frameTimeSec);
+  renderTitleCard(context, width, height, project, timing, frameTimeSec);
 
   const laneCount = BOOMWHACKER_LANES.length;
   const highwayTop = Math.round(height * 0.22);
@@ -323,7 +436,7 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
   const viewportHeight = laneHeight * laneCount;
   const judgmentX = viewportX + (viewportWidth * JUDGMENT_LINE_RATIO);
   const pixelsPerSecond = (viewportWidth * (1 - JUDGMENT_LINE_RATIO)) / SECONDS_VISIBLE_AHEAD;
-  const songTimeSec = getExportSongTimeSec(project, frameTimeSec);
+  const songTimeSec = getExportSongTimeSec(project, timing, frameTimeSec);
 
   const stageGradient = context.createLinearGradient(viewportX, viewportY, viewportX, viewportY + viewportHeight);
   stageGradient.addColorStop(0, 'rgba(8, 17, 28, 0.82)');
@@ -387,9 +500,16 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
       context.save();
       context.fillStyle = judgmentAreaGradient;
       context.fillRect(clippedLeft, viewportY, clippedRight - clippedLeft, viewportHeight);
-
       context.fillStyle = 'rgba(215, 238, 255, 0.08)';
       context.fillRect(clippedLeft, viewportY, clippedRight - clippedLeft, viewportHeight);
+      context.strokeStyle = 'rgba(215, 238, 255, 0.76)';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(clippedLeft, viewportY);
+      context.lineTo(clippedLeft, viewportY + viewportHeight);
+      context.moveTo(clippedRight, viewportY);
+      context.lineTo(clippedRight, viewportY + viewportHeight);
+      context.stroke();
       context.restore();
     }
   }
@@ -400,29 +520,44 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
       continue;
     }
 
-    const beatGuide = shouldRenderGuideAsBeat(guide);
-    if (!beatGuide) {
-      continue;
-    }
-
     context.save();
     context.beginPath();
     context.moveTo(guideX, viewportY);
     context.lineTo(guideX, viewportY + viewportHeight);
-    context.lineWidth = 1;
-    context.strokeStyle = 'rgba(255, 255, 255, 0.26)';
-    context.setLineDash([9, 8]);
+    context.lineWidth = guide.kind === 'measure' ? 3 : 1;
+    context.strokeStyle = guide.kind === 'measure'
+      ? 'rgba(255, 255, 255, 0.62)'
+      : guide.kind === 'count-in'
+        ? 'rgba(121, 187, 255, 0.54)'
+        : guide.kind === 'subdivision'
+          ? 'rgba(121, 187, 255, 0.18)'
+          : 'rgba(255, 255, 255, 0.3)';
+    if (guide.kind !== 'measure') {
+      context.setLineDash(guide.kind === 'subdivision' ? [4, 9] : [9, 8]);
+    }
     context.stroke();
+
+    if ((guide.kind === 'count-in' || guide.kind === 'measure') && guide.label) {
+      context.textAlign = 'center';
+      context.fillStyle = guide.kind === 'measure' ? 'rgba(237, 244, 255, 0.82)' : 'rgba(121, 187, 255, 0.92)';
+      context.font = '700 18px "Atkinson Hyperlegible Next", system-ui, sans-serif';
+      context.fillText(guide.kind === 'measure' ? `M${guide.label}` : guide.label, guideX, viewportY - 12);
+    }
     context.restore();
   }
 
   for (const note of timedNotes) {
+    const visualRow = getVisualLaneRow(note.row, laneCount);
+    const noteStartX = judgmentX + ((note.startTimeSec - songTimeSec) * pixelsPerSecond);
+    const noteEndX = judgmentX + ((note.endTimeSec - songTimeSec) * pixelsPerSecond);
+    const noteIsSustainedCircle = isSustainedCircleNote(note, timing);
     const noteLayout = getHighwayNoteLayout({
       note,
-      startX: judgmentX + ((note.startTimeSec - songTimeSec) * pixelsPerSecond),
-      endX: judgmentX + ((note.endTimeSec - songTimeSec) * pixelsPerSecond),
-      visualRow: getVisualLaneRow(note.row, laneCount),
+      startX: noteStartX,
+      endX: noteEndX,
+      visualRow,
       laneHeightPx: laneHeight,
+      isSustained: noteIsSustainedCircle,
     });
     const noteLeft = noteLayout.left;
     const noteWidth = noteLayout.width;
@@ -433,26 +568,41 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
     }
 
     const noteIsCrossing = note.startTimeSec <= songTimeSec && note.endTimeSec >= songTimeSec;
-    drawNoteShapePath(context, note, noteLeft, noteY, noteWidth, noteHeight);
+    drawNoteShapePath(context, note, noteLeft, noteY, noteWidth, noteHeight, noteIsSustainedCircle);
     context.save();
     context.fillStyle = note.color;
     context.fill();
-    context.lineWidth = noteIsCrossing ? 3 : 1;
+    const noteStrokeWidth = getNoteShapeStrokeWidth(note, noteWidth, noteHeight);
+    context.lineWidth = noteIsCrossing ? Math.max(3, noteStrokeWidth) : noteStrokeWidth;
     context.strokeStyle = noteIsCrossing ? 'rgba(121, 187, 255, 0.9)' : 'rgba(8, 17, 27, 0.22)';
     context.stroke();
     context.restore();
 
     if (noteLayout.showLabel) {
+      const noteLabelX = noteLeft + noteWidth / 2;
+      const noteLabelY = noteY + noteHeight * 0.62;
+      const noteLabelFontPx = Math.round(noteLayout.labelFontPx);
       context.textAlign = 'center';
-      context.fillStyle = '#08111b';
-      context.font = `800 ${Math.round(noteLayout.labelFontPx)}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
+      context.fillStyle = '#ffffff';
+      context.font = `800 ${noteLabelFontPx}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
       context.save();
-      context.shadowColor = 'rgba(255, 255, 255, 0.2)';
-      context.shadowBlur = 0;
-      context.shadowOffsetX = 0;
-      context.shadowOffsetY = 1;
-      context.fillText(note.label, noteLeft + noteWidth / 2, noteY + noteHeight * 0.62);
+      context.lineJoin = 'round';
+      context.strokeStyle = '#000000';
+      context.lineWidth = 2.5;
+      context.strokeText(note.label, noteLabelX, noteLabelY);
+      context.fillText(note.label, noteLabelX, noteLabelY);
       context.restore();
+      drawNoteLabelMarker(context, note.marker, noteLabelX, noteLabelY, noteLabelFontPx);
+    }
+
+    if (noteIsCrossing) {
+      drawPlaybackHighlightCell(
+        context,
+        noteStartX,
+        viewportY + (visualRow * laneHeight),
+        Math.max(1, noteEndX - noteStartX),
+        laneHeight,
+      );
     }
   }
 
@@ -460,8 +610,8 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
   context.font = '500 20px "Atkinson Hyperlegible Next", system-ui, sans-serif';
   context.textAlign = 'left';
   context.fillText(
-    songTimeSec < 0
-      ? `Lead-in ${Math.max(0, -songTimeSec).toFixed(1)}s`
+    songTimeSec < project.songTiming.firstBeatOffsetSec
+      ? `Count-in ${Math.max(0, project.songTiming.firstBeatOffsetSec - songTimeSec).toFixed(1)}s`
       : `Song time ${songTimeSec.toFixed(2)}s`,
     viewportX,
     viewportY + viewportHeight + 38,

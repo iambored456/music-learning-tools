@@ -4,6 +4,7 @@ import TonalService from '@services/tonalService.ts';
 import store from '@state/initStore.ts';
 import columnMapService from '@services/columnMapService.ts';
 import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
+import { buildCanvasFont, getSemanticTextColor } from '@services/typographyService.ts';
 import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
 import {
   OVAL_NOTE_FONT_RATIO,
@@ -561,8 +562,8 @@ export function drawScaleDegreeText(
   if (fontSize < MIN_FONT_SIZE) {return;
   }
 
-  ctx.fillStyle = '#212529';
-  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
+  ctx.fillStyle = getSemanticTextColor('notation');
+  ctx.font = buildCanvasFont('notation-label', { fontSizePx: fontSize });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -603,8 +604,8 @@ export function drawPitchClassText(
     return;
   }
 
-  ctx.fillStyle = '#212529';
-  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
+  ctx.fillStyle = getSemanticTextColor('notation');
+  ctx.font = buildCanvasFont('notation-label', { fontSizePx: fontSize });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -885,7 +886,7 @@ export function drawTonicShape(
 
   ctx.beginPath();
   ctx.arc(centerX, y, radius, 0, 2 * Math.PI);
-  ctx.strokeStyle = '#212529';
+  ctx.strokeStyle = getSemanticTextColor('notation');
   ctx.lineWidth = Math.max(0.5, actualCellWidth * 0.05);
   ctx.stroke();
 
@@ -898,8 +899,8 @@ export function drawTonicShape(
     return;
   }
 
-  ctx.fillStyle = '#212529';
-  ctx.font = `bold ${fontSize}px 'Atkinson Hyperlegible Next', sans-serif`;
+  ctx.fillStyle = getSemanticTextColor('notation');
+  ctx.font = buildCanvasFont('notation-label', { fontSizePx: fontSize });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(numberText, centerX, y);

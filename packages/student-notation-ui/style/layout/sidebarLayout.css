@@ -35,9 +35,7 @@ body.sidebar-open #sidebar {
 
 .sidebar-container .app-title {
   text-align: center;
-  font-weight: bold;
-  line-height: 1.2;
-  color: var(--c-text-muted);
+  color: var(--text-color-secondary);
 }
 
 .sidebar-container .app-title--with-home {
@@ -96,11 +94,13 @@ body.sidebar-open #sidebar {
 
 .sidebar-section-header {
   margin: 0 0 var(--space-025);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-family: var(--typography-section-title-font-family);
+  font-size: var(--typography-section-title-font-size);
+  font-weight: var(--typography-section-title-font-weight);
+  line-height: var(--typography-section-title-line-height);
+  letter-spacing: var(--typography-section-title-letter-spacing);
   text-transform: uppercase;
-  color: var(--c-text-muted);
+  color: var(--text-color-secondary);
 }
 
 .sidebar-theme-toggle-container {
@@ -135,15 +135,18 @@ body.sidebar-open #sidebar {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--c-text-muted);
+  font-family: var(--typography-dense-control-font-family);
+  font-size: var(--typography-dense-control-font-size);
+  font-weight: var(--typography-dense-control-font-weight);
+  line-height: var(--typography-dense-control-line-height);
+  letter-spacing: var(--typography-dense-control-letter-spacing);
+  color: var(--text-color-secondary);
   cursor: pointer;
   transition: color 0.2s ease;
 }
 
 .sidebar-theme-toggle input[type="radio"]:checked + label {
-  color: #ffffff;
+  color: var(--text-color-on-accent);
 }
 
 .sidebar-theme-toggle input[type="radio"]:focus-visible + label {
@@ -189,9 +192,12 @@ body.sidebar-open #sidebar {
 }
 
 .sidebar-button-text {
-  font-size: 1rem;
-  color: var(--c-text);
-  font-weight: 600;
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
+  color: var(--text-color-primary);
   white-space: nowrap;
 }
 
@@ -275,9 +281,12 @@ input[type="range"][orient="vertical"] {
 }
 
 .sidebar-control-group label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--c-text-muted);
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  line-height: var(--typography-label-line-height);
+  letter-spacing: var(--typography-label-letter-spacing);
+  color: var(--text-color-secondary);
   margin-bottom: var(--space-015);
 }
 
@@ -325,8 +334,11 @@ input[type="range"][orient="vertical"] {
 }
 
 .sidebar-value-display {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-family: var(--typography-value-font-family);
+  font-size: var(--typography-value-font-size);
+  font-weight: var(--typography-value-font-weight);
+  line-height: var(--typography-value-line-height);
+  letter-spacing: var(--typography-value-letter-spacing);
   color: var(--c-accent);
   text-align: center;
   min-height: 1.2em;
@@ -339,12 +351,14 @@ input[type="range"][orient="vertical"] {
   width: 100%;
   padding: var(--space-025) var(--space-035);
   background-color: var(--c-surface);
-  color: var(--c-text);
+  color: var(--text-color-primary);
   border: 1px solid var(--c-border);
   border-radius: var(--border-radius-sm);
-  font-family: var(--main-font);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-control-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
@@ -374,9 +388,12 @@ input[type="range"][orient="vertical"] {
   border: 1px solid var(--c-border);
   border-radius: var(--border-radius-sm);
   background-color: var(--c-surface);
-  color: var(--c-text);
-  font-family: var(--main-font);
-  font-size: 0.9rem;
+  color: var(--text-color-primary);
+  font-family: var(--typography-control-font-family);
+  font-size: var(--typography-control-font-size);
+  font-weight: var(--typography-body-font-weight);
+  line-height: var(--typography-control-line-height);
+  letter-spacing: var(--typography-control-letter-spacing);
 }
 
 .mic-device-selector:focus {
@@ -397,8 +414,11 @@ input[type="range"][orient="vertical"] {
 
 .keyboard-shortcuts-container h4 {
     margin-bottom: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-family: var(--typography-section-title-font-family);
+    font-size: var(--typography-section-title-font-size);
+    font-weight: var(--typography-section-title-font-weight);
+    line-height: var(--typography-section-title-line-height);
+    letter-spacing: var(--typography-section-title-letter-spacing);
     color: var(--c-text-muted, #6c757d);
 }
 
@@ -413,17 +433,24 @@ input[type="range"][orient="vertical"] {
     justify-content: space-between;
     align-items: center;
     padding: 0.125rem 0;
-    font-size: 0.75rem;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
+    letter-spacing: var(--typography-caption-letter-spacing);
 }
 
 .shortcut-key {
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-family: var(--typography-diagnostic-font-family);
+    font-size: var(--typography-diagnostic-font-size);
+    font-weight: var(--typography-diagnostic-font-weight);
+    line-height: var(--typography-diagnostic-line-height);
+    letter-spacing: var(--typography-diagnostic-letter-spacing);
     background-color: var(--c-surface, #f8f9fa);
     color: var(--c-text, #212529);
     padding: 0.125rem 0.25rem;
     border-radius: 3px;
     border: 1px solid var(--c-border, #dee2e6);
-    font-weight: 500;
     min-width: 3rem;
     text-align: center;
     white-space: nowrap;
@@ -431,7 +458,6 @@ input[type="range"][orient="vertical"] {
 
 .shortcut-desc {
     color: var(--c-text-muted, #6c757d);
-    font-weight: 400;
     text-align: right;
     flex: 1;
     margin-left: 0.5rem;
@@ -458,12 +484,7 @@ body.dark-mode .shortcut-desc {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .shortcut-item {
-        font-size: 0.7rem;
-    }
-    
     .shortcut-key {
-        font-size: 0.65rem;
         padding: 0.1rem 0.2rem;
         min-width: 2.5rem;
     }

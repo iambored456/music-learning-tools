@@ -335,5 +335,5 @@ const DEFAULT_CONFIG = {
 ## See Also
 
 - [Integration Guide](./HIGHWAY-INTEGRATION.md) - Complete integration examples
-- [CLAUDE.md](../../CLAUDE.md) - Build commands and architecture
+- [AGENTS.md](../../AGENTS.md) - Repository workflow and architecture
 - [Implementation Plan](../../IMPLEMENTATION-PLAN.md) - Design decisions

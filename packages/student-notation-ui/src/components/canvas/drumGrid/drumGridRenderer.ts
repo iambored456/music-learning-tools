@@ -4,7 +4,7 @@ import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/
 import { renderModulationMarkers } from '@components/canvas/PitchGrid/renderers/modulationRenderer.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
-import { getDrumRowHeightFromCellWidth, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
+import { getDrumRowHeightFromCellHeight, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo } from '@state/selectors.ts';
 import type { AppState, MacrobeatBoundaryStyle, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
@@ -237,7 +237,7 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
 
   ctx.clearRect(0, 0, getLogicalCanvasWidth(ctx.canvas), getLogicalCanvasHeight(ctx.canvas));
 
-  const drumRowHeight = getDrumRowHeightFromCellWidth(cellWidth);
+  const drumRowHeight = getDrumRowHeightFromCellHeight(options.cellHeight);
   const drumShapeBoxHeight = getDrumShapeBoxHeightFromCellWidth(cellWidth);
   // columnWidths is canvas-space (musical columns only, no legends)
   const totalColumns = columnWidths.length;

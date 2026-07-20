@@ -75,12 +75,14 @@
     flex-direction: column;
     gap: 2px;
     background: rgba(0, 0, 0, 0.8);
-    color: #fff;
+    color: var(--text-color-inverse, #fff);
     padding: 8px 12px;
     border-radius: 6px;
-    font-family: monospace;
-    font-size: 12px;
-    line-height: 1.35;
+    font-family: var(--typography-diagnostic-font-family, monospace);
+    font-size: var(--typography-diagnostic-font-size, 12px);
+    font-weight: var(--typography-diagnostic-font-weight, 400);
+    line-height: var(--typography-diagnostic-line-height, 1.4);
+    letter-spacing: var(--typography-diagnostic-letter-spacing, 0);
     pointer-events: none;
     animation: viewport-info-toast-fade-in 0.2s ease-out;
   }

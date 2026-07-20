@@ -33,6 +33,7 @@ import { renderSixteenthStampPreview } from '../renderers/sixteenthStampRenderer
 import { renderSixteenthThreeStampPreview } from '../renderers/sixteenthThreeStampRenderer.ts';
 import { renderTripletStampPreview } from '../renderers/tripletStampRenderer.ts';
 import { getModulationDisplayText, getModulationColor } from '@/rhythm/modulationMapping.ts';
+import { buildCanvasFont } from '@services/typographyService.ts';
 import { PitchGridModulationToolInteractor } from './tools/PitchGridModulationToolInteractor.ts';
 import { PitchGridNoteToolInteractor } from './tools/PitchGridNoteToolInteractor.ts';
 import { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolInteractor.ts';
@@ -1029,7 +1030,7 @@ function drawModulationPreview(ctx: CanvasRenderingContext2D, xPosition: number,
 
   // Draw preview label
   ctx.globalAlpha = 0.8;
-  ctx.font = '12px "Atkinson Hyperlegible Next", system-ui, sans-serif';
+  ctx.font = buildCanvasFont('caption');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillStyle = color;

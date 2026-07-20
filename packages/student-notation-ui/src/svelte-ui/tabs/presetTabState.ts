@@ -8,12 +8,13 @@ interface PresetTabStateOptions {
   onMissingTab?: (tabId: string) => void;
 }
 
-function syncOvertoneBinsVisibility(tabId: string): void {
-  const overtoneBinsContainer = document.querySelector('.harmonic-bins-container') as HTMLElement | null;
-  if (!overtoneBinsContainer) {
+function syncFilterContainerVisibility(tabId: string): void {
+  const filterContainer = document.querySelector<HTMLElement>('.filter-container');
+  if (!filterContainer) {
     return;
   }
-  overtoneBinsContainer.style.display = tabId === 'effects' ? 'none' : 'flex';
+
+  filterContainer.style.display = tabId === 'effects' ? 'none' : '';
 }
 
 function activatePresetTab(tabId: string): string | null {
@@ -28,7 +29,7 @@ function activatePresetTab(tabId: string): string | null {
 
   targetButton.classList.add('active');
   targetPanel.classList.add('active');
-  syncOvertoneBinsVisibility(tabId);
+  syncFilterContainerVisibility(tabId);
 
   return targetButton.dataset['presetTab'] ?? tabId;
 }

@@ -1,5 +1,4 @@
 import type {
-  BeatPin,
   BoomwhackerGridNote,
   DerivedBeatSpan,
   DerivedGuideLine,
@@ -7,6 +6,7 @@ import type {
   DerivedTimingModel,
   GridSubdivisionState,
   MacrobeatGrouping,
+  SongTimingState,
   TimedBoomwhackerNote,
 } from './types.js';
 import { getBoomwhackerLane } from './lanes.js';
@@ -15,59 +15,45 @@ export function getSlotCountForGrouping(grouping: MacrobeatGrouping): number {
   return grouping === 3 ? 6 : 4;
 }
 
+function clampTimingInteger(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
 export function getMacrobeatGroupingAtBeatIndex(
   grid: GridSubdivisionState,
   beatIndex: number,
 ): MacrobeatGrouping {
-  return (
-    grid.localMacrobeatGroupings.find((override) => override.beatIndex === beatIndex)?.grouping
-    ?? grid.defaultMacrobeatGrouping
-  );
-}
-
-function sortBeatPins(beatPins: BeatPin[]): BeatPin[] {
-  return [...beatPins].sort((left, right) => left.timeSec - right.timeSec);
-}
-
-export function estimateTempoFromBeatPins(beatPins: BeatPin[]): number | null {
-  const orderedBeatPins = sortBeatPins(beatPins);
-  if (orderedBeatPins.length < 2) {
-    return null;
-  }
-
-  const intervals: number[] = [];
-  for (let index = 1; index < orderedBeatPins.length; index += 1) {
-    const interval = orderedBeatPins[index].timeSec - orderedBeatPins[index - 1].timeSec;
-    if (interval > 0) {
-      intervals.push(interval);
-    }
-  }
-
-  if (intervals.length === 0) {
-    return null;
-  }
-
-  const sortedIntervals = [...intervals].sort((left, right) => left - right);
-  const medianInterval = sortedIntervals[Math.floor(sortedIntervals.length / 2)] ?? intervals[0];
-  if (medianInterval <= 0) {
-    return null;
-  }
-
-  return 60 / medianInterval;
+  void beatIndex;
+  return grid.defaultMacrobeatGrouping;
 }
 
 export function deriveTimingModel(
-  beatPins: BeatPin[],
+  songTiming: SongTimingState,
   grid: GridSubdivisionState,
 ): DerivedTimingModel {
-  const orderedBeatPins = sortBeatPins(beatPins);
-  if (orderedBeatPins.length < 2) {
+  const tempoBpm = Number.isFinite(songTiming.tempoBpm) ? songTiming.tempoBpm : 0;
+  const beatCount = Number.isFinite(songTiming.beatCount) ? Math.trunc(songTiming.beatCount) : 0;
+  const firstBeatOffsetSec = Number.isFinite(songTiming.firstBeatOffsetSec)
+    ? Math.max(0, songTiming.firstBeatOffsetSec)
+    : 0;
+  const countInBeats = clampTimingInteger(songTiming.countInBeats, 0, 32, 4);
+  const countInLeadInBeats = countInBeats > 0 ? 1 : 0;
+  const totalCountInBeats = countInBeats + countInLeadInBeats;
+  const timeSignatureNumerator = clampTimingInteger(songTiming.timeSignatureNumerator, 1, 16, 4);
+  const timeSignatureDenominator = [2, 4, 8, 16].includes(songTiming.timeSignatureDenominator)
+    ? songTiming.timeSignatureDenominator
+    : 4;
+
+  if (tempoBpm <= 0 || beatCount < 1) {
     return {
       beatSpans: [],
       slotBoundaries: [
         {
           slotIndex: 0,
-          timeSec: orderedBeatPins[0]?.timeSec ?? 0,
+          timeSec: firstBeatOffsetSec,
           beatIndex: null,
           fractionOfBeat: 0,
           isBeatStart: true,
@@ -76,27 +62,36 @@ export function deriveTimingModel(
       ],
       totalSlotCount: 0,
       totalDurationSec: 0,
+      secondsPerBeat: 0,
+      countInBeats,
+      countInLeadInBeats,
+      countInDurationSec: 0,
+      countInStartTimeSec: firstBeatOffsetSec,
+      timeSignatureNumerator,
+      timeSignatureDenominator,
     };
   }
 
   const beatSpans: DerivedBeatSpan[] = [];
   const slotBoundaries: DerivedSlotBoundary[] = [];
   let runningSlotIndex = 0;
+  const secondsPerBeat = 60 / tempoBpm;
+  const countInDurationSec = totalCountInBeats * secondsPerBeat;
+  const countInStartTimeSec = firstBeatOffsetSec - countInDurationSec;
 
-  for (let beatIndex = 0; beatIndex < orderedBeatPins.length - 1; beatIndex += 1) {
-    const beatPin = orderedBeatPins[beatIndex];
-    const nextBeatPin = orderedBeatPins[beatIndex + 1];
+  for (let beatIndex = 0; beatIndex < beatCount; beatIndex += 1) {
     const grouping = getMacrobeatGroupingAtBeatIndex(grid, beatIndex);
     const slotCount = getSlotCountForGrouping(grouping);
-    const durationSec = Math.max(0, nextBeatPin.timeSec - beatPin.timeSec);
+    const startTimeSec = firstBeatOffsetSec + (beatIndex * secondsPerBeat);
+    const endTimeSec = startTimeSec + secondsPerBeat;
 
     beatSpans.push({
       beatIndex,
-      beatPinId: beatPin.id,
-      nextBeatPinId: nextBeatPin.id,
-      startTimeSec: beatPin.timeSec,
-      endTimeSec: nextBeatPin.timeSec,
-      durationSec,
+      beatId: `beat-${beatIndex + 1}`,
+      nextBeatId: `beat-${beatIndex + 2}`,
+      startTimeSec,
+      endTimeSec,
+      durationSec: secondsPerBeat,
       grouping,
       slotCount,
       startSlotIndex: runningSlotIndex,
@@ -107,7 +102,7 @@ export function deriveTimingModel(
       const fractionOfBeat = localSlotIndex / slotCount;
       slotBoundaries.push({
         slotIndex: runningSlotIndex + localSlotIndex,
-        timeSec: beatPin.timeSec + (durationSec * fractionOfBeat),
+        timeSec: startTimeSec + (secondsPerBeat * fractionOfBeat),
         beatIndex,
         fractionOfBeat,
         isBeatStart: localSlotIndex === 0,
@@ -118,10 +113,10 @@ export function deriveTimingModel(
     runningSlotIndex += slotCount;
   }
 
-  const finalBeatPin = orderedBeatPins[orderedBeatPins.length - 1];
+  const finalTimeSec = firstBeatOffsetSec + (beatCount * secondsPerBeat);
   slotBoundaries.push({
     slotIndex: runningSlotIndex,
-    timeSec: finalBeatPin.timeSec,
+    timeSec: finalTimeSec,
     beatIndex: beatSpans[beatSpans.length - 1]?.beatIndex ?? null,
     fractionOfBeat: 1,
     isBeatStart: true,
@@ -132,21 +127,47 @@ export function deriveTimingModel(
     beatSpans,
     slotBoundaries,
     totalSlotCount: runningSlotIndex,
-    totalDurationSec: Math.max(0, finalBeatPin.timeSec - orderedBeatPins[0].timeSec),
+    totalDurationSec: finalTimeSec,
+    secondsPerBeat,
+    countInBeats,
+    countInLeadInBeats,
+    countInDurationSec,
+    countInStartTimeSec,
+    timeSignatureNumerator,
+    timeSignatureDenominator,
   };
 }
 
 export function deriveGuideLines(timing: DerivedTimingModel): DerivedGuideLine[] {
   const guides: DerivedGuideLine[] = [];
+  const countInBeats = Math.max(0, Math.round(timing.countInBeats));
+  const countInLeadInBeats = Math.max(0, Math.round(timing.countInLeadInBeats));
+  const visibleCountInStartTimeSec = timing.countInStartTimeSec + (countInLeadInBeats * timing.secondsPerBeat);
+
+  for (let countInIndex = 0; countInIndex < countInBeats; countInIndex += 1) {
+    const remainingCount = countInBeats - countInIndex;
+    guides.push({
+      id: `count-in-${countInIndex}`,
+      timeSec: visibleCountInStartTimeSec + (countInIndex * timing.secondsPerBeat),
+      beatIndex: -remainingCount,
+      slotIndex: 0,
+      kind: 'count-in',
+      emphasis: 'dashed',
+      label: String(remainingCount),
+    });
+  }
 
   for (const span of timing.beatSpans) {
+    const isMeasureStart = span.beatIndex % timing.timeSignatureNumerator === 0;
     guides.push({
       id: `beat-${span.beatIndex}`,
       timeSec: span.startTimeSec,
       beatIndex: span.beatIndex,
       slotIndex: span.startSlotIndex,
-      kind: 'beat',
-      emphasis: 'dashed',
+      kind: isMeasureStart ? 'measure' : 'beat',
+      emphasis: isMeasureStart ? 'solid' : 'dashed',
+      measureIndex: isMeasureStart ? Math.floor(span.beatIndex / timing.timeSignatureNumerator) : undefined,
+      label: isMeasureStart ? String(Math.floor(span.beatIndex / timing.timeSignatureNumerator) + 1) : undefined,
     });
 
     for (let localSlotIndex = 2; localSlotIndex < span.slotCount; localSlotIndex += 2) {

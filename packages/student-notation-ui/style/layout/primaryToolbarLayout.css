@@ -14,7 +14,11 @@
 
 #toolbar .toolkit-button {
     padding: clamp(var(--space-015), 0.9dvh, var(--space-025));
-    font-size: clamp(0.7rem, 1.4dvh, var(--font-size-sm));
+    font-family: var(--typography-dense-control-font-family);
+    font-size: var(--typography-dense-control-font-size);
+    font-weight: var(--typography-dense-control-font-weight);
+    line-height: var(--typography-dense-control-line-height);
+    letter-spacing: var(--typography-dense-control-letter-spacing);
 }
 
 #toolbar-primary {

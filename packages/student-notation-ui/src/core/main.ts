@@ -607,10 +607,11 @@ async function startStudentNotation(): Promise<void> {
 
     // Show user-friendly error message
     const errorDiv = document.createElement('div');
+    errorDiv.className = 'initialization-error';
     errorDiv.style.cssText = `
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #ff4444; color: white; padding: 20px; border-radius: 8px;
-            z-index: 10000; font-family: monospace; max-width: 80vw;
+            background: var(--text-color-danger); color: var(--text-color-on-accent);
+            padding: 20px; border-radius: 8px; z-index: 10000; max-width: 80vw;
         `;
     errorDiv.innerHTML = `
             <h3>Initialization Error</h3>

@@ -92,10 +92,11 @@
       .loading-title {
         font-family: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         font-size: 2rem;
-        font-weight: 400;
+        font-weight: 700;
+        line-height: 1.2;
         color: #ffffff;
         margin: 0 0 2.5rem 0;
-        letter-spacing: 0.5px;
+        letter-spacing: 0;
         opacity: 0;
         animation: fadeInUp 0.8s ease-out 0.3s forwards;
       }
@@ -165,14 +166,19 @@
         100% { transform: translateX(100%); opacity: 0.45; }
       }
       .loading-progress-text {
-        font-family: 'Atkinson Hyperlegible Next', monospace;
-        font-size: 0.875rem;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        font-size: 0.75rem;
+        font-weight: 400;
+        line-height: 1.4;
         color: rgba(255, 255, 255, 0.7);
-        letter-spacing: 1px;
+        letter-spacing: 0.06em;
       }
       .loading-status {
         font-family: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         font-size: 0.875rem;
+        font-weight: 400;
+        line-height: 1.5;
+        letter-spacing: 0;
         color: rgba(255, 255, 255, 0.6);
         opacity: 0;
         animation: fadeInUp 0.8s ease-out 0.9s forwards;

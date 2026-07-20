@@ -39,7 +39,7 @@
     body.mobile-pocket-console #mobile-pocket-console button {
         min-width: 0;
         min-height: 0;
-        font-family: var(--main-font);
+        font-family: var(--typography-control-font-family);
     }
 
     body.mobile-pocket-console .mobile-pocket-nav-button,
@@ -54,21 +54,22 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        line-height: 1;
+        line-height: var(--typography-control-line-height);
+        letter-spacing: var(--typography-control-letter-spacing);
     }
 
     body.mobile-pocket-console .mobile-pocket-nav-button {
         width: clamp(1.8rem, 7vw, 2.2rem);
-        font-size: clamp(0.95rem, 3.2vw, 1.15rem);
-        font-weight: 700;
+        font-size: clamp(var(--font-size-200), 3.2vw, var(--font-size-400));
+        font-weight: var(--typography-control-font-weight);
     }
 
     body.mobile-pocket-console .mobile-pocket-tab-chip {
         width: 100%;
         justify-content: flex-start;
         padding: 0 var(--space-035);
-        font-size: clamp(0.75rem, 2.6vw, 0.95rem);
-        font-weight: 600;
+        font-size: clamp(var(--font-size-100), 2.6vw, var(--font-size-300));
+        font-weight: var(--typography-control-font-weight);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -76,9 +77,9 @@
 
     body.mobile-pocket-console .mobile-pocket-more-button {
         width: clamp(2rem, 8vw, 2.6rem);
-        font-size: clamp(0.85rem, 3vw, 1rem);
-        font-weight: 700;
-        letter-spacing: 1px;
+        font-size: clamp(var(--font-size-200), 3vw, var(--font-size-300));
+        font-weight: var(--typography-control-font-weight);
+        letter-spacing: var(--letter-spacing-status);
     }
 
     body.mobile-pocket-console .mobile-pocket-icon-button {

@@ -6,6 +6,7 @@ import logger from '@utils/logger.ts';
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import type { AppState, ModulationMarker } from '@mlt/types';
+import { buildCanvasFont, getSemanticTextColor, getSemanticTypography } from '@services/typographyService.ts';
 
 type RendererOptions = AppState & {
   columnWidths: number[];
@@ -146,14 +147,13 @@ function drawBarline(ctx: CanvasRenderingContext2D, xCanvas: number, color: stri
  * @param {string} color - Color for the label
  */
 function drawRatioLabel(ctx: CanvasRenderingContext2D, xCanvas: number, displayText: string, color: string): void {
-  const fontSize = 14;
-  const fontFamily = 'Arial, sans-serif';
+  const fontSize = getSemanticTypography('notation-label').fontSizePx;
   const padding = 6;
   const cornerRadius = 8;
   const yOffset = 20; // Distance from top of canvas
 
   // Set font for text measurement
-  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.font = buildCanvasFont('notation-label', { fontSizePx: fontSize });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -172,7 +172,7 @@ function drawRatioLabel(ctx: CanvasRenderingContext2D, xCanvas: number, displayT
   drawRoundedRect(ctx, pillX, pillY, pillWidth, pillHeight, cornerRadius, color);
 
   // Draw text
-  ctx.fillStyle = '#212529';
+  ctx.fillStyle = getSemanticTextColor('notation');
   ctx.fillText(displayText, xCanvas, pillY + (pillHeight / 2));
 }
 

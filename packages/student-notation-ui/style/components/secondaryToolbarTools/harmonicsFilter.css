@@ -111,14 +111,17 @@
     transform: translate(-50%, -50%);
     width: var(--slider-thumb-size);
     height: var(--slider-thumb-size);
-    font-size: 12px;
+    font-family: var(--typography-value-font-family);
+    font-size: var(--typography-value-font-size);
+    font-weight: var(--typography-value-font-weight);
+    line-height: var(--typography-value-line-height);
+    letter-spacing: var(--typography-value-letter-spacing);
     background-color: var(--c-accent);
     border-radius: 50%;
     border: var(--slider-thumb-border) solid var(--c-surface);
     box-shadow: var(--box-shadow-sm);
     cursor: grab;
-    color: var(--c-surface);
-    font-weight: bold;
+    color: var(--text-color-on-accent);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -170,9 +173,12 @@
     border: var(--slider-thumb-border) solid var(--c-surface);
     box-shadow: var(--box-shadow-sm);
     cursor: ns-resize;
-    color: var(--c-surface);
-    font-size: 12px;
-    font-weight: bold;
+    color: var(--text-color-on-accent);
+    font-family: var(--typography-value-font-family);
+    font-size: var(--typography-value-font-size);
+    font-weight: var(--typography-value-font-weight);
+    line-height: var(--typography-value-line-height);
+    letter-spacing: var(--typography-value-letter-spacing);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -218,8 +224,12 @@
 
 /* Harmonic labels (original - kept for backward compatibility) */
 .harmonic-label {
-  font-size: 0.7rem;
-  color: var(--c-text-muted);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  font-weight: var(--typography-caption-font-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  color: var(--text-color-secondary);
   text-align: center;
   height: 16px;
   display: flex;
@@ -233,8 +243,11 @@
   bottom: 2px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-family: var(--typography-label-font-family);
+  font-size: var(--typography-label-font-size);
+  font-weight: var(--typography-label-font-weight);
+  line-height: var(--typography-label-line-height);
+  letter-spacing: var(--typography-label-letter-spacing);
   text-align: center;
   z-index: 3;
   pointer-events: none;

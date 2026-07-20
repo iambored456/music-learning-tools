@@ -153,7 +153,7 @@ class EffectsController {
       const label = document.createElement('label');
       label.className = 'effect-slider-label';
       label.textContent = control.label;
-      label.style.cssText = 'display: block; margin-bottom: 5px; font-weight: bold; color: #333;';
+      label.style.cssText = 'display: block; margin-bottom: 5px;';
       sliderContainer.appendChild(label);
 
       const slider = document.createElement('input');
@@ -169,7 +169,7 @@ class EffectsController {
       valueDisplay.className = 'effect-slider-value';
       const displayValue = control.unit ? `${Math.round(currentValue)}${control.unit}` : Math.round(currentValue);
       valueDisplay.textContent = `${displayValue}`;
-      valueDisplay.style.cssText = 'text-align: center; font-size: 12px; color: #666;';
+      valueDisplay.style.cssText = 'text-align: center;';
       sliderContainer.appendChild(valueDisplay);
 
       this.dials.push({

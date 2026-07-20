@@ -3,7 +3,7 @@
    ========================================================================= */
 
 /* --- General Toolkit Buttons --- */
-.toolkit-button { line-height: 1.2; padding: var(--space-025); }
+.toolkit-button { padding: var(--space-025); }
 
 .toolkit-button--ghost {
     background-color: var(--c-surface);
@@ -27,7 +27,6 @@
 }
 
 .toolkit-icon-button {
-    font-size: var(--font-size-sm);
     inline-size: 100%;
     block-size: 100%;
     max-inline-size: 100%;

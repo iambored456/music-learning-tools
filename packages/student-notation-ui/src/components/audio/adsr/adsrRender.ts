@@ -2,6 +2,7 @@
 import store from '@state/initStore.ts';
 import { hexToRgba, shadeHexColor } from '@utils/colorUtils.ts';
 import { getEffectsCoordinator } from '@services/runtimeGlobals.ts';
+import { applySvgTypography } from '@services/typographyService.ts';
 
 interface Point {
   x: number;
@@ -41,9 +42,8 @@ export function drawTempoGridlines(gridLayer: SVGGElement, { width, height }: Di
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', String(x));
         text.setAttribute('y', String(height - 5)); // Bottom-aligned with 5px padding
-        text.setAttribute('fill', '#d0d0d0'); // Light gray
-        text.setAttribute('font-size', '24');
-        text.setAttribute('font-weight', 'bold');
+        text.style.fill = 'var(--text-color-secondary)';
+        applySvgTypography(text, 'value', { fontSize: 'var(--font-size-600)' });
         text.setAttribute('text-anchor', 'middle');
         text.setAttribute('dominant-baseline', 'auto');
         text.setAttribute('opacity', '0.3');

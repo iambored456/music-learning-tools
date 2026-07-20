@@ -109,8 +109,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-family: var(--typography-notation-label-font-family);
+    font-size: var(--typography-notation-label-font-size);
+    font-weight: var(--typography-notation-label-font-weight);
+    line-height: var(--typography-notation-label-line-height);
+    letter-spacing: var(--typography-notation-label-letter-spacing);
     color: rgba(33, 37, 41, 0.35);
     user-select: none;
     pointer-events: none;
@@ -120,7 +123,7 @@
 }
 
 .clef-wheel-option[data-distance="0"] {
-    font-size: 0.95rem;
+    font-size: var(--font-size-400);
     color: var(--text-strong, #212529);
     opacity: 1;
 }
@@ -179,28 +182,41 @@
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    font-size: 0.7rem;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
+    letter-spacing: var(--typography-caption-letter-spacing);
     width: fit-content;
     min-width: 14ch;
 }
 
 .clef-summary-card h4 {
     margin: 0;
-    font-size: 0.7rem;
-    font-weight: 600;
+    font-family: var(--typography-label-font-family);
+    font-size: var(--typography-label-font-size);
+    font-weight: var(--typography-label-font-weight);
+    line-height: var(--typography-label-line-height);
+    letter-spacing: var(--typography-label-letter-spacing);
 }
 
 .clef-summary-label {
-    font-size: 0.8rem;
-    font-weight: 600;
+    font-family: var(--typography-label-font-family);
+    font-size: var(--typography-label-font-size);
+    font-weight: var(--typography-label-font-weight);
     color: var(--text-strong, #212529);
     min-height: 1.2em;
-    line-height: 1.2;
+    line-height: var(--typography-label-line-height);
+    letter-spacing: var(--typography-label-letter-spacing);
     min-width: 12ch;
 }
 
 .clef-summary-metadata {
-    font-size: 0.65rem;
+    font-family: var(--typography-caption-font-family);
+    font-size: var(--typography-caption-font-size);
+    font-weight: var(--typography-caption-font-weight);
+    line-height: var(--typography-caption-line-height);
+    letter-spacing: var(--typography-caption-letter-spacing);
     color: var(--text-muted, #6c757d);
 }
 
@@ -208,7 +224,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.65rem;
+    font-family: var(--typography-dense-control-font-family);
+    font-size: var(--typography-dense-control-font-size);
+    font-weight: var(--typography-dense-control-font-weight);
+    line-height: var(--typography-dense-control-line-height);
+    letter-spacing: var(--typography-dense-control-letter-spacing);
     color: var(--text-muted, #6c757d);
     margin-top: 4px;
     user-select: none;
@@ -271,7 +291,11 @@
     min-width: 0;
     min-height: 0;
     padding: var(--space-015) var(--space-025);
-    font-size: 0.7rem;
+    font-family: var(--typography-dense-control-font-family);
+    font-size: var(--typography-dense-control-font-size);
+    font-weight: var(--typography-dense-control-font-weight);
+    line-height: var(--typography-dense-control-line-height);
+    letter-spacing: var(--typography-dense-control-letter-spacing);
     white-space: nowrap;
     width: 100%;
     background: var(--c-surface);

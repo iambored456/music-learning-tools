@@ -84,10 +84,10 @@ const TARGETS: CaptureTarget[] = [
     delayMs: 400,
   },
   {
-    id: 'boomwhacker-sketchpad',
+    id: 'simple-notation',
     distDir: 'apps/hub/dist',
-    route: '/boomwhacker-sketchpad/',
-    waitFor: '#boomwhacker-sketchpad-app',
+    route: '/simple-notation/',
+    waitFor: '#simple-notation-app',
     delayMs: 600,
     injectCss: `
 .audio-gate {

@@ -1025,7 +1025,7 @@ Phase 6 introduces no new external dependencies. All features can be implemented
 - [HIGHWAY-API.md](./HIGHWAY-API.md) - Complete API reference
 - [HIGHWAY-INTEGRATION.md](./HIGHWAY-INTEGRATION.md) - Integration guide
 - [Ultrastar Format](https://github.com/UltraStar-Deluxe/USDX/wiki/Song-File-Format)
-- [CLAUDE.md](../../CLAUDE.md) - Build commands
+- [AGENTS.md](../../AGENTS.md) - Repository workflow and build guidance
 
 ---
 

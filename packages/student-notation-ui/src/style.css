@@ -2,6 +2,8 @@
    Main Stylesheet - Imports Only
    ========================================================================== */
 
+@import '@mlt/font-atkinson/index.css';
+
 /* --- Base Styles --- */
 @import url('../style/base/variables.css');
 @import url('../style/base/globals.css');
@@ -22,7 +24,6 @@
 /* --- Print Preview --- */
 @import url('../style/components/printPreview/printPreview.css');
 @import url('../style/components/printPreview/printStyles.css');
-@import url('../style/components/notifications/notification.css');
 
 /* --- Secondary Toolbar Tools --- */
 @import url('../style/components/secondaryToolbarTools/cartesianSlider.css');
@@ -45,12 +46,10 @@
 @import url('../style/components/primaryTools/noteBank.css');
 
 /* --- Buttons --- */
-@import url('../style/components/buttons/navigation/navigationButtons.css');
 @import url('../style/components/buttons/toolbar/toolbarButtons.css');
 @import url('../style/components/buttons/timbre/timbreTabButtons.css');
 @import url('../style/components/buttons/pitch/pitchTabButtons.css');
 @import url('../style/components/buttons/rhythm/rhythmTabButtons.css');
-@import url('../style/components/buttons/controls/controlComponents.css');
 
 /* --- Controls --- */
 @import url('../style/components/controls/sliders.css');

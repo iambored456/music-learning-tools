@@ -1,7 +1,8 @@
 import type { ProjectAudio } from '@mlt/boomwhacker-video-builder-core';
-import { audioBufferToWavBlob } from './audioTransform.js';
 
 const DEFAULT_WAVEFORM_BUCKET_COUNT = 2048;
+const WAV_BITS_PER_SAMPLE = 16;
+const WAV_HEADER_BYTES = 44;
 
 export interface WaveformOverview {
   peaks: number[];
@@ -60,6 +61,54 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes.buffer;
+}
+
+function clampSample(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+function writeAscii(view: DataView, offset: number, text: string): void {
+  for (let index = 0; index < text.length; index += 1) {
+    view.setUint8(offset + index, text.charCodeAt(index));
+  }
+}
+
+export function audioBufferToWavBlob(audioBuffer: AudioBuffer): Blob {
+  const channelCount = Math.max(1, audioBuffer.numberOfChannels);
+  const bytesPerSample = WAV_BITS_PER_SAMPLE / 8;
+  const blockAlign = channelCount * bytesPerSample;
+  const byteRate = audioBuffer.sampleRate * blockAlign;
+  const dataByteLength = audioBuffer.length * blockAlign;
+  const wavBuffer = new ArrayBuffer(WAV_HEADER_BYTES + dataByteLength);
+  const view = new DataView(wavBuffer);
+
+  writeAscii(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataByteLength, true);
+  writeAscii(view, 8, 'WAVE');
+  writeAscii(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, audioBuffer.sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, WAV_BITS_PER_SAMPLE, true);
+  writeAscii(view, 36, 'data');
+  view.setUint32(40, dataByteLength, true);
+
+  let writeOffset = WAV_HEADER_BYTES;
+  for (let frameIndex = 0; frameIndex < audioBuffer.length; frameIndex += 1) {
+    for (let channelIndex = 0; channelIndex < channelCount; channelIndex += 1) {
+      const sample = clampSample(audioBuffer.getChannelData(channelIndex)[frameIndex] ?? 0);
+      const intSample = sample < 0
+        ? Math.round(sample * 0x8000)
+        : Math.round(sample * 0x7fff);
+      view.setInt16(writeOffset, intSample, true);
+      writeOffset += bytesPerSample;
+    }
+  }
+
+  return new Blob([wavBuffer], { type: 'audio/wav' });
 }
 
 function canBrowserPlayAudioBlob(blob: Blob): boolean {

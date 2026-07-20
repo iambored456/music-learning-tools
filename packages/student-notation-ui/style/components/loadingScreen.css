@@ -100,12 +100,13 @@
 
 /* Title */
 .loading-title {
-  font-family: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 2rem;
-  font-weight: 400;
-  color: #ffffff;
+  font-family: var(--typography-display-font-family);
+  font-size: var(--typography-display-font-size);
+  font-weight: var(--typography-display-font-weight);
+  line-height: var(--typography-display-line-height);
+  letter-spacing: var(--typography-display-letter-spacing);
+  color: var(--text-color-inverse);
   margin: 0 0 2.5rem 0;
-  letter-spacing: 0.5px;
   opacity: 0;
   animation: fadeInUp 0.8s ease-out 0.3s forwards;
 }
@@ -231,17 +232,22 @@
 }
 
 .loading-progress-text {
-  font-family: 'Atkinson Hyperlegible Next', monospace;
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 1px;
+  font-family: var(--typography-diagnostic-font-family);
+  font-size: var(--typography-diagnostic-font-size);
+  font-weight: var(--typography-diagnostic-font-weight);
+  line-height: var(--typography-diagnostic-line-height);
+  letter-spacing: var(--letter-spacing-status);
+  color: color-mix(in srgb, var(--text-color-inverse) 70%, transparent);
 }
 
 /* Status Text */
 .loading-status {
-  font-family: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--typography-small-body-font-family);
+  font-size: var(--typography-small-body-font-size);
+  font-weight: var(--typography-small-body-font-weight);
+  line-height: var(--typography-small-body-line-height);
+  letter-spacing: var(--typography-small-body-letter-spacing);
+  color: color-mix(in srgb, var(--text-color-inverse) 60%, transparent);
   opacity: 0;
   animation: fadeInUp 0.8s ease-out 0.9s forwards;
   min-height: 1.5rem;
@@ -250,13 +256,38 @@
 
 /* Error State */
 #app-loading-screen.error .loading-status {
-  color: #ff4444;
-  font-weight: 500;
+  color: var(--text-color-danger);
+  font-weight: var(--font-weight-bold);
 }
 
 #app-loading-screen.error .loading-progress-fill {
   background: linear-gradient(90deg, #ff4444 0%, #cc0000 100%);
   box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+}
+
+.initialization-error {
+  font-family: var(--typography-body-font-family);
+  font-size: var(--typography-body-font-size);
+  font-weight: var(--typography-body-font-weight);
+  line-height: var(--typography-body-line-height);
+  letter-spacing: var(--typography-body-letter-spacing);
+}
+
+.initialization-error h3 {
+  font-family: var(--typography-dialog-title-font-family);
+  font-size: var(--typography-dialog-title-font-size);
+  font-weight: var(--typography-dialog-title-font-weight);
+  line-height: var(--typography-dialog-title-line-height);
+  letter-spacing: var(--typography-dialog-title-letter-spacing);
+}
+
+.initialization-error pre {
+  font-family: var(--typography-diagnostic-font-family);
+  font-size: var(--typography-diagnostic-font-size);
+  font-weight: var(--typography-diagnostic-font-weight);
+  line-height: var(--typography-diagnostic-line-height);
+  letter-spacing: var(--typography-diagnostic-letter-spacing);
+  white-space: pre-wrap;
 }
 
 /* Responsive Design */
@@ -271,7 +302,7 @@
   }
 
   .loading-title {
-    font-size: 1.5rem;
+    font-size: var(--font-size-600);
   }
 }
 

@@ -1,6 +1,6 @@
-# SYSTEM_INTENT.md
+# Student Notation System Intent
 
-This document describes the intended behavior and architecture of Student Notation, a web-based music notation and playback application. It is written for AI assistants and serves as a contract: if the code behaves differently from this document, the document is wrong and should be updated.
+This document describes the intended behavior and architecture of Student Notation, a web-based music notation and playback application. It is descriptive package documentation; repository-wide coding-agent instructions live in the root `AGENTS.md`. If the code behaves differently from this document, verify the current behavior and update this document.
 
 ---
 
@@ -559,38 +559,6 @@ This section is descriptive (not prescriptive): it documents the *current* refac
 - Finish removing legacy audio/gain/clipping logic still present in `src/services/synthEngine.ts` once all behavior is covered by extracted modules.
 
 ### Tests (Current)
-- Unit tests are run by Vitest via `npm run test:run`.
-- Current test files include `src/utils/pitchViewport.test.ts`, `src/state/actions/noteActions.test.ts`, and `src/components/canvas/PitchGrid/renderers/rendererUtils.test.ts`.
+- Vitest is available in this workspace, but the package currently has no `test` script. Run only a relevant focused test through the package when needed.
+- Current test files include `src/utils/pitchViewport.test.ts`, `src/state/noteActions.test.ts`, and `src/components/canvas/PitchGrid/renderers/rendererUtils.test.ts`.
 
-## 11. AI Change Contract
-
-### When modifying this codebase, AI assistants MUST:
-
-1. **Preserve coordinate system boundaries**: Never mix canvas-space and time-space column indices without explicit conversion via columnMapService or pixelMapService.
-2. **Use globalRow for persistence**: New code storing pitch positions must set both `row` and `globalRow` to the same gamut index.
-3. **Go through services**: Use `pixelMapService` for X-coordinate conversion, `columnMapService` for column space conversion, `pitchGridViewportService.getViewportInfo()` for pitch-viewport mapping.
-4. **Emit appropriate events**: After state mutations, emit the corresponding event (`notesChanged`, `layoutConfigChanged`, `rhythmStructureChanged`, etc.).
-5. **Maintain invariants**: Verify changes don't violate Section 5 invariants before considering work complete.
-6. **Record state for undoable actions**: User-initiated changes should call `store.recordState()` after the mutation.
-7. **Respect audio context rules**: Never auto-play audio without user gesture. Use `window.initAudio()` pattern.
-8. **Prefer narrow modules over god objects**: New code should avoid adding dependencies to `layoutService.ts` and `pitchGridInteractor.ts`; extend/consume `pitchGridViewportService.ts`, tool interactors, and coordinators instead.
-
-### When modifying this codebase, AI assistants MUST NOT:
-
-1. **Slice fullRowData**: The pitch gamut must remain complete. Use `pitchRange` to define the viewport, not data subsetting.
-2. **Bypass the store**: Direct `state.placedNotes.push()` without going through store actions will break reactivity and persistence.
-3. **Hardcode pixel values**: Use `cellWidth`, `cellHeight`, `halfUnit` for calculations. Use constants from `src/core/constants.ts`.
-4. **Assume column index space**: Always verify which coordinate space (visual/canvas/time) a column index is in before performing arithmetic.
-5. **Modify playhead during playback**: Let `animatePlayhead()` and Tone.Transport manage playhead position.
-6. **Add duplicate event listeners**: Initialization must be idempotent. Check for existing listeners before adding.
-
-### Before submitting changes:
-
-1. Verify the app builds without type errors (`npm run typecheck`)
-2. Verify linting passes (`npm run lint`)
-3. Test note placement (circle and oval) and tail dragging
-4. Test playback start/stop and verify audio plays
-5. Test zoom in/out and vertical scroll
-6. Verify undo/redo works for the change
-7. Check console for errors during normal operation
-8. If modifying coordinates: verify notes render at correct positions AND play back at correct times

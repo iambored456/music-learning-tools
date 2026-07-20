@@ -37,28 +37,6 @@ importers:
         specifier: ^6.1.1
         version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
 
-  apps/boomwhacker-sketchpad:
-    dependencies:
-      '@mlt/boomwhacker-sketchpad-ui':
-        specifier: workspace:*
-        version: link:../../packages/boomwhacker-sketchpad-ui
-      svelte:
-        specifier: ^5.46.1
-        version: 5.46.1
-    devDependencies:
-      '@sveltejs/vite-plugin-svelte':
-        specifier: ^5.0.3
-        version: 5.1.1(svelte@5.46.1)(vite@6.4.1(@types/node@22.19.3)(tsx@4.21.0))
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.19.3
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^6.1.1
-        version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
-
   apps/boomwhacker-video-builder:
     dependencies:
       '@mlt/boomwhacker-video-builder-ui':
@@ -121,9 +99,6 @@ importers:
       '@mlt/amateur-music-theory-ui':
         specifier: workspace:*
         version: link:../../packages/amateur-music-theory-ui
-      '@mlt/boomwhacker-sketchpad-ui':
-        specifier: workspace:*
-        version: link:../../packages/boomwhacker-sketchpad-ui
       '@mlt/boomwhacker-video-builder-ui':
         specifier: workspace:*
         version: link:../../packages/boomwhacker-video-builder-ui
@@ -136,6 +111,9 @@ importers:
       '@mlt/pitch-utils':
         specifier: workspace:*
         version: link:../../packages/pitch-utils
+      '@mlt/simple-notation-ui':
+        specifier: workspace:*
+        version: link:../../packages/simple-notation-ui
       '@mlt/singing-trainer-ui':
         specifier: workspace:*
         version: link:../../packages/singing-trainer-ui
@@ -176,6 +154,28 @@ importers:
       vite-tsconfig-paths:
         specifier: ^6.0.3
         version: 6.0.3(typescript@5.9.3)(vite@7.3.0(@types/node@24.10.4)(tsx@4.21.0))
+
+  apps/simple-notation:
+    dependencies:
+      '@mlt/simple-notation-ui':
+        specifier: workspace:*
+        version: link:../../packages/simple-notation-ui
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^5.0.3
+        version: 5.1.1(svelte@5.46.1)(vite@6.4.1(@types/node@22.19.3)(tsx@4.21.0))
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.1.1
+        version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
 
   apps/singing-trainer:
     dependencies:
@@ -262,55 +262,11 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  packages/boomwhacker-sketchpad-core:
-    dependencies:
-      '@mlt/audio-samples':
-        specifier: workspace:*
-        version: link:../audio-samples
-      tone:
-        specifier: ^15.1.22
-        version: 15.1.22
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  packages/boomwhacker-sketchpad-ui:
-    dependencies:
-      '@mlt/audio-samples':
-        specifier: workspace:*
-        version: link:../audio-samples
-      '@mlt/boomwhacker-sketchpad-core':
-        specifier: workspace:*
-        version: link:../boomwhacker-sketchpad-core
-      '@mlt/font-atkinson':
-        specifier: workspace:*
-        version: link:../font-atkinson
-      '@mlt/notation-glyphs':
-        specifier: workspace:*
-        version: link:../notation-glyphs
-      '@mlt/tempo-controls-ui':
-        specifier: workspace:*
-        version: link:../tempo-controls-ui
-    devDependencies:
-      svelte:
-        specifier: ^5.46.1
-        version: 5.46.1
-      svelte-check:
-        specifier: ^4.0.0
-        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^6.1.1
-        version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
-
   packages/boomwhacker-video-builder-core:
     dependencies:
-      '@mlt/boomwhacker-sketchpad-core':
+      '@mlt/simple-notation-core':
         specifier: workspace:*
-        version: link:../boomwhacker-sketchpad-core
+        version: link:../simple-notation-core
       '@mlt/types':
         specifier: workspace:*
         version: link:../types
@@ -327,12 +283,12 @@ importers:
       '@mlt/font-atkinson':
         specifier: workspace:*
         version: link:../font-atkinson
-      '@mlt/tempogram-toolbox-core':
+      '@mlt/notation-glyphs':
         specifier: workspace:*
-        version: link:../tempogram-toolbox-core
-      signalsmith-stretch:
-        specifier: ^1.3.2
-        version: 1.3.2
+        version: link:../notation-glyphs
+      '@mlt/tempo-controls-ui':
+        specifier: workspace:*
+        version: link:../tempo-controls-ui
     devDependencies:
       svelte:
         specifier: ^5.46.1
@@ -439,22 +395,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/note-highway:
-    dependencies:
-      '@mlt/pitch-data':
-        specifier: workspace:*
-        version: link:../pitch-data
-      '@mlt/rhythm-core':
-        specifier: workspace:*
-        version: link:../rhythm-core
-      '@mlt/types':
-        specifier: workspace:*
-        version: link:../types
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-
   packages/overdub-engine:
     devDependencies:
       typescript:
@@ -497,18 +437,49 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  packages/rhythm-core:
+  packages/simple-notation-core:
     dependencies:
-      '@mlt/handoff':
+      '@mlt/audio-samples':
         specifier: workspace:*
-        version: link:../handoff
-      '@mlt/types':
-        specifier: workspace:*
-        version: link:../types
+        version: link:../audio-samples
+      tone:
+        specifier: ^15.1.22
+        version: 15.1.22
     devDependencies:
       typescript:
-        specifier: ^5.6.3
+        specifier: ^5.9.3
         version: 5.9.3
+
+  packages/simple-notation-ui:
+    dependencies:
+      '@mlt/audio-samples':
+        specifier: workspace:*
+        version: link:../audio-samples
+      '@mlt/font-atkinson':
+        specifier: workspace:*
+        version: link:../font-atkinson
+      '@mlt/notation-glyphs':
+        specifier: workspace:*
+        version: link:../notation-glyphs
+      '@mlt/simple-notation-core':
+        specifier: workspace:*
+        version: link:../simple-notation-core
+      '@mlt/tempo-controls-ui':
+        specifier: workspace:*
+        version: link:../tempo-controls-ui
+    devDependencies:
+      svelte:
+        specifier: ^5.46.1
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.0.0
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.1.1
+        version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
   packages/singing-trainer-core:
     dependencies:
@@ -635,6 +606,9 @@ importers:
       '@mlt/audio-samples':
         specifier: workspace:*
         version: link:../audio-samples
+      '@mlt/font-atkinson':
+        specifier: workspace:*
+        version: link:../font-atkinson
       '@mlt/handoff':
         specifier: workspace:*
         version: link:../handoff
@@ -1631,9 +1605,6 @@ packages:
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
-
-  signalsmith-stretch@1.3.2:
-    resolution: {integrity: sha512-tJqRbwPCoWLSHXwO29UQ75u72IwPsHns3RG+TKzuOAp7OduJiJMzEtz32JEFbPFQcTR7aiKCIVc+/Kzw8bMZUw==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -2715,8 +2686,6 @@ snapshots:
       mri: 1.2.0
 
   siginfo@2.0.0: {}
-
-  signalsmith-stretch@1.3.2: {}
 
   source-map-js@1.2.1: {}
 
