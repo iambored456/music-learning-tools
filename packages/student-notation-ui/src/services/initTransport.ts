@@ -28,6 +28,10 @@ import { timeToCanvas } from '@services/columnMapService.ts';
 import { buildSixteenthStampShapeNoteId, buildTripletStampShapeNoteId } from '@utils/stampPlaybackNoteId.ts';
 import { getSharedDrumManager } from '@services/transport/drumManager.ts';
 import { invokeInitAudioHandler } from '@services/runtimeGlobals.ts';
+import {
+  clearAdsrPlayheads,
+  triggerAdsrPlayhead
+} from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 
 logger.moduleLoaded('EngineTransport', 'general');
 
@@ -224,15 +228,10 @@ const TransportService = {
           DrumPlayheadRenderer.triggerNotePop(columnIndex, drumTrack);
         },
         triggerAdsrVisual: (noteId, phase, color, adsr) => {
-          // Trigger ADSR visualization
-          if (window.adsrComponent) {
-            window.adsrComponent.triggerPlayheadVisual(noteId, phase, color, adsr);
-          }
+          triggerAdsrPlayhead(noteId, phase, color, adsr);
         },
         clearAdsrVisuals: () => {
-          if (window.adsrComponent) {
-            window.adsrComponent.clearAllPlayheadVisuals();
-          }
+          clearAdsrPlayheads();
         },
         getPlayheadCanvasWidth: () => {
           const canvas = getPlayheadCanvas();

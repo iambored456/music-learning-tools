@@ -3,9 +3,51 @@ import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import { drawTonicShape } from '../../renderers/notes.ts';
+import { drawHorizontalLines } from '../../renderers/gridLines.ts';
+import { getColumnX, getVisibleRowRange } from '../../renderers/rendererUtils.ts';
+import { getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
+import tonicInsertionPreviewService from './tonicInsertionPreviewService.ts';
 import type { CanvasSpaceColumn } from '@mlt/types';
 
 type MeasureSnapPoint = { drawColumn: number; preMacrobeatIndex: number };
+
+const TONIC_COLUMN_COUNT = 2;
+
+function drawInsertedTonicColumn(
+  hoverCtx: CanvasRenderingContext2D,
+  insertionX: number,
+  insertionWidth: number
+): void {
+  const previewHeight = getLogicalCanvasHeight(hoverCtx.canvas);
+  const viewportInfo = pitchGridViewportService.getViewportInfo();
+  const { startRow, endRow } = getVisibleRowRange();
+  const previewRange = { start: insertionX, end: insertionX + insertionWidth };
+  const renderOptions = {
+    ...store.state,
+    viewportHeight: viewportInfo.containerHeight,
+    zoomLevel: viewportInfo.zoomLevel,
+    previewTonicRanges: [previewRange]
+  };
+
+  hoverCtx.save();
+  hoverCtx.beginPath();
+  hoverCtx.rect(insertionX, 0, insertionWidth, previewHeight);
+  hoverCtx.clip();
+  drawHorizontalLines(hoverCtx, renderOptions, startRow, endRow);
+  hoverCtx.restore();
+
+  hoverCtx.save();
+  hoverCtx.strokeStyle = '#adb5bd';
+  hoverCtx.lineWidth = 2;
+  hoverCtx.setLineDash([]);
+  [insertionX, insertionX + insertionWidth].forEach(x => {
+    hoverCtx.beginPath();
+    hoverCtx.moveTo(x, 0);
+    hoverCtx.lineTo(x, previewHeight);
+    hoverCtx.stroke();
+  });
+  hoverCtx.restore();
+}
 
 function findMeasureSnapPoint(columnIndex: number): MeasureSnapPoint | null {
   const { macrobeatGroupings, macrobeatBoundaryStyles, columnWidths } = store.state;
@@ -64,16 +106,28 @@ function getPitchClass(note: string): string {
 export class PitchGridTonicizationToolInteractor {
   private lastHoveredTonicPoint: MeasureSnapPoint | null = null;
   private lastHoveredOctaveRows: number[] = [];
+  private lastHoverContext: CanvasRenderingContext2D | null = null;
 
   resetHoverState(): void {
+    if (this.lastHoverContext) {
+      this.lastHoverContext.clearRect(
+        0,
+        0,
+        getLogicalCanvasWidth(this.lastHoverContext.canvas),
+        getLogicalCanvasHeight(this.lastHoverContext.canvas)
+      );
+    }
     this.lastHoveredTonicPoint = null;
     this.lastHoveredOctaveRows = [];
+    this.lastHoverContext = null;
+    tonicInsertionPreviewService.clearAlignedGridPreviews();
   }
 
   handleMouseMove(opts: {
     colIndex: number;
     rowIndex: number;
     hoverCtx: CanvasRenderingContext2D;
+    sourceCanvas: HTMLCanvasElement;
     getPitchForRow: (rowIndex: number) => string | null;
   }): boolean {
     if (store.state.selectedTool !== 'tonicization') {
@@ -111,6 +165,16 @@ export class PitchGridTonicizationToolInteractor {
 
     this.lastHoveredTonicPoint = snapPoint;
     this.lastHoveredOctaveRows = octaveRows;
+    this.lastHoverContext = opts.hoverCtx;
+
+    const fullOptions = { ...store.state, zoomLevel: pitchGridViewportService.getViewportInfo().zoomLevel };
+    const insertionX = getColumnX(snapPoint.drawColumn, fullOptions);
+    const insertionEndX = getColumnX(snapPoint.drawColumn + TONIC_COLUMN_COUNT, fullOptions);
+    const insertionWidth = Math.max(0, insertionEndX - insertionX);
+
+    tonicInsertionPreviewService.renderPitchSnapshot(opts.hoverCtx, opts.sourceCanvas, insertionX, insertionWidth);
+    drawInsertedTonicColumn(opts.hoverCtx, insertionX, insertionWidth);
+    tonicInsertionPreviewService.renderAlignedGridPreviews(insertionX, insertionWidth);
 
     // Draw ghost preview only for tonics in the visible range
     const visibleOctaveRows = octaveRows.filter(rowIdx =>
@@ -118,7 +182,6 @@ export class PitchGridTonicizationToolInteractor {
     );
 
     opts.hoverCtx.globalAlpha = 0.5;
-    const fullOptions = { ...store.state, zoomLevel: pitchGridViewportService.getViewportInfo().zoomLevel };
     visibleOctaveRows.forEach(rowIdx => {
       const ghostTonic = {
         row: rowIdx,

@@ -46,7 +46,6 @@ type PhaseState = 0 | 90 | 180 | 270;
 
 interface BinColumnRefs {
   column: HTMLDivElement;
-  label: HTMLDivElement;
   sliderTrack: HTMLDivElement;
   sliderFill: HTMLDivElement;
   phaseBtn: HTMLButtonElement;
@@ -210,12 +209,12 @@ function updateSliderVisuals() {
   const color = currentColor;
   binColumns.forEach((column, i) => {
     const fill = column.sliderTrack.querySelector<HTMLDivElement>('.slider-fill');
-    const label = column.sliderTrack.querySelector<HTMLDivElement>('.harmonic-label-internal');
-    if (!fill || !label) {
+    if (!fill) {
       return;
     }
 
     const val = coeffs[i] ?? 0; // No threshold snapping - use raw value
+    const isZero = val <= 0;
 
     fill.style.height = `${val * 100}%`;
 
@@ -233,16 +232,10 @@ function updateSliderVisuals() {
       existingCanvas.remove();
     }
 
-    // Update label color based on bin level
-    if (val > 0.1) {
-      // High bin level - white text for contrast against colored fill
-      label.style.color = 'rgba(255, 255, 255, 0.35)';
-      label.style.textShadow = '0 0 2px rgba(0,0,0,0.3)';
-    } else {
-      // Low/zero bin level - dark text for visibility on light background
-      label.style.color = 'rgba(51, 51, 51, 0.5)';
-      label.style.textShadow = '0 0 1px rgba(255,255,255,0.3)';
-    }
+    column.phaseBtn.disabled = isZero;
+    column.phaseBtn.title = isZero
+      ? `Phase unavailable while harmonic ${i + 1} is zero`
+      : `Change harmonic ${i + 1} phase`;
   });
   drawFilterOverlay();
 }
@@ -514,18 +507,14 @@ export function initOvertoneBins() {
     sliderFill.className = 'slider-fill';
     sliderTrack.appendChild(sliderFill);
 
-    // Label inside the bin at the bottom
-    const label = document.createElement('div');
-    label.className = 'harmonic-label-internal';
-    label.textContent = `${i + 1}`;
-    sliderTrack.appendChild(label);
-
     column.appendChild(sliderTrack);
 
     // Phase button
     const phaseBtn = document.createElement('button');
     phaseBtn.className = 'phase-button';
     phaseBtn.innerHTML = phaseIconPaths[0];
+    phaseBtn.disabled = true;
+    phaseBtn.setAttribute('aria-label', `Harmonic ${i + 1} phase`);
     phaseBtn.dataset['binIndex'] = String(i); // Store bin index for snap-to-zero
 
     // Snap-to-zero when dragging onto phase button
@@ -637,7 +626,6 @@ export function initOvertoneBins() {
     // Store references
     binColumns.push({
       column,
-      label,
       sliderTrack,
       sliderFill,
       phaseBtn
@@ -725,7 +713,10 @@ export function initOvertoneBins() {
 
   const verticalBlendThumb = document.createElement('div');
   verticalBlendThumb.id = 'vertical-blend-thumb';
-  verticalBlendThumb.textContent = 'M';
+  const verticalBlendLabel = document.createElement('span');
+  verticalBlendLabel.className = 'slider-thumb-letter';
+  verticalBlendLabel.textContent = 'M';
+  verticalBlendThumb.appendChild(verticalBlendLabel);
 
   verticalBlendTrack.appendChild(verticalBlendThumb);
   verticalBlendWrapper.appendChild(verticalBlendTrack);

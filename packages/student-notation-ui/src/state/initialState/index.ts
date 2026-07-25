@@ -71,7 +71,7 @@ export const initialState: AppState = {
   // --- UI & View State ---
   selectedTool: 'note',
   previousTool: 'note',
-  selectedToolTonicNumber: 1,
+  selectedToolTonicNumber: 0, // Sentinel: no tonic mode selected yet (valid modes are 1-7).
   selectedNote: { shape: 'circle', color: '#4a90e2' },
   deviceProfile: {
     isMobile: false,

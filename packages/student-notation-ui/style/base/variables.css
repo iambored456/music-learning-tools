@@ -78,6 +78,7 @@
 
   /* Slider dimensions */
   --slider-thumb-size: 20px; /* Base thumb diameter */
+  --slider-thumb-radius: calc(var(--slider-thumb-size) / 2);
   --slider-thumb-border: 2px; /* Thumb border width */
   --slider-thumb-total: calc(var(--slider-thumb-size) + (var(--slider-thumb-border) * 2)); /* Total space needed for thumb */
   --slider-track-thickness: calc(var(--slider-thumb-size) / 2); /* Track/rail thickness - half of thumb size */

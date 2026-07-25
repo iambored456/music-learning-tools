@@ -12,6 +12,15 @@
   export let isPlaying = true;
   export let volume = 72;
   export let actionSkipSignal = 0;
+  export let phase: 'musical-intro' | 'musical-outro' | 'placement' | 'comparison' = 'placement';
+  export let onMusicalIntroComplete: (() => void) | undefined = undefined;
+  export let onMusicalOutroComplete: (() => void) | undefined = undefined;
+  export let onPlacementComplete: (() => void) | undefined = undefined;
+  export let onComparisonComplete: (() => void) | undefined = undefined;
+  const isMusicalScorePhase = phase === 'musical-intro' || phase === 'musical-outro';
+  const isMusicalOutro = phase === 'musical-outro';
+  const startsWithComparison =
+    phase === 'comparison' || section.id === 'differentiate-pitches';
 
   type PitchRegion = 'upper' | 'lower';
   type PracticeTask = {
@@ -22,18 +31,8 @@
     narration: string;
     target: PitchRegion;
     tones: number[];
-    snapTone: string;
     reinforcement: string;
     replayLabel: string;
-  };
-
-  type LegendCell = {
-    id: string;
-    rowIndex: number;
-    column: 'A' | 'B';
-    hex: string;
-    textColor: string;
-    anchorLabel: string | null;
   };
 
   type ScoreNoteShape = 'circle' | 'oval' | 'diamond';
@@ -135,20 +134,31 @@
 
   type NoteDragOrigin = 'avatar' | 'grid';
 
-  function getContrastColor(hex: string): string {
-    const normalized = hex.replace('#', '');
-    if (normalized.length !== 6) return '#ffffff';
-    const red = Number.parseInt(normalized.slice(0, 2), 16);
-    const green = Number.parseInt(normalized.slice(2, 4), 16);
-    const blue = Number.parseInt(normalized.slice(4, 6), 16);
-    const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
-    return luminance > 164 ? '#1b221e' : '#ffffff';
-  }
+  type ComparisonMode = 'higher' | 'lower';
 
-  function getLegendAnchorLabel(toneNote: string): string | null {
-    if (toneNote === 'A0') return toneNote;
-    return /^C[1-8]$/.test(toneNote) ? toneNote : null;
-  }
+  type ComparisonPair = {
+    id: string;
+    mode: ComparisonMode;
+    toneNotes: readonly [string, string];
+    question: string;
+    underlinedWord: 'higher' | 'lower';
+  };
+
+  type SettledComparisonNote = {
+    id: string;
+    toneNote: string;
+    rowIndex: number;
+    leftPercent: number;
+    color: string;
+  };
+
+  type ComparisonFlightNote = SettledComparisonNote & {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    landed: boolean;
+  };
 
   const pitchRows = fullRowData;
   const rowCount = pitchRows.length;
@@ -179,24 +189,24 @@
   ];
   const sixteenthStampById = new Map(sixteenthStamps.map((stamp) => [stamp.id, stamp]));
   const rowIndexByTone = new Map(pitchRows.map((row, index) => [row.toneNote, index]));
-  const introScoreViewportStartRow = rowIndexByTone.get('C6') ?? 0;
-  const introScoreViewportEndRow = rowIndexByTone.get('G3') ?? rowCount - 1;
+  const introScoreViewportStartRow = rowIndexByTone.get('A5') ?? 0;
+  const introScoreViewportEndRow = rowIndexByTone.get('A3') ?? rowCount - 1;
+  const comparisonViewportStartRow = rowIndexByTone.get('D6') ?? 0;
+  const comparisonViewportEndRow = rowIndexByTone.get('G3') ?? rowCount - 1;
+  const introScoreViewportRowCount = Math.max(
+    1,
+    introScoreViewportEndRow - introScoreViewportStartRow + 1
+  );
   const scoreStampDiamondViewBox = '0 0 25 100';
   const scoreStampDiamondPath = 'M 12.5 2 L 2 12.5 L 2 87.5 L 12.5 98 L 23 87.5 L 23 12.5 Z';
-  const legendCells: LegendCell[] = pitchRows.map((row, rowIndex) => ({
-    id: `legend-${row.toneNote}`,
-    rowIndex,
-    column: row.column,
-    hex: row.hex,
-    textColor: getContrastColor(row.hex),
-    anchorLabel: getLegendAnchorLabel(row.toneNote),
-  }));
   const scoreTempo = Number.isFinite(lessonScore.tempo) && lessonScore.tempo > 0
     ? lessonScore.tempo
     : 66;
   const scoreQuarterMs = 60000 / scoreTempo;
   const scoreColumnDurationMs = scoreQuarterMs / 2;
   const scoreSlotDurationMs = scoreQuarterMs / 4;
+  const scorePlaybackRate = isMusicalOutro ? 1.2 : 1;
+  const scorePlaybackSlotDurationMs = scoreSlotDurationMs / scorePlaybackRate;
   const scoreTotalColumns = getScoreTotalColumns(lessonScore);
   const scoreTotalSlots = scoreTotalColumns * 2;
   const scoreBoundaryStylesByColumn = getScoreBoundaryStylesByColumn(lessonScore);
@@ -205,6 +215,58 @@
   const lowIntroToneNotes = ['C3', 'A2', 'F2'];
   const highIntroToneNotes = ['C6', 'E6', 'G6'];
   const dragPreviewThrottleMs = 40;
+  const higherComparisonQuestion = 'Which note has the higher pitch?';
+  const comparisonPairs: ComparisonPair[] = [
+    {
+      id: 'comparison-1',
+      mode: 'higher',
+      toneNotes: ['B5', 'E4'],
+      question: higherComparisonQuestion,
+      underlinedWord: 'higher',
+    },
+    {
+      id: 'comparison-2',
+      mode: 'lower',
+      toneNotes: ['E5', 'C6'],
+      question: 'Which note has the lower pitch?',
+      underlinedWord: 'lower',
+    },
+    {
+      id: 'comparison-3',
+      mode: 'higher',
+      toneNotes: ['B3', 'E5'],
+      question: 'Which is higher?',
+      underlinedWord: 'higher',
+    },
+    {
+      id: 'comparison-4',
+      mode: 'lower',
+      toneNotes: ['A4', 'A3'],
+      question: 'Which is lower?',
+      underlinedWord: 'lower',
+    },
+    {
+      id: 'comparison-5',
+      mode: 'higher',
+      toneNotes: ['C6', 'A3'],
+      question: 'Which is higher?',
+      underlinedWord: 'higher',
+    },
+    {
+      id: 'comparison-6',
+      mode: 'lower',
+      toneNotes: ['F4', 'D5'],
+      question: 'Which is lower?',
+      underlinedWord: 'lower',
+    },
+    {
+      id: 'comparison-7',
+      mode: 'higher',
+      toneNotes: ['A3', 'D6'],
+      question: 'Which is higher?',
+      underlinedWord: 'higher',
+    },
+  ];
 
   function clampRowIndex(rowIndex: number): number {
     return Math.max(0, Math.min(rowCount - 1, Math.round(rowIndex)));
@@ -328,7 +390,6 @@
       narration: 'Drag the note into the lower part of the pitch space.',
       target: 'lower',
       tones: [],
-      snapTone: 'A3',
       reinforcement: 'Good. Lower sounds belong lower in the pitch space.',
       replayLabel: 'Repeat prompt',
     },
@@ -340,69 +401,8 @@
       narration: 'Now drag the note into the higher part of the pitch space.',
       target: 'upper',
       tones: [],
-      snapTone: 'A5',
       reinforcement: 'Good. Higher sounds belong higher in the pitch space.',
       replayLabel: 'Repeat prompt',
-    },
-    {
-      id: 'contrast-1',
-      badge: 'Prompt 3 - 1 of 4',
-      title: 'Listen, then place the note',
-      prompt: 'Listen, then place the note where it belongs.',
-      narration: 'Listen, then place the note where it belongs.',
-      target: 'lower',
-      tones: [196],
-      snapTone: 'G3',
-      reinforcement: 'Yes. That sound belongs in the lower region.',
-      replayLabel: 'Replay contrast tone',
-    },
-    {
-      id: 'contrast-2',
-      badge: 'Prompt 3 - 2 of 4',
-      title: 'Listen, then place the note',
-      prompt: 'Listen, then place the note where it belongs.',
-      narration: 'Listen, then place the note where it belongs.',
-      target: 'upper',
-      tones: [783.99],
-      snapTone: 'G5',
-      reinforcement: 'Yes. That sound belongs in the higher region.',
-      replayLabel: 'Replay contrast tone',
-    },
-    {
-      id: 'contrast-3',
-      badge: 'Prompt 3 - 3 of 4',
-      title: 'Listen, then place the note',
-      prompt: 'Listen, then place the note where it belongs.',
-      narration: 'Listen, then place the note where it belongs.',
-      target: 'lower',
-      tones: [246.94],
-      snapTone: 'B3',
-      reinforcement: 'Yes. Lower sounds still belong lower.',
-      replayLabel: 'Replay contrast tone',
-    },
-    {
-      id: 'contrast-4',
-      badge: 'Prompt 3 - 4 of 4',
-      title: 'Listen, then place the note',
-      prompt: 'Listen, then place the note where it belongs.',
-      narration: 'Listen, then place the note where it belongs.',
-      target: 'upper',
-      tones: [1046.5],
-      snapTone: 'C6',
-      reinforcement: 'Yes. Higher sounds still belong higher.',
-      replayLabel: 'Replay contrast tone',
-    },
-    {
-      id: 'comparison',
-      badge: 'Prompt 4',
-      title: 'Match the higher sound',
-      prompt: 'Drag the note to match the higher sound.',
-      narration: 'Drag the note to match the higher sound.',
-      target: 'upper',
-      tones: [293.66, 880],
-      snapTone: 'A5',
-      reinforcement: 'Good. The second sound belongs higher in the pitch space.',
-      replayLabel: 'Replay comparison',
     },
   ];
 
@@ -442,7 +442,7 @@
   let avatarReady = false;
   let introStarted = false;
   let scorePreludeRunning = false;
-  let scorePlaybackVisible = true;
+  let scorePlaybackVisible = isMusicalScorePhase;
   let skipScorePreludeRequested = false;
   let scoreCursorColumn = 0;
   let scoreColumnWidthPx = pitchGridCellWidth;
@@ -461,10 +461,26 @@
   let dragPreviewRequestId = 0;
   let introRunning = false;
   let taskIndex = -1;
+  let comparisonOptionsEl: HTMLDivElement | null = null;
+  let comparisonStarted = false;
+  let comparisonIndex = -1;
+  let comparisonQuestionVisible = false;
+  let comparisonAnswerLocked = true;
+  let activeComparisonOptionIndex: number | null = null;
+  let activeSettledComparisonNoteId: string | null = null;
+  let settledComparisonNotes: SettledComparisonNote[] = [];
+  let comparisonFlightNotes: ComparisonFlightNote[] = [];
   let narrationText = '';
   let promptBadge = section.code;
   let promptTitle = section.label;
-  let promptStatus = 'This space shows pitch from low to high.';
+  let promptStatus =
+    isMusicalScorePhase
+      ? isMusicalOutro
+        ? 'Listen to the closing musical example.'
+        : 'Listen first. The red cursor will play the score across the pitch grid.'
+      : startsWithComparison
+        ? higherComparisonQuestion
+        : 'This space shows pitch from low to high.';
   let complete = false;
   let previousIsPlaying = isPlaying;
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -485,34 +501,58 @@
   let actionSkipEpoch = 0;
   const actionSkipResolvers = new Set<() => void>();
   const defaultLessonWaveform: OscillatorType = 'triangle';
+  const dragPreviewWaveform: OscillatorType = 'sawtooth';
   let visiblePitchGridStartRow = 0;
   let visiblePitchGridEndRow = rowCount - 1;
   let visiblePitchGridRowCount = rowCount;
+  let pitchGridVerticalColumnSize = pitchGridFallbackColumnSize;
+  let pitchGridContentWidth = 0;
 
-  $: visiblePitchGridStartRow = scorePlaybackVisible ? introScoreViewportStartRow : 0;
-  $: visiblePitchGridEndRow = scorePlaybackVisible ? introScoreViewportEndRow : rowCount - 1;
+  $: visiblePitchGridStartRow =
+    isMusicalScorePhase
+      ? introScoreViewportStartRow
+      : startsWithComparison
+        ? comparisonViewportStartRow
+        : 0;
+  $: visiblePitchGridEndRow =
+    isMusicalScorePhase
+      ? introScoreViewportEndRow
+      : startsWithComparison
+        ? comparisonViewportEndRow
+        : rowCount - 1;
   $: visiblePitchGridRowCount = Math.max(1, visiblePitchGridEndRow - visiblePitchGridStartRow + 1);
   $: pitchGridLayoutColumnSize = pitchGridFrameWidth > 0 && pitchGridFrameHeight > 0
     ? Math.max(
         1,
         Math.min(
-          pitchGridFrameHeight / (visiblePitchGridRowCount + 1),
+          pitchGridFrameHeight / (introScoreViewportRowCount + 1),
           pitchGridFrameWidth / (scoreTotalColumns + pitchGridLegendWidthUnits)
         )
       )
     : pitchGridFallbackColumnSize;
+  $: pitchGridVerticalColumnSize = pitchGridFrameHeight > 0
+    ? Math.max(
+        1,
+        Math.min(
+          pitchGridLayoutColumnSize,
+          pitchGridFrameHeight / (visiblePitchGridRowCount + 1)
+        )
+      )
+    : pitchGridLayoutColumnSize;
   $: pitchGridShellWidth = pitchGridLayoutColumnSize * (scoreTotalColumns + pitchGridLegendWidthUnits);
-  $: pitchGridShellHeight = pitchGridLayoutColumnSize * (visiblePitchGridRowCount + 1);
+  $: pitchGridShellHeight = pitchGridVerticalColumnSize * (visiblePitchGridRowCount + 1);
   $: pitchGridCellHeight = pitchGridViewportHeight > 0
     ? (pitchGridViewportHeight * 2) / (visiblePitchGridRowCount + 1)
-    : pitchGridLayoutColumnSize * 2;
-  $: pitchGridCellWidth = pitchGridCellHeight / 2;
-  $: pitchGridOverlayNoteSize = pitchGridCellHeight;
+    : pitchGridVerticalColumnSize * 2;
+  $: pitchGridCellWidth = pitchGridLayoutColumnSize;
+  $: pitchGridOverlayNoteSize =
+    pitchGridCellHeight * (isMusicalScorePhase || startsWithComparison ? 1 : 2);
   $: pitchGridHitTargetSize = Math.max(
     pitchGridMinHitTargetSize,
     Math.min(pitchGridMaxHitTargetSize, pitchGridOverlayNoteSize * 2.2)
   );
   $: pitchGridLegendWidth = pitchGridCellWidth * pitchGridLegendWidthUnits;
+  $: pitchGridContentWidth = Math.max(0, pitchGridViewportWidth - pitchGridLegendWidth);
   $: pitchGridViewport = {
     startRow: visiblePitchGridStartRow,
     endRow: visiblePitchGridEndRow,
@@ -520,7 +560,19 @@
     containerWidth: pitchGridViewportWidth,
     containerHeight: pitchGridViewportHeight,
   };
+  $: currentPitchNoteColor =
+    pitchRows[getRowIndexForPercent(noteY)]?.hex ?? '#c95a4d';
   $: currentTask = taskIndex >= 0 && taskIndex < tasks.length ? tasks[taskIndex] : null;
+  $: currentComparisonPair =
+    comparisonIndex >= 0 && comparisonIndex < comparisonPairs.length
+      ? comparisonPairs[comparisonIndex]
+      : null;
+  $: currentComparisonQuestion =
+    currentComparisonPair?.question ?? higherComparisonQuestion;
+  $: comparisonUnderlinedWords =
+    currentComparisonPair && narrationText === currentComparisonQuestion
+      ? [currentComparisonPair.underlinedWord]
+      : [];
   $: currentTaskUsesAvatarNoteSource = taskUsesAvatarNoteSource(currentTask);
   $: avatarSourceNoteVisible =
     currentTaskUsesAvatarNoteSource &&
@@ -532,14 +584,16 @@
     !scorePlaybackVisible &&
     introExampleNotes.length === 0 &&
     !introRunning &&
+    !comparisonStarted &&
+    !startsWithComparison &&
     (!currentTaskUsesAvatarNoteSource || notePlacedOnGrid);
   $: noteIsSounding = dragging && draggingOverPitchGrid && dragPreviewVoice !== null;
   $: closingNotes = [
     { id: 'closing-low', top: `${rowCenter(getRowIndexForTone('A3'))}%`, left: '39%' },
     { id: 'closing-high', top: `${rowCenter(getRowIndexForTone('A5'))}%`, left: '66%' },
   ];
-  $: scoreColumnWidthPx = scoreTotalColumns > 0 && pitchGridViewportWidth > 0
-    ? Math.min(pitchGridCellWidth, pitchGridViewportWidth / scoreTotalColumns)
+  $: scoreColumnWidthPx = scoreTotalColumns > 0 && pitchGridContentWidth > 0
+    ? Math.min(pitchGridCellWidth, pitchGridContentWidth / scoreTotalColumns)
     : pitchGridCellWidth;
   $: scoreWidthPx = scoreTotalColumns * scoreColumnWidthPx;
   $: scoreShapeHeightPx = pitchGridCellHeight;
@@ -577,8 +631,8 @@
     return clampRowIndex(visiblePitchGridStartRow + relativeRowIndex);
   }
 
-  function taskUsesAvatarNoteSource(task: PracticeTask | null): boolean {
-    return task?.prompt === 'Listen, then place the note where it belongs.';
+  function taskUsesAvatarNoteSource(_task: PracticeTask | null): boolean {
+    return false;
   }
 
   function buildScoreColumnGuides(columnWidthPx: number): ScoreColumnGuide[] {
@@ -711,7 +765,10 @@
   }
 
   function getScoreCursorColumnFromElapsed(elapsedMs: number): number {
-    const progress = Math.max(0, Math.min(1, elapsedMs / (scoreTotalSlots * scoreSlotDurationMs)));
+    const progress = Math.max(
+      0,
+      Math.min(1, elapsedMs / (scoreTotalSlots * scorePlaybackSlotDurationMs)),
+    );
     return progress * scoreTotalColumns;
   }
 
@@ -762,7 +819,7 @@
     activeScoreItemIds = new Set();
   }
 
-  function setIntroExampleNotes(toneNotes: string[], color: string): void {
+  function setIntroExampleNotes(toneNotes: string[]): void {
     introExampleNotes = toneNotes.map((toneNote, index) => {
       const rowIndex = getRowIndexForTone(toneNote);
       const leftPercent = 30 + index * 18;
@@ -771,7 +828,7 @@
         toneNote,
         top: `${rowCenter(rowIndex)}%`,
         left: `${leftPercent}%`,
-        color,
+        color: pitchRows[rowIndex]?.hex ?? '#6a5140',
         isActive: activeIntroExampleTone === toneNote,
       };
     });
@@ -807,7 +864,7 @@
       const remainingActiveIds = new Set(activeScoreItemIds);
       event.visualIds.forEach((id) => remainingActiveIds.delete(id));
       activeScoreItemIds = remainingActiveIds;
-    }, event.durationMs);
+    }, event.durationMs / scorePlaybackRate);
     scoreHighlightTimers.add(timer);
   }
 
@@ -964,7 +1021,7 @@
     const peak = Math.max(0.012, Math.min(0.075, (volume / 100) * 0.055));
     const voice: ActiveVoice = { oscillator, gain, stopped: false };
 
-    oscillator.type = defaultLessonWaveform;
+    oscillator.type = dragPreviewWaveform;
     oscillator.frequency.setValueAtTime(frequency, now);
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(peak, now + 0.025);
@@ -1089,7 +1146,7 @@
     const context = await ensureAudioContext();
     if (!context || !isCurrentSequence(token) || !isPlaying) return;
     const peak = Math.max(0.008, Math.min(0.065, (volume / 100) * 0.052));
-    startVoice(context, event.frequency, event.durationMs, peak, token);
+    startVoice(context, event.frequency, event.durationMs / scorePlaybackRate, peak, token);
   }
 
   async function playTone(
@@ -1097,7 +1154,8 @@
     durationMs: number,
     region: PitchRegion,
     token: number,
-    waveform: OscillatorType = defaultLessonWaveform
+    waveform: OscillatorType = defaultLessonWaveform,
+    showRegionPulse = true
   ): Promise<void> {
     if (!isCurrentSequence(token) || !isPlaying) return;
     const context = await ensureAudioContext();
@@ -1108,7 +1166,7 @@
     const peak = Math.max(0.015, Math.min(0.11, (volume / 100) * waveGain));
     startVoice(context, frequency, durationMs, peak, token, waveform);
 
-    pulseRegion(region, durationMs + 60);
+    if (showRegionPulse) pulseRegion(region, durationMs + 60);
     await waitMs(durationMs);
     if (!isCurrentSequence(token)) return;
     stopTone();
@@ -1130,6 +1188,279 @@
       if (!isCurrentSequence(token)) return;
     }
     setActiveIntroExampleTone(null);
+  }
+
+  function getComparisonQuestion(pair: ComparisonPair): string {
+    return pair.question;
+  }
+
+  function getComparisonCorrectIndex(pair: ComparisonPair): number {
+    const firstRow = getRowIndexForTone(pair.toneNotes[0]);
+    const secondRow = getRowIndexForTone(pair.toneNotes[1]);
+    if (pair.mode === 'higher') return firstRow < secondRow ? 0 : 1;
+    return firstRow > secondRow ? 0 : 1;
+  }
+
+  function getComparisonNoteId(pair: ComparisonPair, optionIndex: number): string {
+    return `${pair.id}-${optionIndex}`;
+  }
+
+  function getComparisonLeftPercent(pairIndex: number, optionIndex: number): number {
+    const noteIndex = pairIndex * 2 + optionIndex;
+    return ((noteIndex + 1) / (comparisonPairs.length * 2 + 1)) * 100;
+  }
+
+  function buildSettledComparisonNotes(
+    pair: ComparisonPair,
+    pairIndex: number
+  ): SettledComparisonNote[] {
+    return pair.toneNotes.map((toneNote, optionIndex) => {
+      const rowIndex = getRowIndexForTone(toneNote);
+      return {
+        id: getComparisonNoteId(pair, optionIndex),
+        toneNote,
+        rowIndex,
+        leftPercent: getComparisonLeftPercent(pairIndex, optionIndex),
+        color: pitchRows[rowIndex]?.hex ?? '#6a5140',
+      };
+    });
+  }
+
+  function buildComparisonFlightNotes(
+    pair: ComparisonPair,
+    pairIndex: number
+  ): ComparisonFlightNote[] {
+    if (!comparisonOptionsEl || !fieldEl) return [];
+    const sourceButtons = Array.from(
+      comparisonOptionsEl.querySelectorAll<HTMLButtonElement>('.comparison-option')
+    );
+    if (sourceButtons.length !== pair.toneNotes.length) return [];
+
+    const fieldRect = fieldEl.getBoundingClientRect();
+    return buildSettledComparisonNotes(pair, pairIndex).map((note, optionIndex) => {
+      const sourceRect = sourceButtons[optionIndex]?.getBoundingClientRect();
+      const startX = sourceRect ? sourceRect.left + sourceRect.width / 2 : fieldRect.left;
+      const startY = sourceRect ? sourceRect.top + sourceRect.height / 2 : fieldRect.top;
+      return {
+        ...note,
+        startX,
+        startY,
+        endX: fieldRect.left + (note.leftPercent / 100) * fieldRect.width,
+        endY: fieldRect.top + (rowCenter(note.rowIndex) / 100) * fieldRect.height,
+        landed: false,
+      };
+    });
+  }
+
+  function waitForAnimationFrame(): Promise<void> {
+    if (typeof requestAnimationFrame !== 'function') return Promise.resolve();
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
+
+  function getComparisonRegion(rowIndex: number): PitchRegion {
+    return rowIndex < resetRowIndex ? 'upper' : 'lower';
+  }
+
+  async function playComparisonTone(
+    pair: ComparisonPair,
+    optionIndex: number,
+    durationMs: number,
+    token: number,
+    settled: boolean
+  ): Promise<void> {
+    const toneNote = pair.toneNotes[optionIndex];
+    const rowIndex = getRowIndexForTone(toneNote);
+    const frequency = getFrequencyForRow(rowIndex);
+    if (!frequency || !isCurrentSequence(token)) return;
+
+    if (settled) activeSettledComparisonNoteId = getComparisonNoteId(pair, optionIndex);
+    else activeComparisonOptionIndex = optionIndex;
+
+    await playTone(
+      frequency,
+      durationMs,
+      getComparisonRegion(rowIndex),
+      token,
+      'sawtooth',
+      false
+    );
+
+    if (!isCurrentSequence(token)) return;
+    if (settled) activeSettledComparisonNoteId = null;
+    else activeComparisonOptionIndex = null;
+  }
+
+  async function runComparisonLoop(pair: ComparisonPair, token: number): Promise<void> {
+    while (
+      isCurrentSequence(token) &&
+      currentComparisonPair?.id === pair.id &&
+      comparisonQuestionVisible &&
+      !comparisonAnswerLocked
+    ) {
+      for (let optionIndex = 0; optionIndex < pair.toneNotes.length; optionIndex += 1) {
+        if (
+          !isCurrentSequence(token) ||
+          !comparisonQuestionVisible ||
+          comparisonAnswerLocked
+        ) {
+          return;
+        }
+        await playComparisonTone(pair, optionIndex, 650, token, false);
+        if (!isCurrentSequence(token)) return;
+        await waitMs(280);
+      }
+    }
+  }
+
+  async function startComparisonQuestion(index: number, announceQuestion: boolean): Promise<void> {
+    const pair = comparisonPairs[index];
+    if (!pair) return;
+
+    const token = beginSequence();
+    const question = getComparisonQuestion(pair);
+    comparisonStarted = true;
+    comparisonIndex = index;
+    taskIndex = tasks.length;
+    comparisonQuestionVisible = true;
+    comparisonAnswerLocked = true;
+    activeComparisonOptionIndex = null;
+    activeSettledComparisonNoteId = null;
+    complete = false;
+    interactionEnabled = false;
+    notePlacedOnGrid = true;
+    activeRegion = null;
+    feedbackState = null;
+    promptBadge = `Comparison ${index + 1} of ${comparisonPairs.length}`;
+    promptTitle = pair.mode === 'higher' ? 'Find the higher pitch' : 'Find the lower pitch';
+    promptStatus = question;
+    narrationText = question;
+
+    await waitMs(160);
+    if (!isCurrentSequence(token)) return;
+    if (announceQuestion) {
+      await say(question, token);
+      if (!isCurrentSequence(token)) return;
+    }
+
+    comparisonAnswerLocked = false;
+    void runComparisonLoop(pair, token);
+  }
+
+  async function playSettledPair(pair: ComparisonPair, token: number): Promise<void> {
+    for (let repeat = 0; repeat < 3; repeat += 1) {
+      for (let optionIndex = 0; optionIndex < pair.toneNotes.length; optionIndex += 1) {
+        await playComparisonTone(pair, optionIndex, 145, token, true);
+        if (!isCurrentSequence(token)) return;
+        await waitMs(45);
+      }
+    }
+    activeSettledComparisonNoteId = null;
+  }
+
+  async function finishComparisonSequence(token: number): Promise<void> {
+    if (!isCurrentSequence(token)) return;
+    comparisonAnswerLocked = true;
+    comparisonQuestionVisible = false;
+    activeComparisonOptionIndex = null;
+    promptBadge = `${section.code} complete`;
+    promptTitle = 'Higher and lower pitches';
+    promptStatus = 'Bravo!';
+    await say('Bravo!', token);
+    if (!isCurrentSequence(token)) return;
+
+    await waitMs(180);
+    if (!isCurrentSequence(token)) return;
+
+    for (const note of settledComparisonNotes) {
+      const frequency = getFrequencyForRow(note.rowIndex);
+      if (!frequency || !isCurrentSequence(token)) continue;
+      activeSettledComparisonNoteId = note.id;
+      await playTone(
+        frequency,
+        135,
+        getComparisonRegion(note.rowIndex),
+        token,
+        'sawtooth',
+        false
+      );
+      if (!isCurrentSequence(token)) return;
+      await waitMs(38);
+    }
+
+    activeSettledComparisonNoteId = null;
+    complete = true;
+    await waitMs(1000);
+    if (!isCurrentSequence(token)) return;
+    onComparisonComplete?.();
+  }
+
+  async function handleComparisonAnswer(optionIndex: number): Promise<void> {
+    const pair = currentComparisonPair;
+    if (
+      !pair ||
+      comparisonAnswerLocked ||
+      !comparisonQuestionVisible ||
+      !isPlaying
+    ) {
+      return;
+    }
+
+    if (optionIndex !== getComparisonCorrectIndex(pair)) {
+      const token = beginSequence();
+      comparisonAnswerLocked = true;
+      activeComparisonOptionIndex = null;
+      feedbackState = 'error';
+      await say('Try again.', token);
+      if (!isCurrentSequence(token)) return;
+      feedbackState = null;
+      narrationText = getComparisonQuestion(pair);
+      comparisonAnswerLocked = false;
+      void runComparisonLoop(pair, token);
+      return;
+    }
+
+    const flightNotes = buildComparisonFlightNotes(pair, comparisonIndex);
+    const token = beginSequence();
+    comparisonAnswerLocked = true;
+    comparisonQuestionVisible = false;
+    activeComparisonOptionIndex = null;
+    feedbackState = 'success';
+    comparisonFlightNotes = flightNotes;
+
+    if (comparisonFlightNotes.length > 0) {
+      await waitForAnimationFrame();
+      await waitForAnimationFrame();
+      if (!isCurrentSequence(token)) return;
+      comparisonFlightNotes = comparisonFlightNotes.map((note) => ({
+        ...note,
+        landed: true,
+      }));
+      await waitMs(680);
+      if (!isCurrentSequence(token)) return;
+    }
+
+    settledComparisonNotes = [
+      ...settledComparisonNotes,
+      ...buildSettledComparisonNotes(pair, comparisonIndex),
+    ];
+    comparisonFlightNotes = [];
+    feedbackState = null;
+
+    await playSettledPair(pair, token);
+    if (!isCurrentSequence(token)) return;
+
+    await waitMs(180);
+    if (!isCurrentSequence(token)) return;
+
+    if (comparisonIndex >= comparisonPairs.length - 1) {
+      await finishComparisonSequence(token);
+      return;
+    }
+
+    const nextIndex = comparisonIndex + 1;
+    await startComparisonQuestion(nextIndex, true);
   }
 
   async function say(text: string, token: number): Promise<void> {
@@ -1161,8 +1492,20 @@
   }
 
   async function startLessonOpeningSequence(): Promise<void> {
-    const scorePlayed = await playScorePreludeSequence();
-    if (!scorePlayed) return;
+    if (isMusicalScorePhase) {
+      const scorePlayed = await playScorePreludeSequence();
+      if (scorePlayed) {
+        if (isMusicalOutro) onMusicalOutroComplete?.();
+        else onMusicalIntroComplete?.();
+      }
+      return;
+    }
+
+    if (startsWithComparison) {
+      await startComparisonQuestion(0, true);
+      return;
+    }
+
     await startIntroSequence();
   }
 
@@ -1222,7 +1565,9 @@
     narrationText = '';
     promptBadge = section.code;
     promptTitle = section.label;
-    promptStatus = 'Listen first. The red cursor will play the score across the pitch grid.';
+    promptStatus = isMusicalOutro
+      ? 'Listen to the closing musical example.'
+      : 'Listen first. The red cursor will play the score across the pitch grid.';
     noteY = resetY;
     activeRegion = null;
     clearIntroExampleNotes();
@@ -1237,11 +1582,15 @@
     await waitMs(260);
     if (!isCurrentSequence(token)) return false;
 
+    if (isMusicalOutro) {
+      sayDuringScorePrelude('See you next time!', token);
+    }
+
     startScoreCursorAnimation(token);
     const greetingSlot = Math.floor(scoreTotalSlots / 2);
     let greetingSpoken = false;
     for (let slot = 0; slot < scoreTotalSlots; slot += 1) {
-      if (!greetingSpoken && slot >= greetingSlot) {
+      if (!isMusicalOutro && !greetingSpoken && slot >= greetingSlot) {
         greetingSpoken = true;
         sayDuringScorePrelude('Hello', token);
       }
@@ -1252,13 +1601,20 @@
         void playScoreEvent(event, token);
       }
 
-      await waitMs(scoreSlotDurationMs);
+      await waitMs(scorePlaybackSlotDurationMs);
       if (!isCurrentSequence(token)) return false;
     }
 
     stopScoreCursorAnimation();
     clearScoreHighlights();
     scoreCursorColumn = scoreTotalColumns;
+
+    if (isMusicalOutro) {
+      scorePreludeRunning = false;
+      stopTone();
+      return true;
+    }
+
     await say("Let's begin", token);
     if (!isCurrentSequence(token)) return false;
 
@@ -1276,6 +1632,14 @@
     introRunning = true;
     complete = false;
     taskIndex = -1;
+    comparisonStarted = false;
+    comparisonIndex = -1;
+    comparisonQuestionVisible = false;
+    comparisonAnswerLocked = true;
+    activeComparisonOptionIndex = null;
+    activeSettledComparisonNoteId = null;
+    settledComparisonNotes = [];
+    comparisonFlightNotes = [];
     interactionEnabled = false;
     notePlacedOnGrid = true;
     sourceNoteActive = false;
@@ -1296,7 +1660,7 @@
     await waitMs(120);
     if (!isCurrentSequence(token)) return;
 
-    setIntroExampleNotes(lowIntroToneNotes, '#2f8d83');
+    setIntroExampleNotes(lowIntroToneNotes);
     await say('Lower notes belong lower down.', token);
     if (!isCurrentSequence(token)) return;
 
@@ -1307,7 +1671,7 @@
     await waitMs(160);
     if (!isCurrentSequence(token)) return;
 
-    setIntroExampleNotes(highIntroToneNotes, '#c95a4d');
+    setIntroExampleNotes(highIntroToneNotes);
     await say('Higher sounds belong higher up.', token);
     if (!isCurrentSequence(token)) return;
 
@@ -1325,7 +1689,14 @@
 
   async function startTask(index: number): Promise<void> {
     if (index >= tasks.length) {
-      await finishSubsection();
+      const token = beginSequence();
+      interactionEnabled = false;
+      notePlacedOnGrid = true;
+      sourceNoteActive = false;
+      feedbackState = null;
+      activeRegion = null;
+      await waitMs(420);
+      if (isCurrentSequence(token)) onPlacementComplete?.();
       return;
     }
 
@@ -1376,24 +1747,6 @@
     }
   }
 
-  async function finishSubsection(): Promise<void> {
-    const token = beginSequence();
-    complete = true;
-    interactionEnabled = false;
-    notePlacedOnGrid = true;
-    sourceNoteActive = false;
-    feedbackState = null;
-    clearIntroExampleNotes();
-    promptBadge = `${section.code} complete`;
-    promptTitle = 'High and low are now separate regions';
-    promptStatus =
-      'Lower pitches belong lower in the space. Higher pitches belong higher in the space.';
-    narrationText = promptStatus;
-    noteY = resetY;
-    activeRegion = null;
-    await say(promptStatus, token);
-  }
-
   async function replayCurrentTask(): Promise<void> {
     if (!currentTask || !isPlaying || complete || introRunning || scorePreludeRunning) return;
     await startTask(taskIndex);
@@ -1412,7 +1765,6 @@
     sourceNoteActive = false;
     feedbackState = 'success';
     clearIntroExampleNotes();
-    noteY = rowCenter(getRowIndexForTone(currentTask.snapTone));
     activeRegion = currentTask.target;
     promptStatus = currentTask.reinforcement;
     narrationText = currentTask.reinforcement;
@@ -1573,10 +1925,11 @@
   class="pitch-scene"
   style={`--pitch-overlay-note-size:${pitchGridOverlayNoteSize}px; --pitch-hit-target-size:${pitchGridHitTargetSize}px;`}
 >
-  <div class="pitch-scene-support">
+  <div class={`pitch-scene-support ${comparisonQuestionVisible ? 'is-comparison' : ''}`}>
     <LessonAvatarDock
       character="grammy"
       speechText={narrationText}
+      underlinedWords={comparisonUnderlinedWords}
       on:ready={handleAvatarReady}
     />
 
@@ -1597,6 +1950,26 @@
         on:pointercancel={handleNotePointerCancel}
       ></button>
     {/if}
+
+    {#if comparisonQuestionVisible && currentComparisonPair}
+      <div
+        class="comparison-options"
+        bind:this={comparisonOptionsEl}
+        aria-label={currentComparisonQuestion}
+      >
+        {#each currentComparisonPair.toneNotes as toneNote, optionIndex}
+          {@const optionRow = getRowIndexForTone(toneNote)}
+          <button
+            class={`comparison-option ${activeComparisonOptionIndex === optionIndex ? 'is-active' : ''}`}
+            type="button"
+            style={`color:${pitchRows[optionRow]?.hex ?? '#6a5140'};`}
+            aria-label={`Choose note ${optionIndex + 1}`}
+            disabled={comparisonAnswerLocked || !isPlaying}
+            on:click={() => void handleComparisonAnswer(optionIndex)}
+          ></button>
+        {/each}
+      </div>
+    {/if}
   </div>
 
   <section
@@ -1612,19 +1985,6 @@
         class="pitch-grid-shell"
         style={`width:${pitchGridShellWidth}px; height:${pitchGridShellHeight}px;`}
       >
-        <div class="pitch-grid-legend" aria-hidden="true">
-          {#each legendCells as cell}
-            <div
-              class={`pitch-grid-legend-cell ${cell.column === 'B' ? 'is-column-b' : 'is-column-a'} ${cell.anchorLabel ? 'is-anchor-row' : ''}`}
-              style={`top:${rowCenter(cell.rowIndex)}%; height:${pitchGridCellHeight}px; background:${cell.hex}; color:${cell.textColor};`}
-            >
-              {#if cell.anchorLabel}
-                <span class="pitch-grid-legend-label">{cell.anchorLabel}</span>
-              {/if}
-            </div>
-          {/each}
-        </div>
-
         <div
           class="pitch-grid-field"
           bind:clientWidth={pitchGridViewportWidth}
@@ -1638,7 +1998,9 @@
               cellWidth={pitchGridCellWidth}
               cellHeight={pitchGridCellHeight}
               colorMode="color"
-              showOctaveLabels={false}
+              showOctaveLabels={true}
+              showLegendLabels={false}
+              showAccidentalLabels={false}
               showFrequencyLabels={false}
               showRightLegend={false}
               singingConfig={pitchGridSingingConfig}
@@ -1724,14 +2086,23 @@
                     <div
                       class={`intro-example-note ${note.isActive ? 'is-active' : ''}`}
                       style={`top:${note.top}; left:${note.left}; color:${note.color}; border-color:${note.color};`}
-                    >
-                      <span>{note.toneNote}</span>
-                    </div>
+                    ></div>
                   {/each}
                 </div>
               {/if}
 
-              {#if complete}
+              {#if settledComparisonNotes.length > 0}
+                <div class="comparison-settled-layer" aria-hidden="true">
+                  {#each settledComparisonNotes as note (note.id)}
+                    <span
+                      class={`comparison-settled-note ${activeSettledComparisonNoteId === note.id ? 'is-active' : ''}`}
+                      style={`top:${rowCenter(note.rowIndex)}%; left:${note.leftPercent}%; color:${note.color};`}
+                    ></span>
+                  {/each}
+                </div>
+              {/if}
+
+              {#if complete && !comparisonStarted}
                 {#each closingNotes as closingNote}
                   <div
                     class="pitch-note pitch-note--settled"
@@ -1744,7 +2115,7 @@
                   bind:this={noteEl}
                   class={`pitch-note ${dragging ? 'is-dragging' : ''} ${noteIsSounding ? 'is-sounding' : ''} ${interactionEnabled ? '' : 'is-muted'}`}
                   type="button"
-                  style={`top:${noteY}%; left:18%;`}
+                  style={`top:${noteY}%; left:50%; color:${currentPitchNoteColor};`}
                   aria-label={interactionEnabled
                     ? 'Draggable pitch note'
                     : 'Pitch note waiting for the next prompt'}
@@ -1760,6 +2131,17 @@
       </div>
     </div>
   </section>
+
+  {#if comparisonFlightNotes.length > 0}
+    <div class="comparison-flight-layer" aria-hidden="true">
+      {#each comparisonFlightNotes as note (note.id)}
+        <span
+          class={`comparison-flight-note ${note.landed ? 'is-landed' : ''}`}
+          style={`left:${note.landed ? note.endX : note.startX}px; top:${note.landed ? note.endY : note.startY}px; color:${note.color};`}
+        ></span>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -1777,6 +2159,11 @@
     justify-content: flex-start;
     gap: 0.85rem;
     min-height: 100%;
+  }
+
+  .pitch-scene-support.is-comparison {
+    flex-direction: column;
+    justify-content: center;
   }
 
   .pitch-workspace {
@@ -1824,65 +2211,19 @@
   }
 
   .pitch-grid-shell {
-    display: grid;
-    grid-template-columns: var(--legend-width) minmax(0, 1fr);
-    gap: 0;
-    align-items: stretch;
+    display: block;
     max-width: 100%;
     max-height: 100%;
   }
 
-  .pitch-grid-legend {
-    position: relative;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-    border-radius: 22px 0 0 22px;
-    border: 1px solid rgba(84, 65, 39, 0.14);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(249, 245, 237, 0.9));
-  }
-
-  .pitch-grid-legend-cell {
-    position: absolute;
-    width: 50%;
-    transform: translateY(-50%);
-    box-shadow: inset 0 0 0 0.8px rgba(255, 255, 255, 0.35);
-  }
-
-  .pitch-grid-legend-cell.is-column-b {
-    left: 0;
-  }
-
-  .pitch-grid-legend-cell.is-column-a {
-    left: 50%;
-  }
-
-  .pitch-grid-legend-cell.is-anchor-row {
-    z-index: 1;
-  }
-
-  .pitch-grid-legend-label {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.62rem;
-    line-height: 1;
-    font-weight: 800;
-    letter-spacing: 0.01em;
-    color: inherit;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 3px rgba(23, 18, 14, 0.35);
-  }
-
   .pitch-grid-field {
     position: relative;
+    width: 100%;
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    border-radius: 0 22px 22px 0;
+    border-radius: 22px;
     border: 1px solid rgba(84, 65, 39, 0.14);
-    border-left: 0;
     background:
       radial-gradient(580px 260px at 100% 8%, rgba(78, 176, 226, 0.06), transparent 62%),
       radial-gradient(620px 260px at 0% 100%, rgba(202, 187, 102, 0.06), transparent 64%),
@@ -1891,14 +2232,14 @@
 
   .pitch-grid-field-overlay {
     position: absolute;
-    inset: 0;
+    inset: 0 0 0 var(--legend-width);
     pointer-events: none;
     z-index: 2;
   }
 
   .score-playback-layer {
     position: absolute;
-    inset: 0 auto 0 0;
+    inset: 0 auto 0 var(--legend-width);
     width: min(var(--score-width), 100%);
     pointer-events: none;
     overflow: hidden;
@@ -2106,23 +2447,6 @@
       transform 0.1s ease;
   }
 
-  .intro-example-note span {
-    position: absolute;
-    top: 50%;
-    left: calc(100% + 0.24rem);
-    transform: translateY(-50%);
-    padding: 0.08rem 0.22rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.78);
-    box-shadow: 0 2px 7px rgba(39, 28, 18, 0.08);
-    color: #1f241f;
-    font-size: 0.64rem;
-    line-height: 1;
-    font-weight: 800;
-    letter-spacing: 0;
-    white-space: nowrap;
-  }
-
   .intro-example-note.is-active::before {
     background: color-mix(in srgb, currentColor 26%, rgba(255, 255, 255, 0.88));
     box-shadow:
@@ -2130,6 +2454,104 @@
       0 0 18px currentColor,
       0 0 32px color-mix(in srgb, currentColor 48%, transparent);
     transform: scale(1.1);
+  }
+
+  .comparison-options {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    min-height: 4rem;
+  }
+
+  .comparison-option {
+    width: 3.25rem;
+    height: 3.25rem;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 3px solid currentColor;
+    border-radius: 999px;
+    appearance: none;
+    background: color-mix(in srgb, currentColor 12%, rgba(255, 255, 255, 0.9));
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.8),
+      0 7px 16px rgba(39, 28, 18, 0.13);
+    cursor: pointer;
+    transition:
+      background-color 0.14s ease,
+      box-shadow 0.14s ease,
+      transform 0.14s ease;
+  }
+
+  .comparison-option:hover:not(:disabled),
+  .comparison-option:focus-visible {
+    transform: translateY(-2px) scale(1.04);
+  }
+
+  .comparison-option.is-active {
+    background: color-mix(in srgb, currentColor 30%, rgba(255, 255, 255, 0.88));
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.88),
+      0 0 18px currentColor,
+      0 0 34px color-mix(in srgb, currentColor 48%, transparent);
+    transform: scale(1.1);
+  }
+
+  .comparison-option:disabled {
+    cursor: default;
+    opacity: 0.72;
+  }
+
+  .comparison-settled-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  .comparison-settled-note,
+  .comparison-flight-note {
+    width: max(1.45rem, var(--pitch-overlay-note-size));
+    height: max(1.45rem, var(--pitch-overlay-note-size));
+    display: block;
+    border: 2px solid currentColor;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 12%, rgba(255, 255, 255, 0.9));
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.76),
+      0 4px 10px rgba(39, 28, 18, 0.12);
+    transform: translate(-50%, -50%);
+  }
+
+  .comparison-settled-note {
+    position: absolute;
+    transition:
+      background-color 0.1s ease,
+      box-shadow 0.1s ease,
+      transform 0.1s ease;
+  }
+
+  .comparison-settled-note.is-active {
+    background: color-mix(in srgb, currentColor 30%, rgba(255, 255, 255, 0.88));
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.88),
+      0 0 15px currentColor,
+      0 0 28px color-mix(in srgb, currentColor 48%, transparent);
+    transform: translate(-50%, -50%) scale(1.14);
+  }
+
+  .comparison-flight-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  .comparison-flight-note {
+    position: fixed;
+    transition:
+      left 0.68s cubic-bezier(0.2, 0.72, 0.2, 1),
+      top 0.68s cubic-bezier(0.2, 0.72, 0.2, 1);
   }
 
   .pitch-note {
@@ -2143,7 +2565,9 @@
     appearance: none;
     background: transparent;
     transform: translate(-50%, -50%);
-    transition: top 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition:
+      top 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      color 0.12s ease;
     cursor: grab;
     z-index: 2;
     pointer-events: auto;
@@ -2158,7 +2582,7 @@
     width: var(--pitch-overlay-note-size);
     height: var(--pitch-overlay-note-size);
     border-radius: 999px;
-    border: 2px solid #c95a4d;
+    border: 2px solid currentColor;
     background: transparent;
     transform: translate(-50%, -50%);
     box-shadow: 0 7px 16px rgba(39, 28, 18, 0.13), inset 0 0 0 1px rgba(255, 255, 255, 0.45);
@@ -2175,25 +2599,27 @@
   }
 
   .pitch-note.is-active::before {
-    background: color-mix(in srgb, #c95a4d 26%, rgba(255, 255, 255, 0.9));
+    background: color-mix(in srgb, currentColor 26%, rgba(255, 255, 255, 0.9));
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.86),
-      0 0 18px rgba(201, 90, 77, 0.72),
-      0 0 32px rgba(201, 90, 77, 0.34);
+      0 0 18px currentColor,
+      0 0 32px color-mix(in srgb, currentColor 48%, transparent);
     transform: translate(-50%, -50%) scale(1.1);
   }
 
   .pitch-note.is-dragging::before {
-    box-shadow: 0 10px 22px rgba(39, 28, 18, 0.22), 0 0 0 8px rgba(201, 90, 77, 0.08);
+    box-shadow:
+      0 10px 22px rgba(39, 28, 18, 0.22),
+      0 0 0 8px color-mix(in srgb, currentColor 10%, transparent);
     transform: translate(-50%, -50%) scale(1.03);
   }
 
   .pitch-note.is-dragging.is-sounding::before {
-    background: color-mix(in srgb, #c95a4d 24%, rgba(255, 255, 255, 0.88));
+    background: color-mix(in srgb, currentColor 24%, rgba(255, 255, 255, 0.88));
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.82),
-      0 0 18px rgba(201, 90, 77, 0.7),
-      0 0 30px rgba(201, 90, 77, 0.32);
+      0 0 18px currentColor,
+      0 0 30px color-mix(in srgb, currentColor 46%, transparent);
     transform: translate(-50%, -50%) scale(1.08);
   }
 
@@ -2233,14 +2659,6 @@
     );
   }
 
-  .pitch-workspace.is-success .pitch-note::before {
-    border-color: #42975e;
-  }
-
-  .pitch-workspace.is-error .pitch-note::before {
-    border-color: #b94d42;
-  }
-
   @media (max-width: 980px) {
     .pitch-scene {
       grid-template-columns: 1fr;
@@ -2251,6 +2669,12 @@
       grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
       align-items: start;
       min-height: auto;
+    }
+
+    .pitch-scene-support.is-comparison {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
   }
 
@@ -2267,13 +2691,16 @@
       gap: 0;
     }
 
-    .pitch-grid-legend,
     .pitch-grid-field {
       min-height: 0;
     }
+  }
 
-    .pitch-grid-legend-label {
-      font-size: 0.56rem;
+  @media (prefers-reduced-motion: reduce) {
+    .comparison-option,
+    .comparison-settled-note,
+    .comparison-flight-note {
+      transition: none;
     }
   }
 </style>

@@ -147,6 +147,9 @@ export function createTransportService(config: TransportConfig): TransportServic
   let lastAppliedTempoMultiplier = 1.0;
   let rescheduleTimerId: ReturnType<typeof setTimeout> | null = null;
   let startSequenceToken = 0;
+  let audioContextTransitionQueue: Promise<void> = Promise.resolve();
+  let audioContextFreezeRequested = false;
+  let requiresFreshAudioReset = false;
   const RESCHEDULE_DEBOUNCE_MS = 50;
 
   // Event listener cleanup
@@ -211,13 +214,47 @@ export function createTransportService(config: TransportConfig): TransportServic
     }
   }
 
-  async function ensureAudioContextRunning(): Promise<void> {
-    const init = audioInit || (() => Tone.start());
-    await init();
+  function enqueueAudioContextTransition(transition: () => Promise<void>): Promise<void> {
+    const queuedTransition = audioContextTransitionQueue
+      .catch(() => undefined)
+      .then(transition);
 
-    if (Tone.context.state !== 'running') {
-      await Tone.context.resume();
-    }
+    // Keep the queue usable after a failed browser context transition. The
+    // returned promise still rejects so the initiating start/resume can report it.
+    audioContextTransitionQueue = queuedTransition.catch(() => undefined);
+    return queuedTransition;
+  }
+
+  async function ensureAudioContextRunning(): Promise<void> {
+    audioContextFreezeRequested = false;
+
+    await enqueueAudioContextTransition(async () => {
+      const init = audioInit || (() => Tone.start());
+      await init();
+
+      if (Tone.context.state !== 'running') {
+        await Tone.context.resume();
+      }
+    });
+  }
+
+  function freezeAudioContext(): void {
+    audioContextFreezeRequested = true;
+
+    void enqueueAudioContextTransition(async () => {
+      // A rapid Resume or Stop supersedes a queued Pause before it reaches the
+      // context, while a completed pause keeps the entire audio graph frozen.
+      if (!audioContextFreezeRequested || Tone.context.state !== 'running') {
+        return;
+      }
+
+      const rawContext = Tone.context.rawContext as AudioContext;
+      if (typeof rawContext.suspend === 'function') {
+        await rawContext.suspend();
+      }
+    }).catch(error => {
+      log.warn('TransportService', 'Failed to suspend audio context for pause', error);
+    });
   }
 
   function clearLoopCarryoverAudio(): void {
@@ -225,12 +262,23 @@ export function createTransportService(config: TransportConfig): TransportServic
     synthEngine.flushPlaybackTails?.();
   }
 
-  function hardStopPlaybackAudio(): void {
+  function hardStopPlaybackAudio(skipFade = false): void {
     if (typeof synthEngine.hardStopAllSound === 'function') {
-      synthEngine.hardStopAllSound();
+      synthEngine.hardStopAllSound({ skipFade });
       return;
     }
     clearLoopCarryoverAudio();
+  }
+
+  function resetAudioForFreshPlayback(): void {
+    Tone.Draw.cancel();
+    drumManager?.reset();
+
+    if (typeof synthEngine.resetForPlayback === 'function') {
+      synthEngine.resetForPlayback();
+    } else {
+      clearLoopCarryoverAudio();
+    }
   }
 
   function clampReleaseToLoopBoundary(
@@ -912,6 +960,13 @@ export function createTransportService(config: TransportConfig): TransportServic
             contextState: Tone.context.state
           });
 
+          if (requiresFreshAudioReset) {
+            const resetStartMs = nowMs();
+            resetAudioForFreshPlayback();
+            requiresFreshAudioReset = false;
+            logStartupTiming('audio-generation-reset', nowMs() - resetStartMs);
+          }
+
           const initialState = stateCallbacks.getState();
           const shouldWaitForDrums = hasDrumNotes(initialState) && !!drumManager && !drumManager.isLoaded();
 
@@ -974,6 +1029,7 @@ export function createTransportService(config: TransportConfig): TransportServic
         } catch (error) {
           if (runToken !== startSequenceToken) {return;}
           log.warn('TransportService', 'Failed to start playback', error);
+          requiresFreshAudioReset = true;
           eventCallbacks.setPlaybackState?.(false, false);
           eventCallbacks.emit('playbackStopped');
         }
@@ -1007,6 +1063,7 @@ export function createTransportService(config: TransportConfig): TransportServic
         } catch (error) {
           if (runToken !== startSequenceToken) {return;}
           log.warn('TransportService', 'Failed to resume playback', error);
+          requiresFreshAudioReset = true;
           eventCallbacks.setPlaybackState?.(false, false);
           eventCallbacks.emit('playbackStopped');
         }
@@ -1017,6 +1074,7 @@ export function createTransportService(config: TransportConfig): TransportServic
       log.info('TransportService', 'Pausing playback');
       invalidatePendingStartSequence();
       Tone.Transport.pause();
+      freezeAudioContext();
 
       if (playheadAnimationFrame) {
         cancelAnimationFrame(playheadAnimationFrame);
@@ -1029,6 +1087,7 @@ export function createTransportService(config: TransportConfig): TransportServic
     stop(): void {
       log.info('TransportService', 'Stopping playback and clearing visuals');
       invalidatePendingStartSequence();
+      requiresFreshAudioReset = true;
 
       if (rescheduleTimerId !== null) {
         clearTimeout(rescheduleTimerId);
@@ -1049,7 +1108,12 @@ export function createTransportService(config: TransportConfig): TransportServic
       Tone.Transport.bpm.value = state.tempo;
       timeMapCalculator?.reapplyConfiguredLoopBounds(state.isLooping);
 
-      hardStopPlaybackAudio();
+      hardStopPlaybackAudio(audioContextFreezeRequested);
+
+      // A Stop from frozen pause stays suspended. There is no audio render
+      // window (and therefore no de-click fade) until the next deliberate
+      // Play or interactive preview resumes the context.
+      audioContextFreezeRequested = false;
 
       // Clear visuals
       visualCallbacks?.clearPlayheadCanvas?.();

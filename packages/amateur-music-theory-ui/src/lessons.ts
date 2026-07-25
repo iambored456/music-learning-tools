@@ -67,34 +67,24 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
   ],
   '1.1': [
     {
+      id: 'lines-spaces',
+      label: 'Lines and Spaces',
+      description: 'Recognize whether a pitch sits on a horizontal line or inside a pitch space.',
+    },
+    {
       id: 'high-low',
       label: 'High and Low in Pitch Space',
       description: 'Use a vertical pitch field to sort low sounds lower and high sounds higher.',
     },
     {
-      id: 'octave',
-      label: 'Spot the Octave',
-      description: 'Compare doubled frequency with perceived sameness to frame octave equivalence.',
+      id: 'differentiate-pitches',
+      label: 'Differentiate Two Pitches',
+      description: 'Compare two sounding notes and identify which pitch is higher or lower.',
     },
     {
-      id: 'classes',
-      label: 'Map Pitch Classes',
-      description: 'Group pitches by repeating note identity across octaves.',
-    },
-    {
-      id: 'notation',
-      label: 'Read Scientific Notation',
-      description: 'Anchor note names and octave numbers into a repeatable labeling system.',
-    },
-    {
-      id: 'diatonic',
-      label: 'Fit the Diatonic Framework',
-      description: 'Place the seven basic note names inside the twelve-pitch octave framework.',
-    },
-    {
-      id: 'tuning',
-      label: 'Compare Tuning Systems',
-      description: 'Show tuning as culturally chosen organization, with 12-TET as one specific system.',
+      id: 'matching-pitches',
+      label: 'Match the Pitch',
+      description: 'Listen for exact pitch matches and select the matching note on the pitch grid.',
     },
   ],
   '1.2': [

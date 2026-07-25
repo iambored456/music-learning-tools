@@ -1,4 +1,5 @@
 // js/services/timbreEffects/effectsAnimation/tremoloWaveformEffect.ts
+import * as Tone from 'tone';
 import BaseAnimationEffect from './baseAnimationEffect.ts';
 import logger from '@utils/logger.ts';
 import {
@@ -68,8 +69,7 @@ class TremoloWaveformEffect extends BaseAnimationEffect<TremoloAnimationState, T
       // Create/update tremolo animation
       const frequencyHz = (speed / 100) * 16; // Convert 0-100% to 0-16 Hz
       const amplitudeSpan = span / 100; // Convert 0-100% to 0-1 span
-      const toneNow = window.Tone?.now?.();
-      const timestamp = typeof toneNow === 'number' ? toneNow * 1000 : performance.now();
+      const timestamp = Tone.now() * 1000;
 
       const animationData: TremoloAnimationState = {
         frequency: frequencyHz,
@@ -93,8 +93,7 @@ class TremoloWaveformEffect extends BaseAnimationEffect<TremoloAnimationState, T
      */
   updateAnimationPhases(currentTime: number): void {
     let updatedCount = 0;
-    const toneNow = window.Tone?.now?.();
-    const toneTime = typeof toneNow === 'number' ? toneNow * 1000 : currentTime; // Use Tone.js time for audio sync
+    const toneTime = Tone.now() * 1000; // Use Tone.js time for audio sync
 
     this.animations.forEach((animation, color) => {
       const deltaTime = (toneTime - animation.lastUpdate) / 1000; // Convert to seconds
@@ -119,13 +118,10 @@ class TremoloWaveformEffect extends BaseAnimationEffect<TremoloAnimationState, T
 
     // Debug animation loop activity
     if (updatedCount > 0 && Math.random() < 0.05) { // Log occasionally
-      const timingSource = window.Tone?.now ? 'Tone.js' : 'performance';
       logger.debug('TremoloWaveformEffect', 'Timing sample', {
-        hasTone: Boolean(window.Tone),
-        hasToneNow: Boolean(window.Tone?.now),
         toneTime,
         currentTime,
-        timingSource
+        timingSource: 'Tone.js'
       }, 'animation');
     }
   }
@@ -179,8 +175,7 @@ class TremoloWaveformEffect extends BaseAnimationEffect<TremoloAnimationState, T
 
     // Only log tremolo issues when phase is actually stuck (not advancing)
     // Note: Don't check oscillation value since sin() naturally crosses zero
-    const toneNow = window.Tone?.now?.();
-    const currentTimestamp = typeof toneNow === 'number' ? toneNow * 1000 : performance.now();
+    const currentTimestamp = Tone.now() * 1000;
     const timeSinceUpdate = currentTimestamp - animation.lastUpdate;
     if (timeSinceUpdate > 100 && animation.span > 0) { // Only warn if no updates for 100ms+
       // Check if phase advancement is too small relative to expected frequency

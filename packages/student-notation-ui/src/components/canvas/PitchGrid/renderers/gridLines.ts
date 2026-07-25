@@ -68,6 +68,10 @@ function buildLightRanges(options: GridRenderOptions): Range[] {
     ranges.push({ start, end });
   });
 
+  options.previewTonicRanges?.forEach(range => {
+    ranges.push({ ...range });
+  });
+
   return mergeRanges(ranges);
 }
 
@@ -121,6 +125,7 @@ interface GridRenderOptions extends Pick<AppState,
 > {
   viewportHeight: number;
   baseMicrobeatPx?: number;
+  previewTonicRanges?: Range[];
 }
 
 function drawHorizontalMusicLines(ctx: CanvasRenderingContext2D, options: GridRenderOptions, startRow: number, endRow: number): void {

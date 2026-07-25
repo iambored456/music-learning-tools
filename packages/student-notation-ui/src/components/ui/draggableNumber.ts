@@ -57,6 +57,9 @@ export default class DraggableNumber {
   private clicked = false;
   private _start: { y: number } = { y: 0 };
   private _changeFactor = 1;
+  private _mouseMoveHandler: ((event: MouseEvent) => void) | null = null;
+  private _mouseUpHandler: (() => void) | null = null;
+  private _destroyed = false;
 
   constructor(parent: string | HTMLElement, opts: DraggableNumberOptions = {}) {
     // Resolve parent element
@@ -186,6 +189,15 @@ export default class DraggableNumber {
 
   passiveUpdate(v: number) { this._value.update(v); this._render(); }
 
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this.clicked = false;
+    this._removeWindowDragHandlers();
+    this._em.clear();
+    this.element.remove();
+  }
+
   // Connect to another control that exposes min/max/step and emits change
   link(destination: { min: number; max: number; step: number; value: number; on?: (name: string, fn: (v: number) => void) => any }) {
     this.min = destination.min;
@@ -240,6 +252,7 @@ export default class DraggableNumber {
   }
 
   _onMouseDown(e: MouseEvent) {
+    if (this._destroyed) return;
     this.hasMoved = false;
     this.clicked = true;
     this.element.readOnly = true;
@@ -250,10 +263,11 @@ export default class DraggableNumber {
     const relX = (e.clientX - rect.left) / rect.width;
     this._changeFactor = invert(relX); // more sensitivity on the left side, like Nexus
 
-    const mm = (ev: MouseEvent) => this._onMouseMove(ev);
-    const mu = () => this._onMouseUp(mm, mu);
-    window.addEventListener('mousemove', mm);
-    window.addEventListener('mouseup', mu);
+    this._removeWindowDragHandlers();
+    this._mouseMoveHandler = (event: MouseEvent) => this._onMouseMove(event);
+    this._mouseUpHandler = () => this._onMouseUp();
+    window.addEventListener('mousemove', this._mouseMoveHandler);
+    window.addEventListener('mouseup', this._mouseUpHandler);
   }
 
   _onMouseMove(e: MouseEvent) {
@@ -270,10 +284,9 @@ export default class DraggableNumber {
     if (this._value.changed) {this.emit('change', this._value.value);}
   }
 
-  _onMouseUp(mm: (ev: MouseEvent) => void, mu: () => void) {
+  _onMouseUp() {
     this.clicked = false;
-    window.removeEventListener('mousemove', mm);
-    window.removeEventListener('mouseup', mu);
+    this._removeWindowDragHandlers();
 
     if (!this.hasMoved) {
       // Focus-to-edit mode
@@ -290,6 +303,17 @@ export default class DraggableNumber {
     } else {
       // remove focus to avoid accidental typing
       document.body.focus();
+    }
+  }
+
+  _removeWindowDragHandlers() {
+    if (this._mouseMoveHandler) {
+      window.removeEventListener('mousemove', this._mouseMoveHandler);
+      this._mouseMoveHandler = null;
+    }
+    if (this._mouseUpHandler) {
+      window.removeEventListener('mouseup', this._mouseUpHandler);
+      this._mouseUpHandler = null;
     }
   }
 
@@ -348,6 +372,7 @@ class Emitter {
     const arr = this._m.get(name); if (!arr) {return;}
     for (const fn of arr.slice()) {fn(data);}
   }
+  clear() { this._m.clear(); }
 }
 
 function clip(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }

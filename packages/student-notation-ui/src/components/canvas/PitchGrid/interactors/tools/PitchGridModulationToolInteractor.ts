@@ -1,6 +1,10 @@
 import store from '@state/initStore.ts';
 import { MODULATION_RATIOS } from '@/rhythm/modulationMapping.ts';
-import { getModulationMarkerCursor, hitTestModulationMarker } from '../../renderers/modulationRenderer.ts';
+import {
+  getModulationMarkerCanvasX,
+  getModulationMarkerCursor,
+  hitTestModulationMarker
+} from '../../renderers/modulationRenderer.ts';
 import logger from '@utils/logger.ts';
 import type { ModulationMarker } from '@mlt/types';
 
@@ -16,27 +20,25 @@ export class PitchGridModulationToolInteractor {
   private lastModulationHoverResult: ReturnType<typeof hitTestModulationMarker> | null = null;
 
   handleMouseDown(actualX: number, canvasY: number): boolean {
-    for (const marker of store.state.tempoModulationMarkers || []) {
-      const xCanvas = marker.xCanvas ?? marker.xPosition ?? 0;
-      const hitResult = hitTestModulationMarker(actualX, canvasY, { ...marker, xCanvas });
-      if (!hitResult) {
-        continue;
-      }
+    const hitResult = this.getHoveredMarker(actualX, canvasY);
+    if (!hitResult) {
+      return false;
+    }
 
-      if (hitResult.type === 'label') {
-        const newRatio = marker.ratio === MODULATION_RATIOS.COMPRESSION_2_3
-          ? MODULATION_RATIOS.EXPANSION_3_2
-          : MODULATION_RATIOS.COMPRESSION_2_3;
-        store.setModulationRatio(marker.id, newRatio);
-        return true;
-      }
+    const marker = hitResult.marker;
+    if (hitResult.type === 'label') {
+      const newRatio = marker.ratio === MODULATION_RATIOS.COMPRESSION_2_3
+        ? MODULATION_RATIOS.EXPANSION_3_2
+        : MODULATION_RATIOS.COMPRESSION_2_3;
+      store.setModulationRatio(marker.id, newRatio);
+      return true;
+    }
 
-      if (hitResult.type === 'barline' && hitResult.canDrag) {
-        this.isDragging = true;
-        this.draggedModulationMarker = marker;
-        document.body.style.cursor = getModulationMarkerCursor(hitResult);
-        return true;
-      }
+    if (hitResult.type === 'barline' && hitResult.canDrag) {
+      this.isDragging = true;
+      this.draggedModulationMarker = marker;
+      document.body.style.cursor = getModulationMarkerCursor(hitResult);
+      return true;
     }
 
     return false;
@@ -96,13 +98,27 @@ export class PitchGridModulationToolInteractor {
 
   getHoveredMarker(actualX: number, canvasY: number): ReturnType<typeof hitTestModulationMarker> | null {
     for (const marker of store.state.tempoModulationMarkers || []) {
-      const xCanvas = marker.xCanvas ?? marker.xPosition ?? 0;
+      if (!marker.active) {
+        continue;
+      }
+
+      const xCanvas = getModulationMarkerCanvasX(marker, store.state);
       const hitResult = hitTestModulationMarker(actualX, canvasY, { ...marker, xCanvas });
       if (hitResult) {
         return hitResult;
       }
     }
     return null;
+  }
+
+  eraseAtPoint(actualX: number, canvasY: number): boolean {
+    const hitResult = this.getHoveredMarker(actualX, canvasY);
+    if (!hitResult) {
+      return false;
+    }
+
+    store.removeModulationMarker(hitResult.marker.id, false);
+    return true;
   }
 
   updateCursor(canvasEl: HTMLElement, hoveredMarker: ReturnType<typeof hitTestModulationMarker> | null): void {

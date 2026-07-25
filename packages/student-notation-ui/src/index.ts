@@ -46,6 +46,16 @@ function rewriteAssetUrls(container: HTMLElement): void {
 
     element.setAttribute(attr, resolvePublicAsset(value));
   });
+
+  container.querySelectorAll<HTMLElement>('[data-mask-src]').forEach((element) => {
+    const value = element.getAttribute('data-mask-src');
+    if (!value || !value.startsWith('assets/')) {
+      return;
+    }
+
+    const resolved = resolvePublicAsset(value);
+    element.style.setProperty('--preset-mask-image', `url("${resolved.replace(/"/g, '\\"')}")`);
+  });
 }
 
 function ensureMountContainerLayout(container: HTMLElement): void {

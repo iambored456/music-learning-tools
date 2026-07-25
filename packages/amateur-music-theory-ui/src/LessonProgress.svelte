@@ -3,13 +3,8 @@
 
   export let steps: LessonSection[] = [];
   export let currentStep = 1;
+  export let completedCurrentStep = false;
   export let onSelectStep: ((step: number) => void) | undefined = undefined;
-
-  function getSegmentState(stepNumber: number): 'completed' | 'current' | 'upcoming' {
-    if (stepNumber < currentStep) return 'completed';
-    if (stepNumber === currentStep) return 'current';
-    return 'upcoming';
-  }
 
   function canSelectStep(stepNumber: number): boolean {
     return Boolean(onSelectStep) && stepNumber <= currentStep;
@@ -24,7 +19,12 @@
 >
   {#each steps as step, index (step.id)}
     {@const stepNumber = index + 1}
-    {@const state = getSegmentState(stepNumber)}
+    {@const state =
+      stepNumber < currentStep || (completedCurrentStep && stepNumber === currentStep)
+        ? 'completed'
+        : stepNumber === currentStep
+          ? 'current'
+          : 'upcoming'}
     <button
       class={`lesson-progress-segment is-${state}`}
       type="button"
@@ -90,6 +90,7 @@
     background: #f07b7b;
     color: #241313;
     cursor: pointer;
+    box-shadow: inset 0 0 0 3px rgba(126, 30, 30, 0.42);
   }
 
   .lesson-progress-segment.is-upcoming {

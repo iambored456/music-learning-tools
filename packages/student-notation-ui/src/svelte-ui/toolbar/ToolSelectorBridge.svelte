@@ -288,9 +288,10 @@
 
   function updateTonicModeButtons(activeNumber: string | number | null | undefined = store.state.selectedToolTonicNumber) {
     if (!tonicModeButtons.length) return;
-    const fallbackNumber = tonicModeButtons[0] ? parseInt(tonicModeButtons[0].dataset['tonic'] ?? '1', 10) : 1;
     const parsedCandidate = typeof activeNumber === 'number' ? activeNumber : parseInt(String(activeNumber ?? ''), 10);
-    const parsedActive = Number.isNaN(parsedCandidate) ? fallbackNumber : parsedCandidate;
+    const parsedActive = Number.isInteger(parsedCandidate) && parsedCandidate >= 1 && parsedCandidate <= 7
+      ? parsedCandidate
+      : null;
     tonicModeButtons.forEach(button => {
       const tonicValue = button.dataset['tonic'];
       const buttonNumber = tonicValue ? parseInt(tonicValue, 10) : NaN;
@@ -566,8 +567,25 @@
           const tonicNumber = button.getAttribute('data-tonic');
           if (!tonicNumber) return;
           const parsed = parseInt(tonicNumber, 10);
+          if (Number.isNaN(parsed)) return;
+
+          const isActiveMode = button.classList.contains('selected')
+            && store.state.selectedToolTonicNumber === parsed;
+          if (isActiveMode) {
+            const currentTool = store.state.selectedTool || 'note';
+            const previousTool = store.state.previousTool;
+            const nextTool = currentTool === 'tonicization'
+              ? (previousTool && previousTool !== 'tonicization' ? previousTool : 'note')
+              : currentTool;
+            store.setSelectedTool(nextTool, 0);
+            updateTonicModeButtons(0);
+            button.blur();
+            return;
+          }
+
           store.setSelectedTool('tonicization', parsed);
           updateTonicModeButtons(parsed);
+          button.blur();
         });
       });
       updateTonicModeButtons();

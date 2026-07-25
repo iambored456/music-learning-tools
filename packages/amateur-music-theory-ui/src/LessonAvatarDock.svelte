@@ -5,11 +5,38 @@
 
   export let character: LessonAvatarCharacter;
   export let speechText = '';
+  export let underlinedWords: string[] = [];
 
   const dispatch = createEventDispatcher<{ ready: { character: LessonAvatarCharacter } }>();
 
   let mount: HTMLDivElement | null = null;
   let mountedCharacter: LessonAvatarCharacter | null = null;
+
+  type SpeechPart = {
+    text: string;
+    underlined: boolean;
+  };
+
+  function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function buildSpeechParts(text: string, words: string[]): SpeechPart[] {
+    const normalizedWords = words.map((word) => word.trim()).filter(Boolean);
+    if (normalizedWords.length === 0) return [{ text, underlined: false }];
+
+    const matcher = new RegExp(`(${normalizedWords.map(escapeRegExp).join('|')})`, 'gi');
+    const underlinedSet = new Set(normalizedWords.map((word) => word.toLocaleLowerCase()));
+    return text
+      .split(matcher)
+      .filter(Boolean)
+      .map((part) => ({
+        text: part,
+        underlined: underlinedSet.has(part.toLocaleLowerCase()),
+      }));
+  }
+
+  $: speechParts = buildSpeechParts(speechText, underlinedWords);
 
   async function syncAvatar(): Promise<void> {
     if (!mount) return;
@@ -33,7 +60,15 @@
 <div class="lesson-avatar-dock" aria-label="Lesson avatar">
   {#if speechText.trim()}
     <div class="lesson-avatar-bubble" aria-live="polite">
-      <p>{speechText}</p>
+      <p>
+        {#each speechParts as part}
+          {#if part.underlined}
+            <u>{part.text}</u>
+          {:else}
+            {part.text}
+          {/if}
+        {/each}
+      </p>
     </div>
   {/if}
   <div class="lesson-avatar-stage" bind:this={mount}></div>

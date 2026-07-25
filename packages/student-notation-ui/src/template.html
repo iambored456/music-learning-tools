@@ -51,6 +51,10 @@
 <h4 class="sidebar-section-header">Playhead</h4>
 <div class="toggle-button-group"><button class="sidebar-toggle-button active" id="playhead-mode-cursor-btn">Cursor Playhead</button><button class="sidebar-toggle-button" id="playhead-mode-microbeat-btn">Pulsing Microbeat</button><button class="sidebar-toggle-button" id="playhead-mode-macrobeat-btn">Pulsing Macrobeat</button></div>
 </div>
+<div class="sidebar-container">
+<h4 class="sidebar-section-header">Performance</h4>
+<button class="sidebar-toggle-button active" id="adsr-playheads-toggle" type="button" aria-pressed="true" title="Toggle ADSR playheads to compare playback performance">ADSR Playheads: On</button>
+</div>
 </aside>
 <main id="app-container" role="main">
   <!-- Toolbar Container -->
@@ -152,7 +156,7 @@
                 <div class="control-section preset-effects-container">
                     <div class="preset-effects-controls">
                             <div class="preset-effects-tabs">
-                                <button class="preset-tab-button active" data-preset-tab="presets">Presets</button>
+                                <button class="preset-tab-button active" data-preset-tab="presets">Tone</button>
                                 <button class="preset-tab-button" data-preset-tab="effects">Effects</button>
                             </div>
                             <div class="preset-effects-content">
@@ -161,16 +165,40 @@
                             <div class="preset-content-box">
                                 <div class="preset-grid" id="preset-buttons">
                                     <div class="preset-column">
-                                        <button class="preset-button" id="preset-sine">Sine</button>
-                                        <button class="preset-button" id="preset-triangle">Triangle</button>
-                                        <button class="preset-button" id="preset-square">Square</button>
-                                        <button class="preset-button" id="preset-sawtooth">Sawtooth</button>
+                                        <button class="preset-button preset-button--icon" id="preset-sine" type="button" title="Sine" aria-label="Sine" aria-pressed="false">
+                                            <svg class="preset-icon preset-waveform-icon" viewBox="2.5 4.5 91 55" aria-hidden="true" focusable="false">
+                                                <path d="M6 32 C14 8 26 8 34 32 S54 56 62 32 S82 8 90 32" />
+                                            </svg>
+                                        </button>
+                                        <button class="preset-button preset-button--icon" id="preset-triangle" type="button" title="Triangle" aria-label="Triangle" aria-pressed="false">
+                                            <svg class="preset-icon preset-waveform-icon" viewBox="2.5 8.5 91 47" aria-hidden="true" focusable="false">
+                                                <path d="M6 18 L26 52 L48 12 L70 52 L90 18" />
+                                            </svg>
+                                        </button>
+                                        <button class="preset-button preset-button--icon" id="preset-square" type="button" title="Square" aria-label="Square" aria-pressed="false">
+                                            <svg class="preset-icon preset-waveform-icon" viewBox="2.5 12.5 91 41" aria-hidden="true" focusable="false">
+                                                <path d="M6 16 H30 V50 H54 V16 H78 V50 H90" />
+                                            </svg>
+                                        </button>
+                                        <button class="preset-button preset-button--icon" id="preset-sawtooth" type="button" title="Sawtooth" aria-label="Sawtooth" aria-pressed="false">
+                                            <svg class="preset-icon preset-waveform-icon" viewBox="2.5 8.5 91 47" aria-hidden="true" focusable="false">
+                                                <path d="M6 52 L30 12 V52 L54 12 V52 L78 12 V52 L90 32" />
+                                            </svg>
+                                        </button>
                                     </div>
                                     <div class="preset-column">
-                                        <button class="preset-button" id="preset-piano">Piano</button>
-                                        <button class="preset-button" id="preset-marimba">Marimba</button>
-                                        <button class="preset-button" id="preset-woodwind">Woodwind</button>
-                                        <button class="preset-button" id="preset-strings">Strings</button>
+                                        <button class="preset-button preset-button--icon" id="preset-piano" type="button" title="Piano" aria-label="Piano" aria-pressed="false">
+                                            <span class="preset-icon preset-mask-icon" data-mask-src="assets/presets/piano.svg" aria-hidden="true"></span>
+                                        </button>
+                                        <button class="preset-button preset-button--icon" id="preset-marimba" type="button" title="Marimba" aria-label="Marimba" aria-pressed="false">
+                                            <span class="preset-icon preset-mask-icon" data-mask-src="assets/presets/marimba.svg" aria-hidden="true"></span>
+                                        </button>
+                                        <button class="preset-button preset-button--icon" id="preset-woodwind" type="button" title="Woodwind" aria-label="Woodwind" aria-pressed="false">
+                                            <span class="preset-icon preset-mask-icon" data-mask-src="assets/presets/woodwind.svg" aria-hidden="true"></span>
+                                        </button>
+                                        <button class="preset-button preset-button--icon" id="preset-strings" type="button" title="Strings" aria-label="Strings" aria-pressed="false">
+                                            <span class="preset-icon preset-mask-icon" data-mask-src="assets/presets/strings.svg" aria-hidden="true"></span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -214,11 +242,11 @@
                 </div>
                 <div class="control-section filter-container">
                     <!-- Row 1, Col 1: Blend slider -->
-                    <div class="blend-slider-container"><div id="blend-slider-container"><div class="filter-blend-thumb" id="thumb-b" tabindex="0">B</div></div></div>
+                    <div class="blend-slider-container"><div id="blend-slider-container"><div class="filter-blend-thumb" id="thumb-b" tabindex="0"><span class="slider-thumb-letter">B</span></div></div></div>
                     <!-- Row 2, Col 1: Bins grid (appended via JS) -->
                     <div class="filter-bins-wrapper"></div>
                     <!-- Row 3, Col 1: Cutoff slider -->
-                    <div id="cutoff-slider-container"><div class="filter-cutoff-thumb" id="thumb-c" tabindex="0">C</div></div>
+                    <div id="cutoff-slider-container"><div class="filter-cutoff-thumb" id="thumb-c" tabindex="0"><span class="slider-thumb-letter">C</span></div></div>
                     <!-- Row 2, Col 2: Vertical M slider (appended via JS) -->
                     <div class="filter-vertical-blend-wrapper"></div>
                 </div>
@@ -226,9 +254,9 @@
                     <!-- Row 1, Col 1: ADSR graph -->
                     <div class="adsr-graph-wrapper"><div id="adsr-envelope"></div></div>
                     <!-- Row 1, Col 2: Sustain slider -->
-                    <div class="sustain-slider-wrapper"><div id="sustain-slider-track"><div id="sustain-slider-thumb" tabindex="0">S</div></div></div>
+                    <div class="sustain-slider-wrapper"><div id="sustain-slider-track"><div id="sustain-slider-thumb" tabindex="0"><span class="slider-thumb-letter">S</span></div></div></div>
                     <!-- Row 2, Col 1: ADR slider -->
-                    <div id="multi-thumb-slider-container"><div class="time-slider-thumb" id="thumb-a" tabindex="0">A</div><div class="time-slider-thumb" id="thumb-d" tabindex="0">D</div><div class="time-slider-thumb" id="thumb-r" tabindex="0">R</div></div>
+                    <div id="multi-thumb-slider-container"><div class="time-slider-thumb" id="thumb-a" tabindex="0"><span class="slider-thumb-letter">A</span></div><div class="time-slider-thumb" id="thumb-d" tabindex="0"><span class="slider-thumb-letter">D</span></div><div class="time-slider-thumb" id="thumb-r" tabindex="0"><span class="slider-thumb-letter">R</span></div></div>
                 </div>
                   <!-- Waveform Section (Separate) -->
                   <div class="control-section">
@@ -295,19 +323,19 @@
                                                     Full Range
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-treble-button" type="button">
-                                                    Treble
+                                                    Treble Clef
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-voice1-button" type="button">
                                                     Voice I
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-alto-button" type="button">
-                                                    Alto
+                                                    Alto Clef
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-voice2-button" type="button">
                                                     Voice II
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-bass-button" type="button">
-                                                    Bass
+                                                    Bass Clef
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-voice3-button" type="button">
                                                     Voice III

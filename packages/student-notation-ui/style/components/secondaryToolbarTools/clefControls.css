@@ -152,8 +152,9 @@
     left: 0%;
     right: 0%;
     top: 50%;
-    /* Height is 75% of option height to stay contained within cell */
-    height: calc(var(--clef-option-height) * 0.75);
+    box-sizing: border-box;
+    /* Fit the selected label instead of spanning most of the wheel's option cell. */
+    height: calc(var(--font-size-400) + var(--space-025));
     border-radius: 16px;
     border: 1px solid rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.35);
     background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.12);

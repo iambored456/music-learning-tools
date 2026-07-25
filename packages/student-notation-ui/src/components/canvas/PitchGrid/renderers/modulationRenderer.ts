@@ -45,6 +45,30 @@ function measureIndexToCanvasX(measureIndex: number, options: RendererOptions): 
   return measureIndex * 200; // Fallback
 }
 
+export function getModulationMarkerCanvasX(marker: ModulationMarker, options: RendererOptions): number {
+  if (marker.columnIndex !== null && marker.columnIndex !== undefined) {
+    return getColumnX(marker.columnIndex + 1, options);
+  }
+
+  if (marker.macrobeatIndex !== null && marker.macrobeatIndex !== undefined && marker.macrobeatIndex >= 0) {
+    const measureInfo = getMacrobeatInfo(store.state, marker.macrobeatIndex);
+    if (measureInfo) {
+      return getColumnX(measureInfo.endColumn + 1, options);
+    }
+
+    logger.warn('ModulationRenderer', 'Could not find measure info for index', {
+      macrobeatIndex: marker.macrobeatIndex
+    }, 'grid');
+    return marker.xPosition ?? 0;
+  }
+
+  if (marker.measureIndex !== null && marker.measureIndex !== undefined) {
+    return measureIndexToCanvasX(marker.measureIndex, options);
+  }
+
+  return marker.xPosition ?? 0;
+}
+
 /**
  * Renders modulation markers with barlines and labels
  * @param {CanvasRenderingContext2D} ctx - Canvas context
@@ -60,36 +84,10 @@ export function renderModulationMarkers(ctx: CanvasRenderingContext2D, options: 
   // Convert measure-based markers to canvas positions
   const markersWithCanvasX: MarkerWithCanvas[] = tempoModulationMarkers
     .filter(marker => marker.active)
-    .map(marker => {
-      let canvasX: number;
-
-      // ALIGNMENT FIX: Check what data the marker actually has and calculate accordingly
-      if (marker.columnIndex !== null && marker.columnIndex !== undefined) {
-        // Use modulated column calculation to match current grid display
-        canvasX = getColumnX(marker.columnIndex + 1, options); // +1 because getColumnX gives end of column
-      } else if (marker.macrobeatIndex !== null && marker.macrobeatIndex !== undefined && marker.macrobeatIndex >= 0) {
-        // Use the macrobeat index to find the correct boundary position
-        // IMPORTANT: Use store.state instead of options to ensure we have the latest tonic data
-        const macrobeatInfo = getMacrobeatInfo(store.state, marker.macrobeatIndex);
-        if (macrobeatInfo) {
-          canvasX = getColumnX(macrobeatInfo.endColumn + 1, options);
-        } else {
-          logger.warn('ModulationRenderer', 'Could not find macrobeat info for index', { macrobeatIndex: marker.macrobeatIndex }, 'grid');
-          canvasX = marker.xPosition ?? 0;
-        }
-      } else if (marker.measureIndex !== null && marker.measureIndex !== undefined) {
-        // Fallback to measure calculation (handles measureIndex 0 and macrobeatIndex -1)
-        canvasX = measureIndexToCanvasX(marker.measureIndex, options);
-      } else {
-        // Final fallback to stored position
-        canvasX = marker.xPosition ?? 0;
-      }
-
-      return {
-        ...marker,
-        xCanvas: canvasX
-      };
-    });
+    .map(marker => ({
+      ...marker,
+      xCanvas: getModulationMarkerCanvasX(marker, options)
+    }));
 
   // Save context state
   ctx.save();

@@ -81,6 +81,8 @@
     accidentalMode?: AccidentalMode;
     showFrequencyLabels?: boolean;
     showOctaveLabels?: boolean;
+    showLegendLabels?: boolean;
+    showAccidentalLabels?: boolean;
     showRightLegend?: boolean;
     legendHighlight?: LegendHighlightConfig;
     rowHighlight?: PitchRowHighlightConfig;
@@ -124,6 +126,8 @@
     accidentalMode = { sharp: true, flat: true },
     showFrequencyLabels = false,
     showOctaveLabels = true,
+    showLegendLabels = true,
+    showAccidentalLabels = true,
     showRightLegend = true,
     legendHighlight,
     rowHighlight,
@@ -697,6 +701,8 @@
       colorMode,
       showFrequencyLabels,
       showOctaveLabels,
+      showLegendLabels,
+      showAccidentalLabels,
       accidentalMode,
       focusedPitchClasses: focusedPitchClasses ?? null,
       focusColorsEnabled,
@@ -828,6 +834,8 @@
     void rowHighlight;
     void showHorizontalGridLines;
     void horizontalGridReferencePitchClass;
+    void showLegendLabels;
+    void showAccidentalLabels;
 
     if (ctx && isNotationMode) {
       render();

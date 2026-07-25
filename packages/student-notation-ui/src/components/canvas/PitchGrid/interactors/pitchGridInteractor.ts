@@ -19,7 +19,7 @@ import pitchGridViewportService from '@services/pitchGridViewportService.ts';
 import annotationService from '@services/annotationService.ts';
 import { drawSingleColumnOvalNote, drawTwoColumnOvalNote } from '../renderers/notes.ts';
 import { getRowY, getColumnFromX, getColumnX } from '../renderers/rendererUtils.ts';
-import GlobalService from '@services/globalService.ts';
+import { triggerAdsrPlayhead } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 import { isNotePlayableAtColumn, isWithinTonicSpan } from '@utils/tonicColumnUtils.ts';
 import { setGhostNotePosition, clearGhostNotePosition } from '@services/spacebarHandler.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
@@ -60,6 +60,7 @@ let activePreviewPitches: string[] = []; // NEW: To hold all pitches for audio p
 const placementFillNoteIds = new Set<string>(); // Track fills started during manual placement
 let isEraserDragActive = false;
 let lastDragRow: number | null = null; // Track last row during drag for pitch change detection
+let hoverPreviewRefreshFrame: number | null = null;
 
 // --- Modulation Marker State ---
 const modulationToolInteractor = new PitchGridModulationToolInteractor();
@@ -403,11 +404,16 @@ function handleMouseDown(e: MouseEvent) {
       event: e,
       colIndex: colIndex as CanvasSpaceColumn,
       rowIndex,
-      annotationService
+      actualX: x + scrollLeft,
+      canvasY: y,
+      annotationService,
+      eraseModulationAtPoint: (actualX, canvasY) => modulationToolInteractor.eraseAtPoint(actualX, canvasY)
     });
     if (handled) {
       pitchHoverCtx.clearRect(0, 0, getLogicalCanvasWidth(pitchHoverCtx.canvas), getLogicalCanvasHeight(pitchHoverCtx.canvas));
-      drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+      if (rightClickEraserInteractor.shouldShowEraserHighlight()) {
+        drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+      }
     }
     return;
   }
@@ -491,7 +497,7 @@ function handleMouseDown(e: MouseEvent) {
   }
 }
 
-function handleMouseMove(e: MouseEvent) {
+function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement) {
   if (isAnnotationToolActive()) {
     handleMouseLeave();
     return;
@@ -522,6 +528,20 @@ function handleMouseMove(e: MouseEvent) {
   const actualX = x + scrollLeft;
   const timeCol = canvasToTime(colIndex, store.state);
   const threeStampSnapTarget = getSixteenthThreeSnapTargetForX(actualX);
+
+  if (rightClickEraserInteractor.getIsModulationOnly() && rightClickEraserInteractor.handleMouseMove({
+    event: e,
+    colIndex: colIndex as CanvasSpaceColumn,
+    rowIndex,
+    actualX,
+    canvasY: y,
+    annotationService,
+    eraseModulationAtPoint: (markerX, markerY) => modulationToolInteractor.eraseAtPoint(markerX, markerY)
+  })) {
+    drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+    return;
+  }
+
   const preBoundsMoveResult = interactionCoordinator.handleToolMouseMoveBeforeBoundsCheck({
     actualX,
     rowIndex,
@@ -633,9 +653,14 @@ function handleMouseMove(e: MouseEvent) {
     event: e,
     colIndex: colIndex as CanvasSpaceColumn,
     rowIndex,
-    annotationService
+    actualX,
+    canvasY: y,
+    annotationService,
+    eraseModulationAtPoint: (markerX, markerY) => modulationToolInteractor.eraseAtPoint(markerX, markerY)
   })) {
-    drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+    if (rightClickEraserInteractor.shouldShowEraserHighlight()) {
+      drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+    }
     return;
   }
 
@@ -644,7 +669,13 @@ function handleMouseMove(e: MouseEvent) {
     return;
   }
 
-  if (pitchHoverCtx && tonicizationToolInteractor.handleMouseMove({ colIndex, rowIndex, hoverCtx: pitchHoverCtx, getPitchForRow })) {
+  if (pitchHoverCtx && tonicizationToolInteractor.handleMouseMove({
+    colIndex,
+    rowIndex,
+    hoverCtx: pitchHoverCtx,
+    sourceCanvas: sourceCanvasOverride ?? e.currentTarget as HTMLCanvasElement,
+    getPitchForRow
+  })) {
     return;
   }
 
@@ -799,7 +830,29 @@ function handleMouseMove(e: MouseEvent) {
     }
 }
 
+function handleMouseWheel(e: WheelEvent) {
+  const pitchCanvas = e.currentTarget instanceof HTMLCanvasElement ? e.currentTarget : null;
+  if (!pitchCanvas) {return;}
+
+  if (hoverPreviewRefreshFrame !== null) {
+    cancelAnimationFrame(hoverPreviewRefreshFrame);
+  }
+
+  // The viewport range is updated by the wheel handler on the surrounding wrapper.
+  // Refresh on the next frame so the stationary pointer is mapped to the new pitch row.
+  hoverPreviewRefreshFrame = requestAnimationFrame(() => {
+    hoverPreviewRefreshFrame = null;
+    if (pitchCanvas.isConnected) {
+      handleMouseMove(e, pitchCanvas);
+    }
+  });
+}
+
 function handleMouseLeave() {
+  if (hoverPreviewRefreshFrame !== null) {
+    cancelAnimationFrame(hoverPreviewRefreshFrame);
+    hoverPreviewRefreshFrame = null;
+  }
   if (pitchHoverCtx) {
     pitchHoverCtx.clearRect(0, 0, getLogicalCanvasWidth(pitchHoverCtx.canvas), getLogicalCanvasHeight(pitchHoverCtx.canvas));
   }
@@ -833,7 +886,7 @@ function handleGlobalMouseUp() {
         const adsr = store.state.timbres[previewColor]?.adsr;
         if (adsr) {
           const pitchColor = store.state.fullRowData[note.row]?.hex || '#888888';
-          GlobalService.adsrComponent?.playheadManager.trigger(note.uuid, 'release', pitchColor, adsr);
+          triggerAdsrPlayhead(note.uuid, 'release', pitchColor, adsr);
         }
       } else if (previewColor) { // It was a chord preview.
         const rootPitch = activePreviewPitches[0];
@@ -843,7 +896,7 @@ function handleGlobalMouseUp() {
             const adsr = store.state.timbres[previewColor]?.adsr;
             if (adsr) {
               const pitchColor = rootRow.hex;
-              GlobalService.adsrComponent?.playheadManager.trigger('chord_preview', 'release', pitchColor, adsr);
+              triggerAdsrPlayhead('chord_preview', 'release', pitchColor, adsr);
             }
           }
         }
@@ -1056,6 +1109,7 @@ export function initPitchGridInteraction() {
 
   pitchCanvas.addEventListener('mousedown', handleMouseDown);
   pitchCanvas.addEventListener('mousemove', handleMouseMove);
+  pitchCanvas.addEventListener('wheel', handleMouseWheel, { passive: true });
   pitchCanvas.addEventListener('mouseleave', handleMouseLeave);
   pitchCanvas.addEventListener('contextmenu', e => e.preventDefault());
 

@@ -7,13 +7,11 @@
  */
 
 import { createSynthEngine, type SynthEngineInstance } from '@mlt/student-notation-engine';
-import * as Tone from 'tone';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import { getFilteredCoefficients } from '@components/audio/harmonicsFilter/overtoneBins.ts';
 import {
   getAudioEffectsManager,
-  getWaveformVisualizer,
   registerSynthEngine
 } from '@services/runtimeGlobals.ts';
 
@@ -22,95 +20,8 @@ logger.moduleLoaded('EngineAudio', 'general');
 // Engine instance
 let engineInstance: SynthEngineInstance | null = null;
 
-const ANALYSER_PREROLL_SECONDS = 0.02;
-const WAVEFORM_RELEASE_PADDING_MS = 80;
-const QUICK_RELEASE_VISUAL_TAIL_MS = 90;
-
-const activeWaveformVoicesByColor = new Map<string, number>();
-const waveformStopTimersByColor = new Map<string, ReturnType<typeof setTimeout>>();
-
-function getAudioTimeDelayMs(time?: number, offsetSeconds = 0): number {
-  if (typeof time !== 'number' || !Number.isFinite(time)) {
-    return 0;
-  }
-  return Math.max(0, (time - Tone.now() + offsetSeconds) * 1000);
-}
-
-function getReleaseTailMs(color: string): number {
-  const releaseSeconds = store.state.timbres[color]?.adsr?.release;
-  return Math.max(0, (typeof releaseSeconds === 'number' ? releaseSeconds : 0.3) * 1000);
-}
-
-function clearWaveformStopTimer(color: string): void {
-  const timerId = waveformStopTimersByColor.get(color);
-  if (!timerId) {
-    return;
-  }
-  clearTimeout(timerId);
-  waveformStopTimersByColor.delete(color);
-}
-
-function getTotalActiveWaveformVoices(): number {
-  let total = 0;
-  activeWaveformVoicesByColor.forEach(count => {
-    total += count;
-  });
-  return total;
-}
-
-function startWaveformForColor(color: string, time?: number): void {
-  if (store.state.isPlaying && !store.state.isPaused) {
-    return;
-  }
-
-  const delayMs = getAudioTimeDelayMs(time, -ANALYSER_PREROLL_SECONDS);
-  setTimeout(() => {
-    clearWaveformStopTimer(color);
-    activeWaveformVoicesByColor.set(color, (activeWaveformVoicesByColor.get(color) ?? 0) + 1);
-
-    const waveformVisualizer = getWaveformVisualizer();
-    if (!waveformVisualizer) {
-      return;
-    }
-
-    waveformVisualizer.currentColor = color;
-    waveformVisualizer.generateWaveform();
-    waveformVisualizer.startSingleNoteVisualization(color);
-  }, delayMs);
-}
-
-function scheduleWaveformStopIfQuiet(color: string, tailMs: number): void {
-  clearWaveformStopTimer(color);
-  waveformStopTimersByColor.set(color, setTimeout(() => {
-    waveformStopTimersByColor.delete(color);
-    if (getTotalActiveWaveformVoices() > 0 || (store.state.isPlaying && !store.state.isPaused)) {
-      return;
-    }
-    getWaveformVisualizer()?.stopLiveVisualization();
-  }, tailMs + WAVEFORM_RELEASE_PADDING_MS));
-}
-
-function releaseWaveformForColor(color: string, time?: number, tailMs = getReleaseTailMs(color)): void {
-  if (store.state.isPlaying && !store.state.isPaused) {
-    return;
-  }
-
-  const delayMs = getAudioTimeDelayMs(time);
-  setTimeout(() => {
-    const nextCount = Math.max(0, (activeWaveformVoicesByColor.get(color) ?? 0) - 1);
-    if (nextCount === 0) {
-      activeWaveformVoicesByColor.delete(color);
-      scheduleWaveformStopIfQuiet(color, tailMs);
-      return;
-    }
-    activeWaveformVoicesByColor.set(color, nextCount);
-  }, delayMs);
-}
-
-function releaseAllWaveformVisuals(tailMs?: number): void {
-  const colors = Array.from(activeWaveformVoicesByColor.keys());
-  activeWaveformVoicesByColor.clear();
-  colors.forEach(color => scheduleWaveformStopIfQuiet(color, tailMs ?? getReleaseTailMs(color)));
+function isPlaybackFrozen(): boolean {
+  return store.state.isPlaying && store.state.isPaused;
 }
 
 /**
@@ -227,34 +138,33 @@ const SynthEngine = {
   },
 
   playNote(pitch: string | number, duration: string | number, time?: number, color?: string) {
-    if (!engineInstance) return;
+    if (!engineInstance || isPlaybackFrozen()) return;
     engineInstance.playNote(pitch, duration, time, color);
   },
 
   triggerAttack(pitch: string | number, color: string, time?: number, isDrum?: boolean) {
-    if (!engineInstance) return;
-    if (!isDrum) {
-      startWaveformForColor(color, time);
+    if (!engineInstance || isPlaybackFrozen()) return;
+
+    if (time === undefined && !isDrum) {
+      engineInstance.triggerAttackInteractive(pitch, color);
+      return;
     }
     engineInstance.triggerAttack(pitch, color, time, isDrum);
   },
 
   triggerAttackInteractive(pitch: string | number, color: string) {
-    if (!engineInstance) return;
-    startWaveformForColor(color, Tone.now() + 0.02);
+    if (!engineInstance || isPlaybackFrozen()) return;
     engineInstance.triggerAttackInteractive(pitch, color);
   },
 
   triggerRelease(pitch: string | number, color: string, time?: number) {
     if (!engineInstance) return;
     engineInstance.triggerRelease(pitch, color, time);
-    releaseWaveformForColor(color, time);
   },
 
   releaseAll() {
     if (!engineInstance) return;
     engineInstance.releaseAll();
-    releaseAllWaveformVisuals();
   },
 
   flushPlaybackTails(colors?: string[]) {
@@ -262,22 +172,24 @@ const SynthEngine = {
     engineInstance.flushPlaybackTails?.(colors);
   },
 
-  hardStopAllSound() {
+  hardStopAllSound(options?: { skipFade?: boolean }) {
     if (!engineInstance) return;
     if (typeof engineInstance.hardStopAllSound === 'function') {
-      engineInstance.hardStopAllSound();
-      releaseAllWaveformVisuals(QUICK_RELEASE_VISUAL_TAIL_MS);
+      engineInstance.hardStopAllSound(options);
       return;
     }
     engineInstance.releaseAll();
     engineInstance.flushPlaybackTails?.();
-    releaseAllWaveformVisuals();
+  },
+
+  resetForPlayback() {
+    if (!engineInstance) return;
+    engineInstance.resetForPlayback?.();
   },
 
   quickReleasePitches(pitches: Array<string | number>, color: string) {
     if (!engineInstance) return;
     engineInstance.quickReleasePitches(pitches, color);
-    pitches.forEach(() => releaseWaveformForColor(color, undefined, QUICK_RELEASE_VISUAL_TAIL_MS));
   },
 
   setSynth(color: string, synth: any) {

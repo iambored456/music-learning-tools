@@ -44,9 +44,12 @@ class DynamicWaveformVisualizer {
   private currentColor: string | null = null;
 
   private isPlaybackActive = false;
+  private isVisualizationPaused = false;
   private liveAnalysers = new Map<string, WaveformAnalyser>();
   private liveWaveforms = new Map<string, Float32Array>();
   private playbackAnimationId: number | null = null;
+  private isInitialized = false;
+  private storeCleanups: Array<() => void> = [];
 
   private animationSpeed = 100;
   private lastAnimationTimestamp: number | null = null;
@@ -55,34 +58,64 @@ class DynamicWaveformVisualizer {
   onWaveformUpdate?: () => void;
 
   initialize(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): boolean {
+    if (this.isInitialized) {
+      this.canvas = canvas;
+      this.ctx = ctx;
+      return true;
+    }
+
     this.canvas = canvas;
     this.ctx = ctx;
     this.currentColor = store.state.selectedNote?.color || '#4a90e2';
     this.setupEventListeners();
+    this.isInitialized = true;
     logger.info('DynamicWaveformVisualizer', 'Initialized with canvas context', null, 'waveform');
     return true;
   }
 
   private setupEventListeners(): void {
-    store.on('noteChanged', ({ newNote }: { newNote?: { color?: string } } = {}) => {
+    const handleNoteChanged = ({ newNote }: { newNote?: { color?: string } } = {}) => {
       if (newNote?.color && newNote.color !== this.currentColor) {
         this.currentColor = newNote.color;
       }
-    });
+    };
 
-    store.on('playbackStateChanged', ({ isPlaying = false, isPaused = false }: { isPlaying?: boolean; isPaused?: boolean } = {}) => {
-      if (isPlaying && !isPaused) {
-        this.startLiveVisualization();
-      } else {
+    const handlePlaybackStateChanged = ({ isPlaying = false, isPaused = false }: { isPlaying?: boolean; isPaused?: boolean } = {}) => {
+      if (isPlaying && isPaused) {
+        this.pauseLiveVisualization();
+      } else if (!isPlaying) {
         this.stopLiveVisualization();
       }
-    });
+    };
 
-    store.on('tremoloAmplitudeUpdate', ({ activeColors }: { activeColors?: string[] } = {}) => {
+    const handlePlaybackStarted = () => this.startLiveVisualization();
+    const handlePlaybackResumed = () => this.startLiveVisualization();
+    const handlePlaybackPaused = () => this.pauseLiveVisualization();
+    const handlePlaybackStopped = () => this.stopLiveVisualization();
+
+    const handleTremoloAmplitudeUpdate = ({ activeColors }: { activeColors?: string[] } = {}) => {
       if (this.isPlaybackActive && activeColors?.some(color => this.liveWaveforms.has(color))) {
         logger.debug('DynamicWaveformVisualizer', 'Tremolo update received for active colors', activeColors, 'waveform');
       }
-    });
+    };
+
+    store.on('noteChanged', handleNoteChanged);
+    store.on('playbackStateChanged', handlePlaybackStateChanged);
+    store.on('playbackStarted', handlePlaybackStarted);
+    store.on('playbackResumed', handlePlaybackResumed);
+    store.on('playbackPaused', handlePlaybackPaused);
+    store.on('playbackStopped', handlePlaybackStopped);
+    store.on('tremoloAmplitudeUpdate', handleTremoloAmplitudeUpdate);
+
+    this.storeCleanups.push(
+      () => store.off('noteChanged', handleNoteChanged),
+      () => store.off('playbackStateChanged', handlePlaybackStateChanged),
+      () => store.off('playbackStarted', handlePlaybackStarted),
+      () => store.off('playbackResumed', handlePlaybackResumed),
+      () => store.off('playbackPaused', handlePlaybackPaused),
+      () => store.off('playbackStopped', handlePlaybackStopped),
+      () => store.off('tremoloAmplitudeUpdate', handleTremoloAmplitudeUpdate)
+    );
 
     logger.info('DynamicWaveformVisualizer', 'Event subscriptions established', null, 'waveform');
   }
@@ -93,13 +126,40 @@ class DynamicWaveformVisualizer {
   }
 
   startLiveVisualization(): void {
-    if (this.isPlaybackActive) {return;}
+    if (this.isPlaybackActive) {
+      this.resumeLiveVisualization();
+      return;
+    }
     this.isPlaybackActive = true;
+    this.isVisualizationPaused = false;
     this.lastAnimationTimestamp = null;
     this.setupLiveAnalysers();
     this.updateContainerState(true);
     this.animateLiveWaveforms();
     logger.debug('DynamicWaveformVisualizer', 'Started live visualization', null, 'waveform');
+  }
+
+  pauseLiveVisualization(): void {
+    if (!this.isPlaybackActive || this.isVisualizationPaused) {return;}
+
+    this.isVisualizationPaused = true;
+    this.lastAnimationTimestamp = null;
+    if (this.playbackAnimationId !== null) {
+      cancelAnimationFrame(this.playbackAnimationId);
+      this.playbackAnimationId = null;
+    }
+    this.updateContainerState(true);
+    logger.debug('DynamicWaveformVisualizer', 'Paused live visualization on current frame', null, 'waveform');
+  }
+
+  private resumeLiveVisualization(): void {
+    if (!this.isVisualizationPaused) {return;}
+
+    this.isVisualizationPaused = false;
+    this.lastAnimationTimestamp = null;
+    this.updateContainerState(true);
+    this.animateLiveWaveforms();
+    logger.debug('DynamicWaveformVisualizer', 'Resumed live visualization', null, 'waveform');
   }
 
   startSingleNoteVisualization(color: string): void {
@@ -119,6 +179,7 @@ class DynamicWaveformVisualizer {
 
   stopLiveVisualization(): void {
     this.isPlaybackActive = false;
+    this.isVisualizationPaused = false;
     const synthEngine = getSynthEngine();
     this.liveAnalysers.forEach((_, color) => {
       synthEngine?.removeWaveformAnalyzer?.(color);
@@ -127,25 +188,20 @@ class DynamicWaveformVisualizer {
     this.liveWaveforms.clear();
     this.waveformPhaseByColor.clear();
     this.lastAnimationTimestamp = null;
-    if (this.playbackAnimationId) {
+    if (this.playbackAnimationId !== null) {
       cancelAnimationFrame(this.playbackAnimationId);
       this.playbackAnimationId = null;
     }
     this.updateContainerState(false);
+    this.onWaveformUpdate?.();
     logger.debug('DynamicWaveformVisualizer', 'Stopped live visualization', null, 'waveform');
   }
 
   private updateContainerState(isLive: boolean): void {
     const wrapper = this.canvas?.parentElement;
     if (!wrapper) {return;}
-    if (isLive) {
-      wrapper.classList.add('live-mode');
-      if (store.state.isPlaying && !store.state.isPaused) {
-        wrapper.classList.add('pulsing');
-      }
-    } else {
-      wrapper.classList.remove('live-mode', 'pulsing');
-    }
+    wrapper.classList.toggle('live-mode', isLive);
+    wrapper.classList.toggle('pulsing', isLive && store.state.isPlaying && !store.state.isPaused);
   }
 
   private setupLiveAnalysers(): void {
@@ -201,7 +257,7 @@ class DynamicWaveformVisualizer {
   }
 
   private animateLiveWaveforms(timestamp = performance.now()): void {
-    if (!this.isPlaybackActive) {return;}
+    if (!this.isPlaybackActive || this.isVisualizationPaused) {return;}
 
     const deltaSeconds = this.lastAnimationTimestamp === null
       ? 0
@@ -409,6 +465,12 @@ class DynamicWaveformVisualizer {
 
   dispose(): void {
     this.stopLiveVisualization();
+    this.storeCleanups.forEach(cleanup => cleanup());
+    this.storeCleanups = [];
+    this.canvas = null;
+    this.ctx = null;
+    this.currentColor = null;
+    this.isInitialized = false;
     logger.info('DynamicWaveformVisualizer', 'Disposed', null, 'waveform');
   }
 }

@@ -62,7 +62,7 @@ export interface SynthEngineInstance {
 
   /**
    * Trigger attack for interactive (user-initiated) events.
-   * Adds a small scheduling offset to help avoid audio pops.
+   * Uses the current Tone scheduling time so immediate releases remain ordered.
    */
   triggerAttackInteractive(pitch: string | number, color: string): void;
 
@@ -79,7 +79,10 @@ export interface SynthEngineInstance {
   flushPlaybackTails?(colors?: string[]): void;
 
   /** Immediately silence output and clear effect tails */
-  hardStopAllSound?(): void;
+  hardStopAllSound?(options?: { skipFade?: boolean }): void;
+
+  /** Rebuild playback voices and clear state retained by a previous run */
+  resetForPlayback?(): void;
 
   /** Update synth for a specific timbre color */
   updateSynthForColor(color: string): void;

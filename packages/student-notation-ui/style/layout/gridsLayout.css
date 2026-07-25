@@ -181,6 +181,7 @@
   flex: 0 0 auto;
   min-width: 0;
   border: none;
+  border-bottom-right-radius: var(--border-radius-md);
   overflow: hidden;
 }
 
@@ -227,7 +228,7 @@
 .drum-left-content {
   --drum-volume-control-width: clamp(16px, calc(var(--drum-row-height, 30px) * 0.9), 30px);
   display: grid;
-  grid-template-columns: var(--drum-volume-control-width) minmax(0, 1fr);
+  grid-template-columns: var(--drum-volume-control-width) minmax(0, 1fr) max-content minmax(0, 1fr);
   grid-template-rows: repeat(3, 1fr);
   align-items: stretch;
   justify-items: stretch;
@@ -289,12 +290,16 @@
   background: var(--c-surface-muted);
   border-color: var(--c-border-strong);
 }
-.drum-track-settings-button__track {
+.drum-track-settings-button__icon {
+  display: block;
   flex: 0 0 auto;
-  min-width: 1ch;
-  color: var(--c-text-muted);
-  font-weight: 800;
-  font-size: calc(var(--drum-row-height, 30px) * 0.52);
+  width: auto;
+  height: clamp(12px, calc(var(--drum-row-height, 30px) * 0.82), 32px);
+  object-fit: contain;
+}
+.drum-track-settings-button[data-track='M'] .drum-track-settings-button__icon {
+  transform: scale(0.8);
+  transform-origin: center;
 }
 
 .drum-layer-sample-modal {

@@ -19,7 +19,8 @@
   transform: translateX(-100%);
   transition: transform 0.3s ease-in-out;
   backdrop-filter: blur(5px);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body.sidebar-open #sidebar {
@@ -379,6 +380,12 @@ input[type="range"][orient="vertical"] {
   background-color: var(--c-accent) !important;
   color: var(--c-surface) !important;
   border-color: var(--c-accent) !important;
+}
+
+#adsr-playheads-toggle.active {
+  background-color: var(--c-accent);
+  color: var(--text-color-on-accent);
+  border-color: var(--c-accent);
 }
 
 /* Microphone device selector styling */

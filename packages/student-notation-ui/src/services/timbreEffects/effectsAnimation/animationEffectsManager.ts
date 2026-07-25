@@ -23,6 +23,7 @@ class AnimationEffectsManager {
   private envelopeFillEffect: EnvelopeFillEffect;
   private delayEffect: DelayADSREffect;
   private isRunning: boolean;
+  private isPlaybackPaused: boolean;
   private animationFrameId: number | null;
   private lastTime: number;
   private lastRenderTrigger: number;
@@ -36,6 +37,7 @@ class AnimationEffectsManager {
 
     // Single animation loop for all effects (eliminates conflicts)
     this.isRunning = false;
+    this.isPlaybackPaused = false;
     this.animationFrameId = null;
     this.lastTime = 0;
     this.lastRenderTrigger = 0;
@@ -52,6 +54,27 @@ class AnimationEffectsManager {
     this.tremoloEffect.init();
     this.envelopeFillEffect.init();
     this.delayEffect.init();
+
+    store.on('playbackPaused', () => {
+      this.isPlaybackPaused = true;
+      this.pause();
+    });
+
+    store.on('playbackResumed', () => {
+      this.isPlaybackPaused = false;
+      this.updateAnimationState();
+    });
+
+    store.on('playbackStarted', () => {
+      this.isPlaybackPaused = false;
+    });
+
+    store.on('playbackStopped', () => {
+      this.isPlaybackPaused = false;
+      if (!this.isRunning) {
+        this.triggerFinalUpdates();
+      }
+    });
 
     // Listen for visual effect changes from main coordinator
     // Note: Individual effects also listen, but we coordinate the main loop here
@@ -143,6 +166,22 @@ class AnimationEffectsManager {
   }
 
   /**
+   * Pause without resetting effect positions. Resume restarts the shared loop
+   * from the same phases, matching the frozen Web Audio context.
+   */
+  pause(): void {
+    if (!this.isRunning) {return;}
+
+    this.isRunning = false;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+
+    logger.debug('AnimationEffectsManager', 'Animation loop paused on current frame', null, 'animation');
+  }
+
+  /**
      * Effect-specific shouldBeRunning methods
      * Each effect has its own trigger conditions
      */
@@ -187,6 +226,11 @@ class AnimationEffectsManager {
   }
 
   updateAnimationState(): void {
+    if (this.isPlaybackPaused) {
+      this.pause();
+      return;
+    }
+
     const vibratoShouldRun = this.shouldVibratoBeRunning();
     const tremoloShouldRun = this.shouldTremoloBeRunning();
     const envelopeFillShouldRun = this.shouldEnvelopeFillBeRunning();

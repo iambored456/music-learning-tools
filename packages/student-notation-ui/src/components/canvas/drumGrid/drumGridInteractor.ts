@@ -26,6 +26,9 @@ import {
   setDrumLayerSamples,
   triggerDrum
 } from '@services/transport/drumManager.ts';
+import hiHatIconUrl from '../../../../public/assets/drums/hi-hat.svg?url';
+import snareIconUrl from '../../../../public/assets/drums/snare.svg?url';
+import bassDrumIconUrl from '../../../../public/assets/drums/bass-drum.svg?url';
 
 /**
  * COORDINATE SYSTEM NOTE:
@@ -36,9 +39,14 @@ import {
 type DrumTrack = 'H' | 'M' | 'L';
 const DRUM_TRACKS: DrumTrack[] = ['H', 'M', 'L'];
 const DRUM_TRACK_LABELS: Record<DrumTrack, string> = {
-  H: 'High Layer (H)',
-  M: 'Mid Layer (M)',
-  L: 'Low Layer (L)'
+  H: 'Hi Hat',
+  M: 'Snare',
+  L: 'Bass Drum'
+};
+const DRUM_TRACK_ICON_PATHS: Record<DrumTrack, string> = {
+  H: hiHatIconUrl,
+  M: snareIconUrl,
+  L: bassDrumIconUrl
 };
 const CANVAS_CONTAINER_ID = 'canvas-container';
 const DRUM_GRID_WRAPPER_ID = 'drum-grid-wrapper';
@@ -257,18 +265,23 @@ function updateDrumTrackSettingButtons(
   buttons.forEach((button) => {
     const track = button.dataset.track as DrumTrack | undefined;
     if (!track || !DRUM_TRACKS.includes(track)) {return;}
+    button.style.gridColumn = '3';
 
     const sampleLabelEl = button.querySelector<HTMLElement>('[data-role="track-sample-label"]');
     const { sampleLabel, machineLabel } = getDrumTrackSampleLabel(track, assignedSamples);
     const summary = machineLabel ? `${sampleLabel} - ${machineLabel}` : sampleLabel;
     sampleLabelEl?.remove();
 
-    const trackLabelEl = button.querySelector<HTMLElement>('.drum-track-settings-button__track');
-    if (trackLabelEl) {
-      trackLabelEl.textContent = track;
-    } else {
-      button.textContent = track;
+    let trackIconEl = button.querySelector<HTMLImageElement>('.drum-track-settings-button__icon');
+    if (!trackIconEl) {
+      trackIconEl = document.createElement('img');
+      trackIconEl.className = 'drum-track-settings-button__icon';
+      trackIconEl.alt = '';
+      trackIconEl.setAttribute('aria-hidden', 'true');
+      button.prepend(trackIconEl);
     }
+    trackIconEl.src = DRUM_TRACK_ICON_PATHS[track];
+    button.querySelector<HTMLElement>('.drum-track-settings-button__track')?.remove();
 
     button.title = summary;
     button.setAttribute('aria-label', `${DRUM_TRACK_LABELS[track]} sample: ${summary}. Open sample browser.`);
@@ -1084,21 +1097,22 @@ function createVolumeSlider(): void {
     volumeButton.style.gridColumn = '1';
     leftContentEl.appendChild(volumeButton);
 
-    // Column 2: Row buttons with track labels and active sample names.
+    // Column 3: Centered row buttons; columns 2 and 4 share the remaining space.
     DRUM_TRACKS.forEach((track, index) => {
       const trackButton = document.createElement('button');
       trackButton.className = 'drum-track-settings-button';
       trackButton.type = 'button';
       trackButton.dataset.track = track;
-      trackButton.style.gridColumn = '2';
+      trackButton.style.gridColumn = '3';
       trackButton.style.gridRow = `${index + 1}`;
 
-      const trackLabel = document.createElement('span');
-      trackLabel.className = 'drum-track-settings-button__track';
-      trackLabel.textContent = track;
-      trackLabel.setAttribute('aria-hidden', 'true');
+      const trackIcon = document.createElement('img');
+      trackIcon.className = 'drum-track-settings-button__icon';
+      trackIcon.src = DRUM_TRACK_ICON_PATHS[track];
+      trackIcon.alt = '';
+      trackIcon.setAttribute('aria-hidden', 'true');
 
-      trackButton.appendChild(trackLabel);
+      trackButton.appendChild(trackIcon);
 
       trackButton.addEventListener('click', (event) => {
         event.stopPropagation();

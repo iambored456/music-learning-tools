@@ -2,7 +2,10 @@
 import logger from '@utils/logger.ts';
 import { initOvertoneBins } from '@components/audio/harmonicsFilter/overtoneBins.ts';
 import { mountComponent } from '@/svelte-ui/index.ts';
-import { initWaveformVisualizer } from '@components/staticWaveform/waveformVisualizer.ts';
+import {
+  disposeWaveformVisualizer,
+  initWaveformVisualizer
+} from '@components/staticWaveform/waveformVisualizer.ts';
 import animationEffectsManager from '@services/timbreEffects/effectsAnimation/animationEffectsManager.ts';
 import audioEffectsManager from '@services/timbreEffects/effectsAudio/audioEffectsManager.ts';
 import effectsCoordinator from '@services/timbreEffects/effectsCoordinator.ts';
@@ -13,7 +16,7 @@ export interface AudioComponentProgress {
   onStep(status: string): void;
 }
 
-export function initAudioComponents(progress?: AudioComponentProgress): void {
+export function initAudioComponents(progress?: AudioComponentProgress): () => void {
   progress?.onStep('Mounting envelope editor...');
   mountComponent('adsr-envelope', '#adsr-envelope');
 
@@ -50,4 +53,6 @@ export function initAudioComponents(progress?: AudioComponentProgress): void {
     effectsController
   });
   logger.initSuccess('Effects Managers');
+
+  return () => disposeWaveformVisualizer();
 }

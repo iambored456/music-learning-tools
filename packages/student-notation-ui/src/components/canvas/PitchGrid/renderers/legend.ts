@@ -497,7 +497,12 @@ export function drawLegendsToSeparateCanvases(
   const isAccidentalHidden = (): boolean => !sharp && !flat;
 
   const clearLegend = (ctx: CanvasRenderingContext2D): void => {
-    ctx.clearRect(0, 0, getLogicalCanvasWidth(ctx.canvas), getLogicalCanvasHeight(ctx.canvas));
+    const canvasWidth = getLogicalCanvasWidth(ctx.canvas);
+    const canvasHeight = getLogicalCanvasHeight(ctx.canvas);
+
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   };
 
   function drawSingleLegend(
@@ -577,6 +582,25 @@ export function drawLegendsToSeparateCanvases(
       }
       cumulativeX += colWidth;
     });
+
+    const finalRow = fullRowData[endRow];
+    if (finalRow && !finalRow.isDummy) {
+      const paddingColumn = finalRow.column === 'A' ? 'B' : 'A';
+      const paddingColumnIndex = columnsOrder.indexOf(paddingColumn);
+      const paddingTop = Math.max(0, Math.min(getLogicalCanvasHeight(ctx.canvas), getRowY(endRow, options)));
+
+      if (paddingColumnIndex >= 0) {
+        // A/B rows are staggered by half a cell. Paint only the unused lower
+        // half-row black; the corresponding unused space at the top stays white.
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(
+          paddingColumnIndex * (colWidthsPx[paddingColumnIndex] ?? 0),
+          paddingTop,
+          colWidthsPx[paddingColumnIndex] ?? 0,
+          getLogicalCanvasHeight(ctx.canvas) - paddingTop
+        );
+      }
+    }
 
     if (focusColours && focusSet.size > 0) {
       logger.debug('LegendRenderer', 'Focus filter summary (separate)', {

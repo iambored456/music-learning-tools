@@ -30,7 +30,7 @@ export const MIN_VISUAL_ROWS = 5;
 // Layout and Grid Constants
 export const DEFAULT_SCROLL_POSITION = 0.52;
 export const GRID_WIDTH_RATIO = 0.5;
-export const SIDE_COLUMN_WIDTH = 3;
+export const SIDE_COLUMN_WIDTH = 3.236;
 export const BEAT_COLUMN_WIDTH = 1;
 // Base pixel size of 1 abstract grid unit (before zoom).
 // cellHeight = BASE_ABSTRACT_UNIT * zoomLevel; halfUnit = cellHeight / 2.

@@ -72,11 +72,23 @@
 }
 
 /* --- Undo/Redo Button Specific Styling --- */
-#undo-button:hover,
-#redo-button:hover,
-#undo-button:focus,
-#redo-button:focus {
+#undo-button:hover:not(:disabled),
+#redo-button:hover:not(:disabled),
+#undo-button:focus:not(:disabled),
+#redo-button:focus:not(:disabled) {
     background-color: rgba(0, 0, 0, 0.08);
+}
+
+#undo-button:disabled,
+#redo-button:disabled {
+    background-color: transparent;
+    opacity: 1;
+}
+
+#undo-button:disabled img,
+#redo-button:disabled img {
+    opacity: 0.32;
+    filter: grayscale(1);
 }
 
 /* --- Playback Control Buttons --- */

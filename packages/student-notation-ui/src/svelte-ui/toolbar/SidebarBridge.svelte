@@ -9,6 +9,10 @@
   import store from '@state/initStore.ts';
   import LayoutService from '@services/layoutService.ts';
   import { preloadDrumSamples } from '@services/transport/drumManager.ts';
+  import {
+    subscribeToAdsrPlayheadsEnabled,
+    toggleAdsrPlayheadsEnabled
+  } from '@services/adsrPlayheadSettings.ts';
   import { notificationSystem } from '../ui/NotificationModal.svelte';
   import {
     convertToSnapshot,
@@ -41,6 +45,10 @@
   let playheadCursorBtn: HTMLElement | null = null;
   let playheadMicrobeatBtn: HTMLElement | null = null;
   let playheadMacrobeatBtn: HTMLElement | null = null;
+
+  // ADSR playhead performance toggle
+  let adsrPlayheadsToggleBtn: HTMLButtonElement | null = null;
+  let unsubscribeAdsrPlayheadSetting: (() => void) | null = null;
 
   // Grid visibility toggles
   let drumGridToggleBtn: HTMLElement | null = null;
@@ -201,6 +209,17 @@
     playheadMacrobeatBtn?.classList.toggle('active', currentMode === 'macrobeat');
   }
 
+  function syncAdsrPlayheadsToggle(enabled: boolean): void {
+    if (!adsrPlayheadsToggleBtn) {return;}
+    adsrPlayheadsToggleBtn.classList.toggle('active', enabled);
+    adsrPlayheadsToggleBtn.setAttribute('aria-pressed', String(enabled));
+    adsrPlayheadsToggleBtn.textContent = `ADSR Playheads: ${enabled ? 'On' : 'Off'}`;
+  }
+
+  function handleAdsrPlayheadsToggle(): void {
+    toggleAdsrPlayheadsEnabled();
+  }
+
   // Grid visibility handlers
   function handleDrumGridToggle() {
     isDrumGridVisible = !isDrumGridVisible;
@@ -351,6 +370,7 @@
     playheadCursorBtn = document.getElementById('playhead-mode-cursor-btn');
     playheadMicrobeatBtn = document.getElementById('playhead-mode-microbeat-btn');
     playheadMacrobeatBtn = document.getElementById('playhead-mode-macrobeat-btn');
+    adsrPlayheadsToggleBtn = document.getElementById('adsr-playheads-toggle') as HTMLButtonElement | null;
 
     // Grid visibility toggles
     drumGridToggleBtn = document.getElementById('hide-drumgrid-toggle');
@@ -420,6 +440,11 @@
       playheadMacrobeatBtn.classList.toggle('active', currentMode === 'macrobeat');
     }
 
+    if (adsrPlayheadsToggleBtn) {
+      adsrPlayheadsToggleBtn.addEventListener('click', handleAdsrPlayheadsToggle);
+      unsubscribeAdsrPlayheadSetting = subscribeToAdsrPlayheadsEnabled(syncAdsrPlayheadsToggle);
+    }
+
     // Grid visibility event listeners
     if (drumGridToggleBtn && drumGridWrapper) {
       drumGridToggleBtn.addEventListener('click', handleDrumGridToggle);
@@ -463,6 +488,9 @@
     playheadCursorBtn?.removeEventListener('click', handlePlayheadCursor);
     playheadMicrobeatBtn?.removeEventListener('click', handlePlayheadMicrobeat);
     playheadMacrobeatBtn?.removeEventListener('click', handlePlayheadMacrobeat);
+    adsrPlayheadsToggleBtn?.removeEventListener('click', handleAdsrPlayheadsToggle);
+    unsubscribeAdsrPlayheadSetting?.();
+    unsubscribeAdsrPlayheadSetting = null;
 
     drumGridToggleBtn?.removeEventListener('click', handleDrumGridToggle);
     buttonGridToggleBtn?.removeEventListener('click', handleButtonGridToggle);

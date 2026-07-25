@@ -18,8 +18,6 @@
   const volumeIconHref = new URL('../../student-notation-ui/public/assets/icons/volume.svg', import.meta.url).href;
   const playIconHref = new URL('../../student-notation-ui/public/assets/icons/play.svg', import.meta.url).href;
   const pauseIconHref = new URL('../../student-notation-ui/public/assets/icons/pause.svg', import.meta.url).href;
-  const previousControlRepeatMs = 850;
-
   let volumeOpen = false;
   let volume = 72;
   let isPlaying = true;
@@ -27,8 +25,8 @@
   let lastLessonCode = '';
   let actionSkipSignal = 0;
   let segmentResetSignal = 0;
-  let previousControlPressAt = 0;
-  let previousControlPressStep = 0;
+  let finalSectionComplete = false;
+  let lessonOutroComplete = false;
 
   $: lesson = getLessonDefinition(lessonCode);
   $: totalSteps = lesson?.sections.length ?? 0;
@@ -37,13 +35,13 @@
   $: hasCustomScene = lesson?.code === '1.1';
   $: if (lesson && lesson.code !== lastLessonCode) {
     lastLessonCode = lesson.code;
-    currentStep = 1;
+    currentStep = lesson.code === '1.1' ? 0 : 1;
     volumeOpen = false;
     isPlaying = true;
     actionSkipSignal = 0;
     segmentResetSignal = 0;
-    previousControlPressAt = 0;
-    previousControlPressStep = 0;
+    finalSectionComplete = false;
+    lessonOutroComplete = false;
   }
   $: setLessonAvatarVolume(volume);
 
@@ -58,12 +56,11 @@
 
   function selectStep(step: number): void {
     if (!lesson) return;
-    const nextStep = Math.max(1, Math.min(step, lesson.sections.length));
+    const minimumStep = lesson.code === '1.1' ? 0 : 1;
+    const nextStep = Math.max(minimumStep, Math.min(step, lesson.sections.length));
     if (nextStep === currentStep) return;
     currentStep = nextStep;
     actionSkipSignal = 0;
-    previousControlPressAt = 0;
-    previousControlPressStep = 0;
   }
 
   function goToPreviousStep(): void {
@@ -74,31 +71,31 @@
     selectStep(currentStep + 1);
   }
 
-  function skipCurrentAction(): void {
-    actionSkipSignal += 1;
+  function handleNextControl(): void {
+    goToNextStep();
   }
 
-  function resetCurrentSegment(): void {
-    cancelLessonAvatarSpeech();
-    actionSkipSignal = 0;
-    segmentResetSignal += 1;
+  function completeMusicalIntro(): void {
+    if (currentStep === 0) selectStep(1);
+  }
+
+  function completeCurrentSection(): void {
+    if (!lesson || currentStep < 1 || currentStep >= lesson.sections.length) return;
+    selectStep(currentStep + 1);
+  }
+
+  function completeFinalSection(): void {
+    if (!lesson || currentStep !== lesson.sections.length) return;
+    finalSectionComplete = true;
+  }
+
+  function completeLessonOutro(): void {
+    finalSectionComplete = true;
+    lessonOutroComplete = true;
   }
 
   function handlePreviousControl(): void {
-    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    const isRepeatPress =
-      previousControlPressStep === currentStep && now - previousControlPressAt <= previousControlRepeatMs;
-
-    if (isRepeatPress && currentStep > 1) {
-      previousControlPressAt = 0;
-      previousControlPressStep = 0;
-      goToPreviousStep();
-      return;
-    }
-
-    previousControlPressAt = now;
-    previousControlPressStep = currentStep;
-    resetCurrentSegment();
+    goToPreviousStep();
   }
 
   $: if (lessonCode) {
@@ -160,32 +157,37 @@
           {/if}
         </div>
 
-        <div class="canvas-toolbar-progress">
-          <LessonProgress steps={lesson.sections} currentStep={currentStep} onSelectStep={selectStep} />
+          <div class="canvas-toolbar-progress">
+          {#key currentStep}
+            <LessonProgress
+              steps={lesson.sections}
+              currentStep={currentStep}
+              completedCurrentStep={finalSectionComplete && currentStep === totalSteps}
+              onSelectStep={selectStep}
+            />
+          {/key}
         </div>
 
         {#if hasCustomScene}
           <div class="canvas-subsection-controls" role="group" aria-label="Lesson segment controls">
             <button
-              class="canvas-subsection-arrow"
+              class={`canvas-subsection-arrow ${currentStep > 0 ? 'is-enabled' : ''}`}
               type="button"
-              aria-label={currentStep > 1
-                ? 'Restart current segment; press again quickly for previous segment'
-                : 'Restart current segment'}
-              title={currentStep > 1
-                ? 'Restart current segment; press again quickly for previous segment'
-                : 'Restart current segment'}
+              aria-label="Previous lesson segment"
+              title="Previous lesson segment"
+              disabled={currentStep <= 0}
               onclick={handlePreviousControl}
             >
               <span class="canvas-arrow-icon canvas-arrow-icon--left" aria-hidden="true"></span>
             </button>
 
             <button
-              class="canvas-subsection-arrow"
+              class={`canvas-subsection-arrow ${currentStep < totalSteps ? 'is-enabled' : ''}`}
               type="button"
-              aria-label="Skip current action"
-              title="Skip current action"
-              onclick={skipCurrentAction}
+              aria-label={currentStep === 0 ? 'Skip musical introduction' : 'Next lesson segment'}
+              title={currentStep === 0 ? 'Skip musical introduction' : 'Next lesson segment'}
+              disabled={currentStep >= totalSteps}
+              onclick={handleNextControl}
             >
               <span class="canvas-arrow-icon canvas-arrow-icon--right" aria-hidden="true"></span>
             </button>
@@ -196,7 +198,18 @@
   </header>
 
   {#if lesson && hasCustomScene}
-    <PitchLesson11Scene {lesson} {currentStep} {isPlaying} {volume} {actionSkipSignal} {segmentResetSignal} />
+    <PitchLesson11Scene
+      {lesson}
+      {currentStep}
+      {isPlaying}
+      {volume}
+      {actionSkipSignal}
+      {segmentResetSignal}
+      onMusicalIntroComplete={completeMusicalIntro}
+      onSectionComplete={completeCurrentSection}
+      onFinalSectionComplete={completeFinalSection}
+      onLessonOutroComplete={completeLessonOutro}
+    />
   {:else if lesson && !isShellOnlyCanvas}
     <section class="canvas-title-card app-card">
       <p class="canvas-title-kicker">Lesson {lesson.code} | {lesson.trail.join(' / ')}</p>
@@ -266,6 +279,24 @@
       </div>
     </section>
   {/if}
+
+  {#if lessonOutroComplete}
+    <div class="lesson-complete-backdrop" role="presentation">
+      <div
+        class="lesson-complete-dialog app-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lesson-complete-title"
+      >
+        <p class="lesson-complete-kicker">Lesson complete</p>
+        <h2 id="lesson-complete-title">Bravo!</h2>
+        <p>You completed Lesson {lesson?.code}.</p>
+        <a class="canvas-nav-button canvas-nav-button--primary canvas-nav-link" href={portalHref}>
+          Return to Amateur Music Theory
+        </a>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -332,6 +363,21 @@
     color: rgba(49, 65, 58, 0.82);
     border-color: rgba(47, 141, 131, 0.22);
     background: rgba(255, 255, 255, 0.48);
+  }
+
+  .canvas-subsection-arrow.is-enabled {
+    opacity: 0.9;
+    color: rgba(38, 92, 80, 0.9);
+    border-color: rgba(47, 141, 131, 0.28);
+    background: rgba(47, 141, 131, 0.12);
+  }
+
+  .canvas-subsection-arrow.is-enabled:hover,
+  .canvas-subsection-arrow.is-enabled:focus-visible {
+    opacity: 1;
+    color: rgba(30, 76, 66, 1);
+    border-color: rgba(47, 141, 131, 0.5);
+    background: rgba(47, 141, 131, 0.2);
   }
 
   .canvas-subsection-arrow:active:not(:disabled) {
@@ -605,6 +651,49 @@
   .canvas-nav-button:disabled {
     opacity: 0.48;
     cursor: default;
+  }
+
+  .lesson-complete-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(31, 36, 31, 0.42);
+    backdrop-filter: blur(4px);
+  }
+
+  .lesson-complete-dialog {
+    width: min(28rem, 100%);
+    display: grid;
+    justify-items: center;
+    gap: 0.8rem;
+    padding: 1.4rem;
+    text-align: center;
+  }
+
+  .lesson-complete-kicker,
+  .lesson-complete-dialog p {
+    margin: 0;
+  }
+
+  .lesson-complete-kicker {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amt-muted);
+  }
+
+  .lesson-complete-dialog h2 {
+    margin: 0;
+    font-size: clamp(1.7rem, 4vw, 2.5rem);
+    color: #1f241f;
+  }
+
+  .lesson-complete-dialog p:not(.lesson-complete-kicker) {
+    color: #3f4641;
   }
 
   .sr-only {

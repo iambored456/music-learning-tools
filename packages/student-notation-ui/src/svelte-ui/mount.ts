@@ -149,6 +149,11 @@ export function mountSvelteComponents(): void {
     const componentName = placeholder.getAttribute('data-svelte-component');
     if (!componentName) return;
 
+    if (mountedComponents.some(({ target }) => target === placeholder)) {
+      initDebug('mount:already-mounted', componentName);
+      return;
+    }
+
     const Component = componentRegistry[componentName];
     if (!Component) {
       console.warn(`[Svelte] Unknown component: ${componentName}`);

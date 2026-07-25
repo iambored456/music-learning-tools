@@ -1,4 +1,5 @@
 // js/services/timbreEffects/effectsAnimation/vibratoCanvasEffect.ts
+import * as Tone from 'tone';
 import BaseAnimationEffect from './baseAnimationEffect.ts';
 import logger from '@utils/logger.ts';
 import { getAnimationEffectsManager } from '@services/runtimeGlobals.ts';
@@ -56,12 +57,13 @@ class VibratoCanvasEffect extends BaseAnimationEffect<VibratoAnimationState, Vib
       // Create/update vibrato animation
       const frequencyHz = (speed / 100) * 16; // Convert 0-100% to 0-16 Hz
       const amplitudeSemitones = (span / 100) * 0.5; // Convert 0-100% to 0-0.5 semitone
+      const toneTime = Tone.now() * 1000;
 
       const animationData: VibratoAnimationState = {
         frequency: frequencyHz,
         amplitude: amplitudeSemitones,
         phase: existingAnimation?.phase || 0, // Start at 0 to match audio LFO phase
-        lastUpdate: performance.now()
+        lastUpdate: toneTime
       };
 
       this.animations.set(color, animationData);
@@ -77,11 +79,13 @@ class VibratoCanvasEffect extends BaseAnimationEffect<VibratoAnimationState, Vib
   /**
      * Update vibrato animation phases
      */
-  updateAnimationPhases(currentTime: number): void {
+  updateAnimationPhases(_currentTime: number): void {
+    const toneTime = Tone.now() * 1000;
+
     this.animations.forEach((animation) => {
-      const deltaTime = (currentTime - animation.lastUpdate) / 1000; // Convert to seconds
+      const deltaTime = (toneTime - animation.lastUpdate) / 1000; // Convert to seconds
       animation.phase += animation.frequency * deltaTime * 2 * Math.PI; // 2pi for full cycle
-      animation.lastUpdate = currentTime;
+      animation.lastUpdate = toneTime;
 
       // Keep phase in reasonable range to prevent floating point overflow
       if (animation.phase > 4 * Math.PI) {

@@ -33,7 +33,8 @@ class StaticWaveformVisualizer {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   public currentColor: string | null = null;
-  private animationFrameId: number | null = null;
+  private generationFrameId: number | null = null;
+  private generationPending = false;
   private waveformData: Float32Array = new Float32Array(MAX_SAMPLES);
   private isInitialized = false;
 
@@ -47,14 +48,22 @@ class StaticWaveformVisualizer {
   private readonly dynamicVisualizer = new DynamicWaveformVisualizer();
   private animationSpeed = 100;
   private resizeObserver: ResizeObserver | null = null;
+  private eventAbortController: AbortController | null = null;
+  private storeCleanups: Array<() => void> = [];
 
-  public calculatedAmplitude = 0;
+  public calculatedAmplitude = 1;
 
   constructor() {
     logger.info('StaticWaveformVisualizer', 'Initialized with dynamic visualizer integration', null, 'waveform');
   }
 
   initialize(): boolean {
+    if (this.isInitialized) {
+      this.resize();
+      this.generateWaveform();
+      return true;
+    }
+
     this.canvas = document.getElementById('static-waveform-canvas') as HTMLCanvasElement | null;
     if (!this.canvas) {return false;}
 
@@ -63,6 +72,8 @@ class StaticWaveformVisualizer {
 
     this.ctx = ctx;
     this.currentColor = store.state.selectedNote?.color || '#4a90e2';
+    this.isInitialized = true;
+    this.eventAbortController = new AbortController();
 
     const container = this.canvas.parentElement;
     if (container && typeof ResizeObserver !== 'undefined') {
@@ -77,8 +88,8 @@ class StaticWaveformVisualizer {
     this.dynamicVisualizer.initialize(this.canvas, this.ctx);
     this.dynamicVisualizer.onWaveformUpdate = () => this.draw();
 
-    this.generateWaveform();
-    this.isInitialized = true;
+    this.generationPending = false;
+    this.generateWaveformNow();
     return true;
   }
 
@@ -109,26 +120,39 @@ class StaticWaveformVisualizer {
   }
 
   private setupEventListeners(): void {
-    document.addEventListener(TYPOGRAPHY_CHANGED_EVENT, () => this.draw());
+    const signal = this.eventAbortController?.signal;
+    if (!signal) {return;}
 
-    store.on('noteChanged', (payload: NoteChangedPayload = {}) => {
+    document.addEventListener(TYPOGRAPHY_CHANGED_EVENT, () => this.draw(), { signal });
+
+    const handleNoteChanged = (payload: NoteChangedPayload = {}) => {
       const nextColor = payload.newNote?.color;
       if (nextColor && nextColor !== this.currentColor) {
         this.currentColor = nextColor;
         this.generateWaveform();
       }
-    });
+    };
 
-    store.on('timbreChanged', (color?: string) => {
+    const handleTimbreChanged = (color?: string) => {
       if (color && color === this.currentColor) {
         this.generateWaveform();
       }
-    });
+    };
 
-    store.on('waveformExtendedViewChanged', () => {
+    const handleExtendedViewChanged = () => {
       this.generateWaveform();
       this.updateToggleButton();
-    });
+    };
+
+    store.on('noteChanged', handleNoteChanged);
+    store.on('timbreChanged', handleTimbreChanged);
+    store.on('waveformExtendedViewChanged', handleExtendedViewChanged);
+
+    this.storeCleanups.push(
+      () => store.off('noteChanged', handleNoteChanged),
+      () => store.off('timbreChanged', handleTimbreChanged),
+      () => store.off('waveformExtendedViewChanged', handleExtendedViewChanged)
+    );
 
     const tabButtons = document.querySelectorAll<HTMLElement>('.tab-button');
     tabButtons.forEach(button => {
@@ -137,14 +161,14 @@ class StaticWaveformVisualizer {
         if (tabId === 'timbre') {
           setTimeout(() => this.resize(), 100);
         }
-      });
+      }, { signal });
     });
 
-    this.setupSpeedControls();
-    this.setupExtendToggle();
+    this.setupSpeedControls(signal);
+    this.setupExtendToggle(signal);
   }
 
-  private setupSpeedControls(): void {
+  private setupSpeedControls(signal: AbortSignal): void {
     const button = document.getElementById('waveform-speed-button');
     const popover = document.getElementById('waveform-speed-slider-popover');
     const slider = document.getElementById('waveform-speed-slider');
@@ -197,11 +221,11 @@ class StaticWaveformVisualizer {
       if (shouldOpen && this.animationSpeed === 100) {
         applySliderSpeed(Number(slider.dataset['value'] ?? '10'));
       }
-    });
+    }, { signal });
 
     popover.addEventListener('click', (event) => {
       event.stopPropagation();
-    });
+    }, { signal });
 
     slider.addEventListener('pointerdown', (event) => {
       event.preventDefault();
@@ -210,12 +234,12 @@ class StaticWaveformVisualizer {
       slider.focus();
       slider.setPointerCapture(event.pointerId);
       updateSpeedFromPointer(event);
-    });
+    }, { signal });
 
     slider.addEventListener('pointermove', (event) => {
       if (!isDragging) {return;}
       updateSpeedFromPointer(event);
-    });
+    }, { signal });
 
     const stopDragging = (event: PointerEvent): void => {
       if (!isDragging) {return;}
@@ -225,8 +249,8 @@ class StaticWaveformVisualizer {
       }
     };
 
-    slider.addEventListener('pointerup', stopDragging);
-    slider.addEventListener('pointercancel', stopDragging);
+    slider.addEventListener('pointerup', stopDragging, { signal });
+    slider.addEventListener('pointercancel', stopDragging, { signal });
 
     slider.addEventListener('keydown', (event) => {
       const currentSpeed = Number(slider.dataset['value'] ?? this.animationSpeed);
@@ -250,11 +274,11 @@ class StaticWaveformVisualizer {
 
       event.preventDefault();
       applySliderSpeed(nextSpeed);
-    });
+    }, { signal });
 
     document.addEventListener('click', () => {
       setPopoverOpen(false);
-    });
+    }, { signal });
   }
 
   private setAnimationSpeed(percentage: number): number {
@@ -268,13 +292,13 @@ class StaticWaveformVisualizer {
     return nextSpeed;
   }
 
-  private setupExtendToggle(): void {
+  private setupExtendToggle(signal: AbortSignal): void {
     const toggleButton = document.getElementById('waveform-extend-toggle');
     if (!(toggleButton instanceof HTMLElement)) {return;}
 
     toggleButton.addEventListener('click', () => {
       store.toggleWaveformExtendedView();
-    });
+    }, { signal });
 
     this.updateToggleButton();
   }
@@ -290,7 +314,27 @@ class StaticWaveformVisualizer {
   }
 
   generateWaveform(): void {
-    if (this.isTransitioning || !this.currentColor) {return;}
+    this.generationPending = true;
+    this.scheduleWaveformGeneration();
+  }
+
+  private scheduleWaveformGeneration(): void {
+    if (!this.isInitialized || this.isTransitioning || this.generationFrameId !== null) {
+      return;
+    }
+
+    this.generationFrameId = requestAnimationFrame(() => {
+      this.generationFrameId = null;
+      if (!this.generationPending || this.isTransitioning) {
+        return;
+      }
+      this.generationPending = false;
+      this.generateWaveformNow();
+    });
+  }
+
+  private generateWaveformNow(): void {
+    if (!this.currentColor) {return;}
 
     const timbre = store.state.timbres[this.currentColor];
     if (!timbre?.coeffs) {return;}
@@ -414,6 +458,7 @@ class StaticWaveformVisualizer {
       this.fromWaveform = null;
       this.toWaveform = null;
       this.transitionAnimationId = null;
+      this.scheduleWaveformGeneration();
     } else {
       this.transitionAnimationId = requestAnimationFrame(() => this.animateTransition());
     }
@@ -609,9 +654,9 @@ class StaticWaveformVisualizer {
   dispose(): void {
     this.dynamicVisualizer.dispose();
 
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
+    if (this.generationFrameId !== null) {
+      cancelAnimationFrame(this.generationFrameId);
+      this.generationFrameId = null;
     }
 
     if (this.transitionAnimationId) {
@@ -621,9 +666,16 @@ class StaticWaveformVisualizer {
 
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.eventAbortController?.abort();
+    this.eventAbortController = null;
+    this.storeCleanups.forEach(cleanup => cleanup());
+    this.storeCleanups = [];
     this.isTransitioning = false;
     this.fromWaveform = null;
     this.toWaveform = null;
+    this.generationPending = false;
+    this.canvas = null;
+    this.ctx = null;
     this.isInitialized = false;
   }
 }
@@ -633,6 +685,10 @@ registerWaveformVisualizer(waveformVisualizer);
 
 export function initWaveformVisualizer(): boolean {
   return waveformVisualizer.initialize();
+}
+
+export function disposeWaveformVisualizer(): void {
+  waveformVisualizer.dispose();
 }
 
 export default waveformVisualizer;

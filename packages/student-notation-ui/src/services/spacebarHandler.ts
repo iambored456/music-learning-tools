@@ -1,7 +1,7 @@
 // js/services/spacebarHandler.ts
 import store from '@state/initStore.ts';
 import SynthEngine from './initAudio.ts';
-import GlobalService from './globalService.ts';
+import { triggerAdsrPlayhead } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 import { Note } from 'tonal';
 import type { PlacedNote } from '@mlt/types';
 
@@ -121,14 +121,14 @@ export function initSpacebarHandler(): void {
         (SynthEngine as { triggerAttack: (pitch: string, color: string) => void }).triggerAttack(pitch, toolColor);
       });
 
-      // ADSR and waveform visualizer will still use the root note for simplicity
+      // The ADSR visual uses the root note for a compact chord preview.
       const rowData = store.state.fullRowData.find(row => row.toneNote === noteToPlay);
       const pitchColor = rowData ? rowData.hex : '#888888';
       const timbre = store.state.timbres[toolColor];
       if (!timbre) {return;}
       const adsr = timbre.adsr;
 
-      (GlobalService as { adsrComponent?: { playheadManager: { trigger: (id: string, phase: string, color: string, adsr: unknown) => void } } }).adsrComponent?.playheadManager.trigger('spacebar', 'attack', pitchColor, adsr);
+      triggerAdsrPlayhead('spacebar', 'attack', pitchColor, adsr);
       store.emit('spacebarPlayback', {
         note: noteToPlay,
         color: toolColor,
@@ -173,7 +173,7 @@ export function initSpacebarHandler(): void {
       }
       const adsr = triggerTimbre.adsr;
 
-      (GlobalService as { adsrComponent?: { playheadManager: { trigger: (id: string, phase: string, color: string, adsr: unknown) => void } } }).adsrComponent?.playheadManager.trigger('spacebar', 'release', pitchColor, adsr);
+      triggerAdsrPlayhead('spacebar', 'release', pitchColor, adsr);
       store.emit('spacebarPlayback', {
         note: rootNote,
         color: triggerColor,

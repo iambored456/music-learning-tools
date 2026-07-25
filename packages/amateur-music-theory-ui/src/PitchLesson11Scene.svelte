@@ -1,6 +1,8 @@
 <script lang="ts">
-  import type { LessonDefinition } from './lessons';
-  import PitchLesson111HighLow from './PitchLesson111HighLow.svelte';
+  import type { LessonDefinition, LessonSection } from './lessons';
+  import PitchLesson112HighLow from './PitchLesson112HighLow.svelte';
+  import PitchLesson111LinesSpaces from './PitchLesson111LinesSpaces.svelte';
+  import PitchLesson114MatchPitch from './PitchLesson114MatchPitch.svelte';
 
   export let lesson: LessonDefinition;
   export let currentStep = 1;
@@ -8,14 +10,90 @@
   export let volume = 72;
   export let actionSkipSignal = 0;
   export let segmentResetSignal = 0;
+  export let onMusicalIntroComplete: (() => void) | undefined = undefined;
+  export let onSectionComplete: (() => void) | undefined = undefined;
+  export let onFinalSectionComplete: (() => void) | undefined = undefined;
+  export let onLessonOutroComplete: (() => void) | undefined = undefined;
 
-  $: currentSection = lesson.sections[currentStep - 1] ?? lesson.sections[0];
+  let finalOutroActive = false;
+  let lastStep = currentStep;
+
+  $: if (currentStep !== lastStep) {
+    lastStep = currentStep;
+    if (currentStep !== 4) finalOutroActive = false;
+  }
+
+  function startFinalOutro(): void {
+    onFinalSectionComplete?.();
+    finalOutroActive = true;
+  }
+
+  $: musicalIntroSection = {
+    id: 'musical-introduction',
+    code: `${lesson.code}.0`,
+    label: 'Musical introduction',
+    description: 'Listen to the opening score before beginning the lesson subsections.',
+  } satisfies LessonSection;
+  $: currentSection = currentStep === 0
+    ? musicalIntroSection
+    : lesson.sections[currentStep - 1] ?? lesson.sections[0];
 </script>
 
 {#if currentSection}
-  {#key `${currentSection.code}-${segmentResetSignal}`}
-    {#if currentStep === 1}
-      <PitchLesson111HighLow section={currentSection} {isPlaying} {volume} {actionSkipSignal} />
+  {#key `${currentStep}-${currentSection.code}-${segmentResetSignal}`}
+    {#if currentStep === 0}
+      <PitchLesson112HighLow
+        section={currentSection}
+        phase="musical-intro"
+        {isPlaying}
+        {volume}
+        {actionSkipSignal}
+        {onMusicalIntroComplete}
+      />
+    {:else if currentStep === 1}
+      <PitchLesson111LinesSpaces
+        section={currentSection}
+        {isPlaying}
+        {volume}
+        {actionSkipSignal}
+        onComplete={onSectionComplete}
+      />
+    {:else if currentStep === 2}
+      <PitchLesson112HighLow
+        section={currentSection}
+        phase="placement"
+        {isPlaying}
+        {volume}
+        {actionSkipSignal}
+        onPlacementComplete={onSectionComplete}
+      />
+    {:else if currentStep === 3}
+      <PitchLesson112HighLow
+        section={currentSection}
+        phase="comparison"
+        {isPlaying}
+        {volume}
+        {actionSkipSignal}
+        onComparisonComplete={onSectionComplete}
+      />
+    {:else if currentStep === 4}
+      {#if finalOutroActive}
+        <PitchLesson112HighLow
+          section={currentSection}
+          phase="musical-outro"
+          {isPlaying}
+          {volume}
+          {actionSkipSignal}
+          onMusicalOutroComplete={onLessonOutroComplete}
+        />
+      {:else}
+        <PitchLesson114MatchPitch
+          section={currentSection}
+          {isPlaying}
+          {volume}
+          onComplete={startFinalOutro}
+        />
+      {/if}
     {:else}
       <section class="scene-placeholder app-card">
         <p class="scene-placeholder-kicker">{currentSection.code}</p>

@@ -1,15 +1,27 @@
 <script lang="ts">
   import store from '@state/initStore.ts';
   import logger from '@utils/logger.ts';
-  import { applyTheme, drawEnvelope, drawTempoGridlines } from '@components/audio/adsr/adsrRender.ts';
   import {
-    getAnimationEffectsManager,
-    getWaveformVisualizer
+    ADSR_NODE_PAINTED_RADIUS,
+    applyTheme,
+    drawEnvelope,
+    drawTempoGridlines
+  } from '@components/audio/adsr/adsrRender.ts';
+  import {
+    getAnimationEffectsManager
   } from '@services/runtimeGlobals.ts';
+  import {
+    attachAdsrPlayheadCanvas,
+    clearAdsrPlayheads,
+    pauseAdsrPlayheads,
+    refreshAdsrPlayheadGeometry,
+    resizeAdsrPlayheadCanvas,
+    resumeAdsrPlayheads,
+    type AdsrPlayheadEnvelope
+  } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 
   const BASE_ADSR_TIME_SECONDS = 2.5;
   const MIN_STAGE_GAP = 0.01;
-  const SUSTAIN_EPSILON = 1e-4;
 
   interface ADSRValues {
     attack: number;
@@ -21,6 +33,22 @@
   interface EnvelopePoint {
     x: number;
     y: number;
+  }
+
+  interface CanvasPlotBounds {
+    inset: number;
+    left: number;
+    bottom: number;
+    width: number;
+    height: number;
+  }
+
+  type TimeHandle = 'attack' | 'decay' | 'release';
+
+  interface AbsoluteTimes {
+    a: number;
+    d: number;
+    r: number;
   }
 
   interface NoteChangedPayload {
@@ -38,6 +66,11 @@
     color?: string;
   }
 
+  interface PlaybackStatePayload {
+    isPlaying?: boolean;
+    isPaused?: boolean;
+  }
+
   let attack = 0;
   let decay = 0;
   let sustain = 0;
@@ -48,6 +81,7 @@
   let width = 0;
   let height = 0;
   let renderQueued = false;
+  let playheadGeometryRefreshQueued = false;
 
   let container: HTMLElement | null = null;
   let parentContainer: HTMLElement | null = null;
@@ -59,19 +93,26 @@
   let thumbR: HTMLElement | null = null;
 
   let reverbCanvas: HTMLCanvasElement | null = null;
+  let playheadCanvas: HTMLCanvasElement | null = null;
   let reverbCtx: CanvasRenderingContext2D | null = null;
   let svgContainer: SVGSVGElement | null = null;
   let gridLayer: SVGGElement | null = null;
   let envelopeLayer: SVGGElement | null = null;
   let nodeLayer: SVGGElement | null = null;
 
-  function scheduleRender(): void {
+  function scheduleRender(refreshPlayheadGeometry = false): void {
+    playheadGeometryRefreshQueued ||= refreshPlayheadGeometry;
     if (renderQueued) {return;}
     renderQueued = true;
 
     const run = () => {
       renderQueued = false;
+      const shouldRefreshPlayheadGeometry = playheadGeometryRefreshQueued;
+      playheadGeometryRefreshQueued = false;
       render();
+      if (shouldRefreshPlayheadGeometry) {
+        refreshAdsrPlayheadGeometry();
+      }
       updateControls();
     };
 
@@ -82,37 +123,21 @@
     }
   }
 
-  function getNormalizedAmplitude(color: string): number {
+  function getEnvelopeAmplitude(color: string): number {
     let tremoloMultiplier = 1.0;
     const animationManager = getAnimationEffectsManager();
     if (animationManager?.shouldTremoloBeRunning?.()) {
       tremoloMultiplier = animationManager.getADSRTremoloAmplitudeMultiplier?.(color) ?? 1.0;
     }
 
-    const originalAmplitude = getWaveformVisualizer()?.calculatedAmplitude ?? 1.0;
-    return originalAmplitude * tremoloMultiplier;
-  }
-
-  function clampSustain(timbreAdsr: ADSRValues): ADSRValues {
-    const normalizedAmplitude = getNormalizedAmplitude(currentColor);
-    if (!Number.isFinite(normalizedAmplitude)) {
-      return timbreAdsr;
-    }
-
-    if (timbreAdsr.sustain - normalizedAmplitude > SUSTAIN_EPSILON) {
-      const nextAdsr = { ...timbreAdsr, sustain: normalizedAmplitude };
-      store.setADSR(currentColor, nextAdsr);
-      return nextAdsr;
-    }
-
-    return timbreAdsr;
+    return tremoloMultiplier;
   }
 
   function updateFromStore(): void {
     const timbre = store.state.timbres[currentColor];
     if (!timbre) {return;}
 
-    const nextAdsr = clampSustain(timbre.adsr);
+    const nextAdsr = timbre.adsr;
 
     attack = nextAdsr.attack;
     decay = nextAdsr.decay;
@@ -124,6 +149,62 @@
 
   function getCurrentMaxTime(): number {
     return BASE_ADSR_TIME_SECONDS * timeAxisScale;
+  }
+
+  function getCanvasPlotBounds(): CanvasPlotBounds {
+    const sliderThumbRadius = (thumbA?.offsetWidth ?? 0) / 2;
+    const requestedInset = Math.max(ADSR_NODE_PAINTED_RADIUS, sliderThumbRadius);
+    const inset = Math.min(requestedInset, width / 2, height / 2);
+
+    return {
+      inset,
+      left: inset,
+      bottom: height - inset,
+      width: width - (2 * inset),
+      height: height - (2 * inset)
+    };
+  }
+
+  function resolvePushedAbsoluteTimes(
+    handle: TimeHandle,
+    requestedTime: number,
+    currentTimes: AbsoluteTimes
+  ): AbsoluteTimes {
+    const maxTime = getCurrentMaxTime();
+    const gap = Math.min(MIN_STAGE_GAP, maxTime / 2);
+    const next = { ...currentTimes };
+
+    if (handle === 'attack') {
+      next.a = Math.max(0, Math.min(maxTime - (2 * gap), requestedTime));
+      next.d = Math.max(next.d, next.a + gap);
+      next.r = Math.max(next.r, next.d + gap);
+
+      if (next.r > maxTime) {
+        next.r = maxTime;
+        next.d = maxTime - gap;
+        next.a = maxTime - (2 * gap);
+      }
+    } else if (handle === 'decay') {
+      next.d = Math.max(gap, Math.min(maxTime - gap, requestedTime));
+
+      if (next.d < next.a + gap) {
+        next.a = next.d - gap;
+      }
+      if (next.d > next.r - gap) {
+        next.r = next.d + gap;
+      }
+    } else {
+      next.r = Math.max(2 * gap, Math.min(maxTime, requestedTime));
+
+      if (next.r < next.d + gap) {
+        next.d = next.r - gap;
+      }
+      if (next.d < next.a + gap) {
+        next.a = next.d - gap;
+      }
+    }
+
+    return next;
   }
 
   function updateADSRFromAbsoluteTimes(times: { a: number; d: number; r: number }): void {
@@ -168,15 +249,9 @@
     const timbre = store.state.timbres[currentColor];
     if (!timbre) {return;}
 
-    const normalizedAmplitude = getNormalizedAmplitude(currentColor);
-    const maxSustainPercent = normalizedAmplitude * 100;
-
     const sustainPercent = sustain * 100;
     sustainThumb.style.bottom = `${sustainPercent}%`;
     sustainTrack.style.setProperty('--sustain-progress', `${sustainPercent}%`);
-
-    const ineligiblePercent = 100 - maxSustainPercent;
-    sustainTrack.style.setProperty('--ineligible-height', `${ineligiblePercent}%`);
 
     const maxTimeValue = getCurrentMaxTime();
     const aPercent = maxTimeValue > 0 ? (attack / maxTimeValue) * 100 : 0;
@@ -212,6 +287,39 @@
     }
   }
 
+  function calculateEnvelopePoints(sourceAdsr: AdsrPlayheadEnvelope): EnvelopePoint[] {
+    if (!width || !height) {return [];}
+
+    const maxTimeValue = getCurrentMaxTime();
+    if (!Number.isFinite(maxTimeValue) || maxTimeValue <= 0) {return [];}
+
+    const normalizedAmplitude = getEnvelopeAmplitude(currentColor);
+    if (!Number.isFinite(normalizedAmplitude)) {return [];}
+
+    const plotBounds = getCanvasPlotBounds();
+    const timeToX = (time: number) => {
+      const timeRatio = Math.max(0, Math.min(1, time / maxTimeValue));
+      return plotBounds.left + (timeRatio * plotBounds.width);
+    };
+    const amplitudeToY = (amplitude: number) => {
+      const safeAmplitude = Math.max(0, Math.min(1, amplitude));
+      return plotBounds.bottom - (safeAmplitude * plotBounds.height);
+    };
+
+    return [
+      { x: plotBounds.left, y: height },
+      { x: timeToX(sourceAdsr.attack), y: amplitudeToY(normalizedAmplitude) },
+      {
+        x: timeToX(sourceAdsr.attack + sourceAdsr.decay),
+        y: amplitudeToY(Math.min(sourceAdsr.sustain * normalizedAmplitude, normalizedAmplitude))
+      },
+      {
+        x: timeToX(sourceAdsr.attack + sourceAdsr.decay + sourceAdsr.release),
+        y: plotBounds.bottom
+      }
+    ];
+  }
+
   function render(): void {
     if (!gridLayer || !envelopeLayer || !nodeLayer) {return;}
     if (!width || !height) {return;}
@@ -219,21 +327,13 @@
     const maxTimeValue = getCurrentMaxTime();
     if (!Number.isFinite(maxTimeValue) || maxTimeValue <= 0) {return;}
 
-    const normalizedAmplitude = getNormalizedAmplitude(currentColor);
+    const normalizedAmplitude = getEnvelopeAmplitude(currentColor);
     if (!Number.isFinite(normalizedAmplitude)) {return;}
 
-    const timeToX = (time: number) => (time / maxTimeValue) * width;
-    const points: EnvelopePoint[] = [
-      { x: 0, y: height },
-      { x: timeToX(attack), y: height * (1 - normalizedAmplitude) },
-      {
-        x: timeToX(attack + decay),
-        y: height * (1 - Math.min(sustain * normalizedAmplitude, normalizedAmplitude))
-      },
-      { x: timeToX(attack + decay + release), y: height }
-    ];
+    const points = calculateEnvelopePoints({ attack, decay, sustain, release });
+    const { inset: plotInset } = getCanvasPlotBounds();
 
-    drawTempoGridlines(gridLayer, { width, height }, maxTimeValue);
+    drawTempoGridlines(gridLayer, { width, height }, maxTimeValue, plotInset);
     drawEnvelope(
       envelopeLayer,
       nodeLayer,
@@ -241,7 +341,8 @@
       { width, height },
       currentColor,
       maxTimeValue,
-      reverbCtx
+      reverbCtx,
+      plotInset
     );
     applyTheme(parentContainer, currentColor);
   }
@@ -276,6 +377,8 @@
       svgContainer.setAttribute('viewBox', `0 0 ${nextWidth} ${nextHeight}`);
     }
 
+    resizeAdsrPlayheadCanvas(nextWidth, nextHeight);
+
     scheduleRender();
   }
 
@@ -295,12 +398,20 @@
     thumbR = document.getElementById('thumb-r');
     reverbCtx = reverbCanvas?.getContext('2d') ?? null;
 
+    const detachPlayheadCanvas = playheadCanvas
+      ? attachAdsrPlayheadCanvas({
+          canvas: playheadCanvas,
+          getEnvelopePoints: calculateEnvelopePoints
+        })
+      : () => undefined;
+
     const observer = new ResizeObserver(() => resize());
     observer.observe(container);
     resize();
 
     return () => {
       observer.disconnect();
+      detachPlayheadCanvas();
     };
   });
 
@@ -323,12 +434,13 @@
 
     const handleAdsrTimeScaleChanged = () => {
       timeAxisScale = store.state.adsrTimeAxisScale;
+      refreshAdsrPlayheadGeometry();
       scheduleRender();
     };
 
     const handleTremoloAmplitudeUpdate = (payload?: TremoloAmplitudePayload) => {
       if (payload?.activeColors?.includes(currentColor)) {
-        scheduleRender();
+        scheduleRender(true);
       }
     };
 
@@ -339,12 +451,23 @@
       }
     };
 
+    const handlePlaybackStateChanged = (payload?: PlaybackStatePayload) => {
+      if (!payload?.isPlaying) {
+        clearAdsrPlayheads();
+      } else if (payload.isPaused) {
+        pauseAdsrPlayheads();
+      } else {
+        resumeAdsrPlayheads();
+      }
+    };
+
     store.on('noteChanged', handleNoteChanged);
     store.on('timbreChanged', handleTimbreChanged);
     store.on('tempoChanged', handleTempoChanged);
     store.on('adsrTimeAxisScaleChanged', handleAdsrTimeScaleChanged);
     store.on('tremoloAmplitudeUpdate', handleTremoloAmplitudeUpdate);
     store.on('audioEffectChanged', handleAudioEffectChanged);
+    store.on('playbackStateChanged', handlePlaybackStateChanged);
 
     updateFromStore();
 
@@ -355,6 +478,7 @@
       store.off('adsrTimeAxisScaleChanged', handleAdsrTimeScaleChanged);
       store.off('tremoloAmplitudeUpdate', handleTremoloAmplitudeUpdate);
       store.off('audioEffectChanged', handleAudioEffectChanged);
+      store.off('playbackStateChanged', handlePlaybackStateChanged);
     };
   });
 
@@ -374,10 +498,6 @@
       const y = event.clientY - rect.top;
       let percent = 100 - (y / rect.height) * 100;
       percent = Math.max(0, Math.min(100, percent));
-
-      const normalizedAmplitude = getWaveformVisualizer()?.getNormalizedAmplitude?.() || 1.0;
-      const maxSustainPercent = normalizedAmplitude * 100;
-      percent = Math.min(percent, maxSustainPercent);
 
       const timbre = store.state.timbres[currentColor];
       if (!timbre) {return;}
@@ -414,11 +534,13 @@
         r: currentAttack + currentDecay + currentRelease
       };
 
-      if (activeThumb.id === 'thumb-a') {currentTimes.a = timeValue;}
-      if (activeThumb.id === 'thumb-d') {currentTimes.d = timeValue;}
-      if (activeThumb.id === 'thumb-r') {currentTimes.r = timeValue;}
+      const handle: TimeHandle = activeThumb.id === 'thumb-a'
+        ? 'attack'
+        : activeThumb.id === 'thumb-d'
+          ? 'decay'
+          : 'release';
 
-      updateADSRFromAbsoluteTimes(currentTimes);
+      updateADSRFromAbsoluteTimes(resolvePushedAbsoluteTimes(handle, timeValue, currentTimes));
     };
 
     const handleMultiPointerDown = (event: PointerEvent): void => {
@@ -445,9 +567,11 @@
       if (!screenCTM) {return;}
 
       const svgPoint = point.matrixTransform(screenCTM.inverse());
+      const plotBounds = getCanvasPlotBounds();
+      if (plotBounds.width <= 0 || plotBounds.height <= 0) {return;}
 
-      let xPercent = (svgPoint.x / width) * 100;
-      let yPercent = 1 - (svgPoint.y / height);
+      let xPercent = ((svgPoint.x - plotBounds.left) / plotBounds.width) * 100;
+      let yPercent = (plotBounds.bottom - svgPoint.y) / plotBounds.height;
       xPercent = Math.max(0, Math.min(100, xPercent));
       yPercent = Math.max(0, Math.min(1, yPercent));
 
@@ -466,16 +590,19 @@
 
       switch (activeNode.id) {
         case 'attack-node':
-          currentTimes.a = timeValue;
+          Object.assign(currentTimes, resolvePushedAbsoluteTimes('attack', timeValue, currentTimes));
           break;
         case 'decay-sustain-node': {
-          currentTimes.d = timeValue;
-          const normalizedAmplitude = getWaveformVisualizer()?.getNormalizedAmplitude?.() || 1.0;
-          nextSustain = Math.min(yPercent, normalizedAmplitude);
+          Object.assign(currentTimes, resolvePushedAbsoluteTimes('decay', timeValue, currentTimes));
+          const normalizedAmplitude = getEnvelopeAmplitude(currentColor);
+          if (normalizedAmplitude > 0) {
+            // Sustain is an envelope ratio; convert the rendered waveform amplitude back to that ratio.
+            nextSustain = Math.min(1, yPercent / normalizedAmplitude);
+          }
           break;
         }
         case 'release-node':
-          currentTimes.r = timeValue;
+          Object.assign(currentTimes, resolvePushedAbsoluteTimes('release', timeValue, currentTimes));
           break;
       }
 
@@ -548,3 +675,9 @@
   <g bind:this={envelopeLayer}></g>
   <g bind:this={nodeLayer}></g>
 </svg>
+<canvas
+  class="adsr-playhead-canvas"
+  bind:this={playheadCanvas}
+  aria-hidden="true"
+  style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"
+></canvas>

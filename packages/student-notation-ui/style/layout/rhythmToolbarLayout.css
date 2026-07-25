@@ -119,7 +119,9 @@
     justify-content: flex-start;
     min-height: 0;
     height: 100%;
+    padding-top: var(--preset-tab-rail-height);
     gap: 0;
+    box-sizing: border-box;
 }
 
 .rhythm-controls-content-box {

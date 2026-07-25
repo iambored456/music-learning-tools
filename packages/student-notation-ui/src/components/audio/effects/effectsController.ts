@@ -4,7 +4,7 @@ import logger from '@utils/logger.ts';
 import store from '@state/initStore.ts';
 import effectsCoordinator from '@services/timbreEffects/effectsCoordinator.ts';
 import SynthEngine from '@services/initAudio.ts';
-import GlobalService from '@services/globalService.ts';
+import { triggerAdsrPlayhead } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 import { Note } from 'tonal';
 
 interface EffectControlConfig {
@@ -338,7 +338,7 @@ class EffectsController {
     const pitchColor = rowData ? rowData.hex : '#888888';
     const timbre = store.state.timbres[color];
     if (timbre) {
-      GlobalService.adsrComponent?.playheadManager.trigger(noteId, 'attack', pitchColor, timbre.adsr);
+      triggerAdsrPlayhead(noteId, 'attack', pitchColor, timbre.adsr);
     }
 
     store.emit('spacebarPlayback', { note: root, color, isPlaying: true });
@@ -360,7 +360,7 @@ class EffectsController {
     const pitchColor = rowData ? rowData.hex : '#888888';
     const timbre = store.state.timbres[color];
     if (timbre) {
-      GlobalService.adsrComponent?.playheadManager.trigger(noteId, 'release', pitchColor, timbre.adsr);
+      triggerAdsrPlayhead(noteId, 'release', pitchColor, timbre.adsr);
     }
 
     store.emit('spacebarPlayback', { note: root, color, isPlaying: false });

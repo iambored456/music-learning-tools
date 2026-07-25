@@ -121,7 +121,7 @@ export const curriculumOutline: OutlineRow = {
               type: 'lesson',
               code: '1.1',
               title: 'The Pitch Frequency Space',
-              body: 'Introduces pitch range, octave equivalence, tuning systems, pitch classes, and scientific pitch notation.',
+              body: 'Introduces lines and spaces, high and low pitch placement, pitch comparison, and exact pitch matching.',
             },
             {
               id: 'lesson-1-2',

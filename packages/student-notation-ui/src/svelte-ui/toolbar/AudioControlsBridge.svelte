@@ -18,6 +18,9 @@
   let quarterNoteInput: InstanceType<typeof DraggableNumber> | null = null;
   let dottedQuarterInput: InstanceType<typeof DraggableNumber> | null = null;
   let presetContainer: HTMLElement | null = null;
+  let tempoMarksCleanup: (() => void) | null = null;
+  const tempoStepButtonCleanups: Array<() => void> = [];
+  const presetButtonCleanups: Array<() => void> = [];
 
   // State
   let isSliderPressed = false;
@@ -43,6 +46,16 @@
     return `#${lightenedR.toString(16).padStart(2, '0')}${lightenedG.toString(16).padStart(2, '0')}${lightenedB.toString(16).padStart(2, '0')}`;
   };
 
+  function updateTempoSliderFill(slider: HTMLInputElement): void {
+    const min = Number(slider.min) || 0;
+    const max = Number(slider.max) || 1;
+    const value = Number(slider.value);
+    const progress = Math.max(0, Math.min(1, (value - min) / Math.max(max - min, 1)));
+    const fillPercent = `${progress * 100}%`;
+    slider.style.setProperty('--tempo-fill-percent', fillPercent);
+    slider.closest<HTMLElement>('.tempo-slider-container')?.style.setProperty('--tempo-fill-percent', fillPercent);
+  }
+
   // Update tempo displays
   function updateTempoDisplays(baseBPM: number): void {
     const quarterBPM = Math.round(baseBPM);
@@ -52,6 +65,7 @@
     if (currentSlider && parseInt(currentSlider.value, 10) !== quarterBPM) {
       currentSlider.value = `${quarterBPM}`;
     }
+    if (currentSlider) updateTempoSliderFill(currentSlider);
 
     const eighthBPM = quarterBPM * 2;
     const dottedQuarterBPM = Math.round(quarterBPM / 1.5);
@@ -73,10 +87,10 @@
   }
 
   // Create tempo marks on slider
-  function createTempoMarks(slider: HTMLInputElement | null): void {
-    if (!slider) return;
+  function createTempoMarks(slider: HTMLInputElement | null): (() => void) | null {
+    if (!slider) return null;
     const container = slider.closest('.tempo-slider-container');
-    if (!container || container.querySelector('.tempo-slider-marks')) return;
+    if (!container || container.querySelector('.tempo-slider-marks')) return null;
 
     const marks = [60, 90, 120, 160, 200];
     const marksLayer = document.createElement('div');
@@ -93,9 +107,7 @@
       const sliderRect = slider.getBoundingClientRect();
       const sliderHeight = sliderRect.height || slider.clientHeight;
       const sliderStyles = getComputedStyle(slider);
-      const thumbSize = parseFloat(sliderStyles.getPropertyValue('--slider-thumb-size')) || 0;
-      const thumbBorder = parseFloat(sliderStyles.getPropertyValue('--slider-thumb-border')) || 0;
-      const thumbTotal = thumbSize + (thumbBorder * 2);
+      const thumbTotal = parseFloat(sliderStyles.getPropertyValue('--tempo-slider-thumb-size')) || 16;
 
       const travelHeight = Math.max(sliderHeight - thumbTotal, 1);
       const origin = thumbTotal / 2;
@@ -116,6 +128,12 @@
       const mark = document.createElement('span');
       mark.className = 'tempo-slider-mark';
       mark.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'tempo-slider-mark-label';
+      label.textContent = `${bpm}`;
+      mark.appendChild(label);
+
       marksLayer.appendChild(mark);
       markElements.push({ el: mark, bpm });
     });
@@ -124,6 +142,11 @@
 
     const resizeObserver = new ResizeObserver(positionMarks);
     resizeObserver.observe(slider);
+
+    return () => {
+      resizeObserver.disconnect();
+      marksLayer.remove();
+    };
   }
 
   // Update preset selection
@@ -139,11 +162,13 @@
     const presetButtons = Array.from(document.querySelectorAll('#preset-buttons .preset-button')) as HTMLElement[];
     presetButtons.forEach((buttonEl) => {
       buttonEl.classList.remove('selected');
+      buttonEl.setAttribute('aria-pressed', 'false');
     });
 
     if (activePresetName) {
       const activeButton = document.getElementById(`preset-${activePresetName}`);
       activeButton?.classList.add('selected');
+      activeButton?.setAttribute('aria-pressed', 'true');
     }
 
     const extraLightColor = lightenColor(lightColor, 60);
@@ -199,7 +224,12 @@
     if (data?.newNote?.color) {
       updatePresetSelection(data.newNote.color);
     } else {
-      document.querySelectorAll('.preset-button').forEach(btn => btn.classList.remove('selected'));
+      document.querySelectorAll('.preset-button').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn instanceof HTMLElement) {
+          btn.setAttribute('aria-pressed', 'false');
+        }
+      });
       if (presetContainer) {
         presetContainer.style.setProperty('--c-accent', '#4A90E2');
         presetContainer.style.setProperty('--c-accent-hover', '#357ABD');
@@ -225,7 +255,7 @@
 
     // Initialize DraggableNumber components
     const tempoInputConfig = {
-      size: [45, 24] as [number, number],
+      size: [45, 18] as [number, number],
       step: 1,
       decimalPlaces: 0,
       useAppStyling: true
@@ -275,10 +305,12 @@
       if (!tempoKey || !tempoStepInputMap[tempoKey]) return;
       const input = tempoStepInputMap[tempoKey]!;
       const delta = btn.classList.contains('tempo-step-up') ? 1 : -1;
-      btn.addEventListener('click', () => {
+      const handleClick = () => {
         input.value = input.value + delta;
         btn.blur();
-      });
+      };
+      btn.addEventListener('click', handleClick);
+      tempoStepButtonCleanups.push(() => btn.removeEventListener('click', handleClick));
     });
 
     // Initialize tempo displays
@@ -286,7 +318,7 @@
 
     // Set up tempo slider
     if (tempoSlider) {
-      createTempoMarks(tempoSlider);
+      tempoMarksCleanup = createTempoMarks(tempoSlider);
 
       tempoSlider.addEventListener('mousedown', handleSliderMouseDown);
       tempoSlider.addEventListener('touchstart', handleSliderTouchStart);
@@ -309,14 +341,16 @@
       const presetId = button.id.replace('preset-', '');
       const preset = (PRESETS as Record<string, any>)[presetId];
       if (preset) {
-        button.addEventListener('click', () => {
+        const handleClick = () => {
           const currentColor = store.state.selectedNote?.color;
           if (currentColor) {
             store.applyPreset(currentColor, preset);
             updatePresetSelection(currentColor);
           }
           button.blur();
-        });
+        };
+        button.addEventListener('click', handleClick);
+        presetButtonCleanups.push(() => button.removeEventListener('click', handleClick));
       }
     });
 
@@ -342,6 +376,22 @@
     document.removeEventListener('mouseup', handleDocumentMouseUp);
     document.removeEventListener('touchend', handleDocumentTouchEnd);
     document.removeEventListener('touchcancel', handleDocumentTouchCancel);
+
+    tempoStepButtonCleanups.splice(0).forEach(cleanup => cleanup());
+    presetButtonCleanups.splice(0).forEach(cleanup => cleanup());
+    tempoMarksCleanup?.();
+    tempoMarksCleanup = null;
+
+    store.off('noteChanged', handleNoteChanged);
+    store.off('timbreChanged', handleTimbreChanged);
+    store.off('tempoChanged', handleTempoChanged);
+
+    eighthNoteInput?.destroy();
+    quarterNoteInput?.destroy();
+    dottedQuarterInput?.destroy();
+    eighthNoteInput = null;
+    quarterNoteInput = null;
+    dottedQuarterInput = null;
   });
 </script>
 

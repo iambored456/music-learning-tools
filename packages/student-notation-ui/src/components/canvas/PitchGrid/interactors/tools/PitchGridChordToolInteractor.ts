@@ -1,6 +1,6 @@
 import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
-import GlobalService from '@services/globalService.ts';
+import { triggerAdsrPlayhead } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 import { isNotePlayableAtColumn } from '@/utils/tonicColumnUtils.ts';
 import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
 
@@ -46,7 +46,7 @@ export class PitchGridChordToolInteractor {
     const pitchColor = store.state.fullRowData[rowIndex]?.hex || '#888888';
     const chordAdsr = store.state.timbres[color]?.adsr;
     if (chordAdsr) {
-      GlobalService.adsrComponent?.playheadManager.trigger('chord_preview', 'attack', pitchColor, chordAdsr);
+      triggerAdsrPlayhead('chord_preview', 'attack', pitchColor, chordAdsr);
     }
 
     const nextChordNotes: PlacedNote[] = [];

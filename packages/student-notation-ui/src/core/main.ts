@@ -486,11 +486,12 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:audio-components START');
     loadingManager.setStatus('Mounting envelope editor...');
     await loadingManager.nextFrame();
-    initAudioComponents({
+    const disposeAudioComponents = initAudioComponents({
       onStep: (status) => {
         loadingManager.setStatus(status);
       }
     });
+    cleanupFns.push(disposeAudioComponents);
     loadingManager.completeTask('mount-envelope');
     initDebug('phase:mount-envelope DONE');
     await loadingManager.nextFrame();

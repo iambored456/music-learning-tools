@@ -699,7 +699,7 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
       return marker.id;
     },
 
-    removeModulationMarker(this: Store, markerId: string): void {
+    removeModulationMarker(this: Store, markerId: string, record = true): void {
       const index = this.state.tempoModulationMarkers.findIndex(m => m.id === markerId);
       if (index === -1) {
         log('warn', 'rhythmActions', `Modulation marker not found: ${markerId}`, null, 'state');
@@ -708,7 +708,9 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
 
       this.state.tempoModulationMarkers.splice(index, 1);
       this.emit('tempoModulationMarkersChanged');
-      this.recordState();
+      if (record) {
+        this.recordState();
+      }
 
       log('info', 'rhythmActions', `Removed modulation marker ${markerId}`, null, 'state');
     },

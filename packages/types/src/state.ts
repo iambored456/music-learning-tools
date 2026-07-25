@@ -197,7 +197,7 @@ export interface Store {
     columnIndex?: number | null,
     macrobeatIndex?: number | null
   ): string | null;
-  removeModulationMarker(markerId: string): void;
+  removeModulationMarker(markerId: string, record?: boolean): void;
   moveModulationMarker(markerId: string, measureIndex: number): void;
   setModulationRatio(markerId: string, ratio: ModulationRatio): void;
   toggleModulationMarker(markerId: string): void;

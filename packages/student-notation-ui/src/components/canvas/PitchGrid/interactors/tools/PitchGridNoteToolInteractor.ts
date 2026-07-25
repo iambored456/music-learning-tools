@@ -1,6 +1,6 @@
 import store from '@state/initStore.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
-import GlobalService from '@services/globalService.ts';
+import { triggerAdsrPlayhead } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
 import { isNotePlayableAtColumn } from '@/utils/tonicColumnUtils.ts';
 import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
@@ -58,7 +58,7 @@ export class PitchGridNoteToolInteractor {
     const pitchColor = store.state.fullRowData[rowIndex]?.hex || '#888888';
     const adsr = store.state.timbres[existingNote.color]?.adsr;
     if (adsr) {
-      GlobalService.adsrComponent?.playheadManager.trigger(existingNote.uuid, 'attack', pitchColor, adsr);
+      triggerAdsrPlayhead(existingNote.uuid, 'attack', pitchColor, adsr);
     }
 
     return {
@@ -138,7 +138,7 @@ export class PitchGridNoteToolInteractor {
       const pitchColor = store.state.fullRowData[rowIndex]?.hex || '#888888';
       const adsr = store.state.timbres[addedNote.color]?.adsr;
       if (adsr) {
-        GlobalService.adsrComponent?.playheadManager.trigger(
+        triggerAdsrPlayhead(
           addedNote.uuid,
           'attack',
           pitchColor,
@@ -199,7 +199,7 @@ export class PitchGridNoteToolInteractor {
         const pitchColor = store.state.fullRowData[newRow]?.hex || '#888888';
         const adsr = store.state.timbres[nextActiveNote.color]?.adsr;
         if (adsr && nextActiveNote.uuid) {
-          GlobalService.adsrComponent?.playheadManager.trigger(nextActiveNote.uuid, 'attack', pitchColor, adsr);
+          triggerAdsrPlayhead(nextActiveNote.uuid, 'attack', pitchColor, adsr);
         }
 
         return {
@@ -246,7 +246,7 @@ export class PitchGridNoteToolInteractor {
         const pitchColor = store.state.fullRowData[newRow]?.hex || '#888888';
         const adsr = store.state.timbres[nextActiveNote.color]?.adsr;
         if (adsr && nextActiveNote.uuid) {
-          GlobalService.adsrComponent?.playheadManager.trigger(nextActiveNote.uuid, 'attack', pitchColor, adsr);
+          triggerAdsrPlayhead(nextActiveNote.uuid, 'attack', pitchColor, adsr);
         }
 
         return {

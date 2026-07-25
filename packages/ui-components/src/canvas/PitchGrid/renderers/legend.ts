@@ -27,6 +27,10 @@ export interface LegendRenderConfig {
   showFrequencyLabels: boolean;
   /** Whether to show octave numbers in labels */
   showOctaveLabels: boolean;
+  /** Whether the legend should display any text labels */
+  showLegendLabels: boolean;
+  /** Whether accidental rows should display pitch-name text */
+  showAccidentalLabels: boolean;
   /** Accidental display mode */
   accidentalMode: AccidentalMode;
   /** Set of pitch classes that should be focused (0-11), null = show all */
@@ -149,7 +153,20 @@ function processLabel(
   row: PitchRowData,
   config: LegendRenderConfig
 ): string | null {
-  const { showFrequencyLabels, showOctaveLabels, accidentalMode, focusColorsEnabled, focusedPitchClasses, labelOverrides } = config;
+  const {
+    showFrequencyLabels,
+    showOctaveLabels,
+    showLegendLabels,
+    showAccidentalLabels,
+    accidentalMode,
+    focusColorsEnabled,
+    focusedPitchClasses,
+    labelOverrides,
+  } = config;
+
+  if (!showLegendLabels || (row.isAccidental && !showAccidentalLabels)) {
+    return null;
+  }
 
   // Label overrides take priority (e.g., scale degree labels)
   if (labelOverrides && labelOverrides.size > 0) {
@@ -238,10 +255,13 @@ export function drawLegend(
       // Check if accidentals are hidden
       const isAccidentalHidden = !accidentalMode.sharp && !accidentalMode.flat;
       const shouldHideAccidental = row.isAccidental && isAccidentalHidden;
+      const shouldHideLabel =
+        !config.showLegendLabels ||
+        (row.isAccidental && !config.showAccidentalLabels);
 
       // Get the label to draw
       const label = processLabel(row, config);
-      if (label === null) continue;
+      if (label === null && !shouldHideLabel) continue;
 
       // Determine background color
       let bgColor = colorMode === 'bw' ? '#ffffff' : (row.hex || '#ffffff');
@@ -284,6 +304,8 @@ export function drawLegend(
         }
       }
 
+      if (label === null) continue;
+
       // Draw text
       const fontSize = getLegendFontSize(cellWidth, cellHeight, label.length, pixelRatio);
 
@@ -306,6 +328,37 @@ export function drawLegend(
     }
 
     cumulativeX += colWidth;
+  }
+
+  let lowestRenderableRow = fullRowData.length - 1;
+  while (
+    lowestRenderableRow >= 0 &&
+    (!fullRowData[lowestRenderableRow] || fullRowData[lowestRenderableRow]?.isBoundary)
+  ) {
+    lowestRenderableRow -= 1;
+  }
+
+  const finalRow = fullRowData[endRow];
+  if (endRow === lowestRenderableRow && finalRow && !finalRow.isBoundary) {
+    const paddingColumn = finalRow.column === 'A' ? 'B' : 'A';
+    const paddingColumnIndex = columnsOrder.indexOf(paddingColumn);
+    const logicalCanvasHeight = ctx.canvas.height / pixelRatio;
+    const paddingTop = Math.max(
+      0,
+      Math.min(logicalCanvasHeight, coords.getRowY(endRow)),
+    );
+
+    if (paddingColumnIndex >= 0 && logicalCanvasHeight > paddingTop) {
+      // A/B legend cells are staggered by half a row. At the gamut floor,
+      // paint the unused half-cell below A0 black to match Student Notation.
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(
+        paddingColumnIndex * colWidth,
+        paddingTop,
+        colWidth,
+        logicalCanvasHeight - paddingTop,
+      );
+    }
   }
 }
 

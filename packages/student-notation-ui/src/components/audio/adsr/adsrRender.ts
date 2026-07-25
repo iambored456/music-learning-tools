@@ -31,14 +31,26 @@ declare global {
   }
 }
 
-export function drawTempoGridlines(gridLayer: SVGGElement, { width, height }: Dimensions, totalADRTime: number): void {
+export const ADSR_NODE_RADIUS = 8;
+export const ADSR_NODE_STROKE_WIDTH = 2;
+export const ADSR_NODE_PAINTED_RADIUS = ADSR_NODE_RADIUS + (ADSR_NODE_STROKE_WIDTH / 2);
+
+export function drawTempoGridlines(
+  gridLayer: SVGGElement,
+  { width, height }: Dimensions,
+  totalADRTime: number,
+  horizontalInset = 0
+): void {
   while (gridLayer.firstChild) {gridLayer.removeChild(gridLayer.firstChild);}
+  const safeHorizontalInset = Math.min(Math.max(0, horizontalInset), width / 2);
+  const plotWidth = width - (2 * safeHorizontalInset);
+  const timeToX = (time: number) => safeHorizontalInset + ((time / totalADRTime) * plotWidth);
 
   // Draw time markers (1s, 2s, 3s, 4s, 5s) in the background
   if (totalADRTime > 0) {
     for (let seconds = 1; seconds <= 5; seconds++) {
       if (seconds <= totalADRTime) {
-        const x = (seconds / totalADRTime) * width;
+        const x = timeToX(seconds);
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', String(x));
         text.setAttribute('y', String(height - 5)); // Bottom-aligned with 5px padding
@@ -58,7 +70,7 @@ export function drawTempoGridlines(gridLayer: SVGGElement, { width, height }: Di
   const microbeatDuration = 30 / tempo;
   let beatCount = 0;
   for (let time = microbeatDuration; time < totalADRTime; time += microbeatDuration) {
-    const x = (time / totalADRTime) * width;
+    const x = timeToX(time);
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', String(x));
     line.setAttribute('y1', '0');
@@ -73,7 +85,16 @@ export function drawTempoGridlines(gridLayer: SVGGElement, { width, height }: Di
   }
 }
 
-export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement, points: Point[], { height, width }: Dimensions, colorKey: string, maxTime: number, canvasCtx: CanvasRenderingContext2D | null): void {
+export function drawEnvelope(
+  envelopeLayer: SVGGElement,
+  nodeLayer: SVGGElement,
+  points: Point[],
+  { height, width }: Dimensions,
+  colorKey: string,
+  maxTime: number,
+  canvasCtx: CanvasRenderingContext2D | null,
+  plotInset = 0
+): void {
   while (envelopeLayer.firstChild) {envelopeLayer.removeChild(envelopeLayer.firstChild);}
   while (nodeLayer.firstChild) {nodeLayer.removeChild(nodeLayer.firstChild);}
   if (points.length < 4) {return;}
@@ -82,6 +103,9 @@ export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement,
   const decayPoint = points[2];
   const releasePoint = points[3];
   if (!startPoint || !attackPoint || !decayPoint || !releasePoint) {return;}
+  const safePlotInset = Math.min(Math.max(0, plotInset), width / 2, height / 2);
+  const plotWidth = width - (2 * safePlotInset);
+  const plotRight = width - safePlotInset;
 
   // Get the color pair from the store's palette
   const palette = store.state.colorPalette[colorKey] || { primary: colorKey, light: colorKey };
@@ -114,7 +138,7 @@ export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement,
 
     while (currentOpacity > minOpacity && echoCount < 10) {
       echoCount++;
-      const delayOffsetPx = (delayTimeSeconds * echoCount / maxTime) * width;
+      const delayOffsetPx = (delayTimeSeconds * echoCount / maxTime) * plotWidth;
 
       // Shift all points by the delay offset
       const echoPoints = points.map(p => ({ x: p.x + delayOffsetPx, y: p.y }));
@@ -126,12 +150,12 @@ export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement,
       }
 
       // Only draw if the echo is still visible within the canvas
-      if (echoStart.x < width) {
+      if (echoStart.x < plotRight) {
         // Draw echo fill
         const echoFill = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        const echoFillPoints = `${echoStart.x},${height} ` +
-                                       echoPoints.map(p => `${p.x},${p.y}`).join(' ') +
-                                       ` ${Math.min(echoRelease.x, width)},${height}`;
+        const echoFillPoints = echoPoints.map(p => `${p.x},${p.y}`).join(' ')
+          + ` ${Math.min(echoRelease.x, plotRight)},${height}`
+          + ` ${echoStart.x},${height}`;
         echoFill.setAttribute('points', echoFillPoints);
         echoFill.setAttribute('fill', hexToRgba(lightColor, 0.7 * currentOpacity));
         echoFill.setAttribute('class', 'delay-echo');
@@ -154,7 +178,9 @@ export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement,
 
   // --- Draw Main Envelope Shape ---
   const fillPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-  const fillPoints = `0,${height} ` + points.map(p => `${p.x},${p.y}`).join(' ') + ` ${width},${height}`;
+  const fillPoints = points.map(p => `${p.x},${p.y}`).join(' ')
+    + ` ${releasePoint.x},${height}`
+    + ` ${startPoint.x},${height}`;
   fillPolygon.setAttribute('points', fillPoints);
   // Use the new light color with transparency for the fill
   fillPolygon.setAttribute('fill', hexToRgba(lightColor, 0.7));
@@ -204,10 +230,10 @@ export function drawEnvelope(envelopeLayer: SVGGElement, nodeLayer: SVGGElement,
     node.setAttribute('class', 'adsr-node');
     node.setAttribute('cx', String(point.x));
     node.setAttribute('cy', String(point.y));
-    node.setAttribute('r', '8');
+    node.setAttribute('r', String(ADSR_NODE_RADIUS));
     node.setAttribute('fill', primaryColor); // Use primary color for node fill
     node.setAttribute('stroke', shadeHexColor(primaryColor, -0.3));
-    node.setAttribute('stroke-width', '2');
+    node.setAttribute('stroke-width', String(ADSR_NODE_STROKE_WIDTH));
     node.style.cursor = 'grab';
 
     const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');

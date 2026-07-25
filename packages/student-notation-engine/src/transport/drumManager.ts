@@ -118,6 +118,7 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
     },
 
     reset(): void {
+      drumPlayers?.stopAll();
       lastDrumStartTimes.clear();
     },
 
