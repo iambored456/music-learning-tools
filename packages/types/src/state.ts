@@ -109,6 +109,7 @@ export interface AppState {
   musicalColumnWidths: number[];
   degreeDisplayMode: DegreeDisplayMode;
   showPitchLabels: boolean;
+  showPitchOctaveLabels: boolean;
   accidentalMode: AccidentalMode;
   showFrequencyLabels: boolean;
   showOctaveLabels: boolean;
@@ -252,6 +253,7 @@ export interface Store {
   toggleOctaveLabels(): void;
   toggleFocusColours(): void;
   setShowPitchLabels(show: boolean): void;
+  setShowPitchOctaveLabels(show: boolean): void;
   setDegreeDisplayMode(mode: DegreeDisplayMode): void;
   toggleWaveformExtendedView(): void;
   shiftGridUp(): void;

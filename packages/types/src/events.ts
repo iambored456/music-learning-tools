@@ -42,6 +42,7 @@ export interface EngineEvents {
   layoutConfigChanged: { oldConfig: unknown; newConfig: unknown };
   degreeDisplayModeChanged: string;
   pitchLabelsChanged: boolean;
+  pitchOctaveLabelsChanged: boolean;
 
   // Timbre events
   timbreChanged: string;

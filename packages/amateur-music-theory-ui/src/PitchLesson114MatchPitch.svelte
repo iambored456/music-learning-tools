@@ -97,6 +97,7 @@
   let frameHeight = 0;
   let viewportWidth = 0;
   let viewportHeight = 0;
+  let layoutGridColumnCount = gridColumnCount;
   let cellSize = fallbackCellSize;
   let shellWidth = fallbackCellSize * (gridColumnCount + legendWidthUnits);
   let shellHeight = fallbackCellSize * (viewportRowCount + 1);
@@ -147,17 +148,18 @@
       ? introductorySourceNote
       : currentQuestion?.sourceNote ?? null;
   $: underlinedWords = narrationText === samePitchStatement ? ['pitch'] : [];
+  $: layoutGridColumnCount = frameWidth > 0 && frameWidth <= 760 ? 22 : gridColumnCount;
   $: cellSize =
     frameWidth > 0 && frameHeight > 0
       ? Math.max(
           1,
           Math.min(
             frameHeight / (viewportRowCount + 1),
-            frameWidth / (gridColumnCount + legendWidthUnits),
+            frameWidth / (layoutGridColumnCount + legendWidthUnits),
           ),
         )
       : fallbackCellSize;
-  $: shellWidth = cellSize * (gridColumnCount + legendWidthUnits);
+  $: shellWidth = cellSize * (layoutGridColumnCount + legendWidthUnits);
   $: shellHeight = cellSize * (viewportRowCount + 1);
   $: cellHeight =
     viewportHeight > 0 ? (viewportHeight * 2) / (viewportRowCount + 1) : cellSize * 2;
@@ -979,12 +981,34 @@
   }
 
   @media (max-width: 760px) {
+    .match-scene {
+      gap: 0.7rem;
+    }
+
+    .match-support {
+      width: 100%;
+      gap: 0.6rem;
+    }
+
     .match-workspace {
-      padding: 0.75rem;
+      width: 100%;
+      justify-self: stretch;
+      padding: 0.65rem;
     }
 
     .pitch-grid-frame {
-      height: clamp(31rem, calc(100svh - 12rem), 46rem);
+      width: 100%;
+      height: clamp(22rem, 66svh, 34rem);
+    }
+
+    .match-note--grid::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 2.75rem;
+      height: 2.75rem;
+      transform: translate(-50%, -50%);
     }
   }
 

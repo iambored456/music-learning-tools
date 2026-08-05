@@ -43,6 +43,7 @@
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;
   let pitchLabelsToggle: HTMLButtonElement | null = null;
+  let pitchOctaveLabelsToggle: HTMLButtonElement | null = null;
   let degreeVisibilityToggle: HTMLButtonElement | null = null;
   let degreeModeToggle: HTMLElement | null = null;
   let degreeModeScaleButton: HTMLButtonElement | null = null;
@@ -104,6 +105,18 @@
     if (!toggleButton) return;
     toggleButton.classList.toggle('active', showPitchLabels);
     toggleButton.setAttribute('aria-pressed', showPitchLabels ? 'true' : 'false');
+  }
+
+  function syncPitchOctaveLabelsButton(): void {
+    if (!pitchOctaveLabelsToggle) return;
+    const pitchLabelsVisible = store.state.showPitchLabels;
+    pitchOctaveLabelsToggle.disabled = !pitchLabelsVisible;
+    pitchOctaveLabelsToggle.classList.toggle('disabled', !pitchLabelsVisible);
+    pitchOctaveLabelsToggle.classList.toggle('active', store.state.showPitchOctaveLabels);
+    pitchOctaveLabelsToggle.setAttribute(
+      'aria-pressed',
+      store.state.showPitchOctaveLabels ? 'true' : 'false'
+    );
   }
 
   function updateChordButtonSelection(): void {
@@ -349,9 +362,21 @@
 
   const syncFocusColoursUiState = (focusColoursEnabled: boolean): void => {
     if (!focusColoursToggle) {return;}
-    focusColoursToggle.classList.toggle('active', focusColoursEnabled);
-    focusColoursToggle.setAttribute('aria-pressed', focusColoursEnabled ? 'true' : 'false');
+    const tonicShapesPresent = hasTonicShapesOnCanvas();
+    const visiblyEnabled = tonicShapesPresent && focusColoursEnabled;
+    focusColoursToggle.disabled = !tonicShapesPresent;
+    focusColoursToggle.classList.toggle('disabled', !tonicShapesPresent);
+    focusColoursToggle.classList.toggle('active', visiblyEnabled);
+    focusColoursToggle.setAttribute('aria-pressed', visiblyEnabled ? 'true' : 'false');
   };
+
+  function handleTonicStructureChanged(): void {
+    if (!hasTonicShapesOnCanvas() && store.state.focusColours) {
+      store.toggleFocusColours();
+      return;
+    }
+    syncFocusColoursUiState(store.state.focusColours);
+  }
 
   // Store event handlers
   function handleToolChanged({ newTool }: ToolChangedPayload = {}) {
@@ -411,6 +436,12 @@
   function handlePitchLabelsChanged(showPitchLabels?: boolean) {
     if (typeof showPitchLabels !== 'boolean') return;
     syncPitchLabelsButton(showPitchLabels, pitchLabelsToggle);
+    syncPitchOctaveLabelsButton();
+  }
+
+  function handlePitchOctaveLabelsChanged(showPitchOctaveLabels?: boolean) {
+    if (typeof showPitchOctaveLabels !== 'boolean') return;
+    syncPitchOctaveLabelsButton();
   }
 
   function handleAccidentalModeChanged(accidentalMode?: { sharp: boolean; flat: boolean }) {
@@ -432,6 +463,10 @@
 
   function handleFocusColoursChanged(focusColoursEnabled?: boolean): void {
     if (typeof focusColoursEnabled !== 'boolean') {return;}
+    if (focusColoursEnabled && !hasTonicShapesOnCanvas()) {
+      store.toggleFocusColours();
+      return;
+    }
     syncFocusColoursUiState(focusColoursEnabled);
     debugFocusColours('focusColoursChanged event', { focusColoursEnabled });
   }
@@ -448,7 +483,7 @@
   onMount(() => {
     // Get cached elements
     const cachedElements = domCache.getMultiple(
-      'noteBankContainer', 'eraserButton', 'pitchLabelsToggle', 'degreeVisibilityToggle', 'degreeModeToggle',
+      'noteBankContainer', 'eraserButton', 'pitchLabelsToggle', 'pitchOctaveLabelsToggle', 'degreeVisibilityToggle', 'degreeModeToggle',
       'flatBtn', 'sharpBtn', 'frequencyBtn', 'octaveLabelBtn', 'focusColoursToggle'
     );
 
@@ -459,6 +494,14 @@
       : document.getElementById('pitch-labels-toggle');
     pitchLabelsToggle = livePitchLabelsToggle instanceof HTMLButtonElement
       ? livePitchLabelsToggle
+      : null;
+
+    const cachedPitchOctaveLabelsToggle = cachedElements['pitchOctaveLabelsToggle'];
+    const livePitchOctaveLabelsToggle = (cachedPitchOctaveLabelsToggle && cachedPitchOctaveLabelsToggle.isConnected)
+      ? cachedPitchOctaveLabelsToggle
+      : document.getElementById('pitch-octave-labels-toggle');
+    pitchOctaveLabelsToggle = livePitchOctaveLabelsToggle instanceof HTMLButtonElement
+      ? livePitchOctaveLabelsToggle
       : null;
 
     const cachedDegreeVisibilityToggle = cachedElements['degreeVisibilityToggle'];
@@ -699,6 +742,13 @@
       });
     }
 
+    if (pitchOctaveLabelsToggle) {
+      pitchOctaveLabelsToggle.addEventListener('click', () => {
+        store.setShowPitchOctaveLabels(!store.state.showPitchOctaveLabels);
+        pitchOctaveLabelsToggle?.blur();
+      });
+    }
+
     if (degreeVisibilityToggle) {
       degreeVisibilityToggle.addEventListener('click', () => {
         const currentMode = store.state.degreeDisplayMode;
@@ -773,7 +823,6 @@
     }
 
     if (focusColoursToggle) {
-      focusColoursToggle.style.pointerEvents = 'auto';
       focusColoursToggle.addEventListener('pointerdown', () => {
         debugFocusColours('pointerdown received on focus button');
       });
@@ -804,16 +853,18 @@
     store.on('noteChanged', handleNoteChanged);
     store.on('degreeDisplayModeChanged', handleDegreeDisplayModeChanged);
     store.on('pitchLabelsChanged', handlePitchLabelsChanged);
+    store.on('pitchOctaveLabelsChanged', handlePitchOctaveLabelsChanged);
     store.on('accidentalModeChanged', handleAccidentalModeChanged);
     store.on('frequencyLabelsChanged', syncFrequencyUiState);
     store.on('octaveLabelsChanged', syncOctaveUiState);
     store.on('focusColoursChanged', handleFocusColoursChanged);
+    store.on('rhythmStructureChanged', handleTonicStructureChanged);
 
     // Initialize UI states
     syncFrequencyUiState(store.state.showFrequencyLabels);
     syncOctaveUiState(store.state.showOctaveLabels);
 
-    syncFocusColoursUiState(store.state.focusColours);
+    handleTonicStructureChanged();
 
     if (harmonyContainer && store.state.selectedNote) {
       applyHarmonyAccentColors(harmonyContainer, store.state.selectedNote.color);
@@ -828,6 +879,7 @@
 
     const currentMode = store.state.degreeDisplayMode;
     syncPitchLabelsButton(store.state.showPitchLabels, pitchLabelsToggle);
+    syncPitchOctaveLabelsButton();
     syncDegreeVisibilityButton(currentMode, degreeVisibilityToggle);
     updateScaleModeToggleState(currentMode);
 
@@ -847,10 +899,12 @@
     store.off('noteChanged', handleNoteChanged);
     store.off('degreeDisplayModeChanged', handleDegreeDisplayModeChanged);
     store.off('pitchLabelsChanged', handlePitchLabelsChanged);
+    store.off('pitchOctaveLabelsChanged', handlePitchOctaveLabelsChanged);
     store.off('accidentalModeChanged', handleAccidentalModeChanged);
     store.off('frequencyLabelsChanged', syncFrequencyUiState);
     store.off('octaveLabelsChanged', syncOctaveUiState);
     store.off('focusColoursChanged', handleFocusColoursChanged);
+    store.off('rhythmStructureChanged', handleTonicStructureChanged);
   });
 </script>
 

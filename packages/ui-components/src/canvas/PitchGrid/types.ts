@@ -373,8 +373,14 @@ export interface PitchGridBaseProps {
   showOctaveLabels?: boolean;
   /** Optional highlight overlay for legend labels */
   legendHighlight?: LegendHighlightConfig;
+  /** Optional legend-label overrides keyed by pitch class. */
+  legendLabelOverrides?: Map<number, string>;
+  /** Optional legend-label overrides keyed by exact MIDI pitch. */
+  legendMidiLabelOverrides?: Map<number, string>;
   /** Whether to render horizontal pitch grid lines */
   showHorizontalGridLines?: boolean;
+  /** Whether horizontal pitch lines should continue beneath the legend canvases. */
+  extendHorizontalGridLinesBehindLegend?: boolean;
   /**
    * Optional tonic/reference pitch class for horizontal grid line styling.
    * 0 preserves legacy C-referenced pattern; other values rotate the full pattern.

@@ -5,6 +5,7 @@ import store from '@state/initStore.ts';
 import columnMapService from '@services/columnMapService.ts';
 import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildCanvasFont, getSemanticTextColor } from '@services/typographyService.ts';
+import { resolvePitchLabelTextLayout } from './pitchLabelTextRendering.ts';
 import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
 import {
   OVAL_NOTE_FONT_RATIO,
@@ -20,6 +21,8 @@ import {
 const SHARP_SYMBOL = '\u266F';
 const FLAT_SYMBOL = '\u266D';
 const DEGREE_SEPARATOR = '/';
+const PITCH_LABEL_MAX_WIDTH_RATIO = 0.82;
+const PITCH_LABEL_MAX_HEIGHT_RATIO = 0.78;
 
 export type PitchRendererOptions = Partial<AppState> & {
   columnWidths: number[];
@@ -336,7 +339,7 @@ function drawStadiumShape(
 
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
     const stadiumCenterX = (leftCenterX + rightCenterX) / 2;
-    drawNoteLabelText(ctx, note, options, stadiumCenterX, centerY, ry);
+    drawNoteLabelText(ctx, note, options, stadiumCenterX, centerY, ry, ry);
   }
 }
 
@@ -591,31 +594,49 @@ export function drawPitchClassText(
   centerX: number,
   centerY: number,
   noteWidth: number,
-  _noteHeight?: number
+  noteHeight?: number
 ): void {
-  const noteLabel = TonalService.getPitchClassForNote(note, options as AppState);
+  const noteLabel = TonalService.getPitchLabelForNote(note, options as AppState);
   if (!noteLabel) {
     return;
   }
 
   const category = getPitchFontCategory(noteLabel);
-  const fontSize = getPitchLabelFontSize(note, noteWidth, category);
+  const preferredFontSize = getPitchLabelFontSize(note, noteWidth, category);
+  const usesStackedEnharmonics = (note.shape === 'oval' || note.shape === 'diamond')
+    && category === 'both-accidentals'
+    && noteLabel.includes(DEGREE_SEPARATOR);
+  const labelLines = usesStackedEnharmonics
+    ? noteLabel.split(DEGREE_SEPARATOR).map(part => part.trim())
+    : [noteLabel];
+  const lineHeightRatio = usesStackedEnharmonics ? 1.05 : 1;
+  const fittedLayout = options.showPitchOctaveLabels
+    ? resolvePitchLabelTextLayout(ctx, labelLines, {
+        preferredFontSize,
+        maxWidth: noteWidth * 2 * PITCH_LABEL_MAX_WIDTH_RATIO,
+        maxHeight: (noteHeight ?? noteWidth) * 2 * PITCH_LABEL_MAX_HEIGHT_RATIO,
+        lineHeightRatio
+      })
+    : {
+        fontSize: preferredFontSize,
+        font: buildCanvasFont('notation-label', { fontSizePx: preferredFontSize })
+      };
+  const { fontSize } = fittedLayout;
   if (fontSize < MIN_FONT_SIZE) {
     return;
   }
 
   ctx.fillStyle = getSemanticTextColor('notation');
-  ctx.font = buildCanvasFont('notation-label', { fontSizePx: fontSize });
+  ctx.font = fittedLayout.font;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if ((note.shape === 'oval' || note.shape === 'diamond') && category === 'both-accidentals' && noteLabel.includes(DEGREE_SEPARATOR)) {
-    const parts = noteLabel.split(DEGREE_SEPARATOR);
+  if (usesStackedEnharmonics) {
     const lineHeight = fontSize * 1.05;
-    const totalHeight = lineHeight * (parts.length - 1);
+    const totalHeight = lineHeight * (labelLines.length - 1);
     const startY = centerY - (totalHeight / 2);
 
-    parts.forEach((part, index) => {
+    labelLines.forEach((part, index) => {
       const y = startY + (index * lineHeight);
       const opticalOffset = fontSize * 0.08;
       ctx.fillText(part.trim(), centerX, y + opticalOffset);
@@ -765,7 +786,7 @@ export function drawTwoColumnOvalNote(
   ctx.restore();
 
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
-    drawNoteLabelText(ctx, note, options, centerX, y, rx);
+    drawNoteLabelText(ctx, note, options, centerX, y, rx, ry);
   }
 }
 
@@ -839,7 +860,7 @@ export function drawSingleColumnOvalNote(
   ctx.restore();
 
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
-    drawNoteLabelText(ctx, note, options, cx, y, rx);
+    drawNoteLabelText(ctx, note, options, cx, y, rx, ry);
   }
 }
 

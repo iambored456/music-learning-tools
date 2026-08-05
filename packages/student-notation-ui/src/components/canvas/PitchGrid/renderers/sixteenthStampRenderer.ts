@@ -140,7 +140,8 @@ function renderSixteenthStampDegreeLabels(
     const labelY = ovalY + getStampShapeVibratoYOffset(note, options);
 
     ctx.save();
-    drawNoteLabelText(ctx, note, degreeOptions, cx, labelY, Math.max(1, Math.min(ovalRx, ovalRy) * 0.82));
+    const labelRadius = Math.max(1, Math.min(ovalRx, ovalRy) * 0.82);
+    drawNoteLabelText(ctx, note, degreeOptions, cx, labelY, labelRadius, labelRadius);
     ctx.restore();
   });
 
@@ -158,7 +159,8 @@ function renderSixteenthStampDegreeLabels(
     const labelY = diamondY + getStampShapeVibratoYOffset(note, options);
 
     ctx.save();
-    drawNoteLabelText(ctx, note, degreeOptions, cx, labelY, Math.max(1, diamondW * 0.66));
+    const labelRadius = Math.max(1, diamondW * 0.66);
+    drawNoteLabelText(ctx, note, degreeOptions, cx, labelY, labelRadius, labelRadius);
     ctx.restore();
   });
 }

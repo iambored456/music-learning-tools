@@ -107,7 +107,8 @@ function renderTripletDegreeLabels(
     const labelY = noteheadY + getStampShapeVibratoYOffset(note, options);
 
     ctx.save();
-    drawNoteLabelText(ctx, note, degreeOptions, noteheadX, labelY, Math.max(1, Math.min(rx, ry) * 0.9));
+    const labelRadius = Math.max(1, Math.min(rx, ry) * 0.9);
+    drawNoteLabelText(ctx, note, degreeOptions, noteheadX, labelY, labelRadius, labelRadius);
     ctx.restore();
   });
 }

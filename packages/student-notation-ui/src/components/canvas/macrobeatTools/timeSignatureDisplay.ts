@@ -33,7 +33,10 @@ export function renderTimeSignatureDisplay(): void {
     if (segment.isAnacrusis) {
       labelElem.classList.add('anacrusis-label');
     }
-    labelElem.textContent = segment.label;
+    const labelText = document.createElement('span');
+    labelText.className = 'time-signature-label__text';
+    labelText.textContent = segment.label;
+    labelElem.appendChild(labelText);
     labelElem.style.position = 'absolute';
     labelElem.style.left = `${offsetLeft + segment.startX}px`;
     labelElem.style.width = `${Math.max(0, segment.endX - segment.startX)}px`;

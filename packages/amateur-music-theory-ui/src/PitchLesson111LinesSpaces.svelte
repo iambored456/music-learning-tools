@@ -173,19 +173,22 @@
   let activeOscillator: OscillatorNode | null = null;
   let activeGain: GainNode | null = null;
 
+  const layoutMusicalColumnCount = $derived(
+    frameWidth > 0 && frameWidth <= 760 ? 22 : pitchGridMusicalColumnCount,
+  );
   const layoutColumnSize = $derived(
     frameWidth > 0 && frameHeight > 0
       ? Math.max(
           1,
           Math.min(
             frameHeight / (viewportRowCount + 1),
-            frameWidth / (pitchGridMusicalColumnCount + pitchGridLegendWidthUnits),
+            frameWidth / (layoutMusicalColumnCount + pitchGridLegendWidthUnits),
           ),
         )
       : pitchGridFallbackColumnSize,
   );
   const shellWidth = $derived(
-    layoutColumnSize * (pitchGridMusicalColumnCount + pitchGridLegendWidthUnits),
+    layoutColumnSize * (layoutMusicalColumnCount + pitchGridLegendWidthUnits),
   );
   const shellHeight = $derived(layoutColumnSize * (viewportRowCount + 1));
   const cellWidth = $derived(layoutColumnSize);
@@ -1108,12 +1111,33 @@
   }
 
   @media (max-width: 760px) {
+    .lines-spaces-scene {
+      gap: 0.7rem;
+    }
+
     .lines-spaces-support {
       grid-template-columns: 1fr;
+      width: 100%;
+      gap: 0.65rem;
+    }
+
+    .lines-spaces-workspace {
+      width: 100%;
+      padding: 0.65rem;
     }
 
     .pitch-grid-frame {
-      height: clamp(25rem, calc(100svh - 12rem), 42rem);
+      height: clamp(22rem, 66svh, 34rem);
+    }
+
+    .draggable-note::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 2.75rem;
+      height: 2.75rem;
+      transform: translate(-50%, -50%);
     }
   }
 

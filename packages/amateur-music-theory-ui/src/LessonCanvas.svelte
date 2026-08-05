@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import LessonProgress from './LessonProgress.svelte';
   import PitchLesson11Scene from './PitchLesson11Scene.svelte';
+  import PitchLesson12Scene from './PitchLesson12Scene.svelte';
   import {
     cancelLessonAvatarSpeech,
     disposeLessonAvatar,
@@ -32,7 +33,7 @@
   $: totalSteps = lesson?.sections.length ?? 0;
   $: currentSection = lesson ? lesson.sections[currentStep - 1] : null;
   $: isShellOnlyCanvas = lesson?.canvasLayout === 'shell-only';
-  $: hasCustomScene = lesson?.code === '1.1';
+  $: hasCustomScene = lesson?.code === '1.1' || lesson?.code === '1.2';
   $: if (lesson && lesson.code !== lastLessonCode) {
     lastLessonCode = lesson.code;
     currentStep = lesson.code === '1.1' ? 0 : 1;
@@ -197,7 +198,7 @@
     {/if}
   </header>
 
-  {#if lesson && hasCustomScene}
+  {#if lesson?.code === '1.1'}
     <PitchLesson11Scene
       {lesson}
       {currentStep}
@@ -209,6 +210,15 @@
       onSectionComplete={completeCurrentSection}
       onFinalSectionComplete={completeFinalSection}
       onLessonOutroComplete={completeLessonOutro}
+    />
+  {:else if lesson?.code === '1.2'}
+    <PitchLesson12Scene
+      {lesson}
+      {currentStep}
+      {isPlaying}
+      {volume}
+      onSectionComplete={completeCurrentSection}
+      onLessonComplete={completeLessonOutro}
     />
   {:else if lesson && !isShellOnlyCanvas}
     <section class="canvas-title-card app-card">
@@ -719,6 +729,10 @@
   }
 
   @media (max-width: 720px) {
+    .lesson-canvas-app {
+      gap: 0.7rem;
+    }
+
     .app-card {
       border-radius: 18px;
     }
@@ -730,20 +744,40 @@
     }
 
     .canvas-toolbar-meta {
-      flex-direction: column;
-      align-items: flex-start;
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.5rem;
     }
 
     .canvas-toolbar-title-card {
+      width: 100%;
       max-width: 100%;
+      grid-column: 1 / -1;
+      padding: 0.5rem 0.7rem;
     }
 
     .canvas-toolbar-progress {
+      width: 100%;
+      min-width: 0;
       overflow-x: auto;
+      overscroll-behavior-inline: contain;
     }
 
     .canvas-subsection-controls {
-      align-self: flex-start;
+      align-self: center;
+    }
+
+    .canvas-icon-button,
+    .canvas-toolbar .home-link {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+
+    .canvas-subsection-arrow {
+      width: 2.4rem;
+      height: 2.4rem;
     }
 
     .canvas-stage-surface {
@@ -758,6 +792,18 @@
     .canvas-nav-button,
     .canvas-nav-link {
       flex: 1 1 100%;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .canvas-toolbar,
+    .canvas-title-card,
+    .canvas-stage-card {
+      padding: 0.65rem;
+    }
+
+    .canvas-toolbar-actions {
+      gap: 0.45rem;
     }
   }
 </style>

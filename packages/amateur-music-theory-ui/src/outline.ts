@@ -33,12 +33,6 @@ export const rowTypeLabels: Record<OutlineRowType, string> = {
 
 export const roadmapSummaries: RoadmapSummary[] = [
   {
-    label: '0.x Foundations',
-    title: 'Introduction to Music Theory',
-    body: 'Two opening lessons establish the shared perceptual frame before the strand split.',
-    tone: 'foundation',
-  },
-  {
     label: '1.x Pitch',
     title: 'Pitch is the first full strand',
     body: 'Pitch lessons are already mapped from frequency space through chords.',
@@ -60,101 +54,79 @@ export const roadmapSummaries: RoadmapSummary[] = [
 
 export const currentFocus: FocusCard = {
   label: 'Current build focus',
-  title: 'Pitch Lesson 1.1 - The Pitch Frequency Space',
-  body: 'The roadmap stays compact here, but this lesson is the first one to design in detail next.',
+  title: 'Pitch Lesson 1.2 - Naming Pitches',
+  body: 'Builds pitch-letter fluency before the course moves into interval naming.',
 };
 
 export const curriculumOutline: OutlineRow = {
   id: 'amateur-music-theory-course',
   type: 'course',
   title: 'Amateur Music Theory',
-  body: 'A strand-based beginner theory sequence organized as foundations, pitch, rhythm, and timbre.',
-  meta: 'Compact course map | Detailed learning goals stay in lesson design',
-  chips: ['Foundations 0.x', 'Pitch 1.x', 'Rhythm 2.x planned', 'Timbre 3.x planned'],
+  body: 'A beginner theory sequence organized into pitch, rhythm, and timbre strands.',
+  meta: 'Compact curriculum map | Detailed learning goals stay in lesson design',
+  chips: ['Pitch 1.x', 'Rhythm 2.x planned', 'Timbre 3.x planned'],
   children: [
     {
-      id: 'foundations',
-      type: 'course',
-      title: 'Introduction to Music Theory',
-      body: 'A shared starting point for hearing music as rhythm, pitch, and timbre before the later course split.',
-      meta: 'Lessons 0.1-0.2',
-      chips: ['Entry point', 'Perceptual framing'],
-      children: [
-        {
-          id: 'lesson-0-1',
-          type: 'lesson',
-          code: '0.1',
-          title: 'Frequency Spaces',
-          body: 'Introduces rhythm, pitch, and timbre as distinct dimensions inside the same musical example.',
-        },
-        {
-          id: 'lesson-0-2',
-          type: 'lesson',
-          code: '0.2',
-          title: 'Perceptual Fundamentals',
-          body: 'Frames theory as descriptive and sets up perceptual entry points for each later strand.',
-          chips: [
-            'Rhythm: Isochronic Microbeats',
-            'Pitch: Scale Ordinality',
-            'Timbre: Spectrotemporal Descriptors',
-          ],
-        },
-      ],
-    },
-    {
       id: 'pitch-strand',
-      type: 'course',
+      type: 'strand',
       title: 'Pitch',
-      body: 'The first full course, moving from pitch space and interval naming into diatonic scales and chords.',
-      meta: 'Lessons 1.1-1.8',
-      chips: ['Current course', 'First detailed lesson build starts at 1.1'],
+      body: 'The first full strand, moving from pitch space and interval naming into diatonic scales and chords.',
+      meta: 'Lessons 1.1-1.9',
+      chips: ['Current course', 'Current detailed build: 1.2'],
       children: [
         {
           id: 'pitch-introduction',
-          type: 'strand',
+          type: 'course',
           title: 'Introduction',
           body: 'Core pitch language, scale building, tonal centers, and scale-degree hearing.',
-          meta: 'Lessons 1.1-1.6',
+          meta: 'Lessons 1.1-1.7',
           children: [
             {
               id: 'lesson-1-1',
               type: 'lesson',
               code: '1.1',
-              title: 'The Pitch Frequency Space',
+              title: 'The Pitch Grid',
               body: 'Introduces lines and spaces, high and low pitch placement, pitch comparison, and exact pitch matching.',
             },
             {
               id: 'lesson-1-2',
               type: 'lesson',
               code: '1.2',
-              title: 'Intervals',
-              body: 'Names the distance between pitches in ascending and descending motion using the diatonic framework.',
+              title: 'Naming Pitches',
+              body: 'Introduces repeating pitch letters and the sharp and flat names of pitches between them.',
             },
             {
               id: 'lesson-1-3',
               type: 'lesson',
               code: '1.3',
-              title: 'The Diatonic Scale',
-              body: 'Builds diatonic scales by applying the step pattern to a chosen pitch.',
+              title: 'Intervals',
+              body: 'Names the distance between pitches in ascending and descending motion using the diatonic framework.',
             },
             {
               id: 'lesson-1-4',
               type: 'lesson',
               code: '1.4',
-              title: 'Tonal Centers',
-              body: 'Introduces tonal center as the pitch a chosen scale is built from and heard around.',
+              title: 'The Diatonic Scale',
+              body: 'Builds diatonic scales by applying the step pattern to a chosen pitch.',
             },
             {
               id: 'lesson-1-5',
               type: 'lesson',
               code: '1.5',
-              title: 'Diatonic Scale Degrees',
-              body: 'Identifies scale degrees within diatonic scales and connects note labels to function.',
+              title: 'Tonal Centers',
+              body: 'Introduces tonal center as the pitch a chosen scale is built from and heard around.',
             },
             {
               id: 'lesson-1-6',
               type: 'lesson',
               code: '1.6',
+              title: 'Diatonic Scale Degrees',
+              body: 'Identifies scale degrees within diatonic scales and connects note labels to function.',
+            },
+            {
+              id: 'lesson-1-7',
+              type: 'lesson',
+              code: '1.7',
               title: 'Diatonic Digital Patterns',
               body: 'Applies stable and unstable scale-degree behavior to short melodic patterns and question-answer shapes.',
             },
@@ -162,22 +134,22 @@ export const curriculumOutline: OutlineRow = {
         },
         {
           id: 'pitch-chords',
-          type: 'strand',
+          type: 'course',
           title: 'Chords',
           body: 'Moves from stacked thirds into the relationship between scale degrees and chord degrees.',
-          meta: 'Lessons 1.7-1.8',
+          meta: 'Lessons 1.8-1.9',
           children: [
-            {
-              id: 'lesson-1-7',
-              type: 'lesson',
-              code: '1.7',
-              title: 'Diatonic Chords: Triads',
-              body: 'Introduces triads as stacked thirds and distinguishes major, minor, diminished, and augmented forms.',
-            },
             {
               id: 'lesson-1-8',
               type: 'lesson',
               code: '1.8',
+              title: 'Diatonic Chords: Triads',
+              body: 'Introduces triads as stacked thirds and distinguishes major, minor, diminished, and augmented forms.',
+            },
+            {
+              id: 'lesson-1-9',
+              type: 'lesson',
+              code: '1.9',
               title: 'Scale Degrees vs. Chord Degrees',
               body: 'Clarifies the difference between a note\'s place in the scale and its place inside the current chord.',
             },
@@ -187,9 +159,9 @@ export const curriculumOutline: OutlineRow = {
     },
     {
       id: 'rhythm-strand',
-      type: 'course',
+      type: 'strand',
       title: 'Rhythm',
-      body: 'The second major course will continue the same structure under the 2.x numbering system.',
+      body: 'The second major strand will continue the same structure under the 2.x numbering system.',
       meta: 'Lessons 2.x',
       children: [
         {
@@ -202,9 +174,9 @@ export const curriculumOutline: OutlineRow = {
     },
     {
       id: 'timbre-strand',
-      type: 'course',
+      type: 'strand',
       title: 'Timbre',
-      body: 'The third major course will eventually house the 3.x lesson sequence.',
+      body: 'The third major strand will eventually house the 3.x lesson sequence.',
       meta: 'Lessons 3.x',
       children: [
         {
@@ -225,17 +197,17 @@ export const lessonOutline = curriculumOutline;
 
 export const rowTypeGroups = [
   {
-    label: 'Course Roadmap',
+    label: 'Curriculum Roadmap',
     items: [
       {
         type: 'course',
         label: 'Course',
-        description: 'Top-level map for the full Amateur Music Theory sequence.',
+        description: 'A group of related lessons within a strand, such as Introduction or Chords.',
       },
       {
         type: 'strand',
         label: 'Strand',
-        description: 'Subdivisions inside a course, such as Introduction and Chords inside Pitch.',
+        description: 'A top-level subject area in Amateur Music Theory, such as Pitch, Rhythm, or Timbre.',
       },
       {
         type: 'lesson',

@@ -39,6 +39,7 @@ class DOMCache {
     this.cacheElement('noteBankContainer', 'note-bank-container');
     this.cacheElement('tonicModeGrid', 'tonic-mode-grid');
     this.cacheElement('pitchLabelsToggle', 'pitch-labels-toggle');
+    this.cacheElement('pitchOctaveLabelsToggle', 'pitch-octave-labels-toggle');
     this.cacheElement('degreeVisibilityToggle', 'degree-visibility-toggle');
     this.cacheElement('degreeModeToggle', 'degree-mode-toggle');
     this.cacheElement('flatBtn', 'flat-toggle-btn');

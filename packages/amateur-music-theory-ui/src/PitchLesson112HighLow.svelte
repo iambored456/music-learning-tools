@@ -506,6 +506,7 @@
   let visiblePitchGridEndRow = rowCount - 1;
   let visiblePitchGridRowCount = rowCount;
   let pitchGridVerticalColumnSize = pitchGridFallbackColumnSize;
+  let pitchGridLayoutColumnCount = scoreTotalColumns;
   let pitchGridContentWidth = 0;
 
   $: visiblePitchGridStartRow =
@@ -521,12 +522,16 @@
         ? comparisonViewportEndRow
         : rowCount - 1;
   $: visiblePitchGridRowCount = Math.max(1, visiblePitchGridEndRow - visiblePitchGridStartRow + 1);
+  $: pitchGridLayoutColumnCount =
+    !isMusicalScorePhase && pitchGridFrameWidth > 0 && pitchGridFrameWidth <= 760
+      ? 22
+      : scoreTotalColumns;
   $: pitchGridLayoutColumnSize = pitchGridFrameWidth > 0 && pitchGridFrameHeight > 0
     ? Math.max(
         1,
         Math.min(
           pitchGridFrameHeight / (introScoreViewportRowCount + 1),
-          pitchGridFrameWidth / (scoreTotalColumns + pitchGridLegendWidthUnits)
+          pitchGridFrameWidth / (pitchGridLayoutColumnCount + pitchGridLegendWidthUnits)
         )
       )
     : pitchGridFallbackColumnSize;
@@ -539,7 +544,8 @@
         )
       )
     : pitchGridLayoutColumnSize;
-  $: pitchGridShellWidth = pitchGridLayoutColumnSize * (scoreTotalColumns + pitchGridLegendWidthUnits);
+  $: pitchGridShellWidth =
+    pitchGridLayoutColumnSize * (pitchGridLayoutColumnCount + pitchGridLegendWidthUnits);
   $: pitchGridShellHeight = pitchGridVerticalColumnSize * (visiblePitchGridRowCount + 1);
   $: pitchGridCellHeight = pitchGridViewportHeight > 0
     ? (pitchGridViewportHeight * 2) / (visiblePitchGridRowCount + 1)
@@ -2679,12 +2685,25 @@
   }
 
   @media (max-width: 760px) {
+    .pitch-scene {
+      gap: 0.7rem;
+    }
+
     .pitch-scene-support {
       grid-template-columns: 1fr;
+      width: 100%;
+      gap: 0.65rem;
+    }
+
+    .pitch-workspace {
+      width: 100%;
+      justify-self: stretch;
+      padding: 0.65rem;
     }
 
     .pitch-grid-frame {
-      height: clamp(25rem, calc(100svh - 12rem), 42rem);
+      width: 100%;
+      height: clamp(22rem, 66svh, 34rem);
     }
 
     .pitch-grid-shell {
@@ -2693,6 +2712,11 @@
 
     .pitch-grid-field {
       min-height: 0;
+    }
+
+    .pitch-note {
+      width: max(2.75rem, var(--pitch-hit-target-size));
+      height: max(2.75rem, var(--pitch-hit-target-size));
     }
   }
 

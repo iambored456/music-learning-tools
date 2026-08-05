@@ -20,6 +20,7 @@ type RenderOptions = Pick<AppState,
   | 'macrobeatBoundaryStyles'
   | 'degreeDisplayMode'
   | 'showPitchLabels'
+  | 'showPitchOctaveLabels'
   | 'tempoModulationMarkers'
   | 'accidentalMode'
   | 'showFrequencyLabels'
@@ -60,6 +61,7 @@ function renderPitchGrid() {
     colorMode: 'color',
     degreeDisplayMode: store.state.degreeDisplayMode,
     showPitchLabels: store.state.showPitchLabels,
+    showPitchOctaveLabels: store.state.showPitchOctaveLabels,
     zoomLevel: viewportInfo.zoomLevel,
     viewportHeight: viewportInfo.containerHeight,
     tempoModulationMarkers: store.state.tempoModulationMarkers,

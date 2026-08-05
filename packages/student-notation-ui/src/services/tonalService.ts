@@ -239,6 +239,25 @@ const TonalService = {
     return sharpEnabled ? spellings.sharp : spellings.flat;
   },
 
+  getPitchLabelForNote(note: PlacedNote, state: AppState): string | null {
+    const pitchClassLabel = TonalService.getPitchClassForNote(note, state);
+    if (!pitchClassLabel || !state.showPitchOctaveLabels) {
+      return pitchClassLabel;
+    }
+
+    const rowIndex = note.globalRow ?? note.row;
+    const notePitch = state.fullRowData[rowIndex]?.toneNote;
+    const octave = notePitch ? Note.octave(notePitch) : null;
+    if (typeof octave !== 'number') {
+      return pitchClassLabel;
+    }
+
+    return pitchClassLabel
+      .split('/')
+      .map(spelling => `${spelling}${octave}`)
+      .join('/');
+  },
+
   getDegreesForNotes(notes: string[], keyTonic: string): string[] {
     if (!notes || notes.length === 0) {return [];}
     return notes.map(noteName => {

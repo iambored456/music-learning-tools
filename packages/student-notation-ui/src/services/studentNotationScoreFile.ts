@@ -41,6 +41,7 @@ export interface StudentNotationSaveData {
   pitchRange: PitchRange;
   degreeDisplayMode: AppState['degreeDisplayMode'];
   showPitchLabels: boolean;
+  showPitchOctaveLabels: boolean;
   showOctaveLabels: boolean;
   longNoteStyle: AppState['longNoteStyle'];
   playheadMode: AppState['playheadMode'];
@@ -430,6 +431,7 @@ function buildSaveData(state: AppState): StudentNotationSaveData {
     pitchRange: { ...state.pitchRange },
     degreeDisplayMode: state.degreeDisplayMode,
     showPitchLabels: state.showPitchLabels,
+    showPitchOctaveLabels: state.showPitchOctaveLabels,
     showOctaveLabels: state.showOctaveLabels,
     longNoteStyle: state.longNoteStyle,
     playheadMode: state.playheadMode,
@@ -495,6 +497,9 @@ function normalizeSaveData(value: unknown): StudentNotationSaveData {
     pitchRange: normalizePitchRange(raw.pitchRange, initialState.pitchRange),
     degreeDisplayMode: showPitchLabels ? 'off' : degreeDisplayMode,
     showPitchLabels,
+    showPitchOctaveLabels: typeof raw.showPitchOctaveLabels === 'boolean'
+      ? raw.showPitchOctaveLabels
+      : initialState.showPitchOctaveLabels,
     showOctaveLabels: typeof raw.showOctaveLabels === 'boolean'
       ? raw.showOctaveLabels
       : initialState.showOctaveLabels,
@@ -583,6 +588,7 @@ export function applyImportedStudentNotationData(
   store.state.tempo = data.tempo;
   store.state.degreeDisplayMode = data.degreeDisplayMode;
   store.state.showPitchLabels = data.showPitchLabels;
+  store.state.showPitchOctaveLabels = data.showPitchOctaveLabels;
   store.state.showOctaveLabels = data.showOctaveLabels;
   store.state.longNoteStyle = data.longNoteStyle;
   store.state.playheadMode = data.playheadMode;
@@ -599,6 +605,7 @@ export function applyImportedStudentNotationData(
   store.emit('layoutConfigChanged');
   store.emit('degreeDisplayModeChanged', store.state.degreeDisplayMode);
   store.emit('pitchLabelsChanged', store.state.showPitchLabels);
+  store.emit('pitchOctaveLabelsChanged', store.state.showPitchOctaveLabels);
   store.emit('octaveLabelsChanged', store.state.showOctaveLabels);
   store.emit('longNoteStyleChanged', store.state.longNoteStyle);
   store.emit('playheadModeChanged', store.state.playheadMode);

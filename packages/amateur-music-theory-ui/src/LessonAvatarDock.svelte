@@ -135,4 +135,34 @@
       display: none;
     }
   }
+
+  @media (max-width: 720px) {
+    .lesson-avatar-dock {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(4.75rem, 22vw, 6rem);
+      align-items: end;
+      gap: 0.55rem;
+    }
+
+    .lesson-avatar-bubble {
+      align-self: center;
+      margin: 0;
+      padding: 0.7rem 0.8rem;
+      border-radius: 0.95rem;
+    }
+
+    .lesson-avatar-bubble p {
+      font-size: clamp(1rem, 4.6vw, 1.18rem);
+      line-height: 1.25;
+    }
+
+    .lesson-avatar-stage {
+      grid-column: 2;
+      grid-row: 1;
+      width: 100%;
+      min-height: 0;
+      margin: 0;
+    }
+  }
 </style>

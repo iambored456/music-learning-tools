@@ -270,6 +270,7 @@ function saveStateToStorage(state: AppState, storage: StorageAdapter | undefined
       pitchRange: state.pitchRange,
       degreeDisplayMode: state.degreeDisplayMode,
       showPitchLabels: state.showPitchLabels,
+      showPitchOctaveLabels: state.showPitchOctaveLabels,
       showOctaveLabels: state.showOctaveLabels,
       longNoteStyle: state.longNoteStyle,
       playheadMode: state.playheadMode
@@ -507,6 +508,11 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       store.emit('pitchLabelsChanged', show);
     },
 
+    setShowPitchOctaveLabels(show: boolean): void {
+      store.state.showPitchOctaveLabels = show;
+      store.emit('pitchOctaveLabelsChanged', show);
+    },
+
     setLongNoteStyle(style: 'style1' | 'style2'): void {
       store.state.longNoteStyle = style;
       store.emit('longNoteStyleChanged', style);
@@ -695,6 +701,7 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     store.on('tempoChanged', () => store.saveState());
     store.on('degreeDisplayModeChanged', () => store.saveState());
     store.on('pitchLabelsChanged', () => store.saveState());
+    store.on('pitchOctaveLabelsChanged', () => store.saveState());
     store.on('longNoteStyleChanged', () => store.saveState());
     store.on('playheadModeChanged', () => store.saveState());
   }

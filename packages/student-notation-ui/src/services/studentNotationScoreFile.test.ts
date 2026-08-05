@@ -25,6 +25,8 @@ describe('studentNotationScoreFile', () => {
       },
     ];
     store.state.tempo = 132;
+    store.state.showPitchLabels = true;
+    store.state.showPitchOctaveLabels = true;
     store.state.macrobeatGroupings = [3, 2, 3];
     store.state.macrobeatBoundaryStyles = ['solid', 'dashed'];
     store.state.hasAnacrusis = true;
@@ -65,6 +67,8 @@ describe('studentNotationScoreFile', () => {
     }
 
     expect(parsed.data.tempo).toBe(132);
+    expect(parsed.data.showPitchLabels).toBe(true);
+    expect(parsed.data.showPitchOctaveLabels).toBe(true);
     expect(parsed.data.macrobeatGroupings).toEqual([3, 2, 3]);
     expect(parsed.data.macrobeatBoundaryStyles).toEqual(['solid', 'dashed']);
     expect(parsed.data.hasAnacrusis).toBe(true);
@@ -78,6 +82,8 @@ describe('studentNotationScoreFile', () => {
     applyImportedStudentNotationData(targetStore, parsed);
 
     expect(targetStore.state.tempo).toBe(132);
+    expect(targetStore.state.showPitchLabels).toBe(true);
+    expect(targetStore.state.showPitchOctaveLabels).toBe(true);
     expect(targetStore.state.macrobeatGroupings).toEqual([3, 2, 3]);
     expect(targetStore.state.macrobeatBoundaryStyles).toEqual(['solid', 'dashed']);
     expect(targetStore.state.tonicSignGroups.tonicA?.[0]?.columnIndex).toBe(5);

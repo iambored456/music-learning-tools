@@ -7,6 +7,7 @@
 
 import type { PitchRowData, AccidentalMode } from '@mlt/types';
 import type { CoordinateUtils, LegendHighlightConfig, LegendHighlightEntry } from '../types.js';
+import { drawHorizontalLines } from './gridLines.js';
 
 // ============================================================================
 // Types
@@ -41,6 +42,12 @@ export interface LegendRenderConfig {
   highlight?: LegendHighlightConfig;
   /** Optional label overrides by pitch class (0-11). When set, replaces pitch name with the override string. */
   labelOverrides?: Map<number, string>;
+  /** Optional label overrides by exact MIDI pitch. These take priority over pitch-class overrides. */
+  midiLabelOverrides?: Map<number, string>;
+  /** Whether horizontal pitch lines should be rendered beneath the legend cells. */
+  extendHorizontalGridLinesBehindLegend?: boolean;
+  /** Pitch-class reference used to style the horizontal pitch lines. */
+  horizontalGridReferencePitchClass?: number | null;
 }
 
 export interface LegendRenderOptions {
@@ -162,13 +169,19 @@ function processLabel(
     focusColorsEnabled,
     focusedPitchClasses,
     labelOverrides,
+    midiLabelOverrides,
   } = config;
 
   if (!showLegendLabels || (row.isAccidental && !showAccidentalLabels)) {
     return null;
   }
 
-  // Label overrides take priority (e.g., scale degree labels)
+  if (midiLabelOverrides && typeof row.midi === 'number') {
+    const midiOverride = midiLabelOverrides.get(row.midi);
+    if (midiOverride !== undefined) return midiOverride;
+  }
+
+  // Pitch-class label overrides take priority over the row's default label.
   if (labelOverrides && labelOverrides.size > 0) {
     const pc = getPitchClassFromRow(row);
     const override = labelOverrides.get(pc);
@@ -339,7 +352,13 @@ export function drawLegend(
   }
 
   const finalRow = fullRowData[endRow];
-  if (endRow === lowestRenderableRow && finalRow && !finalRow.isBoundary) {
+  const isTrueGamutFloor = finalRow?.toneNote === 'A0';
+  if (
+    endRow === lowestRenderableRow &&
+    finalRow &&
+    !finalRow.isBoundary &&
+    isTrueGamutFloor
+  ) {
     const paddingColumn = finalRow.column === 'A' ? 'B' : 'A';
     const paddingColumnIndex = columnsOrder.indexOf(paddingColumn);
     const logicalCanvasHeight = ctx.canvas.height / pixelRatio;
@@ -371,16 +390,41 @@ export function drawLegendsToSeparateCanvases(
   config: LegendRenderConfig,
   options: LegendRenderOptions
 ): void {
+  const drawGridLineUnderlay = (ctx: CanvasRenderingContext2D): void => {
+    if (!config.extendHorizontalGridLinesBehindLegend) return;
+    const pixelRatio = getCanvasPixelRatio(ctx.canvas);
+    const width = ctx.canvas.width / pixelRatio;
+    const height = ctx.canvas.height / pixelRatio;
+    drawHorizontalLines(
+      ctx,
+      {
+        fullRowData: config.fullRowData,
+        cellHeight: config.cellHeight,
+        viewportHeight: height,
+        viewportWidth: width,
+        colorMode: config.colorMode,
+        horizontalGridReferencePitchClass: config.horizontalGridReferencePitchClass,
+      },
+      options.coords,
+      options.startRow,
+      options.endRow,
+      0,
+      width,
+    );
+  };
+
   // Left legend: B column first, then A (reading from right to left towards grid)
   if (leftCtx) {
     // Clear the canvas
     leftCtx.clearRect(0, 0, leftCtx.canvas.width, leftCtx.canvas.height);
+    drawGridLineUnderlay(leftCtx);
     drawLegend(leftCtx, config, options, ['B', 'A'] as const);
   }
 
   // Right legend: A column first, then B (reading from left to right away from grid)
   if (rightCtx) {
     rightCtx.clearRect(0, 0, rightCtx.canvas.width, rightCtx.canvas.height);
+    drawGridLineUnderlay(rightCtx);
     drawLegend(rightCtx, config, options, ['A', 'B'] as const);
   }
 }

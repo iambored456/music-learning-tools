@@ -109,13 +109,14 @@
 
   @media (max-width: 720px) {
     .lesson-progress {
+      width: 100%;
       border-width: 1px;
     }
 
     .lesson-progress-segment {
-      width: 2rem;
-      min-width: 2rem;
-      min-height: 2rem;
+      width: 100%;
+      min-width: 1.75rem;
+      min-height: 2.4rem;
       font-size: 1.05rem;
     }
   }

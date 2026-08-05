@@ -87,10 +87,12 @@
     legendHighlight?: LegendHighlightConfig;
     rowHighlight?: PitchRowHighlightConfig;
     showHorizontalGridLines?: boolean;
+    extendHorizontalGridLinesBehindLegend?: boolean;
     horizontalGridReferencePitchClass?: number | null;
     focusedPitchClasses?: Set<number> | null;
     focusColorsEnabled?: boolean;
     legendLabelOverrides?: Map<number, string>;
+    legendMidiLabelOverrides?: Map<number, string>;
     targetNoteStyle?: TargetNoteStyle;
 
     // Notation/Playback mode props
@@ -132,10 +134,12 @@
     legendHighlight,
     rowHighlight,
     showHorizontalGridLines = true,
+    extendHorizontalGridLinesBehindLegend = false,
     horizontalGridReferencePitchClass = null,
     focusedPitchClasses = null,
     focusColorsEnabled = false,
     legendLabelOverrides,
+    legendMidiLabelOverrides,
     targetNoteStyle = 'stadium',
     placedNotes = [],
     placedTonicSigns = [],
@@ -708,6 +712,9 @@
       focusColorsEnabled,
       highlight: legendHighlight,
       labelOverrides: legendLabelOverrides,
+      midiLabelOverrides: legendMidiLabelOverrides,
+      extendHorizontalGridLinesBehindLegend,
+      horizontalGridReferencePitchClass,
     };
 
     const legendOptions = {
@@ -833,9 +840,12 @@
     void columnWidths;
     void rowHighlight;
     void showHorizontalGridLines;
+    void extendHorizontalGridLinesBehindLegend;
     void horizontalGridReferencePitchClass;
     void showLegendLabels;
     void showAccidentalLabels;
+    void legendLabelOverrides;
+    void legendMidiLabelOverrides;
 
     if (ctx && isNotationMode) {
       render();

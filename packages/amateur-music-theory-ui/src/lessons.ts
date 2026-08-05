@@ -21,50 +21,6 @@ export type LessonDefinition = {
 };
 
 const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
-  '0.1': [
-    {
-      id: 'rhythm',
-      label: 'Hear Rhythm',
-      description: 'Separate rhythmic repetition from the rest of the musical example.',
-    },
-    {
-      id: 'pitch',
-      label: 'Hear Pitch',
-      description: 'Notice the rising and falling dimension that organizes notes by highness and lowness.',
-    },
-    {
-      id: 'timbre',
-      label: 'Hear Timbre',
-      description: 'Identify the sound quality that distinguishes one source or instrument from another.',
-    },
-    {
-      id: 'compare',
-      label: 'Compare the Spaces',
-      description: 'Put rhythm, pitch, and timbre side by side inside a single listening frame.',
-    },
-  ],
-  '0.2': [
-    {
-      id: 'describe',
-      label: 'Describe vs Prescribe',
-      description: 'Set up theory as a description of musical practice rather than a universal rulebook.',
-    },
-    {
-      id: 'rhythm-entry',
-      label: 'Rhythm Entry Point',
-      description: 'Introduce isochronic microbeats as the first perceptual handle for rhythm.',
-    },
-    {
-      id: 'pitch-entry',
-      label: 'Pitch Entry Point',
-      description: 'Introduce scale ordinality as the first perceptual handle for pitch.',
-    },
-    {
-      id: 'timbre-entry',
-      label: 'Timbre Entry Point',
-      description: 'Introduce spectrotemporal description as the first perceptual handle for timbre.',
-    },
-  ],
   '1.1': [
     {
       id: 'lines-spaces',
@@ -89,6 +45,38 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
   ],
   '1.2': [
     {
+      id: 'letter-names',
+      label: 'Letter Names',
+      description: 'Reveal the natural pitch letters from A through G and place three named notes on the grid.',
+    },
+    {
+      id: 'letter-cycle',
+      label: 'Repeating Letter Names',
+      description: 'Continue upward through the A-through-G cycle and recognize the letter above a displayed note.',
+    },
+    {
+      id: 'octaves',
+      label: 'Hear an Octave',
+      description: 'Compare matching letter names and hear the distance from one A to the next.',
+    },
+    {
+      id: 'octave-numbers',
+      label: 'Octave Numbers',
+      description: 'Expand the pitch range and use octave numbers to identify exact pitches across C boundaries.',
+    },
+    {
+      id: 'accidentals',
+      label: 'Sharps and Flats',
+      description: 'Reveal the chromatic pitches and name them with flats, sharps, and enharmonic spellings.',
+    },
+    {
+      id: 'naming-practice',
+      label: 'Naming Practice',
+      description: 'Place pitches from flat, sharp, and combined pitch names using the labelled pitch legend.',
+    },
+  ],
+  '1.3': [
+    {
       id: 'direction',
       label: 'Hear Direction',
       description: 'Recognize ascending and descending motion between two pitches.',
@@ -109,7 +97,7 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
       description: 'Connect interval naming, direction, and octave repetition into one summary.',
     },
   ],
-  '1.3': [
+  '1.4': [
     {
       id: 'tonic',
       label: 'Choose a Starting Pitch',
@@ -131,7 +119,7 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
       description: 'Check the completed scale and relate it back to the construction rule.',
     },
   ],
-  '1.4': [
+  '1.5': [
     {
       id: 'center',
       label: 'Hear the Center',
@@ -153,7 +141,7 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
       description: 'Summarize tonal center as both a construction point and a listening anchor.',
     },
   ],
-  '1.5': [
+  '1.6': [
     {
       id: 'index',
       label: 'Index the Scale',
@@ -175,7 +163,7 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
       description: 'Consolidate scale-degree naming and functional hearing.',
     },
   ],
-  '1.6': [
+  '1.7': [
     {
       id: 'stable',
       label: 'Stable vs Unstable',
@@ -197,7 +185,7 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
       description: 'Bring stability, patterning, and phrase shape together.',
     },
   ],
-  '1.7': [
+  '1.8': [
     {
       id: 'thirds',
       label: 'Stack Thirds',
@@ -219,7 +207,7 @@ const lessonSectionOverrides: Record<string, LessonSectionSeed[]> = {
       description: 'Summarize how triads are built and categorized.',
     },
   ],
-  '1.8': [
+  '1.9': [
     {
       id: 'scale-degree',
       label: 'Locate the Scale Degree',
@@ -276,7 +264,7 @@ function withSectionCodes(lessonCode: string, sections: LessonSectionSeed[]): Le
 }
 
 function getCanvasLayout(lessonCode: string): LessonDefinition['canvasLayout'] {
-  if (lessonCode === '1.1') {
+  if (lessonCode === '1.1' || lessonCode === '1.2') {
     return 'shell-only';
   }
 
@@ -284,7 +272,7 @@ function getCanvasLayout(lessonCode: string): LessonDefinition['canvasLayout'] {
 }
 
 function getAvatarCharacter(code: string): LessonAvatarCharacter | null {
-  if (code === '1.1') {
+  if (code === '1.1' || code === '1.2') {
     return 'grammy';
   }
 

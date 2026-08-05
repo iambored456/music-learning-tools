@@ -95,6 +95,7 @@ export const initialState: AppState = {
   musicalColumnWidths: [],
   degreeDisplayMode: 'off',
   showPitchLabels: false,
+  showPitchOctaveLabels: false,
   accidentalMode: { sharp: true, flat: true },
   showFrequencyLabels: false,
   showOctaveLabels: true,

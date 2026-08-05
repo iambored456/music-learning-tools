@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { defaultAvatarAssets } from '@mlt/talking-avatar';
+
   import OutlineRow from './OutlineRow.svelte';
   import { topLevelOutline } from './outline';
 
@@ -12,11 +14,14 @@
       <img src={homeIconHref} alt="" class="home-link-icon" />
     </a>
     <div class="hero-copy">
-      <h1>Amateur Music Theory</h1>
-      <p class="subtitle">
-        A strand-based beginner theory sequence that starts with shared foundations and then
-        branches into pitch, rhythm, and timbre.
-      </p>
+      <div class="hero-title-group">
+        <h1>Amateur Music Theory</h1>
+        <img
+          class="hero-avatar"
+          src={defaultAvatarAssets.smile_wave}
+          alt="Grammy smiling and waving"
+        />
+      </div>
     </div>
   </header>
 

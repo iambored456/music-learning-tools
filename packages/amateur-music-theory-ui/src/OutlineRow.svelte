@@ -26,7 +26,10 @@
 <div class="outline-row-node" style={`--outline-depth:${depth};`}>
   <article class={`outline-row-card row-type-${row.type}`}>
     <div class="outline-row-topline">
-      <span class="outline-row-type">{getRowLabel(row)}</span>
+      <div class="outline-row-heading">
+        <span class="outline-row-type">{getRowLabel(row)}</span>
+        <h3>{row.title}</h3>
+      </div>
       {#if isCollapsible(row)}
         <button
           class="outline-row-toggle"
@@ -51,8 +54,9 @@
       {/if}
     </div>
 
-    <h3>{row.title}</h3>
-    <p>{row.body}</p>
+    {#if row.type === 'note'}
+      <p>{row.body}</p>
+    {/if}
   </article>
 
   {#if row.children?.length && (!isCollapsible(row) || isExpanded)}
@@ -94,6 +98,17 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.52rem;
+  }
+
+  .outline-row-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+  }
+
+  .outline-row-heading h3 {
+    min-width: 0;
   }
 
   .outline-row-type {
