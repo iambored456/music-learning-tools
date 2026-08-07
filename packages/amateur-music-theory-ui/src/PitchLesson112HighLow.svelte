@@ -607,7 +607,9 @@
   $: scoreNoteRenderItems = buildScoreNoteRenderItems(scoreColumnWidthPx, scoreShapeHeightPx);
   $: scoreStampRenderItems = buildScoreStampRenderItems(scoreColumnWidthPx, scoreShapeHeightPx);
 
-  $: if (avatarReady && !introStarted && isPlaying) {
+  // Score playback can begin while the avatar finishes entering. Narrated
+  // exercise phases still wait for the avatar before starting their sequence.
+  $: if ((isMusicalScorePhase || avatarReady) && !introStarted && isPlaying) {
     introStarted = true;
     void startLessonOpeningSequence();
   }
