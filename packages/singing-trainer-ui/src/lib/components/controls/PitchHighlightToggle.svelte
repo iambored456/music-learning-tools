@@ -30,13 +30,14 @@
     justify-content: space-between;
     gap: var(--spacing-sm);
     padding: 16px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
   }
 
   .toggle-label {
     font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
+    color: var(--color-text);
   }
 
   .toggle-button {
@@ -44,8 +45,8 @@
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--color-text);
-    background-color: var(--color-surface);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--color-control);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-sm);
     transition: all 0.2s ease;
     min-width: 64px;

@@ -40,6 +40,8 @@ export interface TimeBasedCoordinateConfig {
   nowLineX?: number;
   /** Current time in ms (for highway mode) */
   currentTimeMs?: number;
+  /** Optional per-row vertical offsets, measured in equal-tempered semitone steps. */
+  rowPositionOffsets?: readonly number[];
 }
 
 // ============================================================================
@@ -99,19 +101,59 @@ export function createColumnCoordinates(config: CoordinateConfig): CoordinateUti
  * Create coordinate utilities for time-based layout (singing/highway modes).
  */
 export function createTimeCoordinates(config: TimeBasedCoordinateConfig): CoordinateUtils {
-  const { cellHeight, viewport, pixelsPerSecond, nowLineX = 100, currentTimeMs = 0 } = config;
+  const {
+    cellHeight,
+    viewport,
+    pixelsPerSecond,
+    nowLineX = 100,
+    currentTimeMs = 0,
+    rowPositionOffsets,
+  } = config;
   const halfUnit = cellHeight / 2;
+
+  function getOffsetAt(rowIndex: number): number {
+    if (!rowPositionOffsets || rowPositionOffsets.length === 0) return 0;
+    const clampedIndex = Math.min(rowPositionOffsets.length - 1, Math.max(0, rowIndex));
+    const lowerIndex = Math.floor(clampedIndex);
+    const upperIndex = Math.min(rowPositionOffsets.length - 1, lowerIndex + 1);
+    const fraction = clampedIndex - lowerIndex;
+    const lowerOffset = rowPositionOffsets[lowerIndex] ?? 0;
+    const upperOffset = rowPositionOffsets[upperIndex] ?? lowerOffset;
+    return lowerOffset + ((upperOffset - lowerOffset) * fraction);
+  }
+
+  function getPositionedRow(rowIndex: number): number {
+    return rowIndex + getOffsetAt(rowIndex);
+  }
 
   return {
     getRowY(rowIndex: number): number {
-      const relativeRowIndex = rowIndex - viewport.startRow;
+      const relativeRowIndex = getPositionedRow(rowIndex) - viewport.startRow;
       // Row centers are at half-cell intervals, offset by half a cell
       return (relativeRowIndex + 1) * halfUnit;
     },
 
     getRowFromY(canvasY: number): number {
-      const relativeRowIndex = (canvasY / halfUnit) - 1;
-      return Math.round(relativeRowIndex) + viewport.startRow;
+      const targetPosition = ((canvasY / halfUnit) - 1) + viewport.startRow;
+      if (!rowPositionOffsets || rowPositionOffsets.length === 0) {
+        return Math.round(targetPosition);
+      }
+
+      let low = 0;
+      let high = rowPositionOffsets.length - 1;
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        if (getPositionedRow(mid) < targetPosition) low = mid + 1;
+        else high = mid;
+      }
+
+      const upperIndex = low;
+      const lowerIndex = Math.max(0, upperIndex - 1);
+      const lowerPosition = getPositionedRow(lowerIndex);
+      const upperPosition = getPositionedRow(upperIndex);
+      if (upperPosition <= lowerPosition) return lowerIndex;
+      const fraction = (targetPosition - lowerPosition) / (upperPosition - lowerPosition);
+      return lowerIndex + Math.min(1, Math.max(0, fraction));
     },
 
     getColumnX(_columnIndex: number): number {

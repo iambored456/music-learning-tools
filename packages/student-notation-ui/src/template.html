@@ -22,6 +22,10 @@
 </div>
 </div>
 <div class="sidebar-container">
+<h4 class="sidebar-section-header">Styling</h4>
+<button class="sidebar-toggle-button" id="red-c-lines-toggle" type="button" aria-pressed="false">Red C-line</button>
+</div>
+<div class="sidebar-container">
 <button class="sidebar-button" id="save-as-button" title="Save As"><img src="assets/sidebar/saveAs.svg" alt="Save As"><span class="sidebar-button-text">Save As</span></button>
 <button class="sidebar-button" id="import-button" title="Open"><img src="assets/sidebar/open.svg" alt="Open"><span class="sidebar-button-text">Open</span></button>
 <button class="sidebar-button" id="print-button" title="Print"><img src="assets/sidebar/print.svg" alt="Print"><span class="sidebar-button-text">Print</span></button>
@@ -147,6 +151,7 @@
         <div class="tab-sidebar">
             <button class="tab-button" data-tab="timbre">Timbre</button>
             <button class="tab-button" data-tab="pitch">Pitch</button>
+            <button class="tab-button" data-tab="chords">Chords</button>
             <button class="tab-button" data-tab="rhythm">Rhythm</button>
         </div>
         <div class="tab-content">
@@ -282,10 +287,7 @@
             <div class="tab-panel" id="pitch-panel">
                 <div class="control-section pitch-tabs-container">
                     <div class="pitch-tabs">
-                        <button class="pitch-tab-button active" data-pitch-tab="range">Range</button>
-                        <button class="pitch-tab-button" data-pitch-tab="mode">Mode</button>
-                        <button class="pitch-tab-button" data-pitch-tab="chords">Chords</button>
-                        <button class="pitch-tab-button" data-pitch-tab="draw">Draw</button>
+                        <button class="pitch-tab-button active" data-pitch-tab="draw">Range / Mode / Draw</button>
                     </div>
                     <div class="pitch-tab-content">
                         <div class="pitch-tab-panel active" id="range-panel">
@@ -316,29 +318,20 @@
                                        <!-- <h4 class="panel-section-title">Presets</h4> -->
                                        <div class="clef-presets-column">
                                             <div class="clef-preset-buttons">
-                                                <button class="toolkit-button clef-preset-button" id="clef-grandstaff-button" type="button">
-                                                    Grand Staff
-                                                </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-full-range-button" type="button">
                                                     Full Range
+                                                </button>
+                                                <button class="toolkit-button clef-preset-button" id="clef-grandstaff-button" type="button">
+                                                    Grand Staff
                                                 </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-treble-button" type="button">
                                                     Treble Clef
                                                 </button>
-                                                <button class="toolkit-button clef-preset-button" id="clef-voice1-button" type="button">
-                                                    Voice I
-                                                </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-alto-button" type="button">
                                                     Alto Clef
                                                 </button>
-                                                <button class="toolkit-button clef-preset-button" id="clef-voice2-button" type="button">
-                                                    Voice II
-                                                </button>
                                                 <button class="toolkit-button clef-preset-button" id="clef-bass-button" type="button">
                                                     Bass Clef
-                                                </button>
-                                                <button class="toolkit-button clef-preset-button" id="clef-voice3-button" type="button">
-                                                    Voice III
                                                 </button>
                                            </div>
                                        </div>
@@ -780,7 +773,7 @@
                                 </span>
                             </button>
                             <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="triplet"><span class="rhythm-stamp-tab-label" data-label="Triplets"><span class="rhythm-stamp-tab-text">Triplets</span></span></button>
-                            <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="measures"><span class="rhythm-stamp-tab-label" data-label="Measures"><span class="rhythm-stamp-tab-text">Measures</span></span></button>
+                            <button class="rhythm-tab-button rhythm-stamp-tab-button" data-rhythm-stamp-tab="beats"><span class="rhythm-stamp-tab-label" data-label="Beats"><span class="rhythm-stamp-tab-text">Beats</span></span></button>
                         </div>
                         <div class="rhythm-stamp-tab-content">
                             <div class="rhythm-stamp-tab-panel active" id="sixteenth-stamps-panel">
@@ -796,16 +789,16 @@
                                     <!-- Triplets toolbar will be rendered here by JavaScript -->
                                 </div>
                             </div>
-                            <div class="rhythm-stamp-tab-panel" id="measures-stamps-panel">
+                            <div class="rhythm-stamp-tab-panel" id="beats-stamps-panel">
+                                <div class="drum-beats-toolbar" aria-label="Three-track drum beat previews">
+                                    <button class="toolkit-button drum-beat-preview-button" type="button" data-drum-beat-pattern="rock">Rock</button>
+                                    <button class="toolkit-button drum-beat-preview-button" type="button" data-drum-beat-pattern="four-floor">Four Floor</button>
+                                    <button class="toolkit-button drum-beat-preview-button" type="button" data-drum-beat-pattern="syncopated">Syncopated</button>
+                                </div>
+                            </div>
+                            <div class="rhythm-stamp-tab-panel" id="general-stamps-panel">
                                 <div class="rhythm-controls-content-box">
                                     <div class="rhythm-structure-container">
-                                        <div class="control-subsection">
-                                            <h4>Add/Del Beat</h4>
-                                            <div class="macrobeat-adjust-group">
-                                                <button class="toolkit-button" id="macrobeat-decrease">–</button>
-                                                <button class="toolkit-button" id="macrobeat-increase">+</button>
-                                            </div>
-                                        </div>
                                         <div class="control-subsection">
                                             <h4>Pickup</h4>
                                             <div class="toggle-button-group"><button class="sidebar-toggle-button" id="anacrusis-on-btn">On</button><button class="sidebar-toggle-button" id="anacrusis-off-btn">Off</button></div>
@@ -832,7 +825,7 @@
                         <div class="tempo-container">
                             <div class="tempo-boxes-container">
                                 <div class="tempo-input-group tempo-row">
-                                    <img src="assets/tabicons/eigthNote.svg" alt="Eighth Note Tempo" class="tempo-label-icon">
+                                    <span class="tempo-label-icon" aria-label="Eighth note tempo">1</span>
                                     <div class="tempo-stepper">
                                         <button class="tempo-step-btn tempo-step-up" data-tempo="eighth" aria-label="Increase eighth note tempo">&#9650;</button>
                                         <div id="eighth-note-tempo"></div>
@@ -840,7 +833,7 @@
                                     </div>
                                 </div>
                                 <div class="tempo-input-group tempo-row">
-                                    <img src="assets/tabicons/quarterNote.svg" alt="Quarter Note Tempo" class="tempo-label-icon">
+                                    <span class="tempo-label-icon" aria-label="Quarter note tempo">2</span>
                                     <div class="tempo-stepper">
                                         <button class="tempo-step-btn tempo-step-up" data-tempo="quarter" aria-label="Increase quarter note tempo">&#9650;</button>
                                         <div id="quarter-note-tempo"></div>
@@ -848,7 +841,7 @@
                                     </div>
                                 </div>
                                 <div class="tempo-input-group tempo-row">
-                                    <img src="assets/tabicons/dottedQuarterNote.svg" alt="Dotted Quarter Note Tempo" class="tempo-label-icon">
+                                    <span class="tempo-label-icon" aria-label="Dotted quarter note tempo">3</span>
                                     <div class="tempo-stepper">
                                         <button class="tempo-step-btn tempo-step-up" data-tempo="dotted" aria-label="Increase dotted quarter note tempo">&#9650;</button>
                                         <div id="dotted-quarter-tempo"></div>
@@ -891,7 +884,13 @@
                     </div>
                 </div>
                 <div class="button-grid-right-cell">
-                    <!-- Null/empty cell for alignment with pitch grid right legend -->
+                    <div class="macrobeat-floating-panel" aria-label="Add or delete beat">
+                        <span class="macrobeat-floating-label">Add/Del Beat</span>
+                        <div class="macrobeat-adjust-group">
+                            <button class="toolkit-button" id="macrobeat-decrease" aria-label="Delete beat">–</button>
+                            <button class="toolkit-button" id="macrobeat-increase" aria-label="Add beat">+</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="pitch-grid-wrapper">

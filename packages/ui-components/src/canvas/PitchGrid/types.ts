@@ -140,6 +140,8 @@ export interface PitchRowHighlightEntry {
   glow?: number;
   /** Whether to pulse the highlight over time. */
   pulse?: boolean;
+  /** Draw this highlight before horizontal grid lines so the lines remain visible above it. */
+  renderBehindGridLines?: boolean;
   /** Vertical scale factor for highlight height (0-1). 1 = full cell height, 0.5 = half. Default: 1. */
   heightScale?: number;
   /** Extra fade distance above the core highlight, expressed as a multiple of cellHeight. */
@@ -359,6 +361,10 @@ export interface PitchGridBaseProps {
   cellWidth: number;
   /** Base cell height in pixels (before zoom) */
   cellHeight: number;
+  /** Optional per-row vertical offsets, measured in equal-tempered semitone steps. */
+  rowPositionOffsets?: readonly number[];
+  /** Width of each of the legend's two label columns, expressed in cell-width units. */
+  legendColumnWidthUnits?: number;
 
   // === Visual Options ===
   /** Color mode for rendering */
@@ -384,8 +390,20 @@ export interface PitchGridBaseProps {
   /**
    * Optional tonic/reference pitch class for horizontal grid line styling.
    * 0 preserves legacy C-referenced pattern; other values rotate the full pattern.
-   */
+  */
   horizontalGridReferencePitchClass?: number | null;
+  /** Optional color for the emphasized solid horizontal reference line. */
+  horizontalGridReferenceLineColor?: string;
+  /** Optional color for ordinary solid horizontal pitch lines. */
+  horizontalGridDefaultLineColor?: string;
+  /** Optional pixel width for ordinary solid horizontal pitch lines. */
+  horizontalGridDefaultLineWidth?: number;
+  /** Optional pixel width for the emphasized dashed horizontal pitch line. */
+  horizontalGridDashedLineWidth?: number;
+  /** Optional color for the highway judgement line. */
+  judgmentLineColor?: string;
+  /** Optional pixel width for the highway judgement line. */
+  judgmentLineWidth?: number;
   /** Visual style for singing/highway target notes. */
   targetNoteStyle?: TargetNoteStyle;
 }

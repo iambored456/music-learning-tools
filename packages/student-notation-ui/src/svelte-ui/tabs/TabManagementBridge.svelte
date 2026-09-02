@@ -32,6 +32,32 @@
   const pitchTabHandlers = new Map<Element, () => void>();
   const tabBridgeSync = createTabBridgeSyncController();
 
+  function normalizeToolbarStructure(): void {
+    const tabContent = document.querySelector<HTMLElement>('.tab-content');
+    const chordsPanel = document.getElementById('chords-panel');
+    if (tabContent && chordsPanel) {
+      chordsPanel.classList.remove('pitch-tab-panel');
+      chordsPanel.classList.add('tab-panel');
+      const rhythmPanel = document.getElementById('rhythm-panel');
+      tabContent.insertBefore(chordsPanel, rhythmPanel);
+    }
+
+    document.querySelector<HTMLElement>('.pitch-tab-content')?.classList.add('pitch-combined-content');
+
+    const generalPanel = document.getElementById('general-stamps-panel');
+    const tempoPanel = document.querySelector<HTMLElement>('.rhythm-tempo-container');
+    const rhythmPanel = document.getElementById('rhythm-panel');
+    const stampTabs = rhythmPanel?.querySelector<HTMLElement>('.rhythm-stamp-tabs-container');
+    if (generalPanel && rhythmPanel && stampTabs) {
+      generalPanel.classList.remove('rhythm-stamp-tab-panel', 'active');
+      generalPanel.classList.add('rhythm-general-panel');
+      rhythmPanel.insertBefore(generalPanel, stampTabs);
+      if (tempoPanel && tempoPanel.parentElement !== generalPanel) {
+        generalPanel.appendChild(tempoPanel);
+      }
+    }
+  }
+
   function initMainTabs(): void {
     const syncAfterActivate = (): void => {
       tabBridgeSync.observeElements();
@@ -112,6 +138,7 @@
   }
 
   $effect(() => {
+    normalizeToolbarStructure();
     initMainTabs();
     initPresetTabs();
     tabBridgeSync.init();

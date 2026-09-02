@@ -8,6 +8,11 @@
   import { initLocalDrumSampleChoices } from '@components/canvas/drumGrid/drumGridInteractor.ts';
   import store from '@state/initStore.ts';
   import LayoutService from '@services/layoutService.ts';
+  import GridManager from '@components/canvas/PitchGrid/gridManager.ts';
+  import {
+    isRedCLinesEnabled,
+    setRedCLinesEnabled,
+  } from '@services/gridStyleSettings.ts';
   import { preloadDrumSamples } from '@services/transport/drumManager.ts';
   import {
     subscribeToAdsrPlayheadsEnabled,
@@ -32,6 +37,7 @@
   let themeToggle: HTMLElement | null = null;
   let themeLightInput: HTMLInputElement | null = null;
   let themeDarkInput: HTMLInputElement | null = null;
+  let redCLinesToggleBtn: HTMLButtonElement | null = null;
 
   // Anacrusis toggle
   let anacrusisOnBtn: HTMLElement | null = null;
@@ -167,6 +173,19 @@
 
     const nextMode: ThemeMode = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
     applyThemeMode(nextMode);
+  }
+
+  function syncRedCLinesToggle(enabled: boolean): void {
+    if (!redCLinesToggleBtn) {return;}
+    redCLinesToggleBtn.classList.toggle('active', enabled);
+    redCLinesToggleBtn.setAttribute('aria-pressed', String(enabled));
+  }
+
+  function handleRedCLinesToggle(): void {
+    const enabled = !isRedCLinesEnabled();
+    setRedCLinesEnabled(enabled);
+    syncRedCLinesToggle(enabled);
+    GridManager.renderPitchGrid();
   }
 
   function handleDocumentClickForVolume(e: Event) {
@@ -357,6 +376,7 @@
     themeToggle = document.getElementById('theme-toggle');
     themeLightInput = document.getElementById('theme-light') as HTMLInputElement | null;
     themeDarkInput = document.getElementById('theme-dark') as HTMLInputElement | null;
+    redCLinesToggleBtn = document.getElementById('red-c-lines-toggle') as HTMLButtonElement | null;
 
     // Anacrusis toggle
     anacrusisOnBtn = document.getElementById('anacrusis-on-btn');
@@ -405,6 +425,10 @@
     themeLightInput?.addEventListener('change', handleThemeLightChange);
     themeDarkInput?.addEventListener('change', handleThemeDarkChange);
     themeToggle?.addEventListener('click', handleThemeToggleClick);
+    if (redCLinesToggleBtn) {
+      syncRedCLinesToggle(isRedCLinesEnabled());
+      redCLinesToggleBtn.addEventListener('click', handleRedCLinesToggle);
+    }
 
     // Anacrusis event listeners
     if (anacrusisOnBtn && anacrusisOffBtn) {
@@ -478,6 +502,7 @@
     themeLightInput?.removeEventListener('change', handleThemeLightChange);
     themeDarkInput?.removeEventListener('change', handleThemeDarkChange);
     themeToggle?.removeEventListener('click', handleThemeToggleClick);
+    redCLinesToggleBtn?.removeEventListener('click', handleRedCLinesToggle);
 
     anacrusisOnBtn?.removeEventListener('click', handleAnacrusisOn);
     anacrusisOffBtn?.removeEventListener('click', handleAnacrusisOff);

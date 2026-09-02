@@ -63,6 +63,6 @@
     margin: 0;
     font-size: var(--font-size-xs);
     line-height: 1.4;
-    color: var(--color-text-muted);
+    color: var(--color-text);
   }
 </style>

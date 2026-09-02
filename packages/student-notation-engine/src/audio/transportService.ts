@@ -348,7 +348,7 @@ export function createTransportService(config: TransportConfig): TransportServic
       const tailDuration = modulatedEndTime - scheduleTime;
 
       if (note.isDrum) {
-        scheduleRumNote(note, scheduleTime);
+        scheduleRumNote(note, scheduleTime, tailDuration);
       } else {
         schedulePitchedNote(note, scheduleTime, tailDuration, configuredLoopEnd, state);
       }
@@ -382,10 +382,11 @@ export function createTransportService(config: TransportConfig): TransportServic
   /**
    * Schedule a drum note.
    */
-  function scheduleRumNote(note: SchedulableNote, scheduleTime: number): void {
+  function scheduleRumNote(note: SchedulableNote, scheduleTime: number, columnDuration: number): void {
     const state = stateCallbacks.getState();
 
-    Tone.Transport.schedule(time => {
+    const scheduleHit = (hitTime: number): void => {
+      Tone.Transport.schedule(time => {
       if (state.isPaused) return;
 
       const drumTrack = note.drumTrack;
@@ -398,7 +399,16 @@ export function createTransportService(config: TransportConfig): TransportServic
       Tone.Draw.schedule(() => {
         visualCallbacks?.triggerDrumNotePop?.(note.startColumnIndex, drumTrack);
       }, time);
-    }, scheduleTime);
+      }, hitTime);
+    };
+
+    const subdivision = note.drumSubdivision ?? 'single';
+    if (subdivision !== 'secondOnly') {
+      scheduleHit(scheduleTime);
+    }
+    if (subdivision === 'double' || subdivision === 'secondOnly') {
+      scheduleHit(scheduleTime + columnDuration / 2);
+    }
   }
 
   /**

@@ -10,7 +10,7 @@ const SELECTED_RHYTHM_TAB_KEY = 'selectedRhythmTab';
 const SELECTED_SIXTEENTH_SUB_KEY = 'selectedSixteenthSub';
 const DEFAULT_TAB = 'timbre';
 const DEFAULT_PRESET_TAB = 'presets';
-const DEFAULT_PITCH_TAB = 'chords';
+const DEFAULT_PITCH_TAB = 'draw';
 const DEFAULT_RHYTHM_STAMP_TAB = 'sixteenth';
 const DEFAULT_SIXTEENTH_SUB = 'four';
 
@@ -66,7 +66,8 @@ export function saveSelectedPitchTab(tabId: string): void {
 }
 
 export function getSavedPitchTab(): string {
-  return readSelection(SELECTED_PITCH_TAB_KEY, DEFAULT_PITCH_TAB, 'pitch tab');
+  const saved = readSelection(SELECTED_PITCH_TAB_KEY, DEFAULT_PITCH_TAB, 'pitch tab');
+  return saved === 'draw' ? saved : DEFAULT_PITCH_TAB;
 }
 
 export function saveSelectedRhythmStampTab(tabId: string): void {
@@ -83,7 +84,9 @@ export function getSavedRhythmStampTab(): string {
     case 'triplets':
       return 'triplet';
     case 'controls':
-      return 'measures';
+    case 'measures':
+    case 'general':
+      return 'sixteenth';
     default:
       return fallbackValue || DEFAULT_RHYTHM_STAMP_TAB;
   }

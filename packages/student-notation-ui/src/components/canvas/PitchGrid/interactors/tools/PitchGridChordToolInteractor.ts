@@ -25,7 +25,7 @@ export class PitchGridChordToolInteractor {
       return { handled: false, state, shouldStartDragging: false };
     }
 
-    if (!isNotePlayableAtColumn(colIndex, store.state)) {
+    if (!isNotePlayableAtColumn(colIndex, store.state) || !isNotePlayableAtColumn(colIndex + 1, store.state)) {
       return { handled: true, state, shouldStartDragging: false };
     }
 
@@ -39,7 +39,8 @@ export class PitchGridChordToolInteractor {
     if (!selectedNote) {
       return { handled: true, state, shouldStartDragging: false };
     }
-    const { shape, color } = selectedNote;
+    const { color } = selectedNote;
+    const shape = 'circle' as const;
 
     audioPreviewService.triggerAttacks(chordPitches, color, { kind: 'chord', bypassThrottle: true });
 
@@ -56,7 +57,7 @@ export class PitchGridChordToolInteractor {
         return;
       }
 
-      const defaultEndColumn = (shape === 'circle' ? colIndex + 1 : colIndex) as CanvasSpaceColumn;
+      const defaultEndColumn = (colIndex + 1) as CanvasSpaceColumn;
       const newNote: Partial<PlacedNote> = {
         row: noteRow,
         startColumnIndex: colIndex as CanvasSpaceColumn,

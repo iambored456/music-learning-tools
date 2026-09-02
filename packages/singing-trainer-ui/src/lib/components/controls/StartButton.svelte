@@ -79,9 +79,10 @@
 
   .start-button--compact {
     min-width: 0;
-    min-height: 5.75rem;
-    padding: var(--spacing-md);
-    font-size: var(--font-size-base);
+    min-height: 0;
+    height: fit-content;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
   }
 
   .start-button:hover:not(:disabled) {

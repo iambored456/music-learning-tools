@@ -130,6 +130,11 @@ function normalizePlacedNote(note: Partial<PlacedNote>): PlacedNote | null {
   if (note.drumTrack !== undefined) {
     normalized.drumTrack = note.drumTrack;
   }
+  if (note.drumSubdivision === 'double' || note.drumSubdivision === 'secondOnly') {
+    normalized.drumSubdivision = note.drumSubdivision;
+  } else if (note.isDrum) {
+    normalized.drumSubdivision = 'single';
+  }
 
   ensureCircleNoteSpan(normalized);
   return normalized;

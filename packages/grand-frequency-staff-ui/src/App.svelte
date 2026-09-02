@@ -1,6 +1,6 @@
 <script lang="ts">
   import { extendedPitches, type ExtendedPitch, type Region } from './data/pitchRange';
-  import { INSTRUMENTS, FAMILIES, FAMILY_COLORS, type InstrumentFamily } from './data/instruments';
+  import { INSTRUMENTS, type Instrument } from './data/instruments';
 
   const pitches = extendedPitches; // 185 pitches, E10 → C-5
 
@@ -11,28 +11,76 @@
   };
 
   let selectedMidi = $state<number | null>(null);
-  let activeFamilies = $state<Set<InstrumentFamily>>(new Set(FAMILIES));
+  let instrumentOrder = $state<string[]>(INSTRUMENTS.map((instrument) => instrument.id));
+  let draggedInstrumentId = $state<string | null>(null);
+  let dragOverInstrumentId = $state<string | null>(null);
+  let dragOverAfter = $state(false);
+  let pitchColumnsReversed = $state(false);
+  let hzColumnsReversed = $state(false);
+  let midiColumnsReversed = $state(false);
+  let pianoColumnsReversed = $state(false);
   let audioCtx: AudioContext | null = null;
 
-  const visibleInstruments = $derived(
-    INSTRUMENTS.filter(i => activeFamilies.has(i.family))
-  );
+  const instrumentById = new Map(INSTRUMENTS.map((instrument) => [instrument.id, instrument]));
+  const visibleInstruments = $derived.by<Instrument[]>(() => (
+    instrumentOrder
+      .map((id) => instrumentById.get(id))
+      .filter((instrument): instrument is Instrument => instrument !== undefined)
+  ));
 
   const selectedPitch = $derived(
     pitches.find(p => p.midi === selectedMidi) ?? null
   );
 
-  const instrumentsForSelected = $derived.by(() => {
-    const midi = selectedMidi;
-    if (midi === null) return [];
-    return INSTRUMENTS.filter(i => i.pitched && i.minMidi <= midi && i.maxMidi >= midi);
-  });
+  type OffsetColumn = 'A' | 'B';
 
-  function toggleFamily(family: InstrumentFamily) {
-    const next = new Set(activeFamilies);
-    if (next.has(family)) next.delete(family);
-    else next.add(family);
-    activeFamilies = next;
+  function getColumnOrder(reversed: boolean): OffsetColumn[] {
+    return reversed ? ['B', 'A'] : ['A', 'B'];
+  }
+
+  function handleInstrumentDragStart(event: DragEvent, instrumentId: string): void {
+    draggedInstrumentId = instrumentId;
+    dragOverInstrumentId = null;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', instrumentId);
+    }
+  }
+
+  function handleInstrumentDragOver(event: DragEvent, targetId: string): void {
+    event.preventDefault();
+    if (!draggedInstrumentId || draggedInstrumentId === targetId) return;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+
+    const target = event.currentTarget as HTMLElement;
+    const bounds = target.getBoundingClientRect();
+    const insertAfter = event.clientX >= bounds.left + bounds.width / 2;
+    if (dragOverInstrumentId === targetId && dragOverAfter === insertAfter) return;
+
+    const next = instrumentOrder.filter((id) => id !== draggedInstrumentId);
+    const targetIndex = next.indexOf(targetId);
+    if (targetIndex < 0) return;
+    next.splice(targetIndex + (insertAfter ? 1 : 0), 0, draggedInstrumentId);
+    instrumentOrder = next;
+    dragOverInstrumentId = targetId;
+    dragOverAfter = insertAfter;
+  }
+
+  function handleInstrumentDragEnd(): void {
+    draggedInstrumentId = null;
+    dragOverInstrumentId = null;
+    dragOverAfter = false;
+  }
+
+  function handleInstrumentHeaderKey(event: KeyboardEvent, instrumentId: string): void {
+    if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+    event.preventDefault();
+    const currentIndex = instrumentOrder.indexOf(instrumentId);
+    const nextIndex = currentIndex + (event.key === 'ArrowLeft' ? -1 : 1);
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= instrumentOrder.length) return;
+    const next = [...instrumentOrder];
+    [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+    instrumentOrder = next;
   }
 
   function playFrequency(frequency: number) {
@@ -97,46 +145,87 @@
       </a>
       <h1>Grand Frequency Staff</h1>
     </div>
-    <div class="family-filters">
-      {#each FAMILIES as family}
-        <button
-          class="chip"
-          class:active={activeFamilies.has(family)}
-          style="--chip-color: {FAMILY_COLORS[family]}"
-          onclick={() => toggleFamily(family)}
-        >{family}</button>
-      {/each}
-    </div>
   </header>
 
   <div class="body">
     <div class="scroll-area">
-      <!-- Sticky column headers -->
-      <div class="header-row">
-        <div class="strip-spacer"></div>
-        <div class="pitch-header-group">
-          <div class="offset-header-cell">Pitch A</div>
-          <div class="offset-header-cell">Pitch B</div>
+      <!-- Sticky detail toolbar and column headers -->
+      <div class="table-header">
+        <div class="detail-toolbar" aria-live="polite">
+          {#if selectedPitch}
+            <span class="detail-pitch" style="color: {selectedPitch.color}">{selectedPitch.noteName}</span>
+            <span class="detail-hz">{formatHz(selectedPitch.frequency)}</span>
+            <span class="detail-midi">MIDI {selectedPitch.midi}</span>
+            <span
+              class="detail-region"
+              style="color: rgb({selectedPitch.stripRgb}); border-color: rgb({selectedPitch.stripRgb})"
+            >{REGION_LABELS[selectedPitch.region]}</span>
+          {:else}
+            <span class="detail-placeholder">Select a pitch row for details</span>
+          {/if}
         </div>
-        <div class="hz-header-group">
-          <div class="offset-header-cell">Hz A</div>
-          <div class="offset-header-cell">Hz B</div>
+
+        <div class="metadata-header-row">
+          <div class="strip-spacer"></div>
+          <button
+            class="paired-header pitch-header-group"
+            type="button"
+            onclick={() => (pitchColumnsReversed = !pitchColumnsReversed)}
+            aria-label="Swap Pitch A and B columns"
+          >
+            <span>Pitch</span>
+            <span class="column-order">{pitchColumnsReversed ? 'B / A' : 'A / B'}</span>
+          </button>
+          <button
+            class="paired-header hz-header-group"
+            type="button"
+            onclick={() => (hzColumnsReversed = !hzColumnsReversed)}
+            aria-label="Swap Hz A and B columns"
+          >
+            <span>Hz</span>
+            <span class="column-order">{hzColumnsReversed ? 'B / A' : 'A / B'}</span>
+          </button>
+          <button
+            class="paired-header midi-header-group"
+            type="button"
+            onclick={() => (midiColumnsReversed = !midiColumnsReversed)}
+            aria-label="Swap MIDI A and B columns"
+          >
+            <span>MIDI</span>
+            <span class="column-order">{midiColumnsReversed ? 'B / A' : 'A / B'}</span>
+          </button>
+          <button
+            class="paired-header piano-header-group"
+            type="button"
+            onclick={() => (pianoColumnsReversed = !pianoColumnsReversed)}
+            aria-label="Swap Piano Key A and B columns"
+          >
+            <span>Piano Key</span>
+            <span class="column-order">{pianoColumnsReversed ? 'B / A' : 'A / B'}</span>
+          </button>
         </div>
-        <div class="midi-header-group">
-          <div class="offset-header-cell">MIDI A</div>
-          <div class="offset-header-cell">MIDI B</div>
-        </div>
-        <div class="piano-header-group">
-          <div class="offset-header-cell">Key A</div>
-          <div class="offset-header-cell">Key B</div>
-        </div>
-        {#each visibleInstruments as inst}
+
+        <div class="instrument-header-row">
+          {#each visibleInstruments as inst (inst.id)}
           <div
             class="inst-header"
+            class:dragging={draggedInstrumentId === inst.id}
+            class:drag-over-before={dragOverInstrumentId === inst.id && !dragOverAfter}
+            class:drag-over-after={dragOverInstrumentId === inst.id && dragOverAfter}
             style="color: {inst.color}; background: {inst.color}22"
             title={inst.name}
-          >{inst.name}</div>
-        {/each}
+            draggable="true"
+            role="button"
+            tabindex="0"
+            aria-label="Drag {inst.name} to reorder its column"
+            onkeydown={(event) => handleInstrumentHeaderKey(event, inst.id)}
+            ondragstart={(event) => handleInstrumentDragStart(event, inst.id)}
+            ondragover={(event) => handleInstrumentDragOver(event, inst.id)}
+            ondrop={(event) => { event.preventDefault(); handleInstrumentDragEnd(); }}
+            ondragend={handleInstrumentDragEnd}
+          ><span>{inst.name}</span></div>
+          {/each}
+        </div>
       </div>
 
       <!-- Pitch rows, with region headers injected at each zone boundary -->
@@ -150,6 +239,7 @@
         {@const isSelected = pitch.midi === selectedMidi}
         {@const isOctaveC = pitch.pitchClass === 0}
         {@const isColumnA = pitch.column === 'A'}
+        {@const activeColumn: OffsetColumn = isColumnA ? 'A' : 'B'}
         {@const shortHz = formatHzShort(pitch.frequency)}
         {@const pianoKey = getPianoKeyNumber(pitch.midi)}
         {@const isMidiInRange = pitch.midi >= 0 && pitch.midi <= 127}
@@ -169,46 +259,40 @@
         >
           <div class="region-strip" style="background: rgb({pitch.stripRgb})"></div>
           <div class="offset-cells pitch-offset-cells">
-            <div class="offset-cell" class:active={isColumnA}>
-              {#if isColumnA}
-                <span class="cell-text pitch-name" style="color: {pitch.color}">{pitch.noteName}</span>
-              {/if}
-            </div>
-            <div class="offset-cell" class:active={!isColumnA}>
-              {#if !isColumnA}
-                <span class="cell-text pitch-name" style="color: {pitch.color}">{pitch.noteName}</span>
-              {/if}
-            </div>
+            {#each getColumnOrder(pitchColumnsReversed) as column}
+              <div class="offset-cell" class:active={activeColumn === column}>
+                {#if activeColumn === column}
+                  <span class="cell-text pitch-name" style="color: {pitch.color}">{pitch.noteName}</span>
+                {/if}
+              </div>
+            {/each}
           </div>
           <div class="offset-cells hz-offset-cells">
-            <div class="offset-cell hz-offset-cell" class:active={isColumnA}>
-              {#if isColumnA}<span class="cell-text">{shortHz}</span>{/if}
-            </div>
-            <div class="offset-cell hz-offset-cell" class:active={!isColumnA}>
-              {#if !isColumnA}<span class="cell-text">{shortHz}</span>{/if}
-            </div>
+            {#each getColumnOrder(hzColumnsReversed) as column}
+              <div class="offset-cell hz-offset-cell" class:active={activeColumn === column}>
+                {#if activeColumn === column}<span class="cell-text">{shortHz}</span>{/if}
+              </div>
+            {/each}
           </div>
           <div
             class="offset-cells midi-offset-cells"
             class:midi-upper-boundary={isMidiUpperBoundary}
             class:midi-lower-boundary={isMidiLowerBoundary}
           >
-            <div class="offset-cell midi-offset-cell" class:active={isColumnA}>
-              {#if isColumnA && isMidiInRange}<span class="cell-text">{pitch.midi}</span>{/if}
-            </div>
-            <div class="offset-cell midi-offset-cell" class:active={!isColumnA}>
-              {#if !isColumnA && isMidiInRange}<span class="cell-text">{pitch.midi}</span>{/if}
-            </div>
+            {#each getColumnOrder(midiColumnsReversed) as column}
+              <div class="offset-cell midi-offset-cell" class:active={activeColumn === column}>
+                {#if activeColumn === column && isMidiInRange}<span class="cell-text">{pitch.midi}</span>{/if}
+              </div>
+            {/each}
           </div>
           <div class="offset-cells piano-offset-cells">
-            <div class="offset-cell piano-offset-cell" class:active={isColumnA}>
-              {#if isColumnA && pianoKey !== null}<span class="cell-text">{pianoKey}</span>{/if}
-            </div>
-            <div class="offset-cell piano-offset-cell" class:active={!isColumnA}>
-              {#if !isColumnA && pianoKey !== null}<span class="cell-text">{pianoKey}</span>{/if}
-            </div>
+            {#each getColumnOrder(pianoColumnsReversed) as column}
+              <div class="offset-cell piano-offset-cell" class:active={activeColumn === column}>
+                {#if activeColumn === column && pianoKey !== null}<span class="cell-text">{pianoKey}</span>{/if}
+              </div>
+            {/each}
           </div>
-          {#each visibleInstruments as inst}
+          {#each visibleInstruments as inst (inst.id)}
             {@const inRange = inst.pitched && inst.minMidi <= pitch.midi && inst.maxMidi >= pitch.midi}
             <div
               class="inst-cell"
@@ -221,32 +305,6 @@
       {/each}
     </div>
 
-    <!-- Detail sidebar -->
-    {#if selectedPitch}
-      <aside class="detail-panel">
-        <button class="close-btn" onclick={() => { selectedMidi = null; }}>✕</button>
-
-        <div class="detail-pitch" style="color: {selectedPitch.color}">{selectedPitch.noteName}</div>
-        <div class="detail-hz">{formatHz(selectedPitch.frequency)}</div>
-        <div class="detail-midi">MIDI {selectedPitch.midi} · Oct {selectedPitch.octave}</div>
-
-        <div
-          class="detail-region"
-          style="color: rgb({selectedPitch.stripRgb}); border-color: rgb({selectedPitch.stripRgb}, 0.3)"
-        >{REGION_LABELS[selectedPitch.region]}</div>
-
-        <div class="detail-section-label">Instruments</div>
-        {#if instrumentsForSelected.length > 0}
-          <ul class="inst-list">
-            {#each instrumentsForSelected as inst}
-              <li style="color: {FAMILY_COLORS[inst.family]}">{inst.name}</li>
-            {/each}
-          </ul>
-        {:else}
-          <p class="no-inst">Outside all standard instrument ranges</p>
-        {/if}
-      </aside>
-    {/if}
   </div>
 </div>
 
@@ -332,31 +390,6 @@
     mask-size: contain;
   }
 
-  .family-filters {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .chip {
-    padding: 3px 10px;
-    border-radius: 20px;
-    border: 1px solid var(--chip-color);
-    background: transparent;
-    color: #6b7280;
-    cursor: pointer;
-    font-size: 0.7rem;
-    text-transform: capitalize;
-    transition: all 0.15s;
-    line-height: 1.4;
-  }
-
-  .chip.active {
-    background: var(--chip-color);
-    color: #111;
-    font-weight: 600;
-  }
-
   .body {
     display: flex;
     flex: 1;
@@ -371,14 +404,73 @@
     min-width: 0;
   }
 
-  /* Sticky column headers */
-  .header-row {
-    display: flex;
+  /* Sticky detail toolbar and column headers */
+  .table-header {
+    display: grid;
+    grid-template-columns: 346px max-content;
+    grid-template-rows: 36px 60px;
     position: sticky;
     top: 0;
     z-index: 10;
+    width: max-content;
+    min-width: 100%;
     background: #0f172a;
     border-bottom: 1px solid #1e293b;
+  }
+
+  .detail-toolbar {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 5px 10px 5px 12px;
+    border-bottom: 1px solid #1e293b;
+    border-right: 1px solid #1e293b;
+    white-space: nowrap;
+  }
+
+  .detail-placeholder {
+    color: #64748b;
+    font-size: 0.68rem;
+  }
+
+  .detail-pitch {
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
+
+  .detail-hz,
+  .detail-midi {
+    color: #b8c3d4;
+    font-size: 0.67rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-region {
+    min-width: 0;
+    overflow: hidden;
+    padding-left: 6px;
+    border-left: 2px solid;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+  }
+
+  .metadata-header-row {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+  }
+
+  .instrument-header-row {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    display: flex;
+    min-width: max-content;
   }
 
   .strip-spacer {
@@ -390,8 +482,6 @@
   .hz-header-group,
   .midi-header-group,
   .piano-header-group {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     flex-shrink: 0;
   }
 
@@ -415,49 +505,104 @@
     border-right: 1px solid #1e293b;
   }
 
-  .offset-header-cell {
-    font-size: 0.56rem;
-    color: #4b5563;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+  .paired-header {
     display: flex;
-    align-items: flex-end;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
-    height: 80px;
+    height: 60px;
     padding: 4px 2px;
-    border-right: 1px solid #1e293b30;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     user-select: none;
   }
 
-  .pitch-header-group .offset-header-cell:last-child,
-  .hz-header-group .offset-header-cell:last-child,
-  .midi-header-group .offset-header-cell:last-child,
-  .piano-header-group .offset-header-cell:last-child {
-    border-right: none;
+  .paired-header:hover,
+  .paired-header:focus-visible {
+    background: #1e293b;
+    color: #f8fafc;
+    outline: none;
+  }
+
+  .column-order {
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 0.52rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
   }
 
   .inst-header {
     width: 36px;
     flex-shrink: 0;
-    font-size: 0.55rem;
+    position: relative;
+    height: 96px;
+    padding: 0;
+    overflow: visible;
+    border-right: 1px solid #1e293b30;
+    font-size: 0.54rem;
+    font-weight: 600;
     text-align: center;
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    height: 80px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-right: 1px solid #1e293b30;
-    padding: 4px 2px;
-    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .inst-header > span {
+    display: block;
+    width: max-content;
     white-space: nowrap;
-    font-weight: 500;
+    transform: rotate(45deg);
+    transform-origin: center;
+    pointer-events: none;
+  }
+
+  .inst-header:hover,
+  .inst-header:focus-visible {
+    z-index: 1;
+    filter: brightness(1.25);
+    outline: none;
+  }
+
+  .inst-header.dragging {
+    z-index: 2;
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+
+  .inst-header.drag-over-before::before,
+  .inst-header.drag-over-after::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #f8fafc;
+    content: '';
+  }
+
+  .inst-header.drag-over-before::before {
+    left: -1px;
+  }
+
+  .inst-header.drag-over-after::after {
+    right: -1px;
   }
 
   /* Region section headers */
   .region-header {
     position: sticky;
-    top: 81px; /* just below the sticky column headers */
+    top: 97px; /* just below the sticky toolbar and column headers */
     z-index: 5;
     padding: 4px 8px 4px 14px;
     font-size: 0.62rem;
@@ -625,88 +770,4 @@
     box-shadow: inset 0 0 0 1px var(--row-accent);
   }
 
-  /* Detail sidebar */
-  .detail-panel {
-    width: 200px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    padding: 14px 14px 14px 14px;
-    border-left: 1px solid #1e293b;
-    background: #0f172a;
-    position: relative;
-  }
-
-  .close-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: none;
-    border: none;
-    color: #4b5563;
-    cursor: pointer;
-    font-size: 0.75rem;
-    padding: 2px 4px;
-    line-height: 1;
-  }
-
-  .close-btn:hover {
-    color: #9ca3af;
-  }
-
-  .detail-pitch {
-    font-size: 1.8rem;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 6px;
-    padding-right: 20px;
-  }
-
-  .detail-hz {
-    font-size: 0.9rem;
-    color: #9ca3af;
-    margin-bottom: 2px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .detail-midi {
-    font-size: 0.72rem;
-    color: #6b7280;
-    margin-bottom: 10px;
-  }
-
-  .detail-region {
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    border-left: 3px solid;
-    padding-left: 6px;
-    margin-bottom: 14px;
-  }
-
-  .detail-section-label {
-    font-size: 0.65rem;
-    color: #4b5563;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
-  }
-
-  .inst-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-size: 0.78rem;
-  }
-
-  .inst-list li {
-    padding: 2px 0;
-  }
-
-  .no-inst {
-    font-size: 0.72rem;
-    color: #4b5563;
-    font-style: italic;
-    margin: 0;
-  }
 </style>

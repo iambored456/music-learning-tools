@@ -8,6 +8,7 @@ import type { PitchGridTripletStampToolInteractor } from './tools/PitchGridTripl
 import type { PitchGridSixteenthThreeStampToolInteractor } from './tools/PitchGridSixteenthThreeStampToolInteractor.ts';
 import type { PitchGridModulationToolInteractor } from './tools/PitchGridModulationToolInteractor.ts';
 import type { PitchGridTonicizationToolInteractor } from './tools/PitchGridTonicizationToolInteractor.ts';
+import { buildCanvasFont } from '@services/typographyService.ts';
 
 interface MeasureBoundary {
   measureIndex: number;
@@ -314,6 +315,8 @@ export class PitchGridInteractionCoordinator {
     rowIndex: number;
     pitchHoverCtx: CanvasRenderingContext2D;
     zoomLevel: number;
+    cursorX: number;
+    cursorY: number;
     drawSingleColumnOvalNote: (ctx: CanvasRenderingContext2D, options: any, note: any, rowIndex: number) => void;
     drawTwoColumnOvalNote: (ctx: CanvasRenderingContext2D, options: any, note: any, rowIndex: number) => void;
   }): boolean {
@@ -332,7 +335,8 @@ export class PitchGridInteractionCoordinator {
       return true;
     }
 
-    const { shape, color } = selectedNote;
+    const { color } = selectedNote;
+    const shape = 'circle' as const;
     params.pitchHoverCtx.globalAlpha = 0.4;
 
     chordPitches.forEach(noteName => {
@@ -341,7 +345,7 @@ export class PitchGridInteractionCoordinator {
         return;
       }
 
-      const defaultEndColumn = (shape === 'circle' ? params.colIndex + 1 : params.colIndex) as CanvasSpaceColumn;
+      const defaultEndColumn = (params.colIndex + 1) as CanvasSpaceColumn;
       const ghostNote = {
         row: noteRowIndex,
         startColumnIndex: params.colIndex as CanvasSpaceColumn,
@@ -352,14 +356,30 @@ export class PitchGridInteractionCoordinator {
       } as const;
 
       const fullOptions = { ...store.state, zoomLevel: params.zoomLevel };
-      if (shape === 'oval') {
-        params.drawSingleColumnOvalNote(params.pitchHoverCtx, fullOptions, ghostNote as any, noteRowIndex);
-      } else {
-        params.drawTwoColumnOvalNote(params.pitchHoverCtx, fullOptions, ghostNote as any, noteRowIndex);
-      }
+      params.drawTwoColumnOvalNote(params.pitchHoverCtx, fullOptions, ghostNote as any, noteRowIndex);
     });
 
     params.pitchHoverCtx.globalAlpha = 1.0;
+    const chordName = document.querySelector<HTMLElement>('#chords-panel .harmony-preset-button.selected')?.title
+      ?? 'Chord';
+    const rootName = rootPitch.replace(/-?\d+$/, '');
+    const label = `${rootName} ${chordName}`;
+    const ctx = params.pitchHoverCtx;
+    ctx.save();
+    ctx.font = buildCanvasFont('caption');
+    ctx.textBaseline = 'middle';
+    const paddingX = 6;
+    const labelHeight = 20;
+    const labelWidth = ctx.measureText(label).width + paddingX * 2;
+    const x = Math.min(params.cursorX + 8, Math.max(0, ctx.canvas.width - labelWidth - 4));
+    const y = Math.max(labelHeight / 2 + 4, params.cursorY - 12);
+    ctx.fillStyle = 'rgba(33, 37, 41, 0.78)';
+    ctx.beginPath();
+    ctx.roundRect(x, y - labelHeight / 2, labelWidth, labelHeight, 5);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, x + paddingX, y);
+    ctx.restore();
     return true;
   }
 }

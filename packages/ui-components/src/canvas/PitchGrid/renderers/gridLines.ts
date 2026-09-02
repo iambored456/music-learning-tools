@@ -22,8 +22,16 @@ export interface HorizontalLinesConfig {
    * Reference pitch class for horizontal line styling.
    * 0 = legacy C-reference behavior.
    * Non-zero rotates the full pattern relative to tonic.
-   */
+  */
   horizontalGridReferencePitchClass?: number | null;
+  /** Optional color for the emphasized solid reference line. */
+  horizontalGridReferenceLineColor?: string;
+  /** Optional color for the ordinary solid pitch lines. */
+  horizontalGridDefaultLineColor?: string;
+  /** Optional pixel width for the ordinary solid pitch lines. */
+  horizontalGridDefaultLineWidth?: number;
+  /** Optional pixel width for the emphasized dashed pitch line. */
+  horizontalGridDashedLineWidth?: number;
 }
 
 export interface VerticalLinesConfig {
@@ -203,18 +211,31 @@ function resolveRowPitchClass(row: PitchRowData): number | null {
   return parsePitchClassFromPitchString(row.pitch);
 }
 
-function getLineStyleFromInterval(intervalFromReference: number, cellHeight: number): {
+function getLineStyleFromInterval(
+  intervalFromReference: number,
+  cellHeight: number,
+  referenceLineColor: string,
+  defaultLineColor: string,
+  defaultLineWidthOverride?: number,
+  dashedLineWidthOverride?: number
+): {
   lineWidth: number;
   dash: number[];
   color: string;
   fillRow: boolean;
 } {
-  const defaultLineWidth = scaleLineMetric(cellHeight, BASE_DEFAULT_LINE_WIDTH, 0.75, 1.6);
+  const defaultLineWidth =
+    typeof defaultLineWidthOverride === 'number' && Number.isFinite(defaultLineWidthOverride)
+      ? defaultLineWidthOverride
+      : scaleLineMetric(cellHeight, BASE_DEFAULT_LINE_WIDTH, 0.75, 1.6);
   const cLineWidth = scaleLineMetric(cellHeight, BASE_C_LINE_WIDTH, 2.4, 4.2);
-  const eLineWidth = scaleLineMetric(cellHeight, BASE_E_LINE_WIDTH, 0.75, 1.35);
+  const eLineWidth =
+    typeof dashedLineWidthOverride === 'number' && Number.isFinite(dashedLineWidthOverride)
+      ? dashedLineWidthOverride
+      : scaleLineMetric(cellHeight, BASE_E_LINE_WIDTH, 0.75, 1.35);
 
   if (intervalFromReference === EMPHASIZED_SOLID_INTERVAL) {
-    return { lineWidth: cLineWidth, dash: [], color: '#adb5bd', fillRow: false };
+    return { lineWidth: cLineWidth, dash: [], color: referenceLineColor, fillRow: false };
   }
 
   if (intervalFromReference === EMPHASIZED_DASHED_INTERVAL) {
@@ -230,7 +251,7 @@ function getLineStyleFromInterval(intervalFromReference: number, cellHeight: num
     return { lineWidth: defaultLineWidth, dash: [], color: G_ROW_FILL_COLOR, fillRow: true };
   }
 
-  return { lineWidth: defaultLineWidth, dash: [], color: '#ced4da', fillRow: false };
+  return { lineWidth: defaultLineWidth, dash: [], color: defaultLineColor, fillRow: false };
 }
 
 /**
@@ -251,6 +272,10 @@ export function drawHorizontalLines(
     viewportWidth,
     cellHeight,
     horizontalGridReferencePitchClass,
+    horizontalGridReferenceLineColor = '#adb5bd',
+    horizontalGridDefaultLineColor = '#ced4da',
+    horizontalGridDefaultLineWidth,
+    horizontalGridDashedLineWidth,
   } = config;
   const finalEndX = endX ?? viewportWidth;
   const referencePitchClass = (
@@ -280,7 +305,14 @@ export function drawHorizontalLines(
     if (SKIPPED_INTERVALS_FROM_REFERENCE.has(intervalFromReference)) continue;
     if (FILLED_INTERVAL_BORDER_INTERVALS.has(intervalFromReference)) continue;
 
-    const style = getLineStyleFromInterval(intervalFromReference, cellHeight);
+    const style = getLineStyleFromInterval(
+      intervalFromReference,
+      cellHeight,
+      horizontalGridReferenceLineColor,
+      horizontalGridDefaultLineColor,
+      horizontalGridDefaultLineWidth,
+      horizontalGridDashedLineWidth
+    );
 
     if (style.fillRow) {
       // Fill row style (legacy "G" behavior), now rotated relative to reference pitch class.

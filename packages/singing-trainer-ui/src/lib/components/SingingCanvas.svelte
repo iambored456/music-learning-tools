@@ -30,8 +30,14 @@
     UserPitchRenderConfig,
     ViewportWindow,
   } from '@mlt/ui-components/canvas';
-  import { generateRowDataForMidiRange, getTonicPitchClass, type PitchRowData } from '@mlt/pitch-data';
+  import {
+    generateRowDataForMidiRange,
+    getPitchByMidi,
+    getTonicPitchClass,
+    type PitchRowData,
+  } from '@mlt/pitch-data';
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
   import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
   import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
   import { exerciseState } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
@@ -42,6 +48,12 @@
   import { LyricsDisplay } from './karaoke/index.js';
   import YAxisDragZones from './YAxisDragZones.svelte';
   import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';
+
+  interface Props {
+    theme?: 'light' | 'dark';
+  }
+
+  let { theme = 'light' }: Props = $props();
 
   // Container element for measuring size
   let container: HTMLDivElement | undefined = $state(undefined);
@@ -82,26 +94,67 @@
     __MLT_LOG_TIMING_GRID_SNAPSHOT__?: (() => void) | undefined;
   };
   const MODE_ROW_FADE_SCALE = 0.25;
+  const SPEAKING_PITCH_FADE_SCALE = 0.5;
+  const TRAIL_DIAMETER_TO_TWO_ROWS_RATIO = 0.61803;
+  const JUST_INTONATION_CENTS = [
+    0,
+    111.73,
+    203.91,
+    315.64,
+    386.31,
+    498.04,
+    590.22,
+    701.96,
+    813.69,
+    884.36,
+    1017.6,
+    1088.27,
+  ] as const;
+  const CHROMATIC_FLAT_DEGREE_LABELS = [
+    '1', '♭2', '2', '♭3', '3', '4', '♭5', '5', '♭6', '6', '♭7', '7',
+  ] as const;
+  const CHROMATIC_SHARP_DEGREE_LABELS = [
+    '1', '♯1', '2', '♯2', '3', '4', '♯4', '5', '♯5', '6', '♯6', '7',
+  ] as const;
 
   const cellWidth = 20;
-  const showOctaveLabels = true;
-  const showFrequencyLabels = false;
+  const showOctaveLabels = $derived(appState.state.showOctaveLabels);
+  const showFrequencyLabels = $derived(appState.state.showFrequencyLabels);
+  const showLegendLabels = true;
   const showRightLegend = $derived(containerWidth >= 720);
 
   // Keep legend sizing in sync with PitchGrid
-  const LEGEND_COLUMN_WIDTH_UNITS = 3;
+  const LEGEND_COLUMN_WIDTH_UNITS = 3.236;
   const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
   const legendCanvasWidth = $derived(legendColumnWidth * 2);
-  const showLegends = $derived(showOctaveLabels || showFrequencyLabels);
+  const showLegends = $derived(showLegendLabels);
   const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
   const gridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
   const gridOffsetX = $derived(showLegends ? legendCanvasWidth : 0);
 
   // Generate row data for the pitch grid based on y-axis range
   // Uses the shared pitch data package which includes proper colors, frequencies, and enharmonic spellings
-  const fullRowData = $derived<PitchRowData[]>(
-    generateRowDataForMidiRange(appState.state.yAxisRange.minMidi, appState.state.yAxisRange.maxMidi)
-  );
+  const fullRowData = $derived.by<PitchRowData[]>(() => {
+    const rows = generateRowDataForMidiRange(
+      appState.state.yAxisRange.minMidi,
+      appState.state.yAxisRange.maxMidi,
+    );
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    if (
+      !appState.state.centerColorsOnSpeakingPitch
+      || typeof speakingPitchMidi !== 'number'
+      || !Number.isFinite(speakingPitchMidi)
+    ) {
+      return rows;
+    }
+
+    const colorShift = Math.round(speakingPitchMidi) - 60;
+    return rows.map((row) => {
+      if (typeof row.midi !== 'number') return row;
+      const sourceRow = getPitchByMidi(row.midi - colorShift);
+      return sourceRow ? { ...row, hex: sourceRow.hex } : row;
+    });
+  });
 
   // Calculate optimal viewport window that fills container height
   const viewportWindow = $derived<ViewportWindow>(
@@ -112,11 +165,23 @@
       minCellHeight: 20,
     })
   );
-  const rowVisualScale = $derived.by<number>(() => {
-    const baseCellHeight = 40;
-    const rawScale = viewportWindow.cellHeight / baseCellHeight;
-    return Math.min(2.2, Math.max(0.55, rawScale));
-  });
+
+  function getJustCentsFromTonic(semitonesFromTonic: number): number {
+    const octave = Math.floor(semitonesFromTonic / 12);
+    const pitchClassOffset = ((semitonesFromTonic % 12) + 12) % 12;
+    return (octave * 1200) + JUST_INTONATION_CENTS[pitchClassOffset];
+  }
+
+  const rowPositionOffsets = $derived<readonly number[] | undefined>((() => {
+    if (appState.state.pitchTuningMode !== 'just') return undefined;
+    const referenceMidi = Math.round(preferencesStore.speakingPitchMidi ?? 60);
+    return fullRowData.map((row) => {
+      if (typeof row.midi !== 'number') return 0;
+      const semitonesFromTonic = row.midi - referenceMidi;
+      const equalCents = semitonesFromTonic * 100;
+      return (equalCents - getJustCentsFromTonic(semitonesFromTonic)) / 100;
+    });
+  })());
 
   // Derive the PitchGrid mode from app state
   const mode = $derived<PitchGridMode>(
@@ -226,27 +291,37 @@
     }
   }
 
-  const droneHighlightEntry = $derived<PitchRowHighlightEntry | null>((() => {
-    if (!appState.state.drone.isPlaying) return null;
+  // Colour Highlight is independent from audio drone playback.
+  const speakingPitchHighlightEntry = $derived<PitchRowHighlightEntry | null>((() => {
+    const drone = appState.state.drone;
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    const highlightedMidi = drone.useSpeakingPitch
+      && typeof speakingPitchMidi === 'number'
+      && Number.isFinite(speakingPitchMidi)
+        ? Math.round(speakingPitchMidi)
+        : null;
+    if (highlightedMidi === null) return null;
 
-    const droneMidi = ((appState.state.drone.octave + 1) * 12) + getTonicPitchClass(appState.state.tonic);
-    const droneRow = fullRowData.find((row) => row.midi === droneMidi);
-    if (!droneRow) return null;
+    const highlightedRow = fullRowData.find((row) => row.midi === highlightedMidi);
+    if (!highlightedRow) return null;
+    const standaloneSpeakingPitchHighlight = drone.useSpeakingPitch && !drone.modeEnabled;
 
     return {
-      midi: droneMidi,
-      color: droneRow.hex,
-      opacity: 0.52,
+      midi: highlightedMidi,
+      color: highlightedRow.hex,
+      opacity: theme === 'light' ? 1 : 0.52,
       glow: 1,
       pulse: true,
-      heightScale: 0.5,
-      ...getModeDegreeFadeScales(0),
+      renderBehindGridLines: true,
+      heightScale: standaloneSpeakingPitchHighlight ? 1 : 0.5,
+      fadeExtendTopScale: SPEAKING_PITCH_FADE_SCALE,
+      fadeExtendBottomScale: SPEAKING_PITCH_FADE_SCALE,
     };
   })());
 
   const modeRowHighlights = $derived<PitchRowHighlightEntry[]>((() => {
     const drone = appState.state.drone;
-    if (!drone.modeEnabled || !drone.isPlaying) return [];
+    if (!drone.modeEnabled) return [];
 
     const tonicPc = getTonicPitchClass(appState.state.tonic);
     const offsets = MODE_SCALE_DEGREES[drone.selectedMode];
@@ -284,7 +359,7 @@
   const combinedRowHighlight = $derived<PitchRowHighlightConfig | undefined>((() => {
     const entries: PitchRowHighlightEntry[] = [];
     if (modeRowHighlights.length > 0) entries.push(...modeRowHighlights);
-    if (droneHighlightEntry) entries.push(droneHighlightEntry);
+    if (speakingPitchHighlightEntry) entries.push(speakingPitchHighlightEntry);
     return entries.length > 0 ? entries : undefined;
   })());
 
@@ -303,8 +378,11 @@
 
   const modeLabelOverrides = $derived<Map<number, string> | undefined>((() => {
     const drone = appState.state.drone;
-    if (!drone.modeEnabled || !drone.showDegrees) return undefined;
-    const tonicPc = getTonicPitchClass(appState.state.tonic);
+    if (!drone.showDegrees) return undefined;
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    const tonicPc = typeof speakingPitchMidi === 'number' && Number.isFinite(speakingPitchMidi)
+      ? ((Math.round(speakingPitchMidi) % 12) + 12) % 12
+      : getTonicPitchClass(appState.state.tonic);
     const offsets = MODE_SCALE_DEGREES[drone.selectedMode];
     const labels = MODE_DEGREE_LABELS[drone.selectedMode];
     if (!offsets || !labels) return undefined;
@@ -312,10 +390,39 @@
     for (let i = 0; i < offsets.length; i++) {
       map.set((tonicPc + offsets[i]) % 12, labels[i]);
     }
+
+    const { flat, sharp } = appState.state.accidentalMode;
+    if (flat || sharp) {
+      const modeOffsets = new Set(offsets);
+      for (let semitonesFromTonic = 0; semitonesFromTonic < 12; semitonesFromTonic++) {
+        if (modeOffsets.has(semitonesFromTonic)) continue;
+
+        const flatLabel = CHROMATIC_FLAT_DEGREE_LABELS[semitonesFromTonic];
+        const sharpLabel = CHROMATIC_SHARP_DEGREE_LABELS[semitonesFromTonic];
+        const chromaticLabel = flat && sharp && flatLabel !== sharpLabel
+          ? `${flatLabel}/${sharpLabel}`
+          : flat
+            ? flatLabel
+            : sharpLabel;
+
+        map.set((tonicPc + semitonesFromTonic) % 12, chromaticLabel);
+      }
+    }
     return map;
   })());
 
   const showHorizontalGridLines = $derived(appState.state.showHorizontalGridLines);
+  const horizontalGridReferencePitchClass = $derived((() => {
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    if (
+      appState.state.centerGridOnSpeakingPitch
+      && typeof speakingPitchMidi === 'number'
+      && Number.isFinite(speakingPitchMidi)
+    ) {
+      return ((Math.round(speakingPitchMidi) % 12) + 12) % 12;
+    }
+    return getTonicPitchClass(appState.state.tonic);
+  })());
 
   // Build MIDI → hex color lookup from fullRowData
   const midiToHex = $derived.by<Map<number, string>>(() => {
@@ -360,6 +467,8 @@
     void appState.state.noteScaleDegrees;
     void appState.state.useDegrees;
     void appState.state.noteColorMode;
+    void appState.state.centerColorsOnSpeakingPitch;
+    void preferencesStore.speakingPitchMidi;
     return untrack(() => convertTargetNotes());
   });
 
@@ -379,16 +488,23 @@
   const trailConfig = $derived<PitchTrailConfig>({
     timeWindowMs: Infinity,
     pixelsPerSecond: 200,
-    circleRadius: appState.state.micTrailCircleRadiusPx * rowVisualScale,
-    indicatorRadius: appState.state.judgementLineCircleRadiusPx * rowVisualScale,
+    // Two semitone rows span one cellHeight; the configured ratio describes diameter.
+    circleRadius:
+      ((viewportWindow.cellHeight * TRAIL_DIAMETER_TO_TWO_ROWS_RATIO) / 2)
+      * appState.state.micTrailSizeScale,
+    // Adjacent semitone rows are spaced at half cellHeight; this diameter spans two rows.
+    indicatorRadius: viewportWindow.cellHeight / 2,
     proximityThreshold: 35,
     maxConnections: 0,
     connectorLineWidth: 2.5,
     connectorColor: 'rgba(0,0,0,0.4)',
-    useTonicRelativeColors: false,
-    tonicPitchClass: getTonicPitchClass(appState.state.tonic),
+    useTonicRelativeColors: appState.state.centerColorsOnSpeakingPitch,
+    tonicPitchClass: appState.state.centerColorsOnSpeakingPitch
+      && typeof preferencesStore.speakingPitchMidi === 'number'
+      ? ((Math.round(preferencesStore.speakingPitchMidi) % 12) + 12) % 12
+      : getTonicPitchClass(appState.state.tonic),
     clarityThreshold: 0.5,
-    maxOpacity: 0.9,
+    maxOpacity: 0.8,
   });
 
   const labelConfig = $derived({
@@ -1109,6 +1225,7 @@
       pixelsPerSecond,
       nowLineX,
       currentTimeMs: mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0,
+      rowPositionOffsets,
     });
 
     // Compute tonic pitch class dynamically for multi-tonic segments
@@ -1174,6 +1291,7 @@
       pixelsPerSecond: timelinePixelsPerSecond,
       nowLineX: timelineNowLineX,
       currentTimeMs: timelineCurrentTimeMs,
+      rowPositionOffsets,
     });
 
     const persistentTrailConfig: UserPitchRenderConfig = {
@@ -1261,6 +1379,7 @@
       pixelsPerSecond: loopPixelsPerSecond,
       nowLineX: gridWidth,
       currentTimeMs: phraseDurationMs,
+      rowPositionOffsets,
     });
 
     const remappedHistory: PitchHistoryPoint[] = [];
@@ -1361,6 +1480,7 @@
       pixelsPerSecond: loopPixelsPerSecond,
       nowLineX: gridWidth,
       currentTimeMs: phraseDurationMs,
+      rowPositionOffsets,
     });
 
     const persistentTrailConfig: UserPitchRenderConfig = {
@@ -1623,9 +1743,13 @@
     {viewport}
     cellWidth={cellWidth}
     cellHeight={viewportWindow.cellHeight}
+    {rowPositionOffsets}
+    legendColumnWidthUnits={LEGEND_COLUMN_WIDTH_UNITS}
     colorMode="color"
     {showOctaveLabels}
     {showFrequencyLabels}
+    {showLegendLabels}
+    accidentalMode={appState.state.accidentalMode}
     {showRightLegend}
     {singingConfig}
     {highwayConfig}
@@ -1636,7 +1760,9 @@
     focusColorsEnabled={modeFocusColorsEnabled}
     legendLabelOverrides={modeLabelOverrides}
     {showHorizontalGridLines}
-    horizontalGridReferencePitchClass={getTonicPitchClass(appState.state.tonic)}
+    {horizontalGridReferencePitchClass}
+    horizontalGridReferenceLineColor="rgba(255, 0, 0, 0.9)"
+    judgmentLineColor="#adb5bd"
       targetNoteStyle={appState.state.noteType}
       beatIntervalMs={gridBeatIntervalMs}
       measureIntervalMs={gridMeasureIntervalMs}

@@ -7,17 +7,14 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     SingingCanvas,
-    DroneControls,
     StartButton,
     MicInputSelector,
     PitchReadout,
-    RangeControl,
-    LyricLabelControls,
+    UserSettingsControls,
+    DroneControls,
     ExerciseControls,
-    SpeakingPitchPanel,
     OverdubBuilderToolbar,
     ExerciseBuilderToolbar,
-    InputDecibelMeter,
     ConstructionZoneModal,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
@@ -30,6 +27,7 @@
   import { CalibrationWizard } from './lib/calibration/index.js';
   import { handoffState } from '@mlt/singing-trainer-core/stores/handoffState.svelte.js';
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
   import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
   import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
   import { resultsState } from '@mlt/singing-trainer-core/stores/resultsState.svelte.js';
@@ -38,13 +36,17 @@
   import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
   import { ensureLessonTemplatesRegistered } from './lib/lessonTemplates.js';
   import homeIconUrl from './lib/assets/home-icon.svg?url';
-  import constructionIconUrl from './lib/assets/construction-icon.svg?url';
+  import settingsIconUrl from './lib/assets/settings-icon.svg?url';
 
   const hubHref = import.meta.env.BASE_URL;
 
   // Calibration wizard state
   let showCalibrationWizard = $state(false);
-  let showConstructionZone = $state(false);
+  type ColorTheme = 'light' | 'dark';
+  const THEME_STORAGE_KEY = 'mlt-singing-trainer-theme';
+
+  let showSettings = $state(false);
+  let theme = $state<ColorTheme>('light');
 
   // Accordion state: only one sidebar section open at a time
   let openSection: number | null = $state(null);
@@ -134,8 +136,23 @@
     }
   }
 
+  function handleThemeChange(nextTheme: ColorTheme): void {
+    theme = nextTheme;
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // Storage may be unavailable; the selected theme still applies for this session.
+    }
+  }
+
   // Check for handoff on mount
   onMount(async () => {
+    try {
+      theme = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    } catch {
+      theme = 'light';
+    }
+
     const wasHandoff = await handoffState.checkAndConsumeHandoff();
 
     if (wasHandoff) {
@@ -145,6 +162,11 @@
         appState.setYAxisRange(suggestedRange);
       }
     }
+
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi ?? 60;
+    appState.setYAxisRange({ minMidi: speakingPitchMidi - 6, maxMidi: speakingPitchMidi + 20 });
+    appState.setCenterGridOnSpeakingPitch(true);
+    appState.setCenterColorsOnSpeakingPitch(true);
 
     // Auto-start microphone pitch detection by default on app startup.
     try {
@@ -202,7 +224,7 @@
   }
 </script>
 
-<div class="app">
+<div class="app singing-trainer-app" data-theme={theme}>
   {#if handoffError}
     <div class="error-banner">
       {handoffError}
@@ -220,17 +242,17 @@
             <button
               class="header-icon-control"
               type="button"
-              aria-label="Open construction zone"
+              aria-label="Open settings"
               aria-haspopup="dialog"
-              aria-expanded={showConstructionZone}
-              aria-controls="construction-zone"
-              title="Open construction zone"
-              onclick={() => (showConstructionZone = true)}
+              aria-expanded={showSettings}
+              aria-controls="settings-menu"
+              title="Settings"
+              onclick={() => (showSettings = true)}
             >
               <span
-                class="header-icon header-icon--construction"
+                class="header-icon"
                 aria-hidden="true"
-                style={`--header-icon-url: url("${constructionIconUrl}")`}
+                style={`--header-icon-url: url("${settingsIconUrl}")`}
               ></span>
             </button>
           </div>
@@ -252,40 +274,26 @@
         {/if}
       </div>
 
-      <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
-        <summary class="settings-summary">Mic Settings</summary>
-        <div class="settings-content settings-content--mic">
-          <div class="mic-primary-row">
-            <div class="mic-primary-cell">
-              <StartButton compact={true} />
-            </div>
-            <div class="mic-primary-cell">
-              <PitchReadout compact={true} showHint={false} />
-            </div>
+      <section class="sidebar-settings-panels" aria-label="Singing Trainer controls">
+        <section class="sidebar-settings-panel" aria-labelledby="mic-settings-title">
+          <h2 id="mic-settings-title" class="sidebar-settings-title">Mic Settings</h2>
+          <div class="sidebar-settings-stack">
+            <StartButton compact={true} />
+            <PitchReadout compact={true} showHint={false} />
+            <MicInputSelector />
           </div>
-          <MicInputSelector />
-          <InputDecibelMeter />
-        </div>
-      </details>
+        </section>
 
-      <details class="settings-details" open={openSection === 1} ontoggle={handleToggle(1)}>
-        <summary class="settings-summary">User Settings</summary>
-        <div class="settings-content">
-          <SpeakingPitchPanel onCalibrate={openCalibrationWizard} />
-          <RangeControl />
-          <LyricLabelControls />
-        </div>
-      </details>
+        <UserSettingsControls onCalibrate={openCalibrationWizard} />
 
-      <details class="settings-details" open={openSection === 2} ontoggle={handleToggle(2)}>
-        <summary class="settings-summary">Drone Controls</summary>
-        <div class="settings-content">
+        <section class="sidebar-settings-panel" aria-labelledby="drone-controls-title">
+          <h2 id="drone-controls-title" class="sidebar-settings-title">Drone Controls</h2>
           <DroneControls />
-        </div>
-      </details>
+        </section>
+      </section>
 
-      <details class="settings-details" open={openSection === 3} ontoggle={handleToggle(3)}>
-        <summary class="settings-summary">Lessons, Exercises, Workshop</summary>
+      <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
+        <summary class="settings-summary">Lessons &amp; Exercises</summary>
         <div class="settings-content">
           <ExerciseControls bind:this={exerciseControlsRef} />
         </div>
@@ -314,7 +322,7 @@
 
     <section class="canvas-area">
       <div class="canvas-main">
-        <SingingCanvas />
+        <SingingCanvas {theme} />
       </div>
       <ExerciseBuilderToolbar visible={showExerciseBuilderToolbar} />
       <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
@@ -345,8 +353,10 @@
   {/if}
 
   <ConstructionZoneModal
-    open={showConstructionZone}
-    onClose={() => (showConstructionZone = false)}
+    open={showSettings}
+    {theme}
+    onClose={() => (showSettings = false)}
+    onThemeChange={handleThemeChange}
   />
 </div>
 
@@ -356,6 +366,8 @@
     flex-direction: column;
     height: 100%;
     width: 100%;
+    color: var(--color-text);
+    background: var(--color-bg);
   }
 
   .main {
@@ -367,10 +379,10 @@
   .sidebar {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-lg);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-lg);
     background-color: var(--color-bg-light);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid var(--color-border);
     min-width: 260px;
     max-width: 300px;
     overflow-y: auto; /* Allow vertical scrolling */
@@ -408,14 +420,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.1rem;
-    height: 2.1rem;
+    width: 2.5rem;
+    height: 2.5rem;
     flex: 0 0 auto;
     padding: 0;
     border-radius: 999px;
     color: var(--color-text);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
     cursor: pointer;
     appearance: none;
     text-decoration: none;
@@ -430,8 +442,8 @@
   }
 
   .header-icon {
-    width: 1.1rem;
-    height: 1.1rem;
+    width: var(--font-size-xl);
+    height: var(--font-size-xl);
     display: block;
     background-color: currentColor;
     -webkit-mask-image: var(--header-icon-url);
@@ -442,11 +454,6 @@
     mask-repeat: no-repeat;
     mask-position: center;
     mask-size: contain;
-  }
-
-  .header-icon--construction {
-    width: 1.18rem;
-    height: 1.18rem;
   }
 
   .control-group {
@@ -469,10 +476,48 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
-    padding: var(--spacing-lg);
+    padding: 12px;
     overflow: hidden;
     min-width: 0;
     min-height: 0;
+  }
+
+  .sidebar-settings-panels {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    width: 100%;
+  }
+
+  .sidebar-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-panel);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .sidebar-settings-title {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .sidebar-settings-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    width: 100%;
+    min-width: 0;
   }
 
   .canvas-main {
@@ -573,7 +618,8 @@
 
   /* Settings dropdown */
   .settings-details {
-    background-color: var(--color-surface, rgba(255, 255, 255, 0.05));
+    background-color: var(--color-panel);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     padding: var(--spacing-xs);
     width: 100%;
@@ -583,7 +629,7 @@
     cursor: pointer;
     font-size: var(--font-size-sm);
     font-weight: 600;
-    color: var(--color-text-muted);
+    color: var(--color-text);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     padding: var(--spacing-xs);
@@ -614,25 +660,9 @@
   .settings-content {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-md);
-    padding: var(--spacing-sm);
-    padding-top: var(--spacing-md);
-    width: 100%;
-  }
-
-  .settings-content--mic {
     gap: var(--spacing-sm);
-  }
-
-  .mic-primary-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-sm) 0;
     width: 100%;
-  }
-
-  .mic-primary-cell {
-    min-width: 0;
   }
 
   @media (max-width: 900px) {
@@ -652,8 +682,8 @@
       max-width: none;
       min-width: 0;
       border-right: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      padding: var(--spacing-md);
+      border-top: 1px solid var(--color-border);
+      padding: var(--spacing-xs) var(--spacing-md) var(--spacing-md);
       max-height: 40vh;
     }
   }

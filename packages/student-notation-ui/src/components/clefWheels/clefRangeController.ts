@@ -463,9 +463,8 @@ class ClefViewportController {
       return;
     }
 
-    // Animate preset changes so the viewport doesn't snap instantly (especially noticeable for "Full Range").
-    const durationMs = preset === 'full' ? 420 : 280;
-    pitchGridViewportService.setPitchViewportRange(range, { animateMs: durationMs, source: `preset:${preset}` });
+    // Apply the preset in one settled sizing pass; animated range changes can repeatedly reflow the canvas.
+    pitchGridViewportService.setPitchViewportRange(range, { animateMs: 0, source: `preset:${preset}` });
   }
 
   private calculateAndSetWheelHeight() {

@@ -193,6 +193,7 @@ export interface SchedulableNote {
   color: string;
   isDrum?: boolean;
   drumTrack?: number | null;
+  drumSubdivision?: 'single' | 'double' | 'secondOnly';
 }
 
 /**

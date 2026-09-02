@@ -17,6 +17,7 @@ import {
   type TanpuraStringBehavior,
 } from '@mlt/tanpura-drone';
 import { appState } from '../stores/appState.svelte.js';
+import { preferencesStore } from '../stores/preferencesStore.svelte.js';
 
 // Module state
 let synth: Tone.PolySynth | null = null;
@@ -31,13 +32,14 @@ let tanpuraFilter: Tone.Filter | null = null;
 let tanpuraTremolo: Tone.Tremolo | null = null;
 let tanpuraGain: Tone.Gain | null = null;
 let isPlaying = false;
-let currentNote: string | null = null;
+let currentRootMidi: number | null = null;
 let currentFineTuneCents: number | null = null;
 let activeEngine: DroneEngine | null = null;
 
 const STRING_START_OFFSETS = [0.0, 0.28, 0.58, 0.46, 0.8, 0.12] as const;
 const TANPURA_BASE_STRING_GAIN = 0.22;
-const TANPURA_BASE_VOLUME_BOOST_DB = 6;
+const TANPURA_BASE_VOLUME_BOOST_DB = 9;
+const SYNTH_VOLUME_SCALE_DB = 20 * Math.log10(0.5);
 
 /**
  * Initialize synth fallback when the tanpura sample cannot be loaded.
@@ -115,6 +117,10 @@ function setTanpuraVolume(volumeDb: number): void {
   tanpuraGain.gain.rampTo(Tone.dbToGain(effectiveVolumeDb), 0.08);
 }
 
+function getSynthVolumeDb(volumeDb: number): number {
+  return volumeDb + SYNTH_VOLUME_SCALE_DB;
+}
+
 function applyTanpuraTuning(): void {
   const tuning = appState.state.drone.tuning;
   if (tanpuraFilter) {
@@ -143,9 +149,8 @@ function getMergedStringTuning(stringBehavior: TanpuraStringBehavior): {
   };
 }
 
-function setTanpuraPitch(note: string): void {
+function setTanpuraPitch(rootMidi: number): void {
   if (tanpuraVoices.length === 0) return;
-  const rootMidi = Tone.Frequency(note).toMidi();
   const stringSettings = appState.state.drone.strings;
   const now = Tone.now();
 
@@ -181,38 +186,28 @@ function setTanpuraPitch(note: string): void {
   });
 }
 
-function getSynthFrequency(note: string): number {
-  const baseFrequency = Tone.Frequency(note).toFrequency();
+function getSynthFrequency(rootMidi: number): number {
+  const baseFrequency = 440 * (2 ** ((rootMidi - 69) / 12));
   const fineTuneCents = appState.state.drone.tuning.fineTuneCents;
   return baseFrequency * (2 ** (fineTuneCents / 1200));
 }
 
-function normalizeTonic(tonic: string): string {
-  const enharmonicMap: Record<string, string> = {
-    Db: 'C#',
-    Eb: 'D#',
-    Gb: 'F#',
-    Ab: 'G#',
-    Bb: 'A#',
-  };
-  return enharmonicMap[tonic] ?? tonic;
+function getDroneRootMidi(): number {
+  const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+  return typeof speakingPitchMidi === 'number' && Number.isFinite(speakingPitchMidi)
+    ? speakingPitchMidi
+    : 60;
 }
 
-/**
- * Get the note name with octave from tonic and octave
- */
-function getNoteName(tonic: string, octave: number): string {
-  return `${normalizeTonic(tonic)}${octave}`;
-}
-
-function startSynth(note: string): void {
+function startSynth(rootMidi: number): void {
   const s = ensureSynth();
-  s.volume.value = appState.state.drone.volume;
-  if (isPlaying && currentNote) {
+  s.volume.value = getSynthVolumeDb(appState.state.drone.volume);
+  if (isPlaying && currentRootMidi !== null) {
     s.releaseAll();
   }
-  s.triggerAttack(getSynthFrequency(note));
+  s.triggerAttack(getSynthFrequency(rootMidi));
   activeEngine = 'synth';
+  currentRootMidi = rootMidi;
   currentFineTuneCents = appState.state.drone.tuning.fineTuneCents;
   isPlaying = true;
 }
@@ -258,8 +253,8 @@ function disposeTanpuraEngine(): void {
 export async function startDrone(): Promise<void> {
   // Ensure audio context is started (required for browsers)
   await Tone.start();
-  const note = getNoteName(appState.state.tonic, appState.state.drone.octave);
-  currentNote = note;
+  const rootMidi = getDroneRootMidi();
+  currentRootMidi = rootMidi;
   currentFineTuneCents = appState.state.drone.tuning.fineTuneCents;
   const preferredEngine = appState.state.drone.engine;
 
@@ -268,7 +263,7 @@ export async function startDrone(): Promise<void> {
     if (player) {
       setTanpuraVolume(appState.state.drone.volume);
       applyTanpuraTuning();
-      setTanpuraPitch(note);
+      setTanpuraPitch(rootMidi);
       activeEngine = 'tanpura';
       isPlaying = true;
       appState.setDronePlaying(true);
@@ -276,7 +271,7 @@ export async function startDrone(): Promise<void> {
     }
   }
 
-  startSynth(note);
+  startSynth(rootMidi);
   appState.setDronePlaying(true);
 }
 
@@ -288,7 +283,7 @@ export function stopDrone(): void {
   if (synth && isPlaying) {
     synth.releaseAll();
   }
-  currentNote = null;
+  currentRootMidi = null;
   currentFineTuneCents = null;
   activeEngine = null;
   isPlaying = false;
@@ -308,25 +303,25 @@ export function updateDrone(): void {
     return;
   }
 
-  const newNote = getNoteName(appState.state.tonic, appState.state.drone.octave);
+  const newRootMidi = getDroneRootMidi();
   const fineTuneCents = appState.state.drone.tuning.fineTuneCents;
 
   if (activeEngine === 'tanpura' && tanpuraVoices.length > 0) {
     setTanpuraVolume(appState.state.drone.volume);
     applyTanpuraTuning();
-    setTanpuraPitch(newNote);
-    currentNote = newNote;
+    setTanpuraPitch(newRootMidi);
+    currentRootMidi = newRootMidi;
     currentFineTuneCents = fineTuneCents;
     return;
   }
 
   if (!synth) return;
-  synth.volume.value = appState.state.drone.volume;
+  synth.volume.value = getSynthVolumeDb(appState.state.drone.volume);
 
-  if (newNote !== currentNote || fineTuneCents !== currentFineTuneCents) {
+  if (newRootMidi !== currentRootMidi || fineTuneCents !== currentFineTuneCents) {
     synth.releaseAll();
-    synth.triggerAttack(getSynthFrequency(newNote));
-    currentNote = newNote;
+    synth.triggerAttack(getSynthFrequency(newRootMidi));
+    currentRootMidi = newRootMidi;
     currentFineTuneCents = fineTuneCents;
   }
 }
@@ -336,7 +331,7 @@ export function updateDrone(): void {
  */
 export function setDroneVolume(db: number): void {
   setTanpuraVolume(db);
-  if (synth) synth.volume.value = db;
+  if (synth) synth.volume.value = getSynthVolumeDb(db);
 }
 
 /**

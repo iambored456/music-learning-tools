@@ -314,12 +314,21 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
         note.startColumnIndex === drumHit.startColumnIndex
       );
       if (existingIndex >= 0) {
-        this.state.placedNotes.splice(existingIndex, 1);
+        const existingNote = this.state.placedNotes[existingIndex]!;
+        const currentSubdivision = existingNote.drumSubdivision ?? 'single';
+        if (currentSubdivision === 'single') {
+          existingNote.drumSubdivision = 'double';
+        } else if (currentSubdivision === 'double') {
+          existingNote.drumSubdivision = 'secondOnly';
+        } else {
+          this.state.placedNotes.splice(existingIndex, 1);
+        }
       } else {
         const newDrumNote: PlacedNote = {
           ...drumHit,
           uuid: generateUUID(),
           isDrum: true,
+          drumSubdivision: 'single',
           endColumnIndex: (drumHit.endColumnIndex ?? drumHit.startColumnIndex) as CanvasSpaceColumn
         } as PlacedNote;
         this.state.placedNotes.push(newDrumNote);

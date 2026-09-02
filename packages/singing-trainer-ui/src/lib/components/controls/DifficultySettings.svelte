@@ -98,13 +98,14 @@
     justify-content: space-between;
     gap: var(--spacing-sm);
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
   }
 
   .preset-label {
     font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
+    color: var(--color-text);
     font-weight: 600;
   }
 
@@ -130,7 +131,7 @@
 
   .slider-row {
     padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--color-control);
     border-radius: 8px;
   }
 
@@ -143,7 +144,7 @@
 
   .slider-label {
     font-size: 0.75rem;
-    color: var(--color-text-muted);
+    color: var(--color-text);
   }
 
   .slider-value {

@@ -27,7 +27,7 @@ export interface PitchSample {
 
 /** State of a single phrase recording */
 export interface PhraseRecordingState {
-  /** Index of the phrase (0-2) */
+  /** Index of the speaking sample */
   phraseIndex: number;
   /** The phrase text */
   phrase: string;
@@ -58,8 +58,6 @@ export interface CalibrationError {
 export type CalibrationStep =
   | 'intro'
   | 'recording-1'
-  | 'recording-2'
-  | 'recording-3'
   | 'analyzing'
   | 'result'
   | 'error';
@@ -106,11 +104,13 @@ export interface CalibrationWizardState {
   isComplete: boolean;
 }
 
-/** The three calibration phrases */
+/** The single speaking sample used for calibration */
 export const CALIBRATION_PHRASES = [
-  'How now brown cow',
-  'The arsonist has oddly shaped feet',
-  'The human torch was denied a bank loan',
+  `A limrick's not hard to define
+But it needs to do more than just rhyme
+It's the meter that matters
+The pitters and patters
+If not you're just wasting my time`,
 ] as const;
 
 /** Calibration algorithm configuration */
@@ -131,7 +131,7 @@ export interface CalibrationConfig {
   minSpeakingMidi: number;
   /** Maximum plausible speaking pitch (MIDI) */
   maxSpeakingMidi: number;
-  /** Recording duration per phrase in milliseconds */
+  /** Maximum recording duration in milliseconds */
   recordingDurationMs: number;
 }
 
@@ -145,5 +145,5 @@ export const DEFAULT_CALIBRATION_CONFIG: CalibrationConfig = {
   clusterExpansionThreshold: 0.02,
   minSpeakingMidi: 36, // C2 (~65 Hz)
   maxSpeakingMidi: 72, // C5 (~523 Hz)
-  recordingDurationMs: 5000,
+  recordingDurationMs: 30000,
 };

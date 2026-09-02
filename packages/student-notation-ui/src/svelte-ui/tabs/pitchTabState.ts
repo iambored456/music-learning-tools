@@ -22,7 +22,13 @@ function activatePitchTab(tabId: string): string | null {
   panels.forEach(panel => panel.classList.remove('active'));
 
   targetButton.classList.add('active');
-  document.getElementById(`${tabId}-panel`)?.classList.add('active');
+  if (tabId === 'draw') {
+    ['range-panel', 'mode-panel', 'draw-panel'].forEach(panelId => {
+      document.getElementById(panelId)?.classList.add('active');
+    });
+  } else {
+    document.getElementById(`${tabId}-panel`)?.classList.add('active');
+  }
 
   return targetButton.dataset['pitchTab'] ?? tabId;
 }

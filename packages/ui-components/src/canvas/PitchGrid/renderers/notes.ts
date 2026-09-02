@@ -755,12 +755,9 @@ function getMidiY(
     return rowIndex < 0 ? 0 : coords.getRowY(fullRowData.length - 1);
   }
 
-  const baseY = coords.getRowY(rowIndex);
-
-  // Offset by the fraction (negative because higher MIDI = lower row index = higher on screen)
-  // Each semitone step moves by half a cell (row spacing)
-  const rowStep = cellHeight / 2;
-  return baseY - fraction * rowStep;
+  // A fractional row index lets the coordinate mapping interpolate both equal-tempered
+  // and optional non-uniform tuning geometry.
+  return coords.getRowY(rowIndex - fraction);
 }
 
 /**

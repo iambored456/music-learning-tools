@@ -2,7 +2,7 @@
  * Speaking Pitch Calibration Algorithm
  *
  * Estimates the user's "lowest stable cluster" speaking pitch from
- * collected pitch samples across multiple spoken phrases.
+ * pitch samples collected from one slowly read speaking passage.
  *
  * The algorithm:
  * 1. Filters samples by clarity threshold

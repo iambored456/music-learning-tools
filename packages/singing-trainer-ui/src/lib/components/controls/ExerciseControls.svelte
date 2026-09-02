@@ -1076,7 +1076,9 @@
 
   .choose-exercise-btn {
     width: 100%;
-    padding: var(--spacing-md);
+    min-height: 0;
+    height: fit-content;
+    padding: var(--spacing-sm) var(--spacing-md);
     font-size: var(--font-size-md);
     font-weight: 600;
     background-color: var(--color-primary);

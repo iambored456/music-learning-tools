@@ -407,7 +407,16 @@ export function createDrumGridRenderer(callbacks: DrumGridRenderCallbacks) {
         if (drumHit) {
           ctx.fillStyle = drumHit.color;
           const animationScale = callbacks.getAnimationScale?.(canvasCol, drumTrack) ?? 1.0;
-          drawDrumShape(ctx, row, x, y, currentCellWidth, drumRowHeight, animationScale);
+          const subdivision = drumHit.drumSubdivision ?? 'single';
+          if (subdivision === 'single') {
+            drawDrumShape(ctx, row, x, y, currentCellWidth, drumRowHeight, animationScale);
+          } else {
+            const halfWidth = currentCellWidth / 2;
+            if (subdivision === 'double') {
+              drawDrumShape(ctx, row, x, y, halfWidth, drumRowHeight, animationScale);
+            }
+            drawDrumShape(ctx, row, x + halfWidth, y, halfWidth, drumRowHeight, animationScale);
+          }
         } else {
           // Draw empty cell dot
           ctx.fillStyle = '#ced4da';

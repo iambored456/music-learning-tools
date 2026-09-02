@@ -50,7 +50,7 @@ function createSpeakingPitchStore() {
       return state.currentStep;
     },
 
-    /** Get the current phrase index (0-2) or null if not recording */
+    /** Get the current speaking sample index or null if not recording */
     get currentPhraseIndex(): number | null {
       const match = state.currentStep.match(/^recording-(\d+)$/);
       return match ? parseInt(match[1], 10) - 1 : null;
@@ -90,7 +90,7 @@ function createSpeakingPitchStore() {
       return state.manualAdjustmentSemitones;
     },
 
-    /** Check if all recordings are complete */
+    /** Check whether the speaking sample is complete */
     get allRecordingsComplete(): boolean {
       return state.phraseRecordings.every((r) => r.status === 'complete');
     },
@@ -118,12 +118,6 @@ function createSpeakingPitchStore() {
           state.currentStep = 'recording-1';
           break;
         case 'recording-1':
-          state.currentStep = 'recording-2';
-          break;
-        case 'recording-2':
-          state.currentStep = 'recording-3';
-          break;
-        case 'recording-3':
           state.currentStep = 'analyzing';
           this.analyze();
           break;
@@ -142,12 +136,6 @@ function createSpeakingPitchStore() {
       switch (state.currentStep) {
         case 'recording-1':
           state.currentStep = 'intro';
-          break;
-        case 'recording-2':
-          state.currentStep = 'recording-1';
-          break;
-        case 'recording-3':
-          state.currentStep = 'recording-2';
           break;
         default:
           // Can't go back from other states
@@ -201,7 +189,7 @@ function createSpeakingPitchStore() {
 
     /** Analyze all recordings */
     analyze(): void {
-      // Collect all samples from all recordings
+      // Collect the detected pitches from the speaking sample.
       const allSamples = state.phraseRecordings.flatMap((r) => r.pitchSamples);
 
       const result = analyzeRecordingsForSpeakingPitch(allSamples, DEFAULT_CALIBRATION_CONFIG);

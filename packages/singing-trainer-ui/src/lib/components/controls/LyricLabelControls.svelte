@@ -30,54 +30,47 @@
 <div class="lyric-label-controls">
   <div class="label-row">
     <span class="label-text">Lyric Text Size</span>
-    {#if showModeToggle}
-      <div class="mode-toggle" role="group" aria-label="Lyric sizing mode">
-        <button
-          class="mode-button"
-          class:mode-button--active={isEqualMode}
-          type="button"
-          onclick={() => appState.setLyricLabelMode('fixed')}
-        >
-          Equal
-        </button>
-        <button
-          class="mode-button"
-          class:mode-button--active={!isEqualMode}
-          type="button"
-          onclick={() => appState.setLyricLabelMode('auto')}
-        >
-          Relative
-        </button>
-      </div>
-    {/if}
+    <div class="size-controls">
+      <button
+        class="size-button"
+        type="button"
+        aria-label="Decrease lyric text size"
+        title="Decrease lyric text size"
+        onclick={() => appState.decreaseLyricTextSize()}
+        disabled={!canDecrease}
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13 5 7h10Z" /></svg>
+      </button>
+      <span class="size-value">{valueLabel}</span>
+      <button
+        class="size-button"
+        type="button"
+        aria-label="Increase lyric text size"
+        title="Increase lyric text size"
+        onclick={() => appState.increaseLyricTextSize()}
+        disabled={!canIncrease}
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 7 5 13h10Z" /></svg>
+      </button>
+    </div>
   </div>
-  <div class="size-controls">
-    <button
-      class="size-button"
-      type="button"
-      aria-label="Decrease lyric text size"
-      title="Decrease lyric text size"
-      onclick={() => appState.decreaseLyricTextSize()}
-      disabled={!canDecrease}
-    >
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M10 13 5 7h10Z" />
-      </svg>
-    </button>
-    <span class="size-value">{valueLabel}</span>
-    <button
-      class="size-button"
-      type="button"
-      aria-label="Increase lyric text size"
-      title="Increase lyric text size"
-      onclick={() => appState.increaseLyricTextSize()}
-      disabled={!canIncrease}
-    >
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M10 7 5 13h10Z" />
-      </svg>
-    </button>
-  </div>
+
+  {#if showModeToggle}
+    <div class="mode-toggle" role="group" aria-label="Lyric sizing mode">
+      <button
+        class="mode-button"
+        class:mode-button--active={isEqualMode}
+        type="button"
+        onclick={() => appState.setLyricLabelMode('fixed')}
+      >Equal</button>
+      <button
+        class="mode-button"
+        class:mode-button--active={!isEqualMode}
+        type="button"
+        onclick={() => appState.setLyricLabelMode('auto')}
+      >Relative</button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -87,8 +80,9 @@
     gap: var(--spacing-sm);
     width: 100%;
     min-width: 0;
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
   }
 
@@ -97,12 +91,14 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--spacing-sm);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .label-text {
     font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
+    color: var(--color-text);
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   .mode-toggle {
@@ -140,20 +136,20 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.6rem;
-    width: 100%;
+    gap: 0.3rem;
+    width: auto;
   }
 
   .size-button {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 6px;
+    background: var(--color-control);
     color: var(--color-text);
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -171,8 +167,8 @@
   }
 
   .size-button svg {
-    width: 16px;
-    height: 16px;
+    width: 13px;
+    height: 13px;
     fill: currentColor;
   }
 
@@ -181,7 +177,7 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--color-text);
-    min-width: 52px;
+    min-width: 44px;
     text-align: center;
   }
 </style>

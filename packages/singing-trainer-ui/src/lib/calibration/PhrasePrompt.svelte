@@ -38,5 +38,6 @@
     margin: 0;
     line-height: 1.4;
     font-style: italic;
+    white-space: pre-line;
   }
 </style>

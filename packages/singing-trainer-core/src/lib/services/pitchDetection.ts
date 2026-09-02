@@ -609,7 +609,8 @@ export interface CalibrationPitchSample {
 
 export async function collectPitchSamples(
   durationMs: number,
-  onProgress?: (elapsedMs: number, currentPitch: CalibrationPitchSample | null) => void
+  onProgress?: (elapsedMs: number, currentPitch: CalibrationPitchSample | null) => void,
+  signal?: AbortSignal,
 ): Promise<CalibrationPitchSample[]> {
   const samples: CalibrationPitchSample[] = [];
 
@@ -637,29 +638,44 @@ export async function collectPitchSamples(
 
   return new Promise((resolve) => {
     let frameId: number | null = null;
+    let finished = false;
+
+    function finish(): void {
+      if (finished) return;
+      finished = true;
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      signal?.removeEventListener('abort', finish);
+
+      try {
+        calibrationSource.disconnect();
+        calibrationAnalyser.disconnect();
+        calibrationPullGain.disconnect();
+      } catch {
+        // Ignore disconnect cleanup errors.
+      }
+
+      stopStream(calibrationStream);
+      void calibrationContext.close().catch(() => {
+        // Ignore close cleanup errors.
+      });
+
+      resolve(samples);
+    }
+
+    signal?.addEventListener('abort', finish, { once: true });
+    if (signal?.aborted) {
+      finish();
+      return;
+    }
 
     function collectFrame(): void {
+      if (finished) return;
       const elapsed = performance.now() - startTime;
 
       if (elapsed >= durationMs) {
-        if (frameId !== null) {
-          cancelAnimationFrame(frameId);
-        }
-
-        try {
-          calibrationSource.disconnect();
-          calibrationAnalyser.disconnect();
-          calibrationPullGain.disconnect();
-        } catch {
-          // Ignore disconnect cleanup errors.
-        }
-
-        stopStream(calibrationStream);
-        void calibrationContext.close().catch(() => {
-          // Ignore close cleanup errors.
-        });
-
-        resolve(samples);
+        finish();
         return;
       }
 
@@ -690,7 +706,9 @@ export async function collectPitchSamples(
       }
 
       onProgress?.(elapsed, currentSample);
-      frameId = requestAnimationFrame(collectFrame);
+      if (!finished) {
+        frameId = requestAnimationFrame(collectFrame);
+      }
     }
 
     frameId = requestAnimationFrame(collectFrame);

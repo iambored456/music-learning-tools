@@ -100,7 +100,49 @@
   border-right: none;
   border-left: none;
   /* Width and height will be set by JavaScript */
-  /* Intentionally empty for alignment */
+  position: relative;
+}
+
+.macrobeat-floating-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+  box-sizing: border-box;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--box-shadow-sm);
+}
+
+.macrobeat-floating-panel.is-floating {
+  position: fixed;
+  left: var(--macrobeat-float-left);
+  top: var(--macrobeat-float-top);
+  width: var(--macrobeat-float-width);
+  height: var(--macrobeat-float-height);
+  z-index: 1200;
+}
+
+.macrobeat-floating-label {
+  overflow: hidden;
+  color: var(--c-text-muted);
+  font-family: var(--typography-caption-font-family);
+  font-size: var(--typography-caption-font-size);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.macrobeat-floating-panel .macrobeat-adjust-group {
+  gap: 2px;
+}
+
+.macrobeat-floating-panel .toolkit-button {
+  min-width: 0;
+  padding: 0;
 }
 
 #grids-wrapper {
@@ -896,6 +938,12 @@
   position: relative;
   width: 100%;
   height: 100%;
+  will-change: transform;
+}
+
+#pitch-canvas-wrapper.is-middle-panning,
+#pitch-canvas-wrapper.is-middle-panning #notation-grid {
+  cursor: grabbing;
 }
 
 #notation-grid, #playhead-canvas, #hover-canvas, #legend-left-canvas, #legend-right-canvas {

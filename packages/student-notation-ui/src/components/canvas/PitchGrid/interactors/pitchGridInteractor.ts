@@ -50,6 +50,7 @@ import logger from '@utils/logger.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import { setStampHoverCursor, clearStampHoverCursor } from './cursorManager.ts';
 import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
+import { shiftRangeBy } from '@utils/pitchViewport.ts';
 
 // --- Interaction State ---
 let pitchHoverCtx: CanvasRenderingContext2D | null = null;
@@ -61,6 +62,11 @@ const placementFillNoteIds = new Set<string>(); // Track fills started during ma
 let isEraserDragActive = false;
 let lastDragRow: number | null = null; // Track last row during drag for pitch change detection
 let hoverPreviewRefreshFrame: number | null = null;
+let middlePanActive = false;
+let middlePanStartX = 0;
+let middlePanStartY = 0;
+let middlePanOffsetY = 0;
+let middlePanStartScrollLeft = 0;
 
 // --- Modulation Marker State ---
 const modulationToolInteractor = new PitchGridModulationToolInteractor();
@@ -373,6 +379,18 @@ function shouldUseMobileLongPress(): boolean {
 
 // --- Event Handlers ---
 function handleMouseDown(e: MouseEvent) {
+  if (e.button === 1) {
+    e.preventDefault();
+    middlePanActive = true;
+    middlePanStartX = e.clientX;
+    middlePanStartY = e.clientY;
+    middlePanOffsetY = 0;
+    middlePanStartScrollLeft = document.getElementById('canvas-container')?.scrollLeft ?? 0;
+    document.getElementById('pitch-canvas-wrapper')?.classList.add('is-middle-panning');
+    handleMouseLeave();
+    return;
+  }
+
   if (isAnnotationToolActive()) {
     handleMouseLeave();
     return;
@@ -498,6 +516,10 @@ function handleMouseDown(e: MouseEvent) {
 }
 
 function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement) {
+  if (middlePanActive) {
+    return;
+  }
+
   if (isAnnotationToolActive()) {
     handleMouseLeave();
     return;
@@ -643,6 +665,8 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     rowIndex,
     pitchHoverCtx,
     zoomLevel: pitchGridViewportService.getViewportInfo().zoomLevel,
+    cursorX: x + scrollLeft,
+    cursorY: y,
     drawSingleColumnOvalNote,
     drawTwoColumnOvalNote
   })) {
@@ -685,7 +709,7 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
   }
 
   const placedTonicSigns = getPlacedTonicSigns(store.state);
-  const isCircle = store.state.selectedNote?.shape === 'circle';
+  const isCircle = store.state.selectedTool === 'chord' || store.state.selectedNote?.shape === 'circle';
   let tripletStartTimeIndex: number | null = null;
   const threeStampPlacementSnapTarget = store.state.selectedTool === 'sixteenthThreeStamp'
     ? threeStampSnapTarget
@@ -861,7 +885,54 @@ function handleMouseLeave() {
   clearGhostNotePosition();
 }
 
+function handleMiddlePanMove(e: MouseEvent): void {
+  if (!middlePanActive) return;
+  e.preventDefault();
+  middlePanOffsetY = e.clientY - middlePanStartY;
+  const wrapper = document.getElementById('pitch-canvas-wrapper');
+  if (wrapper) {
+    wrapper.style.transition = 'none';
+    wrapper.style.transform = `translateY(${middlePanOffsetY}px)`;
+  }
+  const canvasContainer = document.getElementById('canvas-container');
+  if (canvasContainer) {
+    canvasContainer.scrollLeft = middlePanStartScrollLeft - (e.clientX - middlePanStartX);
+  }
+}
+
+function finishMiddlePan(): void {
+  if (!middlePanActive) return;
+  middlePanActive = false;
+  const wrapper = document.getElementById('pitch-canvas-wrapper');
+  const rowHeight = Math.max(1, store.state.cellHeight / 2);
+  const requestedRows = Math.round(-middlePanOffsetY / rowHeight);
+  const previousRange = { ...store.state.pitchRange };
+  const nextRange = shiftRangeBy(previousRange, requestedRows, store.state.fullRowData.length);
+  const appliedRows = nextRange.topIndex - previousRange.topIndex;
+  const residualOffset = middlePanOffsetY + appliedRows * rowHeight;
+
+  pitchGridViewportService.setPitchViewportRange(nextRange, { animateMs: 0, source: 'middle-pan' });
+  if (wrapper) {
+    wrapper.style.transition = 'none';
+    wrapper.style.transform = `translateY(${residualOffset}px)`;
+    requestAnimationFrame(() => {
+      wrapper.style.transition = 'transform 180ms ease-out';
+      wrapper.style.transform = 'translateY(0)';
+      window.setTimeout(() => {
+        wrapper.classList.remove('is-middle-panning');
+        wrapper.style.removeProperty('transition');
+        wrapper.style.removeProperty('transform');
+      }, 200);
+    });
+  }
+  middlePanOffsetY = 0;
+}
+
 function handleGlobalMouseUp() {
+  if (middlePanActive) {
+    finishMiddlePan();
+    return;
+  }
   if (interactionCoordinator.handleToolMouseUp()) {
     return;
   }
@@ -1112,12 +1183,14 @@ export function initPitchGridInteraction() {
   pitchCanvas.addEventListener('wheel', handleMouseWheel, { passive: true });
   pitchCanvas.addEventListener('mouseleave', handleMouseLeave);
   pitchCanvas.addEventListener('contextmenu', e => e.preventDefault());
+  pitchCanvas.addEventListener('auxclick', e => e.preventDefault());
 
   pitchCanvas.addEventListener('touchstart', e => mobileLongPressNotePlacementInteractor.handleTouchStart(e), { passive: false });
   pitchCanvas.addEventListener('touchmove', e => mobileLongPressNotePlacementInteractor.handleTouchMove(e), { passive: false });
   pitchCanvas.addEventListener('touchend', e => mobileLongPressNotePlacementInteractor.handleTouchEnd(e), { passive: false });
   pitchCanvas.addEventListener('touchcancel', () => mobileLongPressNotePlacementInteractor.handleTouchCancel(), { passive: false });
   window.addEventListener('mouseup', handleGlobalMouseUp);
+  window.addEventListener('mousemove', handleMiddlePanMove, { passive: false });
 
 }
 

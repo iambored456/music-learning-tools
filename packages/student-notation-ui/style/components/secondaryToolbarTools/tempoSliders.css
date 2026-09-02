@@ -93,9 +93,12 @@
     width: 100%;
     justify-content: space-between;
 }
-.tempo-label-icon {
+.tempo-input-group .tempo-label-icon {
     height: 1.2rem;
-    width: auto;
+    width: 1.2rem;
+    display: inline-grid;
+    place-items: center;
+    font-weight: 700;
     user-select: none;
     transform-origin: center;
     transition: transform 0.08s ease-out;

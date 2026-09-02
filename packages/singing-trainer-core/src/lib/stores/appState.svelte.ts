@@ -20,6 +20,7 @@ export type NoteColorMode = 'green' | 'pitchColor';
 export type NoteType = 'stadium' | 'gradient';
 export type BeatLineMode = 'none' | 'beat' | 'bar';
 export type MicTrailColorMode = 'voice' | 'rainbow';
+export type PitchTuningMode = 'equal' | 'just';
 export type TonicNote =
   | 'C'
   | 'C#'
@@ -50,11 +51,17 @@ export interface DroneState {
   selectedMode: string;
   focusLegend: boolean;
   showDegrees: boolean;
+  useSpeakingPitch: boolean;
 }
 
 export interface YAxisRange {
   minMidi: number;
   maxMidi: number;
+}
+
+export interface AccidentalMode {
+  sharp: boolean;
+  flat: boolean;
 }
 
 export interface TonicSegment {
@@ -72,6 +79,10 @@ export interface AppState {
   noteScaleDegrees: string[];
   useDegrees: boolean;
   showAccidentals: boolean;
+  accidentalMode: AccidentalMode;
+  showFrequencyLabels: boolean;
+  showOctaveLabels: boolean;
+  pitchTuningMode: PitchTuningMode;
   pitchHighlightEnabled: boolean;
   yAxisRange: YAxisRange;
   drone: DroneState;
@@ -84,9 +95,11 @@ export interface AppState {
   showBeatGridLines: boolean;
   showMeasureGridLines: boolean;
   showHorizontalGridLines: boolean;
+  centerGridOnSpeakingPitch: boolean;
+  centerColorsOnSpeakingPitch: boolean;
   overdubMicTrailColorMode: MicTrailColorMode;
   judgementLineCircleRadiusPx: number;
-  micTrailCircleRadiusPx: number;
+  micTrailSizeScale: number;
 }
 
 const MIN_LYRIC_LABEL_SCALE = 0.5;
@@ -104,8 +117,12 @@ const DEFAULT_STATE: AppState = {
   noteScaleDegrees: [],
   useDegrees: false,
   showAccidentals: true,
+  accidentalMode: { sharp: false, flat: true },
+  showFrequencyLabels: false,
+  showOctaveLabels: true,
+  pitchTuningMode: 'equal',
   pitchHighlightEnabled: true,
-  yAxisRange: { minMidi: 40, maxMidi: 72 }, // E2 to C5
+  yAxisRange: { minMidi: 54, maxMidi: 80 }, // Six semitones below to 20 above C4
   drone: {
     isPlaying: false,
     octave: 3,
@@ -117,6 +134,7 @@ const DEFAULT_STATE: AppState = {
     selectedMode: '1',
     focusLegend: false,
     showDegrees: false,
+    useSpeakingPitch: false,
   },
   lyricLabelMode: 'fixed',
   lyricLabelScale: 1,
@@ -127,9 +145,11 @@ const DEFAULT_STATE: AppState = {
   showBeatGridLines: false,
   showMeasureGridLines: true,
   showHorizontalGridLines: true,
+  centerGridOnSpeakingPitch: true,
+  centerColorsOnSpeakingPitch: true,
   overdubMicTrailColorMode: 'rainbow',
   judgementLineCircleRadiusPx: 12,
-  micTrailCircleRadiusPx: 5,
+  micTrailSizeScale: 1,
 };
 
 function createAppState() {
@@ -190,6 +210,45 @@ function createAppState() {
 
     setShowAccidentals(show: boolean) {
       state.showAccidentals = show;
+    },
+
+    toggleAccidentalMode(kind: keyof AccidentalMode) {
+      if (state.showFrequencyLabels) {
+        state.showFrequencyLabels = false;
+        if (!state.accidentalMode[kind]) {
+          state.accidentalMode = { ...state.accidentalMode, [kind]: true };
+        }
+        return;
+      }
+      state.accidentalMode = {
+        ...state.accidentalMode,
+        [kind]: !state.accidentalMode[kind],
+      };
+    },
+
+    setAccidentalMode(mode: AccidentalMode) {
+      if (
+        state.accidentalMode.sharp === mode.sharp
+        && state.accidentalMode.flat === mode.flat
+      ) return;
+      state.accidentalMode = { ...mode };
+    },
+
+    toggleFrequencyLabels() {
+      state.showFrequencyLabels = !state.showFrequencyLabels;
+    },
+
+    toggleOctaveLabels() {
+      if (state.showFrequencyLabels) {
+        state.showFrequencyLabels = false;
+        state.showOctaveLabels = true;
+        return;
+      }
+      state.showOctaveLabels = !state.showOctaveLabels;
+    },
+
+    setPitchTuningMode(mode: PitchTuningMode) {
+      state.pitchTuningMode = mode;
     },
 
     togglePitchHighlight() {
@@ -289,6 +348,14 @@ function createAppState() {
       state.showHorizontalGridLines = show;
     },
 
+    setCenterGridOnSpeakingPitch(enabled: boolean) {
+      state.centerGridOnSpeakingPitch = enabled;
+    },
+
+    setCenterColorsOnSpeakingPitch(enabled: boolean) {
+      state.centerColorsOnSpeakingPitch = enabled;
+    },
+
     setOverdubMicTrailColorMode(mode: MicTrailColorMode) {
       state.overdubMicTrailColorMode = mode;
     },
@@ -298,9 +365,9 @@ function createAppState() {
       state.judgementLineCircleRadiusPx = Math.max(4, Math.min(36, Math.round(radius * 10) / 10));
     },
 
-    setMicTrailCircleRadiusPx(radius: number) {
-      if (!Number.isFinite(radius)) return;
-      state.micTrailCircleRadiusPx = Math.max(2, Math.min(24, Math.round(radius * 10) / 10));
+    setMicTrailSizeScale(scale: number) {
+      if (!Number.isFinite(scale)) return;
+      state.micTrailSizeScale = Math.max(0.5, Math.min(2, Math.round(scale * 20) / 20));
     },
 
     setYAxisRange(range: YAxisRange) {
@@ -332,11 +399,13 @@ function createAppState() {
     },
 
     toggleDrone() {
-      state.drone = { ...state.drone, isPlaying: !state.drone.isPlaying };
+      // Playback status is audio-only; avoid invalidating unrelated drone visual settings.
+      state.drone.isPlaying = !state.drone.isPlaying;
     },
 
     setDronePlaying(isPlaying: boolean) {
-      state.drone = { ...state.drone, isPlaying };
+      // Playback status is audio-only; avoid invalidating unrelated drone visual settings.
+      state.drone.isPlaying = isPlaying;
     },
 
     setDroneOctave(octave: number) {
@@ -399,6 +468,10 @@ function createAppState() {
 
     setDroneShowDegrees(enabled: boolean) {
       state.drone = { ...state.drone, showDegrees: enabled };
+    },
+
+    setDroneUseSpeakingPitch(enabled: boolean) {
+      state.drone = { ...state.drone, useSpeakingPitch: enabled };
     },
 
     reset() {

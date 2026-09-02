@@ -127,12 +127,24 @@
     marks.forEach((bpm) => {
       const mark = document.createElement('span');
       mark.className = 'tempo-slider-mark';
-      mark.setAttribute('aria-hidden', 'true');
+      mark.setAttribute('role', 'button');
+      mark.setAttribute('tabindex', '0');
+      mark.setAttribute('aria-label', `Set tempo to ${bpm} BPM`);
 
       const label = document.createElement('span');
       label.className = 'tempo-slider-mark-label';
       label.textContent = `${bpm}`;
       mark.appendChild(label);
+
+      const chooseTempo = (): void => updateTempoDisplays(bpm);
+      const chooseTempoFromKeyboard = (event: KeyboardEvent): void => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          chooseTempo();
+        }
+      };
+      mark.addEventListener('click', chooseTempo);
+      mark.addEventListener('keydown', chooseTempoFromKeyboard);
 
       marksLayer.appendChild(mark);
       markElements.push({ el: mark, bpm });
@@ -305,12 +317,39 @@
       if (!tempoKey || !tempoStepInputMap[tempoKey]) return;
       const input = tempoStepInputMap[tempoKey]!;
       const delta = btn.classList.contains('tempo-step-up') ? 1 : -1;
-      const handleClick = () => {
+      let repeatDelay: ReturnType<typeof setTimeout> | null = null;
+      let repeatTimer: ReturnType<typeof setInterval> | null = null;
+      const step = () => {
         input.value = input.value + delta;
+      };
+      const stopRepeating = () => {
+        if (repeatDelay !== null) clearTimeout(repeatDelay);
+        if (repeatTimer !== null) clearInterval(repeatTimer);
+        repeatDelay = null;
+        repeatTimer = null;
         btn.blur();
       };
-      btn.addEventListener('click', handleClick);
-      tempoStepButtonCleanups.push(() => btn.removeEventListener('click', handleClick));
+      const startRepeating = (event: PointerEvent) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        stopRepeating();
+        btn.setPointerCapture(event.pointerId);
+        step();
+        repeatDelay = setTimeout(() => {
+          repeatTimer = setInterval(step, 90);
+        }, 320);
+      };
+      btn.addEventListener('pointerdown', startRepeating);
+      btn.addEventListener('pointerup', stopRepeating);
+      btn.addEventListener('pointercancel', stopRepeating);
+      btn.addEventListener('lostpointercapture', stopRepeating);
+      tempoStepButtonCleanups.push(() => {
+        stopRepeating();
+        btn.removeEventListener('pointerdown', startRepeating);
+        btn.removeEventListener('pointerup', stopRepeating);
+        btn.removeEventListener('pointercancel', stopRepeating);
+        btn.removeEventListener('lostpointercapture', stopRepeating);
+      });
     });
 
     // Initialize tempo displays

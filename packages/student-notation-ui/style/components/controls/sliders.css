@@ -122,6 +122,20 @@ input[type="range"] {
   letter-spacing: var(--typography-caption-letter-spacing);
   text-transform: uppercase;
   transform: translateY(50%);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.tempo-slider-mark:hover,
+.tempo-slider-mark:focus-visible {
+  color: var(--c-text);
+  outline: none;
+}
+
+.tempo-slider-mark:hover::before,
+.tempo-slider-mark:focus-visible::before {
+  height: 2px;
+  background: var(--c-accent-neutral);
 }
 
 .tempo-slider-mark::before {

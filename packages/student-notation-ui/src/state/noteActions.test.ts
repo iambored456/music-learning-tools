@@ -92,6 +92,29 @@ describe('engine-backed note actions', () => {
     store.dispose();
   });
 
+  it('cycles a drum cell through single, double, second-only, and empty states', () => {
+    const drumHit = {
+      row: 0,
+      drumTrack: 'H',
+      startColumnIndex: createCanvasSpaceColumn(2),
+      endColumnIndex: createCanvasSpaceColumn(2),
+      color: '#4a90e2',
+      shape: 'circle' as const
+    };
+
+    store.toggleDrumNote(drumHit);
+    expect(store.state.placedNotes[0]?.drumSubdivision).toBe('single');
+
+    store.toggleDrumNote(drumHit);
+    expect(store.state.placedNotes[0]?.drumSubdivision).toBe('double');
+
+    store.toggleDrumNote(drumHit);
+    expect(store.state.placedNotes[0]?.drumSubdivision).toBe('secondOnly');
+
+    store.toggleDrumNote(drumHit);
+    expect(store.state.placedNotes).toHaveLength(0);
+  });
+
   it('updates both row and globalRow when dragging a note', () => {
     const note = createMockNote({ row: 10, globalRow: 10 });
 

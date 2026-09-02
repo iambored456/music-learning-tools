@@ -13,6 +13,7 @@
   import clefRangeController from '@components/clefWheels/clefRangeController.ts';
   import logger from '@utils/logger.ts';
   import { initToolSubtabState } from './toolSubtabState.ts';
+  import { initDrumBeatPreviews } from '@components/rhythm/drumBeatPreview.ts';
   import {
     BASIC_CHORD_SHAPES,
     ADVANCED_CHORD_SHAPES,
@@ -39,6 +40,7 @@
   let lastDegreeMode: Exclude<DegreeDisplayMode, 'off'> = 'diatonic';
   let previousMode: 'inversion' | 'position' = 'position';
   let cleanupToolSubtabState: (() => void) | null = null;
+  let cleanupDrumBeatPreviews: (() => void) | null = null;
 
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;
@@ -475,7 +477,7 @@
     if (tabId === 'chords') {
       updateChordPositionToggleState();
     }
-    if (tabId === 'range') {
+    if (tabId === 'draw') {
       setTimeout(() => clefRangeController.refreshWheelVisuals(), 0);
     }
   }
@@ -703,6 +705,7 @@
     cleanupToolSubtabState = initToolSubtabState({
       onPitchTabChanged: handlePitchTabChanged
     });
+    cleanupDrumBeatPreviews = initDrumBeatPreviews();
 
     // Unified position toggle
     if (unifiedPositionToggle) {
@@ -892,6 +895,8 @@
   onDestroy(() => {
     cleanupToolSubtabState?.();
     cleanupToolSubtabState = null;
+    cleanupDrumBeatPreviews?.();
+    cleanupDrumBeatPreviews = null;
     store.off('chordPositionChanged', updateUnifiedToggleVisual);
     store.off('intervalsInversionChanged', updateUnifiedToggleVisual);
     store.off('toolChanged', handleToolChanged);

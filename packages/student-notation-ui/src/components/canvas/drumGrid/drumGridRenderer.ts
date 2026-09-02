@@ -301,7 +301,16 @@ export function drawDrumGrid(ctx: CanvasRenderingContext2D, options: DrumGridRen
         // Pass canvas-space column to animation
         const animationScale = DrumPlayheadRenderer.getAnimationScale(canvasCol, drumTrack);
         const shapeY = y + (drumRowHeight - drumShapeBoxHeight) / 2;
-        drawDrumShape(ctx, row, x, shapeY, currentCellWidth, drumShapeBoxHeight, animationScale);
+        const subdivision = drumHit.drumSubdivision ?? 'single';
+        if (subdivision === 'single') {
+          drawDrumShape(ctx, row, x, shapeY, currentCellWidth, drumShapeBoxHeight, animationScale);
+        } else {
+          const halfWidth = currentCellWidth / 2;
+          if (subdivision === 'double') {
+            drawDrumShape(ctx, row, x, shapeY, halfWidth, drumShapeBoxHeight, animationScale);
+          }
+          drawDrumShape(ctx, row, x + halfWidth, shapeY, halfWidth, drumShapeBoxHeight, animationScale);
+        }
       } else {
         ctx.fillStyle = '#ced4da';
         ctx.beginPath();

@@ -76,6 +76,8 @@
     viewport: PitchGridViewport;
     cellWidth: number;
     cellHeight: number;
+    rowPositionOffsets?: readonly number[];
+    legendColumnWidthUnits?: number;
     colorMode?: 'color' | 'bw';
     degreeDisplayMode?: DegreeDisplayMode;
     accidentalMode?: AccidentalMode;
@@ -89,6 +91,12 @@
     showHorizontalGridLines?: boolean;
     extendHorizontalGridLinesBehindLegend?: boolean;
     horizontalGridReferencePitchClass?: number | null;
+    horizontalGridReferenceLineColor?: string;
+    horizontalGridDefaultLineColor?: string;
+    horizontalGridDefaultLineWidth?: number;
+    horizontalGridDashedLineWidth?: number;
+    judgmentLineColor?: string;
+    judgmentLineWidth?: number;
     focusedPitchClasses?: Set<number> | null;
     focusColorsEnabled?: boolean;
     legendLabelOverrides?: Map<number, string>;
@@ -123,6 +131,8 @@
     viewport,
     cellWidth,
     cellHeight,
+    rowPositionOffsets,
+    legendColumnWidthUnits = 3,
     colorMode = 'color',
     degreeDisplayMode = 'off',
     accidentalMode = { sharp: true, flat: true },
@@ -136,6 +146,12 @@
     showHorizontalGridLines = true,
     extendHorizontalGridLinesBehindLegend = false,
     horizontalGridReferencePitchClass = null,
+    horizontalGridReferenceLineColor = '#adb5bd',
+    horizontalGridDefaultLineColor = '#ced4da',
+    horizontalGridDefaultLineWidth,
+    horizontalGridDashedLineWidth,
+    judgmentLineColor = 'rgba(255, 0, 0, 0.9)',
+    judgmentLineWidth,
     focusedPitchClasses = null,
     focusColorsEnabled = false,
     legendLabelOverrides,
@@ -169,11 +185,10 @@
   let rightCtx: CanvasRenderingContext2D | null = $state(null);
   let animationFrameId: number | null = $state(null);
 
-  // Legend column width in cell units (matches Student Notation sizing)
-  const LEGEND_COLUMN_WIDTH_UNITS = 3;
-  const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
+  // Each legend contains two equal-width label columns.
+  const legendColumnWidth = $derived(cellWidth * legendColumnWidthUnits);
   const legendCanvasWidth = $derived(legendColumnWidth * 2);
-  const showLegends = $derived(showOctaveLabels || showFrequencyLabels);
+  const showLegends = $derived(showLegendLabels);
   const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
   const gridWidth = $derived(Math.max(0, viewport.containerWidth - legendTotalWidth));
 
@@ -218,6 +233,7 @@
         pixelsPerSecond: config?.pixelsPerSecond ?? 200,
         nowLineX: (config as HighwayModeConfig)?.nowLineX ?? 100,
         currentTimeMs: (config as HighwayModeConfig)?.currentTimeMs ?? 0,
+        rowPositionOffsets,
       });
     }
   }
@@ -235,6 +251,7 @@
     // Clear canvas
     ctx.clearRect(0, 0, gridWidth, viewport.containerHeight);
 
+    drawRowHighlights(ctx, coords, paddedStartRow, paddedEndRow, true);
     if (showHorizontalGridLines) {
       // Draw horizontal grid lines
       const horizontalConfig: HorizontalLinesConfig = {
@@ -244,10 +261,14 @@
         viewportWidth: gridWidth,
         colorMode,
         horizontalGridReferencePitchClass,
+        horizontalGridReferenceLineColor,
+        horizontalGridDefaultLineColor,
+        horizontalGridDefaultLineWidth,
+        horizontalGridDashedLineWidth,
       };
       drawHorizontalLines(ctx, horizontalConfig, coords, paddedStartRow, paddedEndRow);
     }
-    drawRowHighlights(ctx, coords, paddedStartRow, paddedEndRow);
+    drawRowHighlights(ctx, coords, paddedStartRow, paddedEndRow, false);
 
     // Mode-specific rendering
     if (isNotationMode) {
@@ -320,7 +341,8 @@
     renderCtx: CanvasRenderingContext2D,
     coords: CoordinateUtils,
     startRow: number,
-    endRow: number
+    endRow: number,
+    renderBehindGridLines: boolean
   ): void {
     const highlights = normalizeRowHighlights(rowHighlight);
     if (highlights.length === 0 || gridWidth <= 0) return;
@@ -330,6 +352,7 @@
 
     renderCtx.save();
     for (const highlight of highlights) {
+      if (Boolean(highlight.renderBehindGridLines) !== renderBehindGridLines) continue;
       const rowIndex = resolveHighlightRowIndex(highlight);
       if (rowIndex === null || rowIndex < startRow || rowIndex > endRow) continue;
 
@@ -341,7 +364,7 @@
 
       const color = highlight.color ?? row.hex;
       const pulse = highlight.pulse ? (Math.sin(now / 260) + 1) / 2 : 0;
-      const baseOpacity = clamp(highlight.opacity ?? 0.23, 0.05, 0.9);
+      const baseOpacity = clamp(highlight.opacity ?? 0.23, 0.05, 1);
       const glowStrength = clamp(highlight.glow ?? 0.9, 0, 1);
       const rowOpacity = clamp(baseOpacity + pulse * 0.05, 0, 1);
       const glowOpacity = clamp((0.14 + pulse * 0.08) * glowStrength, 0, 1);
@@ -675,8 +698,11 @@
   function drawJudgmentLine(ctx: CanvasRenderingContext2D, x: number, height: number): void {
     const baseLineWidth = 3;
     const rowScaledLineWidth = (cellHeight / 40) * baseLineWidth;
-    const lineWidth = clamp(rowScaledLineWidth, 1.25, 7);
-    ctx.strokeStyle = 'rgba(255, 0, 0, 0.9)';
+    const lineWidth =
+      typeof judgmentLineWidth === 'number' && Number.isFinite(judgmentLineWidth)
+        ? judgmentLineWidth
+        : clamp(rowScaledLineWidth, 1.25, 7);
+    ctx.strokeStyle = judgmentLineColor;
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -715,6 +741,10 @@
       midiLabelOverrides: legendMidiLabelOverrides,
       extendHorizontalGridLinesBehindLegend,
       horizontalGridReferencePitchClass,
+      horizontalGridReferenceLineColor,
+      horizontalGridDefaultLineColor,
+      horizontalGridDefaultLineWidth,
+      horizontalGridDashedLineWidth,
     };
 
     const legendOptions = {
@@ -833,6 +863,7 @@
     void viewport;
     void cellWidth;
     void cellHeight;
+    void rowPositionOffsets;
     void colorMode;
     void degreeDisplayMode;
     void placedNotes;
@@ -842,6 +873,12 @@
     void showHorizontalGridLines;
     void extendHorizontalGridLinesBehindLegend;
     void horizontalGridReferencePitchClass;
+    void horizontalGridReferenceLineColor;
+    void horizontalGridDefaultLineColor;
+    void horizontalGridDefaultLineWidth;
+    void horizontalGridDashedLineWidth;
+    void judgmentLineColor;
+    void judgmentLineWidth;
     void showLegendLabels;
     void showAccidentalLabels;
     void legendLabelOverrides;

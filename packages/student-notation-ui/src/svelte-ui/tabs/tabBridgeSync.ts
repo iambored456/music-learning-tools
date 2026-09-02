@@ -188,7 +188,7 @@ function isVisibleElement(node: HTMLElement): boolean {
 
 function getActiveRhythmContentBox(activeRhythmPanel: HTMLElement | null): HTMLElement | null {
   const rhythmContentNodes = activeRhythmPanel?.querySelectorAll(
-    '.sixteenth-stamps-toolbar-container, .triplet-stamps-toolbar-container, .rhythm-controls-content-box'
+    '.sixteenth-stamps-toolbar-container, .triplet-stamps-toolbar-container, .drum-beats-toolbar, .rhythm-controls-content-box'
   );
   if (!rhythmContentNodes || rhythmContentNodes.length === 0) {
     return null;
@@ -327,7 +327,8 @@ export function createTabBridgeSyncController(): TabBridgeSyncController {
       '.rhythm-stamp-tab-button',
       '.rhythm-stamp-tab-panel',
       '.sixteenth-stamps-toolbar-container',
-      '.triplet-stamps-toolbar-container'
+      '.triplet-stamps-toolbar-container',
+      '.drum-beats-toolbar'
     ];
 
     selectors.forEach(selector => {

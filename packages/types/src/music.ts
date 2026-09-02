@@ -60,6 +60,8 @@ export interface PlacedNote {
   color: string;
   isDrum?: boolean;
   drumTrack?: number | string | null;
+  /** Rhythmic content packed into one drum-grid column. */
+  drumSubdivision?: 'single' | 'double' | 'secondOnly';
   enharmonicPreference?: boolean;
   tonicNumber?: number | null;
 }

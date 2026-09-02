@@ -18,7 +18,10 @@ export interface SingingTrainerPreferences {
 
 /** Default preferences */
 const DEFAULT_PREFERENCES: SingingTrainerPreferences = {
-  speakingPitch: null,
+  speakingPitch: {
+    speakingPitchMidi: 60,
+    speakingPitchLastCalibratedAt: '',
+  },
 };
 
 /**

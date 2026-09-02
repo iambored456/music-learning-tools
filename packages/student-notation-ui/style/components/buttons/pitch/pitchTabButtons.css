@@ -119,6 +119,61 @@
     overflow: hidden;
 }
 
+.pitch-tab-content.pitch-combined-content {
+    display: grid;
+    grid-template-columns: max-content minmax(15rem, 1fr) max-content;
+    gap: 0;
+    align-items: stretch;
+    overflow-x: visible;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+}
+
+.pitch-tab-content.pitch-combined-content > .pitch-tab-panel.active {
+    min-width: 0;
+}
+
+.pitch-tab-content.pitch-combined-content > #range-panel,
+.pitch-tab-content.pitch-combined-content > #draw-panel {
+    width: max-content;
+    justify-self: start;
+}
+
+.pitch-tab-content.pitch-combined-content > .pitch-tab-panel.active + .pitch-tab-panel.active {
+    border-left: 1px solid #adb5bd;
+}
+
+.pitch-tab-content.pitch-combined-content > .pitch-tab-panel.active > .range-content-box,
+.pitch-tab-content.pitch-combined-content > .pitch-tab-panel.active > .draw-content-box {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.pitch-tab-content.pitch-combined-content > #range-panel > .range-content-box,
+.pitch-tab-content.pitch-combined-content > #draw-panel > .draw-content-box {
+    width: fit-content;
+    max-width: max-content;
+}
+
+.pitch-tab-content.pitch-combined-content > #mode-panel,
+.pitch-tab-content.pitch-combined-content > #mode-panel > .range-content-box {
+    width: 100%;
+    max-width: none;
+}
+
+#chords-panel.tab-panel.active {
+    min-width: 0;
+    height: 100%;
+}
+
+#chords-panel.tab-panel.active > .chords-content-box {
+    height: 100%;
+}
+
 .range-content-box,
 .chords-content-box,
 .draw-content-box {

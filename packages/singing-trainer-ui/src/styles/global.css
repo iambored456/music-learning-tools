@@ -21,13 +21,22 @@
 }
 
 :root {
-  --color-bg: #1a1a2e;
-  --color-bg-light: #16213e;
-  --color-surface: #0f3460;
-  --color-primary: #e94560;
-  --color-secondary: #00d9ff;
-  --color-text: #eaeaea;
-  --color-text-muted: #a0a0a0;
+  color-scheme: light;
+  --color-bg: #eef3f8;
+  --color-bg-light: #ffffff;
+  --color-surface: #dbe7f2;
+  --color-primary: #c52f4b;
+  --color-primary-dark: #9f223a;
+  --color-secondary: #167a9a;
+  --color-text: #172033;
+  --color-text-muted: #46546a;
+  --color-on-accent: #ffffff;
+  --color-panel: #f5f8fb;
+  --color-panel-strong: #ffffff;
+  --color-control: #e7edf4;
+  --color-border: rgba(23, 32, 51, 0.14);
+  --color-border-strong: rgba(23, 32, 51, 0.28);
+  --color-backdrop: rgba(25, 36, 55, 0.46);
   --color-success: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
@@ -49,9 +58,31 @@
   --radius-md: 8px;
   --radius-lg: 12px;
 
+  --shadow-sm: 0 1px 2px rgba(25, 36, 55, 0.12);
+  --shadow-md: 0 4px 10px rgba(25, 36, 55, 0.16);
+  --shadow-lg: 0 18px 42px rgba(25, 36, 55, 0.24);
+}
+
+.singing-trainer-app[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #1a1a2e;
+  --color-bg-light: #16213e;
+  --color-surface: #0f3460;
+  --color-primary: #f05a72;
+  --color-primary-dark: #d64159;
+  --color-secondary: #00d9ff;
+  --color-text: #ffffff;
+  --color-text-muted: #d5dbe5;
+  --color-on-accent: #102039;
+  --color-panel: rgba(255, 255, 255, 0.07);
+  --color-panel-strong: rgba(255, 255, 255, 0.06);
+  --color-control: rgba(6, 15, 32, 0.72);
+  --color-border: rgba(255, 255, 255, 0.14);
+  --color-border-strong: rgba(255, 255, 255, 0.26);
+  --color-backdrop: rgba(2, 6, 15, 0.78);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 18px 42px rgba(0, 0, 0, 0.5);
 }
 
 html,

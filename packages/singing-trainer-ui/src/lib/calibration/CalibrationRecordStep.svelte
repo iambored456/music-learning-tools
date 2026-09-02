@@ -8,7 +8,10 @@
   import PhrasePrompt from './PhrasePrompt.svelte';
   import { speakingPitchStore } from '@mlt/singing-trainer-core/calibration/speakingPitchStore.svelte.js';
   import { collectPitchSamples, type CalibrationPitchSample } from '@mlt/singing-trainer-core/services/pitchDetection.js';
-  import { DEFAULT_CALIBRATION_CONFIG } from '@mlt/singing-trainer-core/calibration/types.js';
+  import {
+    CALIBRATION_PHRASES,
+    DEFAULT_CALIBRATION_CONFIG,
+  } from '@mlt/singing-trainer-core/calibration/types.js';
 
   interface Props {
     phraseIndex: number;
@@ -90,7 +93,7 @@
 
 <div class="record-step">
   <div class="step-header">
-    <span class="step-indicator">Phrase {phraseIndex + 1} of 3</span>
+    <span class="step-indicator">Sample {phraseIndex + 1} of {CALIBRATION_PHRASES.length}</span>
   </div>
 
   <div class="phrase-section">

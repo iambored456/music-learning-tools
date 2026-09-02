@@ -48,6 +48,14 @@ export interface LegendRenderConfig {
   extendHorizontalGridLinesBehindLegend?: boolean;
   /** Pitch-class reference used to style the horizontal pitch lines. */
   horizontalGridReferencePitchClass?: number | null;
+  /** Color used for the emphasized solid reference line. */
+  horizontalGridReferenceLineColor?: string;
+  /** Color used for ordinary solid horizontal lines. */
+  horizontalGridDefaultLineColor?: string;
+  /** Pixel width used for ordinary solid horizontal lines. */
+  horizontalGridDefaultLineWidth?: number;
+  /** Pixel width used for the emphasized dashed horizontal line. */
+  horizontalGridDashedLineWidth?: number;
 }
 
 export interface LegendRenderOptions {
@@ -106,6 +114,48 @@ function getCanvasPixelRatio(canvas: HTMLCanvasElement): number {
   // Check if canvas has been scaled for HiDPI
   const transform = ctx.getTransform();
   return transform.a || window.devicePixelRatio || 1;
+}
+
+/**
+ * Resolve a legend cell from the midpoints between neighbouring cells in the
+ * same staggered A/B column. This keeps the legend contiguous when row centres
+ * use non-equal spacing, such as Singing Trainer's just-intonation layout.
+ */
+function getLegendCellBounds(
+  rowIndex: number,
+  column: 'A' | 'B',
+  fullRowData: PitchRowData[],
+  coords: CoordinateUtils,
+  fallbackHeight: number,
+): { top: number; bottom: number } {
+  const center = coords.getRowY(rowIndex);
+  let previousCenter: number | null = null;
+  let nextCenter: number | null = null;
+
+  for (let index = rowIndex - 1; index >= 0; index--) {
+    const candidate = fullRowData[index];
+    if (candidate && !candidate.isBoundary && candidate.column === column) {
+      previousCenter = coords.getRowY(index);
+      break;
+    }
+  }
+
+  for (let index = rowIndex + 1; index < fullRowData.length; index++) {
+    const candidate = fullRowData[index];
+    if (candidate && !candidate.isBoundary && candidate.column === column) {
+      nextCenter = coords.getRowY(index);
+      break;
+    }
+  }
+
+  const top = previousCenter === null
+    ? center - ((nextCenter === null ? fallbackHeight : nextCenter - center) / 2)
+    : (previousCenter + center) / 2;
+  const bottom = nextCenter === null
+    ? center + ((previousCenter === null ? fallbackHeight : center - previousCenter) / 2)
+    : (center + nextCenter) / 2;
+
+  return { top, bottom };
 }
 
 /**
@@ -263,10 +313,24 @@ export function drawLegend(
       if (row.column !== colLabel) continue;
 
       const y = coords.getRowY(rowIndex);
+      const bounds = getLegendCellBounds(
+        rowIndex,
+        colLabel,
+        fullRowData,
+        coords,
+        cellHeight,
+      );
+      const cellTop = snap(bounds.top);
+      const cellBottom = snap(bounds.bottom);
+      const seamOverlap = 1 / pixelRatio;
+      const renderedCellHeight = Math.max(seamOverlap, cellBottom - cellTop + seamOverlap);
       const isFocused = isRowFocused(row, focusedPitchClasses);
 
-      // Check if accidentals are hidden
-      const isAccidentalHidden = !accidentalMode.sharp && !accidentalMode.flat;
+      // Explicit degree-label maps define their own chromatic visibility relative
+      // to the tonic, which is not necessarily aligned with piano-key accidentals.
+      const hasExplicitLabelMap = Boolean(config.labelOverrides?.size);
+      const isAccidentalHidden =
+        !hasExplicitLabelMap && !accidentalMode.sharp && !accidentalMode.flat;
       const shouldHideAccidental = row.isAccidental && isAccidentalHidden;
       const shouldHideLabel =
         !config.showLegendLabels ||
@@ -292,7 +356,7 @@ export function drawLegend(
 
       // Draw background
       ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
-      ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+      ctx.fillRect(cumulativeX, cellTop, colWidth, renderedCellHeight);
 
       // Optional highlight overlay
       if (highlightEntries.length > 0) {
@@ -311,7 +375,7 @@ export function drawLegend(
             ctx.save();
             ctx.globalAlpha = Math.min(Math.max(highlight.opacity, 0), 1);
             ctx.fillStyle = highlight.color ?? '#ffff00';
-            ctx.fillRect(cumulativeX, y - cellHeight / 2, colWidth, cellHeight);
+            ctx.fillRect(cumulativeX, cellTop, colWidth, renderedCellHeight);
             ctx.restore();
           }
         }
@@ -404,6 +468,10 @@ export function drawLegendsToSeparateCanvases(
         viewportWidth: width,
         colorMode: config.colorMode,
         horizontalGridReferencePitchClass: config.horizontalGridReferencePitchClass,
+        horizontalGridReferenceLineColor: config.horizontalGridReferenceLineColor,
+        horizontalGridDefaultLineColor: config.horizontalGridDefaultLineColor,
+        horizontalGridDefaultLineWidth: config.horizontalGridDefaultLineWidth,
+        horizontalGridDashedLineWidth: config.horizontalGridDashedLineWidth,
       },
       options.coords,
       options.startRow,
