@@ -46,6 +46,8 @@
     position: relative;
     width: 100%;
     height: 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border-strong);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.1);
     overflow: hidden;

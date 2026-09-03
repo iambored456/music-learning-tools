@@ -278,8 +278,10 @@
         <section class="sidebar-settings-panel" aria-labelledby="mic-settings-title">
           <h2 id="mic-settings-title" class="sidebar-settings-title">Mic Settings</h2>
           <div class="sidebar-settings-stack">
-            <StartButton compact={true} />
-            <PitchReadout compact={true} showHint={false} />
+            <div class="mic-start-row">
+              <StartButton compact={true} />
+              <PitchReadout compact={true} showHint={false} />
+            </div>
             <MicInputSelector />
           </div>
         </section>
@@ -517,6 +519,24 @@
     flex-direction: column;
     gap: var(--spacing-sm);
     width: 100%;
+    min-width: 0;
+  }
+
+  .mic-start-row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mic-start-row :global(.start-button) {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .mic-start-row :global(.pitch-readout) {
+    flex: 1 1 auto;
     min-width: 0;
   }
 

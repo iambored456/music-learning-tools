@@ -368,7 +368,7 @@
       const glowStrength = clamp(highlight.glow ?? 0.9, 0, 1);
       const rowOpacity = clamp(baseOpacity + pulse * 0.05, 0, 1);
       const glowOpacity = clamp((0.14 + pulse * 0.08) * glowStrength, 0, 1);
-      const scale = clamp(highlight.heightScale ?? 1, 0.1, 1);
+      const scale = clamp(highlight.heightScale ?? 1, 0, 1);
       const fadeExtendTop = Math.max(0, highlight.fadeExtendTopScale ?? 0) * cellHeight;
       const fadeExtendBottom = Math.max(0, highlight.fadeExtendBottomScale ?? 0) * cellHeight;
       const halfHeight = (cellHeight / 2) * scale;

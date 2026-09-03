@@ -304,7 +304,6 @@
 
     const highlightedRow = fullRowData.find((row) => row.midi === highlightedMidi);
     if (!highlightedRow) return null;
-    const standaloneSpeakingPitchHighlight = drone.useSpeakingPitch && !drone.modeEnabled;
 
     return {
       midi: highlightedMidi,
@@ -313,7 +312,7 @@
       glow: 1,
       pulse: true,
       renderBehindGridLines: true,
-      heightScale: standaloneSpeakingPitchHighlight ? 1 : 0.5,
+      heightScale: 0,
       fadeExtendTopScale: SPEAKING_PITCH_FADE_SCALE,
       fadeExtendBottomScale: SPEAKING_PITCH_FADE_SCALE,
     };
@@ -1760,6 +1759,7 @@
     focusColorsEnabled={modeFocusColorsEnabled}
     legendLabelOverrides={modeLabelOverrides}
     {showHorizontalGridLines}
+    extendHorizontalGridLinesBehindLegend={true}
     {horizontalGridReferencePitchClass}
     horizontalGridReferenceLineColor="rgba(255, 0, 0, 0.9)"
     judgmentLineColor="#adb5bd"
