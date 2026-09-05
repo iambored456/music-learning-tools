@@ -483,6 +483,9 @@ importers:
 
   packages/singing-trainer-core:
     dependencies:
+      '@mlt/audio-samples':
+        specifier: workspace:*
+        version: link:../audio-samples
       '@mlt/handoff':
         specifier: workspace:*
         version: link:../handoff

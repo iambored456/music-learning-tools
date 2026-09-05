@@ -25,6 +25,10 @@ export interface CoordinateConfig {
   tempoModulationMarkers?: ModulationMarker[];
   /** Base microbeat pixel width (optional) */
   baseMicrobeatPx?: number;
+  /** Musical origin inside the main canvas; excludes the separate legend canvases. */
+  contentInsetX?: number;
+  /** Optional tuning offsets in semitone row units. */
+  rowPositionOffsets?: readonly number[];
 }
 
 export interface TimeBasedCoordinateConfig {
@@ -56,22 +60,28 @@ export function createColumnCoordinates(config: CoordinateConfig): CoordinateUti
   const halfUnit = cellHeight / 2;
 
   // Build cumulative column positions for fast lookup
-  const columnPositions = buildColumnPositions(columnWidths, config.cellWidth);
+  const contentInsetX = config.contentInsetX ?? 0;
+  const columnPositions = buildColumnPositions(columnWidths, config.cellWidth).map(x => x + contentInsetX);
+  const tunedRows = config.rowPositionOffsets
+    ? createTimeCoordinates({ ...config, pixelsPerSecond: 0 })
+    : null;
 
   return {
     getRowY(rowIndex: number): number {
+      if (tunedRows) return tunedRows.getRowY(rowIndex);
       const relativeRowIndex = rowIndex - viewport.startRow;
       // Row centers are at half-cell intervals, offset by half a cell
       return (relativeRowIndex + 1) * halfUnit;
     },
 
     getRowFromY(canvasY: number): number {
+      if (tunedRows) return tunedRows.getRowFromY(canvasY);
       const relativeRowIndex = (canvasY / halfUnit) - 1;
       return Math.round(relativeRowIndex) + viewport.startRow;
     },
 
     getColumnX(columnIndex: number): number {
-      if (columnIndex < 0) return 0;
+      if (columnIndex < 0) return contentInsetX;
       if (columnIndex >= columnPositions.length) {
         return columnPositions[columnPositions.length - 1] ?? 0;
       }

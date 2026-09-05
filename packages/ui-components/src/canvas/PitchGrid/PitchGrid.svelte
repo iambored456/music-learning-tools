@@ -105,8 +105,10 @@
 
     // Notation/Playback mode props
     placedNotes?: PlacedNote[];
+    getScaleDegreeLabel?: NoteRenderContext['getScaleDegreeLabel'];
     placedTonicSigns?: TonicSign[];
     columnWidths?: number[];
+    contentInsetX?: number;
     macrobeatGroupings?: MacrobeatGrouping[];
     macrobeatBoundaryStyles?: MacrobeatBoundaryStyle[];
     tempoModulationMarkers?: ModulationMarker[];
@@ -158,12 +160,14 @@
     legendMidiLabelOverrides,
     targetNoteStyle = 'stadium',
     placedNotes = [],
+    getScaleDegreeLabel,
     placedTonicSigns = [],
     columnWidths = [],
     macrobeatGroupings = [],
     macrobeatBoundaryStyles = [],
     tempoModulationMarkers,
     longNoteStyle = 'style1',
+    contentInsetX = 0,
     singingConfig,
     highwayConfig,
     userPitch,
@@ -222,6 +226,8 @@
         columnWidths,
         viewport,
         tempoModulationMarkers,
+        rowPositionOffsets,
+        contentInsetX,
       });
     } else {
       const config = isHighwayMode ? highwayConfig : singingConfig;
@@ -466,6 +472,7 @@
       config: noteConfig,
       coords,
       allNotes: placedNotes,
+      getScaleDegreeLabel,
     };
 
     // Draw notes
@@ -864,8 +871,10 @@
     void cellWidth;
     void cellHeight;
     void rowPositionOffsets;
+    void contentInsetX;
     void colorMode;
     void degreeDisplayMode;
+    void getScaleDegreeLabel;
     void placedNotes;
     void placedTonicSigns;
     void columnWidths;

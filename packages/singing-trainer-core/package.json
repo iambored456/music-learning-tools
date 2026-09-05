@@ -28,6 +28,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@mlt/audio-samples": "workspace:*",
     "@mlt/handoff": "workspace:*",
     "@mlt/lesson-templates": "workspace:*",
     "@mlt/overdub-engine": "workspace:*",

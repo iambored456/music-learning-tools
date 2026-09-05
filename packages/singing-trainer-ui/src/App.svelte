@@ -5,6 +5,7 @@
    * Main application layout for the Singing Trainer.
    */
   import { onMount, onDestroy } from 'svelte';
+  import SolfegeRows from './lib/components/SolfegeRows.svelte';
   import {
     SingingCanvas,
     StartButton,
@@ -46,6 +47,11 @@
   const THEME_STORAGE_KEY = 'mlt-singing-trainer-theme';
 
   let showSettings = $state(false);
+  let showSolfegeRows = $state(false);
+  const canOpenSolfegeRows = $derived(
+    !exerciseState.state.isActive && !overdubExerciseState.state.isActive
+      && !highwayState.state.isPlaying
+  );
   let theme = $state<ColorTheme>('light');
 
   // Accordion state: only one sidebar section open at a time
@@ -205,6 +211,7 @@
    * Handle starting a lesson from the chooser modal
    */
   function handleLessonStart(lessonId: string, settings: Record<string, number | boolean>) {
+    showSolfegeRows = false;
     exerciseControlsRef?.handleLessonStart(lessonId, settings);
   }
 
@@ -212,6 +219,7 @@
    * Handle starting an exercise from the exercise chooser modal
    */
   function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
+    showSolfegeRows = false;
     exerciseControlsRef?.handleExerciseStart(exerciseId, settings);
   }
 
@@ -219,6 +227,7 @@
    * Handle starting a workshop template from the workshop chooser modal
    */
   function handleWorkshopStart(exerciseId: string, settings: Record<string, number | boolean>) {
+    showSolfegeRows = false;
     ensureLessonTemplatesRegistered();
     overdubExerciseState.loadExercise(exerciseId, settings);
   }
@@ -297,6 +306,10 @@
       <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
         <summary class="settings-summary">Lessons &amp; Exercises</summary>
         <div class="settings-content">
+          <button class="solfege-launch" disabled={!canOpenSolfegeRows} onclick={() => (showSolfegeRows = true)}>
+            Ladukhin solfege rows
+          </button>
+          {#if !canOpenSolfegeRows}<small>Close the current exercise before opening solfege rows.</small>{/if}
           <ExerciseControls bind:this={exerciseControlsRef} />
         </div>
       </details>
@@ -323,11 +336,15 @@
     </aside>
 
     <section class="canvas-area">
+      {#if showSolfegeRows}
+        <SolfegeRows onclose={() => (showSolfegeRows = false)} />
+      {:else}
       <div class="canvas-main">
         <SingingCanvas {theme} />
       </div>
       <ExerciseBuilderToolbar visible={showExerciseBuilderToolbar} />
       <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
+      {/if}
     </section>
   </main>
 
@@ -363,6 +380,15 @@
 </div>
 
 <style>
+  .solfege-launch {
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-panel);
+    color: var(--color-text);
+    cursor: pointer;
+  }
+  .solfege-launch:disabled { opacity: .5; cursor: default; }
   .app {
     display: flex;
     flex-direction: column;

@@ -48,6 +48,7 @@
   import { LyricsDisplay } from './karaoke/index.js';
   import YAxisDragZones from './YAxisDragZones.svelte';
   import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';
+  import { SINGING_GRID, singingLegendWidth, singingPitchSizes, singingJudgmentLineWidth } from './pitchGridAppearance.js';
 
   interface Props {
     theme?: 'light' | 'dark';
@@ -95,7 +96,6 @@
   };
   const MODE_ROW_FADE_SCALE = 0.25;
   const SPEAKING_PITCH_FADE_SCALE = 0.5;
-  const TRAIL_DIAMETER_TO_TWO_ROWS_RATIO = 0.61803;
   const JUST_INTONATION_CENTS = [
     0,
     111.73,
@@ -117,16 +117,15 @@
     '1', '♯1', '2', '♯2', '3', '4', '♯4', '5', '♯5', '6', '♯6', '7',
   ] as const;
 
-  const cellWidth = 20;
+  const cellWidth = SINGING_GRID.cellWidth;
   const showOctaveLabels = $derived(appState.state.showOctaveLabels);
   const showFrequencyLabels = $derived(appState.state.showFrequencyLabels);
   const showLegendLabels = true;
-  const showRightLegend = $derived(containerWidth >= 720);
+  const showRightLegend = $derived(containerWidth >= SINGING_GRID.rightLegendBreakpoint);
 
   // Keep legend sizing in sync with PitchGrid
-  const LEGEND_COLUMN_WIDTH_UNITS = 3.236;
-  const legendColumnWidth = $derived(cellWidth * LEGEND_COLUMN_WIDTH_UNITS);
-  const legendCanvasWidth = $derived(legendColumnWidth * 2);
+  const LEGEND_COLUMN_WIDTH_UNITS = SINGING_GRID.legendColumnWidthUnits;
+  const legendCanvasWidth = $derived(singingLegendWidth());
   const showLegends = $derived(showLegendLabels);
   const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
   const gridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
@@ -161,8 +160,8 @@
     calculateViewportWindow({
       containerHeight,
       fullRowData,
-      preferredCellHeight: 40,
-      minCellHeight: 20,
+      preferredCellHeight: SINGING_GRID.preferredCellHeight,
+      minCellHeight: SINGING_GRID.minCellHeight,
     })
   );
 
@@ -487,12 +486,7 @@
   const trailConfig = $derived<PitchTrailConfig>({
     timeWindowMs: Infinity,
     pixelsPerSecond: 200,
-    // Two semitone rows span one cellHeight; the configured ratio describes diameter.
-    circleRadius:
-      ((viewportWindow.cellHeight * TRAIL_DIAMETER_TO_TWO_ROWS_RATIO) / 2)
-      * appState.state.micTrailSizeScale,
-    // Adjacent semitone rows are spaced at half cellHeight; this diameter spans two rows.
-    indicatorRadius: viewportWindow.cellHeight / 2,
+    ...singingPitchSizes(viewportWindow.cellHeight, appState.state.micTrailSizeScale),
     proximityThreshold: 35,
     maxConnections: 0,
     connectorLineWidth: 2.5,
@@ -1761,8 +1755,9 @@
     {showHorizontalGridLines}
     extendHorizontalGridLinesBehindLegend={true}
     {horizontalGridReferencePitchClass}
-    horizontalGridReferenceLineColor="rgba(255, 0, 0, 0.9)"
-    judgmentLineColor="#adb5bd"
+    horizontalGridReferenceLineColor={SINGING_GRID.referenceLineColor}
+    judgmentLineColor={SINGING_GRID.judgmentLineColor}
+    judgmentLineWidth={singingJudgmentLineWidth(viewportWindow.cellHeight)}
       targetNoteStyle={appState.state.noteType}
       beatIntervalMs={gridBeatIntervalMs}
       measureIntervalMs={gridMeasureIntervalMs}
