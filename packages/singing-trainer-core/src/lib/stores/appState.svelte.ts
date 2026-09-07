@@ -100,6 +100,8 @@ export interface AppState {
   overdubMicTrailColorMode: MicTrailColorMode;
   judgementLineCircleRadiusPx: number;
   micTrailSizeScale: number;
+  micTrailOpacity: number;
+  connectedMicTrailEnabled: boolean;
 }
 
 const MIN_LYRIC_LABEL_SCALE = 0.5;
@@ -122,7 +124,7 @@ const DEFAULT_STATE: AppState = {
   showOctaveLabels: true,
   pitchTuningMode: 'equal',
   pitchHighlightEnabled: true,
-  yAxisRange: { minMidi: 54, maxMidi: 80 }, // Six semitones below to 20 above C4
+  yAxisRange: { minMidi: 42, maxMidi: 80 }, // Keyboard shortcuts span eighteen below to twenty above C4
   drone: {
     isPlaying: false,
     octave: 3,
@@ -150,6 +152,8 @@ const DEFAULT_STATE: AppState = {
   overdubMicTrailColorMode: 'rainbow',
   judgementLineCircleRadiusPx: 12,
   micTrailSizeScale: 1,
+  micTrailOpacity: 0.7,
+  connectedMicTrailEnabled: false,
 };
 
 function createAppState() {
@@ -368,6 +372,15 @@ function createAppState() {
     setMicTrailSizeScale(scale: number) {
       if (!Number.isFinite(scale)) return;
       state.micTrailSizeScale = Math.max(0.5, Math.min(2, Math.round(scale * 20) / 20));
+    },
+
+    setMicTrailOpacity(opacity: number) {
+      if (!Number.isFinite(opacity)) return;
+      state.micTrailOpacity = Math.max(0.1, Math.min(1, Math.round(opacity * 20) / 20));
+    },
+
+    setConnectedMicTrailEnabled(enabled: boolean) {
+      state.connectedMicTrailEnabled = Boolean(enabled);
     },
 
     setYAxisRange(range: YAxisRange) {

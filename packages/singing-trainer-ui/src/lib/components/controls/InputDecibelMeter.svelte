@@ -4,7 +4,10 @@
   const METER_MIN_DB = -60;
   const METER_MAX_DB = 0;
 
-  const inputLevelDb = $derived(pitchState.state.inputLevelDb);
+  let {
+    inputLevelDb = pitchState.state.inputLevelDb,
+    label = 'Microphone input level',
+  }: { inputLevelDb?: number | null; label?: string } = $props();
 
   const normalizedLevel = $derived.by(() => {
     if (inputLevelDb === null) return 0;
@@ -19,7 +22,7 @@
   <div
     class="meter-track"
     role="meter"
-    aria-label="Microphone input level"
+    aria-label={label}
     aria-valuemin={METER_MIN_DB}
     aria-valuemax={METER_MAX_DB}
     aria-valuenow={inputLevelDb ?? METER_MIN_DB}

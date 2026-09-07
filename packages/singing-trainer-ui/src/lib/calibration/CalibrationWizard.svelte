@@ -8,8 +8,8 @@
   } from '@mlt/singing-trainer-core/calibration/types.js';
   import {
     collectPitchSamples,
-    type CalibrationPitchSample,
   } from '@mlt/singing-trainer-core/services/pitchDetection.js';
+  import InputDecibelMeter from '../components/controls/InputDecibelMeter.svelte';
 
   interface Props {
     onComplete: () => void;
@@ -26,7 +26,7 @@
   let isRecording = $state(false);
   let elapsedMs = $state(0);
   let sampleCount = $state(0);
-  let livePitch = $state<string | null>(null);
+  let calibrationInputLevelDb = $state<number | null>(null);
   let hasDetectedSpeech = $state(false);
   let silenceElapsedMs = $state(0);
   let recordingError = $state<string | null>(null);
@@ -40,17 +40,9 @@
     return getPitchByMidi(Math.round(adjustedMidi))?.pitch
       ?? speakingPitchStore.adjustedNoteName;
   })());
-  const previewFrequency = $derived(
-    adjustedMidi === null ? null : 440 * Math.pow(2, (adjustedMidi - 69) / 12)
-  );
-  const accuracyPercent = $derived(
+  const confidencePercent = $derived(
     Math.round((analysisResult?.confidenceScore ?? 0) * 100)
   );
-  const canStop = $derived(isRecording && elapsedMs >= MIN_RECORDING_MS);
-  const silenceProgress = $derived(
-    hasDetectedSpeech ? Math.min(100, (silenceElapsedMs / AUTO_STOP_SILENCE_MS) * 100) : 0
-  );
-  const elapsedSeconds = $derived((elapsedMs / 1000).toFixed(1));
 
   onMount(() => {
     speakingPitchStore.start();
@@ -61,11 +53,6 @@
     recorder?.abort();
   });
 
-  function formatLivePitch(sample: CalibrationPitchSample): string {
-    const midi = Math.round(sample.midi);
-    return getPitchByMidi(midi)?.pitch ?? `${midi}`;
-  }
-
   async function startRecording(): Promise<void> {
     if (isRecording) return;
 
@@ -75,7 +62,7 @@
     recordingError = null;
     elapsedMs = 0;
     sampleCount = 0;
-    livePitch = null;
+    calibrationInputLevelDb = null;
     hasDetectedSpeech = false;
     silenceElapsedMs = 0;
     discardRecording = false;
@@ -90,7 +77,7 @@
     try {
       const samples = await collectPitchSamples(
         DEFAULT_CALIBRATION_CONFIG.recordingDurationMs,
-        (nextElapsedMs, currentSample) => {
+        (nextElapsedMs, currentSample, inputLevelDb) => {
           if (currentSample) {
             collectedCount += 1;
             heardVoice = true;
@@ -108,9 +95,9 @@
           ) {
             elapsedMs = nextElapsedMs;
             sampleCount = collectedCount;
+            calibrationInputLevelDb = inputLevelDb;
             hasDetectedSpeech = true;
             silenceElapsedMs = AUTO_STOP_SILENCE_MS;
-            livePitch = null;
             recorder?.abort();
             return;
           }
@@ -119,9 +106,9 @@
           lastUiUpdateAt = nextElapsedMs;
           elapsedMs = nextElapsedMs;
           sampleCount = collectedCount;
+          calibrationInputLevelDb = inputLevelDb;
           hasDetectedSpeech = heardVoice;
           silenceElapsedMs = nextSilenceElapsedMs;
-          livePitch = currentSample ? formatLivePitch(currentSample) : null;
         },
         recorder.signal,
       );
@@ -130,7 +117,6 @@
 
       elapsedMs = Math.min(elapsedMs, DEFAULT_CALIBRATION_CONFIG.recordingDurationMs);
       sampleCount = samples.length;
-      livePitch = null;
       speakingPitchStore.completeRecording(samples);
       speakingPitchStore.nextStep();
     } catch (error) {
@@ -140,12 +126,12 @@
       speakingPitchStore.reset();
     } finally {
       isRecording = false;
+      calibrationInputLevelDb = null;
       recorder = null;
     }
   }
 
   function stopRecording(): void {
-    if (!canStop) return;
     recorder?.abort();
   }
 
@@ -154,14 +140,10 @@
     speakingPitchStore.reset();
     elapsedMs = 0;
     sampleCount = 0;
-    livePitch = null;
+    calibrationInputLevelDb = null;
     hasDetectedSpeech = false;
     silenceElapsedMs = 0;
     recordingError = null;
-  }
-
-  function adjustPreview(semitones: number): void {
-    speakingPitchStore.adjustSemitones(semitones);
   }
 
   function saveCalibration(): void {
@@ -192,72 +174,27 @@
 
     <header class="panel-header">
       <h2 id="calibration-title">Calibrate Speaking Pitch</h2>
-      <p>Read the limerick once, very slowly and in your natural speaking voice.</p>
     </header>
 
-    <div class="sample-card" class:recording={isRecording}>
-      <span class="sample-label">Speaking sample</span>
-      <blockquote>
-        {#each sampleLines as line}
-          <span>{line}</span>
-        {/each}
-      </blockquote>
-
-      {#if isRecording}
-        <div class="guidance-popup guidance-popup--phrase" role="status">
-          Read one line at a time. Leave a small pause between lines and keep your voice relaxed.
-        </div>
-      {/if}
-    </div>
-
-    <div class="recording-track" aria-label="Recording progress">
-      <div class="track-status">
-        <span class="recording-state" class:active={isRecording}>
-          <span class="recording-dot" aria-hidden="true"></span>
-          {isRecording ? 'Recording' : analysisResult ? 'Recorded' : 'Ready'}
-        </span>
-        <span class="track-time">{elapsedSeconds}s</span>
-      </div>
-      <div
-        class="track-bar"
-        role="progressbar"
-        aria-label="Silence auto-stop progress"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        aria-valuenow={Math.round(silenceProgress)}
-      >
-        <div class="track-fill" style:width={`${silenceProgress}%`}></div>
-      </div>
-      <div class="track-feedback">
-        <span>{sampleCount} voiced samples</span>
-        {#if livePitch}<span>Hearing {livePitch}</span>{/if}
-        {#if isRecording && hasDetectedSpeech && !livePitch}
-          <span>Stopping after quiet&hellip;</span>
-        {/if}
-      </div>
-
-      {#if !analysisResult}
+    {#if !analysisResult}
+      <div class="recording-track" aria-label="Recording controls and progress">
         <div class="record-controls">
+          <div class="guidance-popup" role="status">
+            Start recording, then, very slowly, read the passage below.
+          </div>
           {#if !isRecording}
             <div class="guided-control">
-              <div class="guidance-popup" role="status">
-                Press Start Recording, then begin with the first line. It will stop after two seconds of quiet.
-              </div>
               <button class="record-button record-button--start" type="button" onclick={() => void startRecording()}>
                 <span class="record-icon" aria-hidden="true"></span>
-                Start Recording
+                Record
               </button>
             </div>
           {:else}
             <div class="guided-control">
-              <div class="guidance-popup" role="status">
-                {canStop ? 'Finish the final line, then stay quiet for two seconds or press Stop Recording.' : 'Keep reading slowly—automatic stop activates after your voice is heard.'}
-              </div>
               <button
                 class="record-button record-button--stop"
                 type="button"
                 onclick={stopRecording}
-                disabled={!canStop}
               >
                 <span class="stop-icon" aria-hidden="true"></span>
                 Stop Recording
@@ -265,7 +202,28 @@
             </div>
           {/if}
         </div>
-      {/if}
+
+        {#if isRecording}
+          <div class="track-meter">
+            <InputDecibelMeter
+              inputLevelDb={calibrationInputLevelDb}
+              label="Calibration microphone input level"
+            />
+            <div class="track-feedback">
+              <span>{sampleCount} samples</span>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <div class="sample-card" class:recording={isRecording}>
+      <blockquote>
+        {#each sampleLines as line}
+          <span>{line}</span>
+        {/each}
+      </blockquote>
+
     </div>
 
     {#if recordingError || analysisResult?.error}
@@ -275,37 +233,24 @@
       </div>
     {/if}
 
-    {#if analysisResult?.success && previewPitch && previewFrequency !== null}
+    {#if analysisResult?.success && previewPitch}
       <section class="preview-panel" aria-labelledby="preview-title">
-        <div class="preview-heading">
-          <div>
-            <span class="preview-label">Preview calculated speaking pitch</span>
-            <h3 id="preview-title">{previewPitch}</h3>
-            <span class="preview-frequency">{previewFrequency.toFixed(1)} Hz</span>
-          </div>
-          <div class="accuracy" aria-label="Accuracy {accuracyPercent}%">
-            <strong>{accuracyPercent}%</strong>
-            <span>accuracy</span>
+        <h3 class="preview-title" id="preview-title">Calculated Speaking Pitch</h3>
+        <div class="preview-summary">
+          <strong class="preview-pitch">{previewPitch}</strong>
+          <div class="accuracy" aria-label="Confidence {confidencePercent}%">
+            <strong>{confidencePercent}%</strong>
+            <span>confidence</span>
           </div>
         </div>
 
         <div class="accuracy-track" aria-hidden="true">
-          <div class="accuracy-fill" style:width={`${accuracyPercent}%`}></div>
-        </div>
-
-        <div class="guidance-popup guidance-popup--result" role="status">
-          This is a preview. Use − or + if another nearby note feels more representative, then save it.
-        </div>
-
-        <div class="preview-adjustment" aria-label="Adjust calculated speaking pitch">
-          <button type="button" onclick={() => adjustPreview(-1)} aria-label="Lower speaking pitch one semitone">&minus;</button>
-          <span>{speakingPitchStore.manualAdjustment === 0 ? 'No adjustment' : `${speakingPitchStore.manualAdjustment > 0 ? '+' : ''}${speakingPitchStore.manualAdjustment} semitones`}</span>
-          <button type="button" onclick={() => adjustPreview(1)} aria-label="Raise speaking pitch one semitone">+</button>
+          <div class="accuracy-fill" style:width={`${confidencePercent}%`}></div>
         </div>
 
         <div class="result-actions">
           <button class="secondary-button" type="button" onclick={retryRecording}>Record Again</button>
-          <button class="primary-button" type="button" onclick={saveCalibration}>Save Speaking Pitch</button>
+          <button class="primary-button" type="button" onclick={saveCalibration}>Continue</button>
         </div>
       </section>
     {:else if analysisResult?.error}
@@ -376,12 +321,6 @@
     font-size: var(--font-size-xl, 1.5rem);
   }
 
-  .panel-header p {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-  }
-
   .sample-card,
   .recording-track,
   .preview-panel {
@@ -400,22 +339,13 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
   }
 
-  .sample-label,
-  .preview-label {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
   blockquote {
     display: flex;
     flex-direction: column;
     gap: 3px;
     margin: 8px 0 0;
     color: var(--color-text);
-    font-size: 1rem;
+    font-size: 1.2rem;
     font-style: italic;
     line-height: 1.45;
     text-align: center;
@@ -425,10 +355,8 @@
     padding: 10px 12px;
   }
 
-  .track-status,
   .track-feedback,
-  .preview-heading,
-  .preview-adjustment,
+  .preview-summary,
   .result-actions {
     display: flex;
     align-items: center;
@@ -436,42 +364,12 @@
     gap: 10px;
   }
 
-  .recording-state {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--font-size-sm);
-    font-weight: 700;
-  }
-
-  .recording-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--color-text-muted);
-  }
-
-  .recording-state.active {
-    color: var(--color-error, #d74646);
-  }
-
-  .recording-state.active .recording-dot {
-    background: currentColor;
-    animation: pulse 1s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    50% { opacity: 0.4; transform: scale(1.25); }
-  }
-
-  .track-time,
   .track-feedback {
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
   }
 
-  .track-bar,
   .accuracy-track {
     height: 7px;
     margin: 8px 0;
@@ -480,7 +378,6 @@
     background: var(--color-control);
   }
 
-  .track-fill,
   .accuracy-fill {
     height: 100%;
     border-radius: inherit;
@@ -515,16 +412,6 @@
     transform: translateX(-50%) rotate(45deg);
   }
 
-  .guidance-popup--phrase,
-  .guidance-popup--result {
-    margin-top: 10px;
-  }
-
-  .guidance-popup--phrase::after,
-  .guidance-popup--result::after {
-    display: none;
-  }
-
   @keyframes guidance-in {
     from { opacity: 0; transform: translateY(3px); }
   }
@@ -551,13 +438,16 @@
   }
 
   .record-controls {
+    margin: 0;
+  }
+
+  .track-meter {
     margin-top: 10px;
   }
 
   .record-button,
   .primary-button,
-  .secondary-button,
-  .preview-adjustment button {
+  .secondary-button {
     border: 1px solid var(--color-border-strong);
     border-radius: 9px;
     background: var(--color-control);
@@ -586,11 +476,6 @@
     color: var(--color-error, #d74646);
   }
 
-  .record-button:disabled {
-    cursor: wait;
-    opacity: 0.5;
-  }
-
   .record-icon {
     width: 11px;
     height: 11px;
@@ -612,23 +497,26 @@
     padding: 14px;
   }
 
-  .preview-heading h3 {
-    display: inline;
-    margin: 0 8px 0 0;
-    color: var(--color-secondary);
-    font-size: 1.8rem;
+  .preview-title {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--font-size-base);
+    text-align: center;
   }
 
-  .preview-frequency {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    font-variant-numeric: tabular-nums;
+  .preview-summary {
+    justify-content: center;
+  }
+
+  .preview-pitch {
+    color: var(--color-secondary);
+    font-size: 1.8rem;
   }
 
   .accuracy {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
   }
 
   .accuracy strong {
@@ -647,24 +535,6 @@
     transition-duration: 0.25s;
   }
 
-  .preview-adjustment {
-    justify-content: center;
-  }
-
-  .preview-adjustment button {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    font-size: 1.1rem;
-  }
-
-  .preview-adjustment span {
-    min-width: 110px;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    text-align: center;
-  }
-
   .result-actions {
     justify-content: center;
   }
@@ -680,11 +550,7 @@
     }
 
     blockquote {
-      font-size: 0.9rem;
-    }
-
-    .preview-heading {
-      align-items: flex-start;
+      font-size: 1.05rem;
     }
 
     .result-actions {

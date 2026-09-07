@@ -119,7 +119,7 @@
   .field-input {
     width: 80px;
     padding: var(--spacing-xs) var(--spacing-sm);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     background-color: var(--color-bg);
     color: var(--color-text);
@@ -148,7 +148,7 @@
   .toggle-slider {
     width: 40px;
     height: 22px;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--color-border);
     border-radius: 11px;
     position: relative;
     transition: background-color 0.2s ease;
@@ -169,6 +169,11 @@
 
   .field-checkbox:checked + .toggle-slider {
     background-color: var(--color-primary);
+  }
+
+  .field-checkbox:focus-visible + .toggle-slider {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   .field-checkbox:checked + .toggle-slider::after {

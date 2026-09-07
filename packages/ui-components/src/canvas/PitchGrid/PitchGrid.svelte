@@ -815,8 +815,6 @@
     const dpr = window.devicePixelRatio || 1;
     mainCanvas.width = gridWidth * dpr;
     mainCanvas.height = viewport.containerHeight * dpr;
-    mainCanvas.style.width = `${gridWidth}px`;
-    mainCanvas.style.height = `${viewport.containerHeight}px`;
     ctx.scale(dpr, dpr);
 
     // Set up legend canvases if they exist
@@ -825,8 +823,6 @@
       if (leftCtx) {
         legendLeftCanvas.width = legendCanvasWidth * dpr;
         legendLeftCanvas.height = viewport.containerHeight * dpr;
-        legendLeftCanvas.style.width = `${legendCanvasWidth}px`;
-        legendLeftCanvas.style.height = `${viewport.containerHeight}px`;
         leftCtx.scale(dpr, dpr);
       }
     }
@@ -836,8 +832,6 @@
       if (rightCtx) {
         legendRightCanvas.width = legendCanvasWidth * dpr;
         legendRightCanvas.height = viewport.containerHeight * dpr;
-        legendRightCanvas.style.width = `${legendCanvasWidth}px`;
-        legendRightCanvas.style.height = `${viewport.containerHeight}px`;
         rightCtx.scale(dpr, dpr);
       }
     }
@@ -910,10 +904,13 @@
     }
   });
 
-  // Re-setup canvas when viewport dimensions change
+  // Resize backing buffers when dimensions or the visible legend elements change.
   $effect(() => {
-    void viewport.containerWidth;
+    void gridWidth;
+    void legendCanvasWidth;
     void viewport.containerHeight;
+    void legendLeftCanvas;
+    void legendRightCanvas;
 
     if (ctx && mainCanvas) {
       setupCanvas();
@@ -926,18 +923,24 @@
     <canvas
       bind:this={legendLeftCanvas}
       class="pitch-grid-legend pitch-grid-legend--left"
+      style:width="{legendCanvasWidth}px"
+      style:height="{viewport.containerHeight}px"
     ></canvas>
   {/if}
 
   <canvas
     bind:this={mainCanvas}
     class="pitch-grid-canvas"
+    style:width="{gridWidth}px"
+    style:height="{viewport.containerHeight}px"
   ></canvas>
 
   {#if showLegends && showRightLegend}
     <canvas
       bind:this={legendRightCanvas}
       class="pitch-grid-legend pitch-grid-legend--right"
+      style:width="{legendCanvasWidth}px"
+      style:height="{viewport.containerHeight}px"
     ></canvas>
   {/if}
 </div>
@@ -950,14 +953,11 @@
     position: relative;
   }
 
-  .pitch-grid-canvas {
-    flex: 1;
-    display: block;
-  }
-
+  /* Match the renderer's pixel geometry, including overlays in consumers. */
+  .pitch-grid-canvas,
   .pitch-grid-legend {
-    width: 60px;
-    flex-shrink: 0;
+    flex: none;
+    display: block;
   }
 
 </style>

@@ -5,7 +5,7 @@
    * Displays lesson metadata and expands to show settings when selected.
    */
 
-  import type { AnyLessonTemplate, RegistryEntry } from '@mlt/lesson-templates';
+  import type { RegistryEntry } from '@mlt/lesson-templates';
   import SettingsRenderer from './SettingsRenderer.svelte';
 
   interface Props {
@@ -16,6 +16,7 @@
     onsettingchange: (key: string, value: number | boolean) => void;
     onstart: () => void;
     showSettings?: boolean;
+    startLabel?: string;
   }
 
   let {
@@ -26,6 +27,7 @@
     onsettingchange,
     onstart,
     showSettings = true,
+    startLabel = 'Start Lesson',
   }: Props = $props();
 
   const template = $derived(entry.template);
@@ -37,6 +39,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       if (isSelected) {
@@ -66,22 +69,6 @@
   <!-- Always visible header -->
   <div class="card-header">
     <h4 class="card-title">{template.name}</h4>
-    <p class="card-description">{template.description}</p>
-
-    <div class="card-metadata">
-      <span class="metadata-item" class:uses-pitch={entry.requiresSpeakingPitch}>
-        <span class="metadata-icon">🎙️</span>
-        Speaking Pitch: {entry.requiresSpeakingPitch ? 'Yes' : 'No'}
-      </span>
-      <span class="metadata-item">
-        <span class="metadata-icon">📊</span>
-        {entry.difficultyLabel}
-      </span>
-      <span class="metadata-item">
-        <span class="metadata-icon">⏱️</span>
-        {template.durationEstimate}
-      </span>
-    </div>
   </div>
 
   <!-- Expanded content when selected -->
@@ -99,7 +86,7 @@
       {/if}
 
       <button class="start-btn" onclick={handleStartClick}>
-        Start Lesson
+        {startLabel}
       </button>
     </div>
   {/if}
@@ -107,8 +94,8 @@
 
 <style>
   .exercise-card {
-    background-color: var(--color-surface);
-    border: 2px solid transparent;
+    background-color: var(--color-panel);
+    border: 2px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     cursor: pointer;
@@ -116,8 +103,8 @@
   }
 
   .exercise-card:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--color-control);
+    border-color: var(--color-border);
   }
 
   .exercise-card:focus {
@@ -143,45 +130,11 @@
     margin: 0;
   }
 
-  .card-description {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    margin: 0;
-    line-height: 1.4;
-  }
-
-  .card-metadata {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-    margin-top: var(--spacing-xs);
-  }
-
-  .metadata-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    background-color: rgba(255, 255, 255, 0.05);
-    padding: 2px var(--spacing-xs);
-    border-radius: var(--radius-sm);
-  }
-
-  .metadata-item.uses-pitch {
-    background-color: rgba(var(--color-primary-rgb, 74, 123, 200), 0.2);
-    color: var(--color-primary);
-  }
-
-  .metadata-icon {
-    font-size: var(--font-size-xs);
-  }
-
   /* Expanded content */
   .card-expanded {
     margin-top: var(--spacing-md);
     padding-top: var(--spacing-md);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);

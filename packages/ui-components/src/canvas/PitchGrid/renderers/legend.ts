@@ -8,6 +8,7 @@
 import type { PitchRowData, AccidentalMode } from '@mlt/types';
 import type { CoordinateUtils, LegendHighlightConfig, LegendHighlightEntry } from '../types.js';
 import { drawHorizontalLines } from './gridLines.js';
+import { getPitchRowBounds } from './coordinateUtils.js';
 
 // ============================================================================
 // Types
@@ -114,48 +115,6 @@ function getCanvasPixelRatio(canvas: HTMLCanvasElement): number {
   // Check if canvas has been scaled for HiDPI
   const transform = ctx.getTransform();
   return transform.a || window.devicePixelRatio || 1;
-}
-
-/**
- * Resolve a legend cell from the midpoints between neighbouring cells in the
- * same staggered A/B column. This keeps the legend contiguous when row centres
- * use non-equal spacing, such as Singing Trainer's just-intonation layout.
- */
-function getLegendCellBounds(
-  rowIndex: number,
-  column: 'A' | 'B',
-  fullRowData: PitchRowData[],
-  coords: CoordinateUtils,
-  fallbackHeight: number,
-): { top: number; bottom: number } {
-  const center = coords.getRowY(rowIndex);
-  let previousCenter: number | null = null;
-  let nextCenter: number | null = null;
-
-  for (let index = rowIndex - 1; index >= 0; index--) {
-    const candidate = fullRowData[index];
-    if (candidate && !candidate.isBoundary && candidate.column === column) {
-      previousCenter = coords.getRowY(index);
-      break;
-    }
-  }
-
-  for (let index = rowIndex + 1; index < fullRowData.length; index++) {
-    const candidate = fullRowData[index];
-    if (candidate && !candidate.isBoundary && candidate.column === column) {
-      nextCenter = coords.getRowY(index);
-      break;
-    }
-  }
-
-  const top = previousCenter === null
-    ? center - ((nextCenter === null ? fallbackHeight : nextCenter - center) / 2)
-    : (previousCenter + center) / 2;
-  const bottom = nextCenter === null
-    ? center + ((previousCenter === null ? fallbackHeight : center - previousCenter) / 2)
-    : (center + nextCenter) / 2;
-
-  return { top, bottom };
 }
 
 /**
@@ -313,9 +272,8 @@ export function drawLegend(
       if (row.column !== colLabel) continue;
 
       const y = coords.getRowY(rowIndex);
-      const bounds = getLegendCellBounds(
+      const bounds = getPitchRowBounds(
         rowIndex,
-        colLabel,
         fullRowData,
         coords,
         cellHeight,

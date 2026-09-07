@@ -89,6 +89,8 @@ export interface PitchHistoryPoint {
   time: number;
   /** Detection confidence (0-1) */
   clarity: number;
+  /** Start a new rendered segment before this point */
+  move?: boolean;
 }
 
 /**
@@ -239,8 +241,10 @@ export interface PitchTrailConfig {
   tonicPitchClass?: number;
   /** Minimum clarity threshold to display point (default: 0.5) */
   clarityThreshold?: number;
-  /** Maximum opacity for trail points (default: 0.9) */
+  /** Maximum combined opacity for the composited trail (default: 0.9) */
   maxOpacity?: number;
+  /** Draw a connected ribbon and centerline instead of sample circles (default: false) */
+  connectedRibbon?: boolean;
 }
 
 /**

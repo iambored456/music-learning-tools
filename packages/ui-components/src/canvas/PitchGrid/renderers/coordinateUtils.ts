@@ -354,3 +354,26 @@ export function frequencyToMidi(frequency: number): number {
 export function midiToFrequency(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
+
+/**
+ * A staggered legend cell spans the pitch rows immediately above and below it.
+ * Resolve those edges through the tuned coordinates: averaging the two same-column
+ * centres would put the seam between pitches when semitone spacing is unequal.
+ */
+export function getPitchRowBounds(
+  rowIndex: number,
+  fullRowData: PitchRowData[],
+  coords: CoordinateUtils,
+  fallbackHeight: number,
+): { top: number; bottom: number } {
+  const center = coords.getRowY(rowIndex);
+  const above = rowIndex > 0 ? coords.getRowY(rowIndex - 1) : null;
+  const below = rowIndex + 1 < fullRowData.length ? coords.getRowY(rowIndex + 1) : null;
+  // At the gamut limits, extrapolate the nearest interval rather than clamping
+  // the cell edge to its own centre. A single-row gamut retains its normal height.
+  return {
+    top: above ?? center - (below === null ? fallbackHeight / 2 : below - center),
+    bottom: below ?? center + (above === null ? fallbackHeight / 2 : center - above),
+  };
+}
+

@@ -6,7 +6,7 @@
 
 import { PitchDetector } from 'pitchy';
 import { CENTS_PER_SEMITONE, midiToPitchClass } from '@mlt/pitch-utils';
-import { pitchState, type DetectedPitch } from '../stores/pitchState.svelte.js';
+import { pitchState, secondPitchState, duetState, type DetectedPitch } from '../stores/pitchState.svelte.js';
 import { highwayState } from '../stores/highwayState.svelte.js';
 import { referenceAudio } from './referenceAudio.js';
 
@@ -23,8 +23,6 @@ const CONFIG = {
   HIGHLIGHT_RAMP_DATA_POINTS: 5,
   MIN_VOLUME_DB: -60,
   DISPLAY_MIN_VOLUME_DB: -80,
-  PREFERRED_STREAM_PROBE_DURATION_MS: 220,
-  PREFERRED_STREAM_PROBE_STEP_MS: 16,
   PREFERRED_STREAM_MIN_PEAK: 0.000001,
 } as const;
 
@@ -32,26 +30,11 @@ const HIGHLIGHT_DEFAULT_SIZE = 1.0;
 const PREFERRED_INPUT_DEVICE_STORAGE_KEY = 'singingTrainer.preferredInputDeviceId';
 const RELAXED_MIC_GATES_STORAGE_KEY = 'singingTrainer.relaxedMicGatesEnabled';
 
-// Module state
-let detectionContext: AudioContext | null = null;
-let mediaStream: MediaStream | null = null;
-let sourceNode: MediaStreamAudioSourceNode | null = null;
-let analyserNode: AnalyserNode | null = null;
-let pullGainNode: GainNode | null = null;
-let waveformBuffer: Float32Array | null = null;
-let detector: ReturnType<typeof PitchDetector.forFloat32Array> | null = null;
-let animationFrameId: number | null = null;
-let isRunning = false;
-let startInFlight: Promise<void> | null = null;
-
-let activeTrack: MediaStreamTrack | null = null;
-let trackMuteListener: (() => void) | null = null;
-let trackUnmuteListener: (() => void) | null = null;
-let trackEndedListener: (() => void) | null = null;
-
+export type MicrophoneInput = 1 | 2;
 let preferredInputDeviceId: string | null = null;
+let secondInputDeviceId: string | null = null;
 let relaxedMicGatesEnabled = false;
-let highlightConsecutiveDataPoints = 0;
+let detectionGeneration = 0;
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -161,120 +144,32 @@ function calculatePeakAbs(waveform: Float32Array): number {
   return peak;
 }
 
+function getAnalysisWindowCenterOffsetMs(sampleCount: number, sampleRate: number): number {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) return 0;
+  return (sampleCount / sampleRate) * 500;
+}
+
 function stopStream(stream: MediaStream): void {
   for (const track of stream.getTracks()) {
     track.stop();
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
+async function getPreferredMicStream(input: MicrophoneInput): Promise<MediaStream> {
+  const deviceId = getPreferredInputDeviceId(input);
+  if (input === 2 && !deviceId) throw new Error('Choose a microphone for Input 2.');
+  // An explicit device must never silently fall back to the other singer's mic.
+  return navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: { ideal: 1 },
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      sampleRate: { ideal: 48000 },
+      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+    },
+    video: false,
   });
-}
-
-async function probeStreamPeak(stream: MediaStream): Promise<number> {
-  const probeContext = createDetectionAudioContext();
-  let probeSource: MediaStreamAudioSourceNode | null = null;
-  let probeAnalyser: AnalyserNode | null = null;
-  let probeGain: GainNode | null = null;
-  const probeBuffer = new Float32Array(CONFIG.FFT_SIZE) as Float32Array<ArrayBuffer>;
-
-  try {
-    if (probeContext.state !== 'running') {
-      await probeContext.resume();
-    }
-
-    probeSource = probeContext.createMediaStreamSource(stream);
-    probeAnalyser = probeContext.createAnalyser();
-    probeAnalyser.fftSize = CONFIG.FFT_SIZE;
-    probeAnalyser.smoothingTimeConstant = 0;
-    probeGain = probeContext.createGain();
-    probeGain.gain.value = 0.00001;
-
-    probeSource.connect(probeAnalyser);
-    probeAnalyser.connect(probeGain);
-    probeGain.connect(probeContext.destination);
-
-    let peakAbs = 0;
-    const deadline = performance.now() + CONFIG.PREFERRED_STREAM_PROBE_DURATION_MS;
-
-    while (performance.now() < deadline) {
-      probeAnalyser.getFloatTimeDomainData(probeBuffer);
-      peakAbs = Math.max(peakAbs, calculatePeakAbs(probeBuffer));
-      await sleep(CONFIG.PREFERRED_STREAM_PROBE_STEP_MS);
-    }
-
-    return peakAbs;
-  } finally {
-    if (probeSource) {
-      try {
-        probeSource.disconnect();
-      } catch {
-        // Ignore disconnect cleanup errors.
-      }
-    }
-
-    if (probeAnalyser) {
-      try {
-        probeAnalyser.disconnect();
-      } catch {
-        // Ignore disconnect cleanup errors.
-      }
-    }
-
-    if (probeGain) {
-      try {
-        probeGain.disconnect();
-      } catch {
-        // Ignore disconnect cleanup errors.
-      }
-    }
-
-    void probeContext.close().catch(() => {
-      // Ignore close cleanup errors.
-    });
-  }
-}
-
-async function getPreferredMicStream(): Promise<MediaStream> {
-  const strictBase: MediaTrackConstraints = {
-    channelCount: { ideal: 1 },
-    echoCancellation: false,
-    noiseSuppression: false,
-    autoGainControl: false,
-    sampleRate: { ideal: 48000 },
-  };
-
-  const selectedDeviceId = preferredInputDeviceId;
-  if (selectedDeviceId) {
-    try {
-      const selectedStream = await navigator.mediaDevices.getUserMedia({
-        audio: { ...strictBase, deviceId: { exact: selectedDeviceId } },
-        video: false,
-      });
-
-      const selectedPeak = await probeStreamPeak(selectedStream);
-      if (selectedPeak >= CONFIG.PREFERRED_STREAM_MIN_PEAK) {
-        return selectedStream;
-      }
-
-      stopStream(selectedStream);
-      setPreferredInputDeviceId(null);
-      console.warn('[PitchDetection] Preferred input device stream is silent; falling back to system default.');
-    } catch {
-      setPreferredInputDeviceId(null);
-    }
-  }
-
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: { ...strictBase, deviceId: { ideal: 'default' } },
-      video: false,
-    });
-  } catch {
-    return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  }
 }
 
 export async function listAudioInputDevices(): Promise<AudioInputDeviceInfo[]> {
@@ -288,15 +183,19 @@ export async function listAudioInputDevices(): Promise<AudioInputDeviceInfo[]> {
     }));
 }
 
-export function getPreferredInputDeviceId(): string | null {
-  return preferredInputDeviceId;
+export function getPreferredInputDeviceId(input: MicrophoneInput = 1): string | null {
+  return input === 1 ? preferredInputDeviceId : secondInputDeviceId;
 }
 
 export function getRelaxedMicGatesEnabled(): boolean {
   return relaxedMicGatesEnabled;
 }
 
-export function setPreferredInputDeviceId(deviceId: string | null): void {
+export function setPreferredInputDeviceId(deviceId: string | null, input: MicrophoneInput = 1): void {
+  if (input === 2) {
+    secondInputDeviceId = deviceId?.trim() || null;
+    return;
+  }
   preferredInputDeviceId = deviceId && deviceId.trim().length > 0 ? deviceId : null;
   persistPreferredInputDeviceId(preferredInputDeviceId);
 }
@@ -306,297 +205,382 @@ export function setRelaxedMicGatesEnabled(enabled: boolean): void {
   persistRelaxedMicGatesEnabled(relaxedMicGatesEnabled);
 }
 
-function attachTrackListeners(track: MediaStreamTrack | null): void {
-  activeTrack = track;
-  if (!activeTrack) return;
+const primaryPitchState = pitchState;
 
-  trackMuteListener = () => {
-    console.warn('[PitchDetection] input track muted');
-  };
-  trackUnmuteListener = () => {
-    // no-op
-  };
-  trackEndedListener = () => {
-    console.warn('[PitchDetection] input track ended');
-  };
+function createInputCapture(input: MicrophoneInput, pitchState: typeof primaryPitchState) {
+  // Each microphone owns its stream, analyser, detector, and cleanup lifecycle.
+  let detectionContext: AudioContext | null = null;
+  let mediaStream: MediaStream | null = null;
+  let sourceNode: MediaStreamAudioSourceNode | null = null;
+  let analyserNode: AnalyserNode | null = null;
+  let pullGainNode: GainNode | null = null;
+  let waveformBuffer: Float32Array | null = null;
+  let detector: ReturnType<typeof PitchDetector.forFloat32Array> | null = null;
+  let animationFrameId: number | null = null;
+  let isRunning = false;
+  let startInFlight: Promise<void> | null = null;
 
-  activeTrack.addEventListener('mute', trackMuteListener);
-  activeTrack.addEventListener('unmute', trackUnmuteListener);
-  activeTrack.addEventListener('ended', trackEndedListener);
-}
+  let activeTrack: MediaStreamTrack | null = null;
+  let trackMuteListener: (() => void) | null = null;
+  let trackUnmuteListener: (() => void) | null = null;
+  let trackEndedListener: (() => void) | null = null;
 
-function detachTrackListeners(): void {
-  if (!activeTrack) return;
+  let highlightConsecutiveDataPoints = 0;
 
-  if (trackMuteListener) {
-    activeTrack.removeEventListener('mute', trackMuteListener);
-    trackMuteListener = null;
-  }
+  let captureGeneration = 0;
 
-  if (trackUnmuteListener) {
-    activeTrack.removeEventListener('unmute', trackUnmuteListener);
-    trackUnmuteListener = null;
-  }
+  function attachTrackListeners(track: MediaStreamTrack | null): void {
+    activeTrack = track;
+    if (!activeTrack) return;
 
-  if (trackEndedListener) {
-    activeTrack.removeEventListener('ended', trackEndedListener);
-    trackEndedListener = null;
-  }
-
-  activeTrack = null;
-}
-
-function animationLoop(): void {
-  if (!isRunning || !analyserNode || !detector || !waveformBuffer) {
-    animationFrameId = null;
-    return;
-  }
-
-  analyserNode.getFloatTimeDomainData(waveformBuffer as Float32Array<ArrayBuffer>);
-
-  const amplitudeDb = calculateRmsDb(waveformBuffer);
-  const peakAbs = calculatePeakAbs(waveformBuffer);
-  pitchState.setInputLevelDb(amplitudeDb);
-  const sampleRate = detectionContext?.sampleRate ?? 48000;
-  const [pitch, clarity] = detector.findPitch(waveformBuffer, sampleRate);
-  const effectiveClarity = relaxedMicGatesEnabled ? 1 : clarity;
-
-  const isPitchInRange =
-    pitch !== null &&
-    pitch > CONFIG.MIN_PITCH_HZ &&
-    pitch < CONFIG.MAX_PITCH_HZ;
-
-  const hasDisplayPitch =
-    isPitchInRange &&
-    (
-      relaxedMicGatesEnabled ||
-      (clarity > CONFIG.DISPLAY_CLARITY_THRESHOLD && amplitudeDb > CONFIG.DISPLAY_MIN_VOLUME_DB)
-    );
-
-  const hasScoringPitch =
-    hasDisplayPitch &&
-    effectiveClarity > CONFIG.SCORING_CLARITY_THRESHOLD &&
-    !referenceAudio.isPlaying;
-
-  if (hasDisplayPitch) {
-    const midi = frequencyToMidi(pitch);
-    const detectedPitch: DetectedPitch = {
-      frequency: pitch,
-      midi,
-      clarity: effectiveClarity,
-      pitchClass: Math.round(midi) % 12,
+    trackMuteListener = () => {
+      console.warn('[PitchDetection] input track muted');
+    };
+    trackUnmuteListener = () => {
+      // no-op
+    };
+    trackEndedListener = () => {
+      stopDetection();
+      pitchState.setError(`Input ${input} disconnected. Reconnect it and select the microphone again.`);
     };
 
-    pitchState.setCurrentPitch(detectedPitch);
-    pitchState.addHistoryPoint({
-      frequency: pitch,
-      midi,
-      time: performance.now(),
-      clarity: effectiveClarity,
-    });
+    activeTrack.addEventListener('mute', trackMuteListener);
+    activeTrack.addEventListener('unmute', trackUnmuteListener);
+    activeTrack.addEventListener('ended', trackEndedListener);
+  }
 
-    if (hasScoringPitch) {
-      highwayState.recordPitchInput(
-        midi,
-        effectiveClarity,
-        relaxedMicGatesEnabled ? undefined : amplitudeDb,
+  function detachTrackListeners(): void {
+    if (!activeTrack) return;
+
+    if (trackMuteListener) {
+      activeTrack.removeEventListener('mute', trackMuteListener);
+      trackMuteListener = null;
+    }
+
+    if (trackUnmuteListener) {
+      activeTrack.removeEventListener('unmute', trackUnmuteListener);
+      trackUnmuteListener = null;
+    }
+
+    if (trackEndedListener) {
+      activeTrack.removeEventListener('ended', trackEndedListener);
+      trackEndedListener = null;
+    }
+
+    activeTrack = null;
+  }
+
+  function animationLoop(): void {
+    if (!isRunning || !analyserNode || !detector || !waveformBuffer) {
+      animationFrameId = null;
+      return;
+    }
+
+    analyserNode.getFloatTimeDomainData(waveformBuffer as Float32Array<ArrayBuffer>);
+
+    const amplitudeDb = calculateRmsDb(waveformBuffer);
+    const peakAbs = calculatePeakAbs(waveformBuffer);
+    pitchState.setInputLevelDb(amplitudeDb);
+    const sampleRate = detectionContext?.sampleRate ?? 48000;
+    const timestampCorrectionMs = getAnalysisWindowCenterOffsetMs(waveformBuffer.length, sampleRate);
+    const sampleTime = performance.now() - timestampCorrectionMs;
+    const [pitch, clarity] = detector.findPitch(waveformBuffer, sampleRate);
+    const effectiveClarity = relaxedMicGatesEnabled ? 1 : clarity;
+
+    const isPitchInRange =
+      pitch !== null &&
+      pitch > CONFIG.MIN_PITCH_HZ &&
+      pitch < CONFIG.MAX_PITCH_HZ;
+
+    const hasDisplayPitch =
+      isPitchInRange &&
+      (
+        relaxedMicGatesEnabled ||
+        (clarity > CONFIG.DISPLAY_CLARITY_THRESHOLD && amplitudeDb > CONFIG.DISPLAY_MIN_VOLUME_DB)
       );
-    }
-  } else {
-    pitchState.setCurrentPitch(null);
-    pitchState.addHistoryPoint({
-      frequency: 0,
-      midi: 0,
-      time: performance.now(),
-      clarity: 0,
-    });
-  }
 
-  if (hasDisplayPitch && pitchState.state.currentPitch) {
-    highlightConsecutiveDataPoints += 1;
-    const highlightRampMultiplier = getHighlightRampMultiplier(highlightConsecutiveDataPoints);
-    if (highlightRampMultiplier <= 0) {
-      pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
+    const hasScoringPitch =
+      hasDisplayPitch &&
+      effectiveClarity > CONFIG.SCORING_CLARITY_THRESHOLD &&
+      !referenceAudio.isPlaying;
+
+    if (hasDisplayPitch) {
+      const midi = frequencyToMidi(pitch);
+      const detectedPitch: DetectedPitch = {
+        frequency: pitch,
+        midi,
+        clarity: effectiveClarity,
+        pitchClass: Math.round(midi) % 12,
+      };
+
+      pitchState.setCurrentPitch(detectedPitch);
+      pitchState.addHistoryPoint({
+        frequency: pitch,
+        midi,
+        time: sampleTime,
+        clarity: effectiveClarity,
+      });
+
+      if (hasScoringPitch && input === 1) {
+        highwayState.recordPitchInput(
+          midi,
+          effectiveClarity,
+          relaxedMicGatesEnabled ? undefined : amplitudeDb,
+          -timestampCorrectionMs,
+        );
+      }
     } else {
-      const midi = pitchState.state.currentPitch.midi;
-      const lowerMidi = Math.floor(midi);
-      const upperMidi = lowerMidi + 1;
-      const centsFromLower = (midi - lowerMidi) * CENTS_PER_SEMITONE;
-      const crossfadeStart = CONFIG.HIGHLIGHT_CORE_CENTS;
-      const crossfadeEnd = CENTS_PER_SEMITONE - CONFIG.HIGHLIGHT_CORE_CENTS;
-
-      let lowerOpacity = 0;
-      let upperOpacity = 0;
-
-      if (centsFromLower <= crossfadeStart) {
-        lowerOpacity = 1;
-      } else if (centsFromLower >= crossfadeEnd) {
-        upperOpacity = 1;
-      } else {
-        const t = (centsFromLower - crossfadeStart) / CONFIG.HIGHLIGHT_CROSSFADE_CENTS;
-        lowerOpacity = 1 - t;
-        upperOpacity = t;
-      }
-
-      const highlights = [];
-      if (lowerOpacity > 0) {
-        highlights.push({
-          pitchClass: midiToPitchClass(lowerMidi),
-          midi: lowerMidi,
-          opacity: lowerOpacity * highlightRampMultiplier,
-        });
-      }
-
-      if (upperOpacity > 0) {
-        highlights.push({
-          pitchClass: midiToPitchClass(upperMidi),
-          midi: upperMidi,
-          opacity: upperOpacity * highlightRampMultiplier,
-        });
-      }
-
-      pitchState.setStablePitch({ highlights, size: HIGHLIGHT_DEFAULT_SIZE });
+      pitchState.setCurrentPitch(null);
+      pitchState.addHistoryPoint({
+        frequency: 0,
+        midi: 0,
+        time: sampleTime,
+        clarity: 0,
+      });
     }
-  } else {
-    highlightConsecutiveDataPoints = 0;
+
+    if (hasDisplayPitch && pitchState.state.currentPitch) {
+      highlightConsecutiveDataPoints += 1;
+      const highlightRampMultiplier = getHighlightRampMultiplier(highlightConsecutiveDataPoints);
+      if (highlightRampMultiplier <= 0) {
+        pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
+      } else {
+        const midi = pitchState.state.currentPitch.midi;
+        const lowerMidi = Math.floor(midi);
+        const upperMidi = lowerMidi + 1;
+        const centsFromLower = (midi - lowerMidi) * CENTS_PER_SEMITONE;
+        const crossfadeStart = CONFIG.HIGHLIGHT_CORE_CENTS;
+        const crossfadeEnd = CENTS_PER_SEMITONE - CONFIG.HIGHLIGHT_CORE_CENTS;
+
+        let lowerOpacity = 0;
+        let upperOpacity = 0;
+
+        if (centsFromLower <= crossfadeStart) {
+          lowerOpacity = 1;
+        } else if (centsFromLower >= crossfadeEnd) {
+          upperOpacity = 1;
+        } else {
+          const t = (centsFromLower - crossfadeStart) / CONFIG.HIGHLIGHT_CROSSFADE_CENTS;
+          lowerOpacity = 1 - t;
+          upperOpacity = t;
+        }
+
+        const highlights = [];
+        if (lowerOpacity > 0) {
+          highlights.push({
+            pitchClass: midiToPitchClass(lowerMidi),
+            midi: lowerMidi,
+            opacity: lowerOpacity * highlightRampMultiplier,
+          });
+        }
+
+        if (upperOpacity > 0) {
+          highlights.push({
+            pitchClass: midiToPitchClass(upperMidi),
+            midi: upperMidi,
+            opacity: upperOpacity * highlightRampMultiplier,
+          });
+        }
+
+        pitchState.setStablePitch({ highlights, size: HIGHLIGHT_DEFAULT_SIZE });
+      }
+    } else {
+      highlightConsecutiveDataPoints = 0;
+      pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
+    }
+
+    // If the stream stays fully silent, clear current pitch state.
+    if (peakAbs <= CONFIG.PREFERRED_STREAM_MIN_PEAK) {
+      pitchState.setCurrentPitch(null);
+    }
+
+    animationFrameId = requestAnimationFrame(animationLoop);
+  }
+
+  async function startDetectionInternal(generation: number): Promise<void> {
+    if (isRunning) {
+      return;
+    }
+
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+
+    const context = createDetectionAudioContext();
+    detectionContext = context;
+    if (context.state !== 'running') await context.resume();
+    if (generation !== captureGeneration) throw new DOMException('Capture cancelled', 'AbortError');
+
+    const stream = await getPreferredMicStream(input);
+    if (generation !== captureGeneration) {
+      stopStream(stream);
+      throw new DOMException('Capture cancelled', 'AbortError');
+    }
+    mediaStream = stream;
+    const track = stream.getAudioTracks()[0];
+    if (!track) throw new Error(`Input ${input} has no audio track.`);
+    const settings = track.getSettings();
+    const other = input === 1 ? secondPitchState : primaryPitchState;
+    if ((settings.deviceId && settings.deviceId === other.state.activeDeviceId)
+      || (settings.groupId && settings.groupId === other.state.activeGroupId)) {
+      throw new Error('Choose a different microphone for each input.');
+    }
+    pitchState.setActiveDevice(settings.deviceId ?? null, settings.groupId ?? null);
+    attachTrackListeners(track);
+
+    sourceNode = detectionContext.createMediaStreamSource(mediaStream);
+    analyserNode = detectionContext.createAnalyser();
+    analyserNode.fftSize = CONFIG.FFT_SIZE;
+    analyserNode.smoothingTimeConstant = 0.05;
+    pullGainNode = detectionContext.createGain();
+    pullGainNode.gain.value = 0.00001;
+
+    sourceNode.connect(analyserNode);
+    analyserNode.connect(pullGainNode);
+    pullGainNode.connect(detectionContext.destination);
+
+    waveformBuffer = new Float32Array(analyserNode.fftSize) as Float32Array<ArrayBuffer>;
+    detector = PitchDetector.forFloat32Array(analyserNode.fftSize);
+
+    isRunning = true;
+    animationLoop();
+  }
+
+  async function startDetection(): Promise<void> {
+    if (isRunning) return;
+    if (startInFlight) return startInFlight;
+    const generation = captureGeneration;
+    pitchState.setError(null);
+    pitchState.clearHistory();
+    const pending = startDetectionInternal(generation).catch((err: unknown) => {
+      if (generation === captureGeneration) {
+        cleanup();
+        pitchState.setError(err instanceof Error ? err.message : `Could not open Input ${input}.`);
+      }
+      throw err;
+    });
+    startInFlight = pending;
+    try {
+      await pending;
+    } finally {
+      if (startInFlight === pending) startInFlight = null;
+    }
+  }
+
+  function stopDetection(): void {
+    captureGeneration += 1;
+    startInFlight = null;
+    cleanup();
+  }
+
+  function cleanup(): void {
+    isRunning = false;
+    pitchState.setActiveDevice(null);
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+
+    detachTrackListeners();
+
+    if (sourceNode) {
+      try {
+        sourceNode.disconnect();
+      } catch {
+        // Ignore disconnect cleanup errors.
+      }
+      sourceNode = null;
+    }
+
+    if (analyserNode) {
+      try {
+        analyserNode.disconnect();
+      } catch {
+        // Ignore disconnect cleanup errors.
+      }
+      analyserNode = null;
+    }
+
+    if (pullGainNode) {
+      try {
+        pullGainNode.disconnect();
+      } catch {
+        // Ignore disconnect cleanup errors.
+      }
+      pullGainNode = null;
+    }
+
+    waveformBuffer = null;
+    detector = null;
+
+    if (mediaStream) {
+      stopStream(mediaStream);
+      mediaStream = null;
+    }
+
+    if (detectionContext) {
+      const contextToClose = detectionContext;
+      detectionContext = null;
+      void contextToClose.close().catch(() => {
+        // Ignore close cleanup errors.
+      });
+    }
+
     pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
-  }
-
-  // If the stream stays fully silent, clear current pitch state.
-  if (peakAbs <= CONFIG.PREFERRED_STREAM_MIN_PEAK) {
     pitchState.setCurrentPitch(null);
+    pitchState.setInputLevelDb(null);
+    highlightConsecutiveDataPoints = 0;
   }
 
-  animationFrameId = requestAnimationFrame(animationLoop);
+  function isDetecting(): boolean {
+    return isRunning;
+  }
+
+  return { startDetection, stopDetection, isDetecting };
 }
 
-async function startDetectionInternal(): Promise<void> {
-  if (isRunning) {
-    return;
-  }
-
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-
-  if (!detectionContext) {
-    detectionContext = createDetectionAudioContext();
-  }
-
-  if (detectionContext.state !== 'running') {
-    await detectionContext.resume();
-  }
-
-  mediaStream = await getPreferredMicStream();
-  const track = mediaStream.getAudioTracks()[0] ?? null;
-  attachTrackListeners(track);
-
-  sourceNode = detectionContext.createMediaStreamSource(mediaStream);
-  analyserNode = detectionContext.createAnalyser();
-  analyserNode.fftSize = CONFIG.FFT_SIZE;
-  analyserNode.smoothingTimeConstant = 0.05;
-  pullGainNode = detectionContext.createGain();
-  pullGainNode.gain.value = 0.00001;
-
-  sourceNode.connect(analyserNode);
-  analyserNode.connect(pullGainNode);
-  pullGainNode.connect(detectionContext.destination);
-
-  waveformBuffer = new Float32Array(analyserNode.fftSize) as Float32Array<ArrayBuffer>;
-  detector = PitchDetector.forFloat32Array(analyserNode.fftSize);
-
-  isRunning = true;
-  animationLoop();
-}
+const inputs = {
+  1: createInputCapture(1, pitchState),
+  2: createInputCapture(2, secondPitchState),
+};
 
 export async function startDetection(): Promise<void> {
-  if (startInFlight) {
-    await startInFlight;
-    return;
+  const generation = detectionGeneration;
+  await inputs[1].startDetection();
+  if (generation !== detectionGeneration) throw new DOMException('Capture cancelled', 'AbortError');
+  if (duetState.enabled && secondInputDeviceId) {
+    // A missing second mic must leave the first microphone usable.
+    await inputs[2].startDetection().catch(() => {});
   }
-
-  startInFlight = (async () => {
-    try {
-      await startDetectionInternal();
-    } catch (err) {
-      console.error('[PitchDetection] microphone access denied or failed', err);
-      cleanup();
-      throw err;
-    }
-  })();
-
-  try {
-    await startInFlight;
-  } finally {
-    startInFlight = null;
-  }
+  if (generation !== detectionGeneration) throw new DOMException('Capture cancelled', 'AbortError');
 }
 
 export function stopDetection(): void {
-  isRunning = false;
-  cleanup();
+  detectionGeneration += 1;
+  inputs[1].stopDetection();
+  inputs[2].stopDetection();
+  secondPitchState.clearHistory();
 }
 
-function cleanup(): void {
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
+export async function restartInputDetection(input: MicrophoneInput): Promise<void> {
+  inputs[input].stopDetection();
+  (input === 1 ? pitchState : secondPitchState).clearHistory();
+  if (input === 2 && (!duetState.enabled || !secondInputDeviceId)) return;
+  await inputs[input].startDetection();
+}
+
+export function setDuetEnabled(enabled: boolean): void {
+  duetState.enabled = enabled;
+  if (!enabled) {
+    inputs[2].stopDetection();
+    secondInputDeviceId = null;
+    secondPitchState.reset();
   }
-
-  detachTrackListeners();
-
-  if (sourceNode) {
-    try {
-      sourceNode.disconnect();
-    } catch {
-      // Ignore disconnect cleanup errors.
-    }
-    sourceNode = null;
-  }
-
-  if (analyserNode) {
-    try {
-      analyserNode.disconnect();
-    } catch {
-      // Ignore disconnect cleanup errors.
-    }
-    analyserNode = null;
-  }
-
-  if (pullGainNode) {
-    try {
-      pullGainNode.disconnect();
-    } catch {
-      // Ignore disconnect cleanup errors.
-    }
-    pullGainNode = null;
-  }
-
-  waveformBuffer = null;
-  detector = null;
-
-  if (mediaStream) {
-    stopStream(mediaStream);
-    mediaStream = null;
-  }
-
-  if (detectionContext) {
-    const contextToClose = detectionContext;
-    detectionContext = null;
-    void contextToClose.close().catch(() => {
-      // Ignore close cleanup errors.
-    });
-  }
-
-  pitchState.setStablePitch({ highlights: [], size: HIGHLIGHT_DEFAULT_SIZE });
-  pitchState.setCurrentPitch(null);
-  pitchState.setInputLevelDb(null);
-  highlightConsecutiveDataPoints = 0;
 }
 
 export function isDetecting(): boolean {
-  return isRunning;
+  return inputs[1].isDetecting() || inputs[2].isDetecting();
 }
 
 /** Pitch sample for calibration */
@@ -609,7 +593,11 @@ export interface CalibrationPitchSample {
 
 export async function collectPitchSamples(
   durationMs: number,
-  onProgress?: (elapsedMs: number, currentPitch: CalibrationPitchSample | null) => void,
+  onProgress?: (
+    elapsedMs: number,
+    currentPitch: CalibrationPitchSample | null,
+    inputLevelDb: number,
+  ) => void,
   signal?: AbortSignal,
 ): Promise<CalibrationPitchSample[]> {
   const samples: CalibrationPitchSample[] = [];
@@ -680,6 +668,11 @@ export async function collectPitchSamples(
       }
 
       calibrationAnalyser.getFloatTimeDomainData(calibrationWaveform as Float32Array<ArrayBuffer>);
+      const inputLevelDb = calculateRmsDb(calibrationWaveform);
+      const sampleTime = performance.now() - getAnalysisWindowCenterOffsetMs(
+        calibrationWaveform.length,
+        calibrationContext.sampleRate,
+      );
       const [pitch, clarity] = calibrationDetector.findPitch(
         calibrationWaveform,
         calibrationContext.sampleRate
@@ -700,12 +693,12 @@ export async function collectPitchSamples(
           midi,
           frequency: pitch,
           clarity: effectiveClarity,
-          timestamp: performance.now(),
+          timestamp: sampleTime,
         };
         samples.push(currentSample);
       }
 
-      onProgress?.(elapsed, currentSample);
+      onProgress?.(elapsed, currentSample, inputLevelDb);
       if (!finished) {
         frameId = requestAnimationFrame(collectFrame);
       }

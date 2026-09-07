@@ -5,6 +5,7 @@
  */
 
 import * as Tone from 'tone';
+import { getAudioMasterOutput } from './audioMixer.js';
 import {
   TANPURA_SAMPLE_URL,
   getTanpuraFilterFrequencyFromTuning,
@@ -58,7 +59,7 @@ function ensureSynth(): Tone.PolySynth {
           release: 0.5,
         },
       },
-    }).toDestination();
+    }).connect(getAudioMasterOutput('droneSynth'));
   }
   return synth;
 }
@@ -79,7 +80,7 @@ async function ensureTanpuraPlayer(): Promise<Tone.Player | null> {
       depth: 0.12,
       spread: 80,
     }).start();
-    const gain = new Tone.Gain(0.5).toDestination();
+    const gain = new Tone.Gain(0.5).connect(getAudioMasterOutput('tanpura'));
     mixer.chain(filter, tremolo, gain);
 
     const voices = Array.from({ length: 6 }, () => {

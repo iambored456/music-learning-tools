@@ -6,6 +6,7 @@
   import UltrastarControls from './UltrastarControls.svelte';
   import LyricLabelControls from './LyricLabelControls.svelte';
   import MicTrailSizeControl from './MicTrailSizeControl.svelte';
+  import AudioMasterControls from './AudioMasterControls.svelte';
 
   type ColorTheme = 'light' | 'dark';
 
@@ -49,6 +50,10 @@
       </header>
 
       <div class="settings-stack">
+        <section class="settings-section">
+          <h3>Master Volumes</h3>
+          <AudioMasterControls />
+        </section>
         <section class="settings-section">
           <h3>Theme</h3>
           <div class="theme-toggle" role="group" aria-label="Color theme">

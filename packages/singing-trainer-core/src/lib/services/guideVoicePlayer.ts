@@ -6,6 +6,7 @@
  */
 
 import * as Tone from 'tone';
+import { getAudioMasterOutput } from './audioMixer.js';
 import type { TargetNote } from '../stores/highwayState.svelte.js';
 
 const MIN_VOICE_POLYPHONY = 6;
@@ -83,7 +84,7 @@ class GuideVoicePlayer {
     }
 
     if (!this.limiter) {
-      this.limiter = new Tone.Limiter(-1).toDestination();
+      this.limiter = new Tone.Limiter(-1).connect(getAudioMasterOutput('synth'));
     }
 
     if (!this.volume) {

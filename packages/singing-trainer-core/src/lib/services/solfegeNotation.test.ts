@@ -1,11 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { generateRowDataForMidiRange } from '@mlt/pitch-data';
 import { ladukhinLines } from '../constants/ladukhin.js';
-import { createSolfegeNotation } from './solfegeNotation.js';
+import { createSolfegeNotation, solfegeMidi, solfegeRowOffsets } from './solfegeNotation.js';
 
 const gamut = generateRowDataForMidiRange(21, 108);
 
 describe('Ladukhin Student Notation mapping', () => {
+  it('places degree 4 at 4:3 in Just mode and at five semitones in Equal mode', () => {
+    const justFourth = solfegeMidi(65, 60, 'just');
+    expect(2 ** ((justFourth - 60) / 12)).toBeCloseTo(4 / 3);
+    expect(justFourth).toBeLessThan(65);
+    expect(solfegeMidi(65, 60, 'equal')).toBe(65);
+
+    const offsets = solfegeRowOffsets(gamut, 60, 'just')!;
+    const fourthRow = gamut.findIndex(row => row.midi === 65);
+    // Rows are high-to-low, so a positive offset draws the flatter Just fourth lower.
+    expect(offsets[fourthRow]).toBeCloseTo(65 - justFourth);
+    expect(offsets[fourthRow]).toBeGreaterThan(0);
+    expect(solfegeRowOffsets(gamut, 60, 'equal')).toBeUndefined();
+  });
   it('maps source C to speaking pitch and keeps degrees unchanged by transposition', () => {
     const line = ladukhinLines[0]!;
     const notation = createSolfegeNotation(line, 55, gamut);

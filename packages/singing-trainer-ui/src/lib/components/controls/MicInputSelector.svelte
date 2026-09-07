@@ -1,41 +1,31 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
+  import { pitchState, secondPitchState, duetState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
   import InputDecibelMeter from './InputDecibelMeter.svelte';
   import {
     getPreferredInputDeviceId,
     listAudioInputDevices,
     setPreferredInputDeviceId,
-    startDetection,
-    stopDetection,
+    restartInputDetection,
+    setDuetEnabled,
+    isDetecting,
     type AudioInputDeviceInfo,
+    type MicrophoneInput,
   } from '@mlt/singing-trainer-core/services/pitchDetection.js';
 
   let devices = $state<AudioInputDeviceInfo[]>([]);
-  let selectedValue = $state<string>('default');
+  let selected = $state({ 1: getPreferredInputDeviceId() ?? 'default', 2: getPreferredInputDeviceId(2) ?? '' });
   let isLoading = $state(false);
-  let isApplying = $state(false);
+  let applying = $state<MicrophoneInput | null>(null);
   let loadError = $state<string | null>(null);
-
-  function showEmptyState(): boolean {
-    return !isLoading && !isApplying && devices.length === 0;
-  }
+  const visibleInputs = $derived<MicrophoneInput[]>(duetState.enabled ? [1, 2] : [1]);
 
   async function refreshDevices(): Promise<void> {
     isLoading = true;
     loadError = null;
     try {
       devices = await listAudioInputDevices();
-      const preferredId = getPreferredInputDeviceId();
-      if (devices.length === 0) {
-        selectedValue = '';
-        return;
-      }
-      selectedValue = preferredId ?? 'default';
-      if (preferredId && !devices.some((device) => device.deviceId === preferredId)) {
-        selectedValue = 'default';
-        setPreferredInputDeviceId(null);
-      }
     } catch (err) {
       loadError = err instanceof Error ? err.message : 'Failed to enumerate input devices';
     } finally {
@@ -43,79 +33,116 @@
     }
   }
 
-  async function applySelection(value: string): Promise<void> {
-    const normalized = value === 'default' ? null : value;
-    setPreferredInputDeviceId(normalized);
+  function usedByOtherInput(device: AudioInputDeviceInfo, input: MicrophoneInput): boolean {
+    if (!duetState.enabled) return false;
+    const otherInput = input === 1 ? 2 : 1;
+    const other = otherInput === 1 ? pitchState.state : secondPitchState.state;
+    const selectedDevice = devices.find((entry) => entry.deviceId === selected[otherInput]);
+    return device.deviceId === selected[otherInput]
+      || device.deviceId === other.activeDeviceId
+      || Boolean(device.groupId && device.groupId === (other.activeGroupId || selectedDevice?.groupId));
+  }
 
-    if (!appState.state.isDetecting) {
-      return;
-    }
+  async function applySelection(input: MicrophoneInput, value: string, retry = false): Promise<void> {
+    selected[input] = value;
+    setPreferredInputDeviceId(value === 'default' ? null : value || null, input);
+    const state = input === 1 ? pitchState : secondPitchState;
+    state.setError(null);
+    if (!retry && !appState.state.isDetecting && !isDetecting()) return;
 
-    isApplying = true;
+    applying = input;
     try {
-      stopDetection();
-      appState.setDetecting(false);
-      await startDetection();
-      appState.setDetecting(true);
-    } catch (err) {
-      console.error('[MicInputSelector] Failed to restart detection after device change', err);
+      await restartInputDetection(input);
+    } catch {
+      // The capture service exposes errors separately for each input.
     } finally {
-      isApplying = false;
+      appState.setDetecting(isDetecting());
+      applying = null;
     }
   }
 
-  function handleChange(event: Event): void {
-    const nextValue = (event.currentTarget as HTMLSelectElement).value;
-    selectedValue = nextValue;
-    void applySelection(nextValue);
+  function toggleDuet(): void {
+    setDuetEnabled(!duetState.enabled);
+    selected[2] = '';
   }
 
   onMount(() => {
     void refreshDevices();
+    const mediaDevices = navigator.mediaDevices;
+    const handleDeviceChange = () => void refreshDevices();
+    mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+    return () => mediaDevices?.removeEventListener('devicechange', handleDeviceChange);
   });
 </script>
 
 <div class="mic-input-selector">
-  <div class="selector-row">
-    <label class="selector-label" for="mic-input-device-select">Input</label>
-    <select
-      id="mic-input-device-select"
-      class="selector"
-      class:selector--empty={showEmptyState()}
-      value={showEmptyState() ? '' : selectedValue}
-      onchange={handleChange}
-      disabled={isLoading || isApplying || showEmptyState()}
-    >
-      {#if showEmptyState()}
-        <option value="">No input device found</option>
-      {:else}
-        <option value="default">System Default</option>
-        {#each devices as device}
-          <option value={device.deviceId}>{device.label}</option>
+  {#each visibleInputs as input (input)}
+    {@const inputState = input === 1 ? pitchState.state : secondPitchState.state}
+    <div class="selector-row">
+      <label class="selector-label" for={`mic-input-device-select-${input}`}>
+        {duetState.enabled ? `Input ${input}` : 'Input'}
+      </label>
+      <select
+        id={`mic-input-device-select-${input}`}
+        class="selector"
+        class:selector--empty={devices.length === 0}
+        value={selected[input]}
+        onchange={(event) => void applySelection(input, event.currentTarget.value)}
+        disabled={isLoading || applying !== null}
+      >
+        {#if input === 1}
+          <option value="default">System Default</option>
+        {:else}
+          <option value="">Choose a second microphone</option>
+        {/if}
+        {#if selected[input] && selected[input] !== 'default' && !devices.some((device) => device.deviceId === selected[input])}
+          <option value={selected[input]}>Selected microphone unavailable</option>
+        {/if}
+        {#each devices.filter((device) => device.deviceId !== 'default' && (input === 1 || device.deviceId !== 'communications')) as device}
+          <option value={device.deviceId} disabled={usedByOtherInput(device, input)}>{device.label}</option>
         {/each}
+      </select>
+      {#if input === 1}
+        <button
+          class="refresh-btn"
+          type="button"
+          onclick={() => void refreshDevices()}
+          disabled={isLoading || applying !== null}
+          aria-label={isLoading ? 'Refreshing input devices' : 'Refresh input devices'}
+          title="Refresh input devices"
+        >
+          <svg class="refresh-icon" class:refreshing={isLoading} viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 0 0-14.9-4M4 4v5h5M4 13a8 8 0 0 0 14.9 4M20 20v-5h-5" />
+          </svg>
+        </button>
+        <button
+          class="refresh-btn"
+          type="button"
+          onclick={toggleDuet}
+          aria-label={duetState.enabled ? 'Remove Input 2' : 'Add Input 2'}
+          title={duetState.enabled ? 'Remove Input 2' : 'Add Input 2'}
+          aria-expanded={duetState.enabled}
+        >
+          <svg class="refresh-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h14" />
+            {#if !duetState.enabled}<path d="M12 5v14" />{/if}
+          </svg>
+        </button>
       {/if}
-    </select>
-    <button
-      class="refresh-btn"
-      type="button"
-      onclick={() => void refreshDevices()}
-      disabled={isLoading || isApplying}
-      aria-label={isLoading ? 'Refreshing input devices' : 'Refresh input devices'}
-      title={isLoading ? 'Refreshing input devices' : 'Refresh input devices'}
-    >
-      <svg class="refresh-icon" class:refreshing={isLoading} viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 11a8 8 0 0 0-14.9-4M4 4v5h5M4 13a8 8 0 0 0 14.9 4M20 20v-5h-5" />
-      </svg>
-    </button>
-  </div>
-
-  <InputDecibelMeter />
-
-  {#if isApplying}
-    <p class="hint">Restarting microphone capture...</p>
-  {:else if loadError}
-    <p class="error">{loadError}</p>
+    </div>
+    <InputDecibelMeter inputLevelDb={inputState.inputLevelDb} label={`Input ${input} level`} />
+    {#if applying === input}
+      <p class="hint">Starting Input {input}...</p>
+    {/if}
+    {#if inputState.error}
+      <p class="error" role="status">Input {input}: {inputState.error}</p>
+      <button type="button" disabled={applying !== null} onclick={() => void applySelection(input, selected[input], true)}>Retry Input {input}</button>
+    {/if}
+  {/each}
+  {#if !isLoading && devices.length === 0}
+    <p class="hint">No microphone devices available. Allow microphone access, then refresh.</p>
   {/if}
+  {#if loadError}<p class="error" role="status">{loadError}</p>{/if}
 </div>
 
 <style>

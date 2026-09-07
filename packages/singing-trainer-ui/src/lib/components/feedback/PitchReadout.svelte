@@ -61,48 +61,59 @@
     };
   });
 
-  const currentNote = $derived(() => {
+  const currentNote = $derived.by(() => {
     const pitch = displayedPitch;
     if (!pitch) return null;
 
-    const noteName = NOTE_NAMES[pitch.pitchClass];
-    const octave = Math.floor(pitch.midi / 12) - 1;
+    const noteName = NOTE_NAMES[pitch.pitchClass] ?? '';
+    const octave = Math.floor(Math.round(pitch.midi) / 12) - 1;
     const cents = Math.round((pitch.midi - Math.round(pitch.midi)) * 100);
 
     return {
       name: noteName,
+      // Natural notes reserve the same accidental slot as sharp/flat notes.
+      noteSlots: `${noteName[0] ?? ' '}${noteName.slice(1) || ' '}${octave}`,
       octave,
       frequency: pitch.frequency.toFixed(1),
       cents,
     };
   });
 
+  // Reserve thousands, hundreds, tens, ones, decimal point and tenths, even
+  // when leading positions are empty. The units also occupy fixed slots.
+  const frequencySlots = $derived(currentNote ? `${currentNote.frequency.padStart(6, ' ')} Hz` : '----.- Hz');
+  const centsSlots = $derived(currentNote
+    ? `${currentNote.cents > 0 ? '+' : currentNote.cents < 0 ? '\u2212' : ' '}${String(Math.abs(currentNote.cents)).padStart(2, ' ')}\u00a2`
+    : ' --\u00a2');
+
   const isDetecting = $derived(appState.state.isDetecting);
 </script>
 
+{#snippet characters(text: string)}
+  {#each Array.from(text) as character}
+    <span class="character" aria-hidden="true">{character}</span>
+  {/each}
+{/snippet}
+
 <div class="pitch-readout" class:pitch-readout--compact={compact}>
-  {#if currentNote()}
-    {@const note = currentNote()!}
-    <div class="pitch-line" class:fading={isFading}>
-      <span class="note-display">
-        <span class="note-name">{note.name}</span>
-        <span class="octave">{note.octave}</span>
+  <div class="pitch-line" class:fading={isFading}>
+    <span class="note-display" class:placeholder={!currentNote} role="img"
+      aria-label={currentNote ? `${currentNote.name}${currentNote.octave}` : 'No pitch'}>
+      {@render characters(currentNote?.noteSlots ?? '---')}
+    </span>
+    <span class="frequency" role="img" aria-label={currentNote ? `${currentNote.frequency} hertz` : 'No frequency'}>
+      {@render characters(frequencySlots)}
+    </span>
+    <span class="cents" class:sharp={(currentNote?.cents ?? 0) > 0} class:flat={(currentNote?.cents ?? 0) < 0}
+      role="img" aria-label={currentNote ? `${currentNote.cents > 0 ? '+' : ''}${currentNote.cents} cents` : 'No cents deviation'}>
+      {@render characters(centsSlots)}
+    </span>
+  </div>
+    {#if !currentNote && showHint}
+      <span class="hint">
+        {isDetecting ? 'Sing or hum into the microphone' : 'Click Start to enable the microphone'}
       </span>
-      <span class="frequency">{note.frequency} Hz</span>
-      <span class="cents" class:sharp={note.cents > 0} class:flat={note.cents < 0}>
-        {note.cents > 0 ? '+' : ''}{note.cents}&cent;
-      </span>
-    </div>
-  {:else}
-    <div class="no-pitch" class:no-pitch--compact={compact}>
-      <span class="placeholder">---</span>
-      {#if showHint}
-        <span class="hint">
-          {isDetecting ? 'Sing or hum into the microphone' : 'Click Start to enable the microphone'}
-        </span>
-      {/if}
-    </div>
-  {/if}
+    {/if}
 </div>
 
 <style>
@@ -127,16 +138,26 @@
     background: var(--color-panel);
   }
 
-  .note-display {
-    display: inline-flex;
-    align-items: baseline;
-    gap: var(--spacing-xs);
+  .note-display,
+  .frequency,
+  .cents {
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 0.65em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  .character {
+    white-space: pre;
   }
 
   .pitch-line {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
     align-items: baseline;
-    justify-content: center;
+    justify-items: center;
     gap: var(--spacing-md);
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
@@ -149,15 +170,11 @@
     transition: opacity 900ms ease-out;
   }
 
-  .note-name {
+  .note-display {
+    grid-auto-columns: 0.85em;
     font-size: var(--font-size-2xl);
     font-weight: 700;
     color: var(--color-secondary);
-  }
-
-  .octave {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-muted);
   }
 
   .pitch-readout--compact .pitch-line {
@@ -166,20 +183,15 @@
     text-align: center;
   }
 
-  .frequency,
-  .cents {
-    font-variant-numeric: tabular-nums;
-  }
-
   .frequency {
-    min-width: 58px;
-    text-align: right;
+    min-width: 0;
+    text-align: center;
   }
 
   .cents {
-    min-width: 34px;
+    min-width: 0;
     font-weight: 500;
-    text-align: right;
+    text-align: center;
   }
 
   .cents.sharp {
@@ -190,32 +202,17 @@
     color: var(--color-primary);
   }
 
-  .no-pitch {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing-sm);
-  }
-
   .placeholder {
-    font-size: var(--font-size-2xl);
     color: var(--color-text-muted);
   }
 
-  .pitch-readout--compact .note-name,
-  .pitch-readout--compact .placeholder {
+  .pitch-readout--compact .note-display {
     font-size: var(--font-size-lg);
   }
 
-  .pitch-readout--compact .octave {
-    font-size: var(--font-size-sm);
-  }
-
-  .no-pitch--compact {
-    gap: 0;
-  }
-
   .hint {
+    margin-top: var(--spacing-sm);
+    text-align: center;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     opacity: 0.7;

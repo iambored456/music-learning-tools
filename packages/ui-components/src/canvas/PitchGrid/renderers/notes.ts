@@ -358,12 +358,11 @@ export function drawTwoColumnOvalNote(
     if (hasRenderableDimensions(rightCenterX - leftCenterX, ry)) {
       drawStadiumShape(ctx, note, leftCenterX, rightCenterX, y, ry, dynamicStrokeWidth);
 
-      // Draw scale degree in center of stadium
+      // Keep the degree in the starting cap, aligned with ordinary note heads.
       if (degreeDisplayMode !== 'off' && getScaleDegreeLabel) {
         const { label } = getScaleDegreeLabel(note);
         if (label) {
-          const stadiumCenterX = (leftCenterX + rightCenterX) / 2;
-          drawScaleDegreeText(ctx, label, 'circle', stadiumCenterX, y, ry);
+          drawScaleDegreeText(ctx, label, 'circle', leftCenterX, y, ry);
         }
       }
     }
@@ -486,6 +485,7 @@ const DEFAULT_TRAIL_CONFIG: Required<PitchTrailConfig> = {
   tonicPitchClass: 0,
   clarityThreshold: 0.5,
   maxOpacity: 0.9,
+  connectedRibbon: false,
 };
 
 /**
@@ -703,6 +703,7 @@ interface TrailPoint {
   y: number;
   clarity: number;
   color: RGB;
+  startsSegment: boolean;
 }
 
 interface FixedTargetLabelPlacement {
@@ -728,6 +729,75 @@ function findHistoryStartIndex(history: PitchHistoryPoint[], cutoffTime: number)
   }
 
   return low;
+}
+
+const traceLayerCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+const CONNECTED_TRAIL_MAX_GAP_MS = 150;
+
+function prepareTraceLayer(
+  ctx: CanvasRenderingContext2D,
+): { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D } | null {
+  const destination = ctx.canvas;
+  const ownerDocument = destination.ownerDocument;
+  if (!ownerDocument) return null;
+
+  let canvas = traceLayerCache.get(destination);
+  if (!canvas) {
+    canvas = ownerDocument.createElement('canvas');
+    traceLayerCache.set(destination, canvas);
+  }
+  if (canvas.width !== destination.width) canvas.width = destination.width;
+  if (canvas.height !== destination.height) canvas.height = destination.height;
+
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.setTransform(ctx.getTransform());
+  return { canvas, context };
+}
+
+function drawConnectedTrailStroke(
+  ctx: CanvasRenderingContext2D,
+  points: TrailPoint[],
+  width: number,
+  opacity: number,
+): void {
+  if (points.length === 0) return;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  if (points.length === 1 || Math.hypot(last.x - first.x, last.y - first.y) < 0.001) {
+    ctx.fillStyle = `rgba(${last.color[0]}, ${last.color[1]}, ${last.color[2]}, ${opacity})`;
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+
+  const gradient = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
+  const xSpan = last.x - first.x;
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index]!;
+    const position = xSpan > 0
+      ? (point.x - first.x) / xSpan
+      : index / Math.max(1, points.length - 1);
+    gradient.addColorStop(
+      Math.max(0, Math.min(1, position)),
+      `rgba(${point.color[0]}, ${point.color[1]}, ${point.color[2]}, ${opacity})`,
+    );
+  }
+
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(first.x, first.y);
+  for (let index = 1; index < points.length; index++) {
+    const point = points[index]!;
+    ctx.lineTo(point.x, point.y);
+  }
+  ctx.stroke();
 }
 
 /**
@@ -794,14 +864,22 @@ export function drawUserPitchTrace(
 
   // Transform visible points to screen coordinates.
   const notePoints: TrailPoint[] = [];
+  let startsSegment = true;
+  let previousAcceptedTime: number | null = null;
   for (let i = startIndex; i < history.length; i++) {
     const point = history[i];
     if (!point) continue;
-    if (point.midi <= 0 || point.clarity < trail.clarityThreshold) continue;
+    if (point.midi <= 0 || point.clarity < trail.clarityThreshold) {
+      startsSegment = true;
+      previousAcceptedTime = null;
+      continue;
+    }
     if (
       midiBounds
       && getPitchOverflowDirection(point.midi, midiBounds.minMidi, midiBounds.maxMidi) !== 'inRange'
     ) {
+      startsSegment = true;
+      previousAcceptedTime = null;
       continue;
     }
 
@@ -837,23 +915,33 @@ export function drawUserPitchTrace(
       y,
       clarity: point.clarity,
       color,
+      startsSegment: startsSegment
+        || point.move === true
+        || previousAcceptedTime === null
+        || point.time - previousAcceptedTime > CONNECTED_TRAIL_MAX_GAP_MS,
     });
+    startsSegment = false;
+    previousAcceptedTime = point.time;
   }
 
   if (notePoints.length === 0) return;
 
-  ctx.save();
+  const maxCombinedOpacity = Math.max(0, Math.min(1, trail.maxOpacity));
+  const layer = maxCombinedOpacity < 1 ? prepareTraceLayer(ctx) : null;
+  const renderCtx = layer?.context ?? ctx;
+  renderCtx.save();
 
   // Phase 1: Draw connector lines between proximate points
   if (
-    trail.maxConnections > 0
+    !trail.connectedRibbon
+    && trail.maxConnections > 0
     && trail.connectorLineWidth > 0
     && trail.proximityThreshold > 0
     && notePoints.length > 1
   ) {
-    ctx.strokeStyle = trail.connectorColor;
-    ctx.lineWidth = trail.connectorLineWidth;
-    ctx.beginPath();
+    renderCtx.strokeStyle = trail.connectorColor;
+    renderCtx.lineWidth = trail.connectorLineWidth;
+    renderCtx.beginPath();
 
     const thresholdSq = trail.proximityThreshold * trail.proximityThreshold;
     for (let i = 0; i < notePoints.length; i++) {
@@ -867,25 +955,49 @@ export function drawUserPitchTrace(
         const distSq = dx * dx + dy * dy;
 
         if (distSq <= thresholdSq) {
-          ctx.moveTo(notePoints[i].x, notePoints[i].y);
-          ctx.lineTo(notePoints[j].x, notePoints[j].y);
+          renderCtx.moveTo(notePoints[i].x, notePoints[i].y);
+          renderCtx.lineTo(notePoints[j].x, notePoints[j].y);
           connections++;
         }
       }
     }
-    ctx.stroke();
+    renderCtx.stroke();
   }
 
-  // Phase 2: Draw colored circles at each point
-  for (const pt of notePoints) {
-    const opacity = Math.min(pt.clarity * trail.maxOpacity, 1);
-    ctx.fillStyle = `rgba(${pt.color[0]}, ${pt.color[1]}, ${pt.color[2]}, ${opacity})`;
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, trail.circleRadius, 0, 2 * Math.PI);
-    ctx.fill();
+  if (trail.connectedRibbon) {
+    const segments: TrailPoint[][] = [];
+    for (const point of notePoints) {
+      if (point.startsSegment || segments.length === 0) segments.push([]);
+      segments[segments.length - 1]!.push(point);
+    }
+    const ribbonWidth = Math.max(5, trail.circleRadius * 0.65);
+    const centerlineWidth = Math.max(1.5, ribbonWidth * 0.22);
+    for (const segment of segments) {
+      drawConnectedTrailStroke(renderCtx, segment, ribbonWidth, 0.42);
+    }
+    for (const segment of segments) {
+      drawConnectedTrailStroke(renderCtx, segment, centerlineWidth, 1);
+    }
+  } else {
+    // Draw the original sample-circle trail.
+    for (const pt of notePoints) {
+      const opacity = Math.min(Math.max(pt.clarity, 0), 1) * (layer ? 1 : maxCombinedOpacity);
+      renderCtx.fillStyle = `rgba(${pt.color[0]}, ${pt.color[1]}, ${pt.color[2]}, ${opacity})`;
+      renderCtx.beginPath();
+      renderCtx.arc(pt.x, pt.y, trail.circleRadius, 0, 2 * Math.PI);
+      renderCtx.fill();
+    }
   }
 
-  ctx.restore();
+  renderCtx.restore();
+
+  if (layer) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha *= maxCombinedOpacity;
+    ctx.drawImage(layer.canvas, 0, 0);
+    ctx.restore();
+  }
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@
 
 import type { PitchRowData, MacrobeatGrouping, MacrobeatBoundaryStyle, TonicSign } from '@mlt/types';
 import type { CoordinateUtils } from '../types.js';
+import { getPitchRowBounds } from './coordinateUtils.js';
 
 // ============================================================================
 // Types
@@ -295,9 +296,6 @@ export function drawHorizontalLines(
 
     const y = coords.getRowY(rowIndex);
 
-    // Skip if outside viewport (with small buffer)
-    if (y < -10 || y > viewportHeight + 10) continue;
-
     const pitchClass = resolveRowPitchClass(row);
     if (pitchClass === null) continue;
 
@@ -315,12 +313,15 @@ export function drawHorizontalLines(
     );
 
     if (style.fillRow) {
-      // Fill row style (legacy "G" behavior), now rotated relative to reference pitch class.
+      // Use the same tuned edges as the legend, including for transposed G bands.
+      const { top, bottom } = getPitchRowBounds(rowIndex, fullRowData, coords, cellHeight);
+      if (bottom < 0 || top > viewportHeight) continue;
       ctx.save();
       ctx.fillStyle = style.color;
-      ctx.fillRect(startX, y - cellHeight / 2, finalEndX - startX, cellHeight);
+      ctx.fillRect(startX, top, finalEndX - startX, bottom - top);
       ctx.restore();
     } else {
+      if (y < -10 || y > viewportHeight + 10) continue;
       // Stroke line styles (legacy C/E/default behavior), now tonic-relative when configured.
       ctx.beginPath();
       ctx.moveTo(startX, y);

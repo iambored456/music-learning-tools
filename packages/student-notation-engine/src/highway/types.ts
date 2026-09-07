@@ -339,7 +339,13 @@ export interface NoteHighwayServiceInstance {
   /** Seek to a specific time position (ms) */
   setScrollOffset(timeMs: number): void;
   /** Record a user pitch input */
-  recordPitchInput(midi: number, clarity: number, source: InputSource, amplitudeDb?: number): void;
+  recordPitchInput(
+    midi: number,
+    clarity: number,
+    source: InputSource,
+    amplitudeDb?: number,
+    sampleTimeOffsetMs?: number,
+  ): void;
   /** Get current state */
   getState(): Readonly<NoteHighwayState>;
   /** Get notes visible in current viewport */

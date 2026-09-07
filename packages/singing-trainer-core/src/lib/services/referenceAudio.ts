@@ -5,6 +5,7 @@
  */
 
 import * as Tone from 'tone';
+import { getAudioMasterOutput } from './audioMixer.js';
 
 class ReferenceAudioService {
   private synth: Tone.Synth | null = null;
@@ -27,7 +28,7 @@ class ReferenceAudioService {
     await Tone.start();
 
     // Create volume node
-    this.volume = new Tone.Volume(-12).toDestination();
+    this.volume = new Tone.Volume(-12).connect(getAudioMasterOutput('synth'));
 
     // Create synth with triangle wave (less likely to be picked up by mic as same frequency)
     this.synth = new Tone.Synth({

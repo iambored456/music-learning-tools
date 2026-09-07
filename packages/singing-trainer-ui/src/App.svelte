@@ -4,8 +4,9 @@
    *
    * Main application layout for the Singing Trainer.
    */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import SolfegeRows from './lib/components/SolfegeRows.svelte';
+  import type { SolfegeExercise } from './lib/solfegeExercises.js';
   import {
     SingingCanvas,
     StartButton,
@@ -19,11 +20,8 @@
     ConstructionZoneModal,
   } from './lib/components/index.js';
   import { ResultsModal } from './lib/components/feedback/index.js';
-  import {
-    ExerciseChooserModal,
-    OverdubExerciseChooserModal,
-    SimpleExerciseChooserModal,
-  } from './lib/components/chooser/index.js';
+  import { ExerciseChooserModal } from './lib/components/chooser/index.js';
+  import { chooserState } from '@mlt/singing-trainer-core/stores/chooserState.svelte.js';
   import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { CalibrationWizard } from './lib/calibration/index.js';
   import { handoffState } from '@mlt/singing-trainer-core/stores/handoffState.svelte.js';
@@ -35,6 +33,8 @@
   import { exerciseState } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
   import { overdubState } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
   import { startDetection, stopDetection } from '@mlt/singing-trainer-core/services/pitchDetection.js';
+  import { AudioPreview } from '@mlt/singing-trainer-core/services/audioPreview.js';
+  import { getKeyboardDegreePitch } from '@mlt/singing-trainer-core/services/keyboardShortcuts.js';
   import { ensureLessonTemplatesRegistered } from './lib/lessonTemplates.js';
   import homeIconUrl from './lib/assets/home-icon.svg?url';
   import settingsIconUrl from './lib/assets/settings-icon.svg?url';
@@ -47,31 +47,49 @@
   const THEME_STORAGE_KEY = 'mlt-singing-trainer-theme';
 
   let showSettings = $state(false);
-  let showSolfegeRows = $state(false);
+  let solfegeExercise = $state<SolfegeExercise | null>(null);
+  let lessonOpen = $state(false);
+  const hasOpenActivity = $derived(lessonOpen || solfegeExercise !== null || overdubExerciseState.state.isActive);
   const canOpenSolfegeRows = $derived(
     !exerciseState.state.isActive && !overdubExerciseState.state.isActive
       && !highwayState.state.isPlaying
   );
   let theme = $state<ColorTheme>('light');
+  let shortcutHighlightMidis = $state<number[]>([]);
 
-  // Accordion state: only one sidebar section open at a time
-  let openSection: number | null = $state(null);
+  const activeDegreeShortcuts = new Map<string, { rowMidi: number; preview: AudioPreview }>();
+  let shortcutDronePreview: AudioPreview | null = null;
+  let shortcutSpaceHeld = false;
 
-  function handleToggle(index: number) {
-    return (event: Event & { currentTarget: EventTarget & HTMLDetailsElement }) => {
-      if (event.currentTarget.open) {
-        openSection = index;
-      } else if (openSection === index) {
-        openSection = null;
-      }
-    };
+  let activityLaunch: HTMLButtonElement | undefined = $state();
+
+  function handleOpenActivityChooser() {
+    ensureLessonTemplatesRegistered();
+    chooserState.show();
   }
 
   // Exercise Controls component reference
   let exerciseControlsRef: {
     handleLessonStart: (lessonId: string, settings: Record<string, number | boolean>) => void;
     handleExerciseStart: (exerciseId: string, settings: Record<string, number | boolean>) => void;
+    handleLessonClose: () => void;
   } | undefined;
+
+  function handleActivityClose() {
+    closeCurrentActivity();
+    activityLaunch?.focus();
+  }
+
+  function closeCurrentActivity() {
+    solfegeExercise = null;
+    if (lessonOpen) exerciseControlsRef?.handleLessonClose();
+    if (overdubExerciseState.state.isActive) {
+      void overdubState.stopAndRedoCurrentTake();
+      overdubExerciseState.reset();
+      void overdubState.stopCompositePlayback();
+      appState.setUseDegrees(false);
+    }
+  }
 
   function openCalibrationWizard() {
     showCalibrationWizard = true;
@@ -94,6 +112,12 @@
     overdubExerciseState.state.isActive
       && overdubExerciseState.state.template?.category === 'exercises'
   );
+
+  $effect(() => {
+    void preferencesStore.speakingPitchMidi;
+    void overdubExerciseState.state.exerciseId;
+    untrack(() => overdubExerciseState.syncSpeakingPitch());
+  });
 
   // Register performance complete callbacks
   $effect(() => {
@@ -151,6 +175,110 @@
     }
   }
 
+  function getSpeakingPitchMidi(): number {
+    return Math.round(preferencesStore.speakingPitchMidi ?? 60);
+  }
+
+  function updateShortcutHighlights(): void {
+    const midis = [...activeDegreeShortcuts.values()].map(({ rowMidi }) => rowMidi);
+    if (shortcutSpaceHeld) midis.push(getSpeakingPitchMidi());
+    shortcutHighlightMidis = [...new Set(midis)];
+  }
+
+  function isShortcutBlocked(event: KeyboardEvent): boolean {
+    if (event.ctrlKey || event.metaKey || event.altKey) return true;
+    const target = event.target;
+    if (target instanceof Element) {
+      const input = target.closest('input');
+      if (input && (input as HTMLInputElement).type !== 'range') return true;
+      if (target.closest('textarea, select, [contenteditable="true"]')) return true;
+    }
+    return document.querySelector('[aria-modal="true"]') !== null;
+  }
+
+  function releaseControlFocus(): void {
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement
+      && active.matches('button, a, input[type="range"], [role="button"], [role="slider"]')
+    ) {
+      active.blur();
+    }
+  }
+
+  function handleShortcutKeydown(event: KeyboardEvent): void {
+    if (event.code === 'Space') {
+      if (shortcutSpaceHeld) {
+        event.preventDefault();
+        return;
+      }
+      if (event.repeat || isShortcutBlocked(event)) return;
+
+      event.preventDefault();
+      releaseControlFocus();
+      shortcutSpaceHeld = true;
+      updateShortcutHighlights();
+      const preview = new AudioPreview();
+      shortcutDronePreview = preview;
+      void preview.startSustainedDrone(appState.state.drone.engine, getSpeakingPitchMidi())
+        .catch((error) => console.warn('[SingingTrainer] Could not start shortcut drone.', error));
+      return;
+    }
+
+    const existing = activeDegreeShortcuts.get(event.code);
+    if (existing) {
+      event.preventDefault();
+      return;
+    }
+    if (event.repeat || isShortcutBlocked(event)) return;
+
+    const pitch = getKeyboardDegreePitch(
+      event.code,
+      getSpeakingPitchMidi(),
+      appState.state.pitchTuningMode,
+    );
+    if (!pitch) return;
+
+    event.preventDefault();
+    releaseControlFocus();
+    const preview = new AudioPreview();
+    activeDegreeShortcuts.set(event.code, { rowMidi: pitch.rowMidi, preview });
+    updateShortcutHighlights();
+    void preview.startSustainedTriangle(pitch.playbackMidi)
+      .catch((error) => console.warn('[SingingTrainer] Could not start shortcut pitch.', error));
+  }
+
+  function handleShortcutKeyup(event: KeyboardEvent): void {
+    if (event.code === 'Space' && shortcutSpaceHeld) {
+      event.preventDefault();
+      shortcutSpaceHeld = false;
+      shortcutDronePreview?.release();
+      shortcutDronePreview = null;
+      updateShortcutHighlights();
+      return;
+    }
+
+    const active = activeDegreeShortcuts.get(event.code);
+    if (!active) return;
+    event.preventDefault();
+    active.preview.release();
+    activeDegreeShortcuts.delete(event.code);
+    updateShortcutHighlights();
+  }
+
+  function releaseAllShortcuts(): void {
+    shortcutSpaceHeld = false;
+    shortcutDronePreview?.release();
+    shortcutDronePreview = null;
+    for (const { preview } of activeDegreeShortcuts.values()) preview.release();
+    activeDegreeShortcuts.clear();
+    updateShortcutHighlights();
+  }
+
+  function handleShortcutVisibilityChange(): void {
+    if (document.hidden) releaseAllShortcuts();
+  }
+
   // Check for handoff on mount
   onMount(async () => {
     try {
@@ -170,7 +298,11 @@
     }
 
     const speakingPitchMidi = preferencesStore.speakingPitchMidi ?? 60;
-    appState.setYAxisRange({ minMidi: speakingPitchMidi - 6, maxMidi: speakingPitchMidi + 20 });
+    // Keep every keyboard-audition row visible, including P seventeen semitones below.
+    appState.setYAxisRange({
+      minMidi: Math.max(21, speakingPitchMidi - 18),
+      maxMidi: Math.min(108, speakingPitchMidi + 20),
+    });
     appState.setCenterGridOnSpeakingPitch(true);
     appState.setCenterColorsOnSpeakingPitch(true);
 
@@ -186,6 +318,7 @@
 
   // Clean up on unmount
   onDestroy(() => {
+    releaseAllShortcuts();
     stopDetection();
     void overdubState.dispose();
   });
@@ -211,7 +344,7 @@
    * Handle starting a lesson from the chooser modal
    */
   function handleLessonStart(lessonId: string, settings: Record<string, number | boolean>) {
-    showSolfegeRows = false;
+    closeCurrentActivity();
     exerciseControlsRef?.handleLessonStart(lessonId, settings);
   }
 
@@ -219,19 +352,26 @@
    * Handle starting an exercise from the exercise chooser modal
    */
   function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
-    showSolfegeRows = false;
+    closeCurrentActivity();
     exerciseControlsRef?.handleExerciseStart(exerciseId, settings);
   }
 
   /**
-   * Handle starting a workshop template from the workshop chooser modal
+   * Load recording exercises selected in the shared chooser.
    */
   function handleWorkshopStart(exerciseId: string, settings: Record<string, number | boolean>) {
-    showSolfegeRows = false;
+    closeCurrentActivity();
     ensureLessonTemplatesRegistered();
     overdubExerciseState.loadExercise(exerciseId, settings);
   }
 </script>
+
+<svelte:window
+  onkeydown={handleShortcutKeydown}
+  onkeyup={handleShortcutKeyup}
+  onblur={releaseAllShortcuts}
+/>
+<svelte:document onvisibilitychange={handleShortcutVisibilityChange} />
 
 <div class="app singing-trainer-app" data-theme={theme}>
   {#if handoffError}
@@ -285,12 +425,12 @@
 
       <section class="sidebar-settings-panels" aria-label="Singing Trainer controls">
         <section class="sidebar-settings-panel" aria-labelledby="mic-settings-title">
-          <h2 id="mic-settings-title" class="sidebar-settings-title">Mic Settings</h2>
+          <div class="mic-header-row">
+            <h2 id="mic-settings-title" class="sidebar-settings-title">Microphone</h2>
+            <StartButton compact={true} />
+          </div>
           <div class="sidebar-settings-stack">
-            <div class="mic-start-row">
-              <StartButton compact={true} />
-              <PitchReadout compact={true} showHint={false} />
-            </div>
+            <PitchReadout compact={true} showHint={false} />
             <MicInputSelector />
           </div>
         </section>
@@ -303,16 +443,19 @@
         </section>
       </section>
 
-      <details class="settings-details" open={openSection === 0} ontoggle={handleToggle(0)}>
-        <summary class="settings-summary">Lessons &amp; Exercises</summary>
-        <div class="settings-content">
-          <button class="solfege-launch" disabled={!canOpenSolfegeRows} onclick={() => (showSolfegeRows = true)}>
-            Ladukhin solfege rows
+      <section class="activity-controls" aria-label="Lessons and exercises">
+        <div class="activity-actions">
+          <button bind:this={activityLaunch} class="activity-launch" type="button"
+            aria-haspopup="dialog" aria-expanded={chooserState.state.isVisible} onclick={handleOpenActivityChooser}>
+            Lessons &amp; Exercises
           </button>
-          {#if !canOpenSolfegeRows}<small>Close the current exercise before opening solfege rows.</small>{/if}
-          <ExerciseControls bind:this={exerciseControlsRef} />
+          {#if hasOpenActivity}
+            <button class="activity-close" type="button" aria-label="Exit current lesson or exercise"
+              title="Exit current lesson or exercise" onclick={handleActivityClose}>&times;</button>
+          {/if}
         </div>
-      </details>
+        <ExerciseControls bind:this={exerciseControlsRef} bind:lessonOpen />
+      </section>
 
       {#if hasImportedSnapshot}
         <div class="control-group">
@@ -336,11 +479,17 @@
     </aside>
 
     <section class="canvas-area">
-      {#if showSolfegeRows}
-        <SolfegeRows onclose={() => (showSolfegeRows = false)} />
+      {#if solfegeExercise}
+        {#key solfegeExercise.id}
+          <SolfegeRows
+            exercise={solfegeExercise}
+            {shortcutHighlightMidis}
+            onclose={() => (solfegeExercise = null)}
+          />
+        {/key}
       {:else}
       <div class="canvas-main">
-        <SingingCanvas {theme} />
+        <SingingCanvas {theme} {shortcutHighlightMidis} />
       </div>
       <ExerciseBuilderToolbar visible={showExerciseBuilderToolbar} />
       <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
@@ -351,14 +500,17 @@
   <!-- Avatar mount point for lesson instructions -->
   <div id="lesson-avatar-mount" class="avatar-mount"></div>
 
-  <!-- Lesson Chooser Modal -->
-  <ExerciseChooserModal onstart={handleLessonStart} />
-
-  <!-- Exercise Chooser Modal -->
-  <SimpleExerciseChooserModal onstart={handleExerciseStart} />
-
-  <!-- Workshop Chooser Modal -->
-  <OverdubExerciseChooserModal onstart={handleWorkshopStart} />
+  <ExerciseChooserModal
+    onstart={handleLessonStart}
+    onexercisestart={handleExerciseStart}
+    onworkshopstart={handleWorkshopStart}
+    canStartSolfege={canOpenSolfegeRows || hasOpenActivity}
+    onsolfegestart={(exercise) => {
+      if (!canOpenSolfegeRows && !hasOpenActivity) return;
+      closeCurrentActivity();
+      solfegeExercise = exercise;
+    }}
+  />
 
   <!-- Results Modal -->
   <ResultsModal onRetry={handleResultsRetry} onClose={handleResultsClose} />
@@ -380,15 +532,6 @@
 </div>
 
 <style>
-  .solfege-launch {
-    padding: 10px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-panel);
-    color: var(--color-text);
-    cursor: pointer;
-  }
-  .solfege-launch:disabled { opacity: .5; cursor: default; }
   .app {
     display: flex;
     flex-direction: column;
@@ -548,22 +691,18 @@
     min-width: 0;
   }
 
-  .mic-start-row {
+  .mic-header-row {
     display: flex;
-    align-items: stretch;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--spacing-sm);
     width: 100%;
     min-width: 0;
   }
 
-  .mic-start-row :global(.start-button) {
+  .mic-header-row :global(.start-button) {
     flex: 0 0 auto;
     width: auto;
-  }
-
-  .mic-start-row :global(.pitch-readout) {
-    flex: 1 1 auto;
-    min-width: 0;
   }
 
   .canvas-main {
@@ -662,53 +801,65 @@
     font-weight: 600;
   }
 
-  /* Settings dropdown */
-  .settings-details {
-    background-color: var(--color-panel);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: var(--spacing-xs);
-    width: 100%;
-  }
-
-  .settings-summary {
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: var(--spacing-xs);
-    user-select: none;
-    list-style: none;
-  }
-
-  .settings-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .settings-summary::before {
-    content: '▶';
-    display: inline-block;
-    margin-right: var(--spacing-xs);
-    font-size: 0.7em;
-    transition: transform 0.2s ease;
-  }
-
-  .settings-details[open] .settings-summary::before {
-    transform: rotate(90deg);
-  }
-
-  .settings-summary:hover {
-    color: var(--color-primary);
-  }
-
-  .settings-content {
+  .activity-controls {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-sm) 0;
     width: 100%;
+  }
+
+  .activity-actions {
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-xs);
+  }
+
+  .activity-launch {
+    flex: 1;
+    min-width: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--color-primary);
+    color: white;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .activity-launch:hover {
+    background: var(--color-primary-dark);
+  }
+
+  .activity-launch:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .activity-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    min-height: 32px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-control);
+    color: var(--color-text);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .activity-close:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .activity-close:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   @media (max-width: 900px) {

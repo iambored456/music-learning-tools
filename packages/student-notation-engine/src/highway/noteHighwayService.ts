@@ -564,12 +564,18 @@ export function createNoteHighwayService(
       logger?.debug('NoteHighway', 'Scroll offset set', { timeMs, scrollOffset: state.scrollOffset });
     },
 
-    recordPitchInput(midi: number, clarity: number, source: InputSource, amplitudeDb?: number): void {
+    recordPitchInput(
+      midi: number,
+      clarity: number,
+      source: InputSource,
+      amplitudeDb?: number,
+      sampleTimeOffsetMs = 0,
+    ): void {
       if (!state.isPlaying || state.isPaused) return;
       if (!finalConfig.inputSources.includes(source)) return;
 
       const sample: PitchSample = {
-        timeMs: state.currentTimeMs,
+        timeMs: state.currentTimeMs + (Number.isFinite(sampleTimeOffsetMs) ? sampleTimeOffsetMs : 0),
         midi,
         clarity,
         amplitudeDb,

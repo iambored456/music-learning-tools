@@ -18,6 +18,7 @@
     CoordinateUtils,
     CurrentPitch,
     LegendHighlightConfig,
+    LegendHighlightEntry,
     PitchHistoryPoint,
     PitchRowHighlightConfig,
     PitchRowHighlightEntry,
@@ -38,7 +39,7 @@
   } from '@mlt/pitch-data';
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
-  import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
+  import { pitchState, secondPitchState, duetState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
   import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
   import { exerciseState } from '@mlt/singing-trainer-core/stores/exerciseState.svelte.js';
   import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
@@ -52,9 +53,10 @@
 
   interface Props {
     theme?: 'light' | 'dark';
+    shortcutHighlightMidis?: readonly number[];
   }
 
-  let { theme = 'light' }: Props = $props();
+  let { theme = 'light', shortcutHighlightMidis = [] }: Props = $props();
 
   // Container element for measuring size
   let container: HTMLDivElement | undefined = $state(undefined);
@@ -240,21 +242,29 @@
   );
 
   const legendHighlight = $derived<LegendHighlightConfig | undefined>((() => {
-    if (!appState.state.pitchHighlightEnabled) {
-      return undefined;
+    const entries: LegendHighlightEntry[] = [];
+    if (appState.state.pitchHighlightEnabled) {
+      const stable = pitchState.state.stablePitch;
+      entries.push(...stable.highlights.map((highlight) => ({
+        pitchClass: highlight.pitchClass,
+        midi: highlight.midi,
+        opacity: highlight.opacity,
+        color: '#ffff00',
+      })));
     }
 
-    const stable = pitchState.state.stablePitch;
-    if (stable.highlights.length === 0) {
-      return undefined;
+    for (const midi of shortcutHighlightMidis) {
+      const row = fullRowData.find((candidate) => candidate.midi === midi);
+      if (!row) continue;
+      entries.push({
+        pitchClass: ((midi % 12) + 12) % 12,
+        midi,
+        opacity: theme === 'light' ? 0.9 : 0.7,
+        color: row.hex,
+      });
     }
 
-    return stable.highlights.map((highlight) => ({
-      pitchClass: highlight.pitchClass,
-      midi: highlight.midi,
-      opacity: highlight.opacity,
-      color: '#ffff00',
-    }));
+    return entries.length > 0 ? entries : undefined;
   })());
 
   function getModeDegreeFadeScales(degreeIndex: number): Pick<
@@ -317,6 +327,24 @@
     };
   })());
 
+  const shortcutRowHighlights = $derived<PitchRowHighlightEntry[]>(
+    shortcutHighlightMidis.flatMap((midi) => {
+      const row = fullRowData.find((candidate) => candidate.midi === midi);
+      if (!row) return [];
+      return [{
+        midi,
+        color: row.hex,
+        opacity: theme === 'light' ? 0.9 : 0.62,
+        glow: 1,
+        pulse: false,
+        renderBehindGridLines: true,
+        heightScale: 0,
+        fadeExtendTopScale: SPEAKING_PITCH_FADE_SCALE,
+        fadeExtendBottomScale: SPEAKING_PITCH_FADE_SCALE,
+      }];
+    })
+  );
+
   const modeRowHighlights = $derived<PitchRowHighlightEntry[]>((() => {
     const drone = appState.state.drone;
     if (!drone.modeEnabled) return [];
@@ -358,6 +386,11 @@
     const entries: PitchRowHighlightEntry[] = [];
     if (modeRowHighlights.length > 0) entries.push(...modeRowHighlights);
     if (speakingPitchHighlightEntry) entries.push(speakingPitchHighlightEntry);
+    for (const shortcut of shortcutRowHighlights) {
+      const existingIndex = entries.findIndex((entry) => entry.midi === shortcut.midi);
+      if (existingIndex >= 0) entries.splice(existingIndex, 1);
+      entries.push(shortcut);
+    }
     return entries.length > 0 ? entries : undefined;
   })());
 
@@ -409,7 +442,11 @@
     return map;
   })());
 
-  const showHorizontalGridLines = $derived(appState.state.showHorizontalGridLines);
+  // Standalone exercises always show the full grid, regardless of other activities' display settings.
+  const exerciseGridAlwaysVisible = $derived(
+    overdubExerciseState.state.isActive && overdubExerciseState.state.template?.category === 'exercises'
+  );
+  const showHorizontalGridLines = $derived(exerciseGridAlwaysVisible || appState.state.showHorizontalGridLines);
   const horizontalGridReferencePitchClass = $derived((() => {
     const speakingPitchMidi = preferencesStore.speakingPitchMidi;
     if (
@@ -497,7 +534,8 @@
       ? ((Math.round(preferencesStore.speakingPitchMidi) % 12) + 12) % 12
       : getTonicPitchClass(appState.state.tonic),
     clarityThreshold: 0.5,
-    maxOpacity: 0.8,
+    maxOpacity: appState.state.micTrailOpacity,
+    connectedRibbon: appState.state.connectedMicTrailEnabled,
   });
 
   const labelConfig = $derived({
@@ -529,7 +567,7 @@
     return map;
   });
   const liveMicTrailFixedColor = $derived.by<RgbTuple | null>(() => {
-    if (appState.state.overdubMicTrailColorMode !== 'voice') return null;
+    if (duetState.enabled || appState.state.overdubMicTrailColorMode !== 'voice') return null;
     if (!overdubExerciseState.state.isActive) return null;
 
     const template = overdubExerciseState.state.template;
@@ -638,14 +676,14 @@
   });
   const gridBeatIntervalMs = $derived.by<number>(() => {
     if (!showTimingGridLines) return 0;
-    const showBeatLines = appState.state.showBeatGridLines;
-    const showMeasureLines = appState.state.showMeasureGridLines;
+    const showBeatLines = exerciseGridAlwaysVisible || appState.state.showBeatGridLines;
+    const showMeasureLines = exerciseGridAlwaysVisible || appState.state.showMeasureGridLines;
     if (!showBeatLines && !showMeasureLines) return 0;
     if (showBeatLines) return beatIntervalMs;
     return measureIntervalMs;
   });
   const gridMeasureIntervalMs = $derived.by<number | undefined>(() => {
-    if (!showTimingGridLines || !appState.state.showMeasureGridLines) return undefined;
+    if (!showTimingGridLines || (!exerciseGridAlwaysVisible && !appState.state.showMeasureGridLines)) return undefined;
     return measureIntervalMs;
   });
   const effectiveGridMode = $derived<PitchGridMode>(useLoopTimeline ? 'singing' : mode);
@@ -1165,7 +1203,8 @@
     trailCtx.clearRect(0, 0, gridWidth, containerHeight);
     if (useLoopTimeline) {
       drawPersistentOverdubTrails(trailCtx, currentTime);
-      drawLoopTimelineMicTrail(trailCtx, currentTime);
+      drawLoopTimelineMicTrail(trailCtx, currentTime, pitchState);
+      if (duetState.enabled) drawLoopTimelineMicTrail(trailCtx, currentTime, secondPitchState);
       drawLoopPlaybackCursor(trailCtx, currentTime);
       return;
     }
@@ -1174,35 +1213,14 @@
     const activeConfig = mode === 'singing' ? singingConfig : highwayConfig;
     if (!activeConfig) return;
 
-    const trailHistory = pitchState.state.history;
-    let trailHistoryForRender = trailHistory;
-    let trailCurrentTime = currentTime;
-
-    if (mode === 'highway' && highwayConfig) {
-      const waitingForInput = highwayState.state.isPlaying && highwayState.state.isWaitingForInput;
-      if (waitingForInput) {
-        if (highwayWaitFreezePerfMs === null) {
-          highwayWaitFreezePerfMs = currentTime;
-        }
-        trailCurrentTime = highwayWaitFreezePerfMs;
-
-        // Clamp post-freeze samples to the freeze timestamp so new points stack at the
-        // judgment line instead of scrolling while waitgate pauses highway time.
-        const freezeTime = highwayWaitFreezePerfMs;
-        const latestPointTime = trailHistory[trailHistory.length - 1]?.time ?? Number.NEGATIVE_INFINITY;
-        if (latestPointTime > freezeTime) {
-          trailHistoryForRender = trailHistory.map((point) => (
-            point.time > freezeTime
-              ? { ...point, time: freezeTime }
-              : point
-          ));
-        }
-      } else {
-        highwayWaitFreezePerfMs = null;
-      }
+    const waitingForInput = mode === 'highway'
+      && highwayState.state.isPlaying && highwayState.state.isWaitingForInput;
+    if (waitingForInput) {
+      highwayWaitFreezePerfMs ??= currentTime;
     } else {
       highwayWaitFreezePerfMs = null;
     }
+    const trailCurrentTime = highwayWaitFreezePerfMs ?? currentTime;
 
     // Use appropriate nowLineX based on mode
     const nowLineX = mode === 'highway' && highwayConfig
@@ -1249,15 +1267,30 @@
       trailConfig: syncedTrailConfig,
     };
 
-    if (trailHistoryForRender.length > 0) {
-      drawUserPitchTrace(
-        trailCtx,
-        coords,
-        trailHistoryForRender,
-        trailCurrentTime,
-        userPitchConfig,
-        fullRowData
-      );
+    const microphones = duetState.enabled ? [pitchState, secondPitchState] : [pitchState];
+    for (const microphone of microphones) {
+      const history = microphone.state.history;
+      const freezeTime = highwayWaitFreezePerfMs;
+      // Keep both singers at the judgement line while wait-for-input pauses time.
+      const hasPostFreezeSamples = freezeTime !== null
+        && (history[history.length - 1]?.time ?? Number.NEGATIVE_INFINITY) > freezeTime;
+      const trailHistoryForRender = !hasPostFreezeSamples || freezeTime === null ? history : history.map((point) => (
+        point.time > freezeTime ? { ...point, time: freezeTime } : point
+      ));
+      if (trailHistoryForRender.length > 0) {
+        drawUserPitchTrace(
+          trailCtx, coords, trailHistoryForRender, trailCurrentTime, userPitchConfig, fullRowData
+        );
+      }
+      // The shared grid already draws Input 1; this overlay adds Input 2.
+      const currentPitch = microphone.state.currentPitch;
+      if (microphone === secondPitchState && currentPitch) {
+        drawUserPitchIndicator(
+          trailCtx, coords, currentPitch.midi, currentPitch.clarity,
+          mode === 'highway' ? nowLineX : gridWidth - 20,
+          userPitchConfig, fullRowData
+        );
+      }
     }
 
     if (mode === 'highway' && highwayConfig) {
@@ -1352,11 +1385,13 @@
     return 0;
   }
 
-  function drawLoopTimelineMicTrail(ctx: CanvasRenderingContext2D, currentTime: number): void {
+  function drawLoopTimelineMicTrail(
+    ctx: CanvasRenderingContext2D, currentTime: number, microphone: typeof pitchState
+  ): void {
     const phraseDurationMs = loopDurationMs;
     if (phraseDurationMs <= 0) return;
 
-    const pitchHistory = pitchState.state.history;
+    const pitchHistory = microphone.state.history;
     if (pitchHistory.length === 0) return;
 
     const recordingProgressMs = isLoopTransportActive()
@@ -1406,7 +1441,7 @@
     };
 
     drawUserPitchTrace(ctx, coords, remappedHistory, currentTime, userPitchConfig, fullRowData);
-    drawLoopCurrentPitchIndicator(ctx, coords, userPitchConfig, phraseDurationMs, currentTime);
+    drawLoopCurrentPitchIndicator(ctx, coords, userPitchConfig, phraseDurationMs, currentTime, microphone);
   }
 
   function drawLoopCurrentPitchIndicator(
@@ -1414,10 +1449,11 @@
     coords: CoordinateUtils,
     config: UserPitchRenderConfig,
     phraseDurationMs: number,
-    currentTime: number
+    currentTime: number,
+    microphone: typeof pitchState
   ): void {
     if (!isLoopTransportActive()) return;
-    const currentPitch = pitchState.state.currentPitch;
+    const currentPitch = microphone.state.currentPitch;
     if (!currentPitch) return;
 
     const progressMs = getLoopTransportProgressMs(phraseDurationMs, currentTime);

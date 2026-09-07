@@ -71,7 +71,19 @@
 </script>
 
 <div class="speaking-pitch-panel">
-  <h2 class="panel-title">Speaking Pitch</h2>
+  <div class="panel-heading">
+    <h2 class="panel-title">Speaking Pitch</h2>
+    <button class="highlight-toggle" class:active={appState.state.drone.useSpeakingPitch}
+      type="button" disabled={!preferencesStore.isCalibrated}
+      aria-label="Highlight speaking pitch" aria-pressed={appState.state.drone.useSpeakingPitch}
+      title={preferencesStore.isCalibrated ? 'Toggle speaking pitch highlight' : 'Calibrate your speaking pitch to enable highlighting'}
+      onclick={() => appState.setDroneUseSpeakingPitch(!appState.state.drone.useSpeakingPitch)}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+      </svg>
+    </button>
+  </div>
 
   <div class="pitch-display">
     <div class="pitch-value-row">
@@ -84,7 +96,7 @@
       </button>
     </div>
     <div class="pitch-action-row">
-      <button class="recalibrate-button" type="button" onclick={onCalibrate}>Recalibrate</button>
+      <button class="recalibrate-button" type="button" onclick={onCalibrate}>Calibrate</button>
       <button class="center-range-button" type="button" onclick={centerRangeAroundSpeakingPitch}>
         Zoom to
       </button>
@@ -104,9 +116,40 @@
     color: var(--color-text);
   }
 
+  .panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .highlight-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .highlight-toggle.active {
+    color: var(--color-secondary);
+    background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
+  }
+
+  .highlight-toggle.active circle { fill: currentColor; }
+  .highlight-toggle:hover:not(:disabled) { border-color: var(--color-secondary); }
+  .highlight-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  .highlight-toggle:disabled { opacity: 0.4; cursor: default; }
+
   .panel-title {
     margin: 0;
-    width: 100%;
     color: var(--color-text);
     font-size: var(--font-size-sm);
     font-weight: 700;

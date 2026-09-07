@@ -131,10 +131,10 @@
     width: 100%;
     min-height: 130px;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(12, 17, 26, 0.94);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-light);
     backdrop-filter: blur(8px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-md);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -148,8 +148,8 @@
   .resize-handle {
     height: 14px;
     border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-control);
     cursor: ns-resize;
     display: flex;
     align-items: center;
@@ -162,7 +162,7 @@
     width: 56px;
     height: 4px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--color-text-muted);
   }
 
   .exercise-toolbar__content {

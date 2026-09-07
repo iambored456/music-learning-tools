@@ -58,8 +58,6 @@ export interface OverdubExerciseSessionState {
   waitForInputEnabled: boolean;
   /** Base semitone transposition (e.g., speaking-pitch anchoring) */
   exerciseBaseTransposeSemitones: number;
-  /** Manual key shift in semitones (clamped to [-6, +6] for exercises) */
-  exerciseManualShiftSemitones: number;
   /** Effective tonic after transposition */
   effectiveTonic: TonicNote | null;
 }
@@ -79,7 +77,6 @@ const DEFAULT_STATE: OverdubExerciseSessionState = {
   durationMs: 0,
   waitForInputEnabled: false,
   exerciseBaseTransposeSemitones: 0,
-  exerciseManualShiftSemitones: 0,
   effectiveTonic: null,
 };
 
@@ -105,8 +102,6 @@ const TONIC_TO_PC: Record<TonicNote, number> = {
   B: 11,
 };
 const PC_TO_TONIC_SHARP: TonicNote[] = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const MIN_EXERCISE_KEY_SHIFT = -6;
-const MAX_EXERCISE_KEY_SHIFT = 6;
 const DEFAULT_EXERCISE_RANGE_PADDING_SEMITONES = 2;
 const AMAZING_GRACE_EXERCISE_ID = 'exercise-amazing-grace';
 const AMAZING_GRACE_RANGE_PADDING_SEMITONES = 1;
@@ -172,7 +167,7 @@ function createOverdubExerciseState() {
   }
 
   function getTotalTransposeSemitones(): number {
-    return state.exerciseBaseTransposeSemitones + state.exerciseManualShiftSemitones;
+    return state.exerciseBaseTransposeSemitones;
   }
 
   function getLowestMidiInTemplate(template: OverdubExerciseTemplate): number | null {
@@ -192,7 +187,7 @@ function createOverdubExerciseState() {
       return 0;
     }
     const lowestMidi = getLowestMidiInTemplate(template);
-    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    const speakingPitchMidi = preferencesStore.speakingPitchMidi ?? 60;
     if (lowestMidi === null || typeof speakingPitchMidi !== 'number' || !Number.isFinite(speakingPitchMidi)) {
       return 0;
     }
@@ -432,7 +427,6 @@ function createOverdubExerciseState() {
       state.durationMs = durationMs;
       state.waitForInputEnabled = waitForInput;
       state.exerciseBaseTransposeSemitones = baseTransposeSemitones;
-      state.exerciseManualShiftSemitones = 0;
       state.effectiveTonic = null;
       state.activeVoiceId = config.voices.length === 1
         ? (config.voices[0]?.voiceId ?? null)
@@ -442,6 +436,11 @@ function createOverdubExerciseState() {
       state.synthMixByVoiceId = createDefaultSynthMixByVoiceId(config.voices.map((voice) => voice.voiceId));
       state.isActive = true;
       appState.setUseDegrees(false);
+      if (isStandaloneExerciseTemplate()) {
+        appState.setShowBeatGridLines(true);
+        appState.setShowMeasureGridLines(true);
+        appState.setShowHorizontalGridLines(true);
+      }
 
       rebuildNotes();
       applyExerciseTonic();
@@ -489,32 +488,20 @@ function createOverdubExerciseState() {
       }
     },
 
-    getExerciseKeyShiftSemitones(): number {
-      return state.exerciseManualShiftSemitones;
-    },
-
-    getExerciseTonic(): TonicNote | null {
-      if (!isStandaloneExerciseTemplate()) return null;
-      return state.effectiveTonic;
-    },
-
-    shiftExerciseKey(deltaSemitones: number) {
-      if (!isStandaloneExerciseTemplate()) return;
-      if (!Number.isFinite(deltaSemitones) || deltaSemitones === 0) return;
-      const nextShift = clampNumber(
-        state.exerciseManualShiftSemitones + Math.round(deltaSemitones),
-        MIN_EXERCISE_KEY_SHIFT,
-        MAX_EXERCISE_KEY_SHIFT,
-      );
-      if (nextShift === state.exerciseManualShiftSemitones) return;
+    /** Re-anchor exercise notes when the user's Speaking Pitch changes. */
+    syncSpeakingPitch() {
+      if (!state.isActive || !state.template || !isStandaloneExerciseTemplate()) return;
+      const nextTranspose = computeBaseTransposeSemitones(state.template);
+      if (nextTranspose === state.exerciseBaseTransposeSemitones) return;
 
       const wasPlaying = state.isPlaying && highwayState.state.isPlaying;
       const resumeTimeMs = highwayState.state.currentTimeMs;
-      state.exerciseManualShiftSemitones = nextShift;
+      state.exerciseBaseTransposeSemitones = nextTranspose;
       rebuildNotes();
       applyExerciseTonic();
       setHighwayTargetNotes();
-      restoreExerciseRangeView();
+      const range = getCurrentPitchRange();
+      if (range) appState.setYAxisRange(range);
 
       if (wasPlaying) {
         highwayState.hardCutTo(resumeTimeMs, true);

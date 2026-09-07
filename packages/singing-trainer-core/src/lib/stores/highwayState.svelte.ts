@@ -577,9 +577,9 @@ function createHighwayState() {
       }
     },
 
-    recordPitchInput(midi: number, clarity: number, amplitudeDb?: number) {
+    recordPitchInput(midi: number, clarity: number, amplitudeDb?: number, sampleTimeOffsetMs?: number) {
       if (engineService && state.isPlaying) {
-        engineService.recordPitchInput(midi, clarity, 'microphone', amplitudeDb);
+        engineService.recordPitchInput(midi, clarity, 'microphone', amplitudeDb, sampleTimeOffsetMs);
       }
     },
 

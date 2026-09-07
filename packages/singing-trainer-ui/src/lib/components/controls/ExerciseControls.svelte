@@ -15,9 +15,6 @@
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import { resultsState, type ResultsSummary } from '@mlt/singing-trainer-core/stores/resultsState.svelte.js';
   import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
-  import { chooserState } from '@mlt/singing-trainer-core/stores/chooserState.svelte.js';
-  import { exerciseChooserState } from '@mlt/singing-trainer-core/stores/exerciseChooserState.svelte.js';
-  import { overdubExerciseChooserState } from '@mlt/singing-trainer-core/stores/overdubExerciseChooserState.svelte.js';
   import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { referenceAudio } from '@mlt/singing-trainer-core/services/referenceAudio.js';
   import { getPitchByMidi } from '@mlt/pitch-data';
@@ -31,6 +28,9 @@
     speakWithLessonAvatar,
     cancelLessonAvatarSpeech,
   } from '@mlt/singing-trainer-core/engine/controllerAdapters.js';
+
+  let { lessonOpen = $bindable(false) }: { lessonOpen?: boolean } = $props();
+  let lessonStartGeneration = 0;
 
   // Local state for exercise defaults
   let numLoops = $state(5);
@@ -97,6 +97,10 @@
 
   // Reactive state from stores
   const isActive = $derived(exerciseState.state.isActive);
+
+  $effect(() => {
+    lessonOpen = activeLessonId !== null || isActive || lessonGuideVisible;
+  });
   const isPlaying = $derived(exerciseState.state.isPlaying);
   const currentPhase = $derived(exerciseState.state.currentPhase);
   const currentPhaseLabel = $derived(exerciseState.state.currentPhaseLabel);
@@ -604,11 +608,13 @@
    * Start the exercise
    */
   async function handleStart() {
+    const generation = ++lessonStartGeneration;
     // Auto-switch to highway mode
     appState.setVisualizationMode('highway');
 
     // Mount and show the avatar for lesson instructions
     await mountAndShowLessonAvatar();
+    if (generation !== lessonStartGeneration) return;
     if (lessonGuideSteps.length === 0) {
       initializeLessonGuide(activeLesson);
     }
@@ -639,6 +645,7 @@
 
     // Initialize reference audio
     await referenceAudio.init();
+    if (generation !== lessonStartGeneration) return;
     referenceAudio.setVolume(referenceVolume);
 
     // Start exercise (generates notes)
@@ -650,6 +657,7 @@
     if (lessonGuideSteps.length > 0 && !lessonGuideDismissed) {
       lessonGuideIndex = 0;
       await speakGuideStep(0);
+      if (generation !== lessonStartGeneration) return;
       const firstStep = lessonGuideSteps[0];
       if (firstStep) {
         lastInstructionKey = `0:${firstStep.phaseIndex}:${firstStep.message}`;
@@ -685,6 +693,7 @@
    * Stop the exercise
    */
   function handleStop() {
+    lessonStartGeneration++;
     // Stop polling
     stopResultsPolling();
 
@@ -716,6 +725,11 @@
     clearActiveLesson();
   }
 
+  export function handleLessonClose() {
+    handleStop();
+    highwayState.setTargetNotes([]);
+  }
+
   /**
    * Get phase label for display
    */
@@ -745,30 +759,6 @@
     }
     const pitch = getPitchByMidi(midi);
     return pitch?.pitch || `MIDI ${midi}`;
-  }
-
-  /**
-   * Open the lesson chooser modal
-   */
-  function handleOpenLessonChooser() {
-    ensureLessonTemplatesRegistered();
-    chooserState.show();
-  }
-
-  /**
-   * Open the standalone exercise chooser modal
-   */
-  function handleOpenExerciseChooser() {
-    ensureLessonTemplatesRegistered();
-    exerciseChooserState.show();
-  }
-
-  /**
-   * Open the workshop chooser modal
-   */
-  function handleOpenWorkshopChooser() {
-    ensureLessonTemplatesRegistered();
-    overdubExerciseChooserState.show();
   }
 
   /**
@@ -891,24 +881,9 @@
 </script>
 
 <div class="exercise-panel">
-  <!-- Choose Lesson / Exercise / Workshop Buttons -->
-  {#if !isActive && !standaloneExerciseActive && !workshopActive}
-    <div class="chooser-buttons">
-      <button class="choose-exercise-btn" onclick={handleOpenLessonChooser}>
-        Choose Lesson
-      </button>
-      <button class="choose-exercise-btn choose-exercise-btn--exercise" onclick={handleOpenExerciseChooser}>
-        Choose Exercise
-      </button>
-      <button class="choose-exercise-btn choose-exercise-btn--workshop" onclick={handleOpenWorkshopChooser}>
-        Choose Workshop
-      </button>
-    </div>
-  {/if}
-
   {#if workshopActive}
     <div class="workshop-active-note">
-      Workshop loaded. Use the bottom workshop toolbar for playback and recording.
+      Exercise loaded. Use the bottom toolbar for playback and recording.
     </div>
   {/if}
 
@@ -1066,47 +1041,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
-  }
-
-  .chooser-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-  }
-
-  .choose-exercise-btn {
-    width: 100%;
-    min-height: 0;
-    height: fit-content;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--font-size-md);
-    font-weight: 600;
-    background-color: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-
-  .choose-exercise-btn:hover {
-    background-color: var(--color-primary-dark, #4a7bc8);
-  }
-
-  .choose-exercise-btn--exercise {
-    background-color: #6b5b95;
-  }
-
-  .choose-exercise-btn--exercise:hover {
-    background-color: #574a7a;
-  }
-
-  .choose-exercise-btn--workshop {
-    background-color: #236b4d;
-  }
-
-  .choose-exercise-btn--workshop:hover {
-    background-color: #1a5139;
   }
 
   .workshop-active-note {

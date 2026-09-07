@@ -4,6 +4,7 @@ import type { SolfegeLine } from '../constants/ladukhin.js';
 
 export const SOLFEGE_SOURCE_TONIC = 60;
 export const SOLFEGE_COLUMNS_PER_BEAT = 2;
+export type SolfegeTuningMode = 'equal' | 'just';
 const degrees = ['1', '♯1', '2', '♭3', '3', '4', '♯4', '5', '♭6', '6', '♭7', '7'];
 
 const justRatios = [1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 9 / 5, 15 / 8];
@@ -12,6 +13,18 @@ const justRatios = [1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 
 export function solfegeJustMidi(sourceMidi: number, tonicMidi: number): number {
   const offset = sourceMidi - SOLFEGE_SOURCE_TONIC;
   return tonicMidi + Math.floor(offset / 12) * 12 + 12 * Math.log2(justRatios[((offset % 12) + 12) % 12]!);
+}
+
+/** Physical pitch shared by the score, reference audio and accuracy target. */
+export function solfegeMidi(sourceMidi: number, tonicMidi: number, tuning: SolfegeTuningMode = 'just'): number {
+  return tuning === 'just' ? solfegeJustMidi(sourceMidi, tonicMidi) : tonicMidi + sourceMidi - SOLFEGE_SOURCE_TONIC;
+}
+
+/** Gamut rows run from high to low: a flatter pitch has a positive row offset. */
+export function solfegeRowOffsets(rows: PitchRowData[], tonicMidi: number, tuning: SolfegeTuningMode): number[] | undefined {
+  if (tuning === 'equal') return undefined;
+  return rows.map(row => typeof row.midi === 'number'
+    ? row.midi - solfegeMidi(row.midi - tonicMidi + SOLFEGE_SOURCE_TONIC, tonicMidi, tuning) : 0);
 }
 
 /** Source C4 becomes the singer's speaking pitch; columns represent eighth notes. */

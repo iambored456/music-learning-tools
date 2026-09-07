@@ -1042,7 +1042,7 @@
   .warning {
     background: rgba(255, 153, 0, 0.12);
     border: 1px solid rgba(255, 153, 0, 0.45);
-    color: #ffd48a;
+    color: var(--color-text);
     border-radius: var(--radius-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
@@ -1064,10 +1064,10 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--color-border);
     border-radius: 10px;
     padding: 0;
-    background: rgba(9, 14, 22, 0.55);
+    background: var(--color-panel);
     overflow-x: auto;
   }
 
@@ -1097,14 +1097,14 @@
     gap: 4px;
     padding: 1px 3px;
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--color-border);
+    background: var(--color-control);
     min-width: max-content;
   }
 
   .voice-row--active {
-    border-color: rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-light));
   }
 
   .voice-left {
@@ -1151,7 +1151,7 @@
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    color: #ffb48a;
+    color: var(--color-primary);
     border: 1px solid rgba(255, 180, 138, 0.35);
     background: rgba(255, 120, 80, 0.12);
     border-radius: 999px;
@@ -1166,9 +1166,9 @@
   }
 
   .take-slot-btn {
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-control);
     color: var(--color-text-muted);
     font-size: 10px;
     font-weight: 700;
@@ -1185,13 +1185,13 @@
   .take-slot-btn--active {
     color: #fff;
     border-color: rgba(84, 214, 144, 0.65);
-    background: rgba(32, 147, 93, 0.5);
+    background: #23734d;
   }
 
   .take-slot-btn--missing {
     border-color: rgba(255, 176, 102, 0.62);
     background: rgba(128, 70, 20, 0.34);
-    color: rgba(255, 223, 192, 0.95);
+    color: var(--color-text);
   }
 
   .voice-visibility {
@@ -1205,9 +1205,9 @@
   }
 
   .voice-settings-btn {
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-control);
     color: var(--color-text-muted);
     font-size: 13px;
     font-weight: 700;
@@ -1221,7 +1221,7 @@
   .voice-settings-btn--active {
     color: #fff;
     border-color: rgba(115, 166, 255, 0.75);
-    background: rgba(40, 93, 179, 0.58);
+    background: #2366a5;
   }
 
   .voice-settings-panel {
@@ -1234,9 +1234,9 @@
     flex-direction: column;
     gap: 6px;
     padding: 7px 8px 8px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
-    background: rgba(12, 18, 30, 0.96);
+    background: var(--color-bg-light);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
   }
 
@@ -1250,13 +1250,13 @@
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #93b7ff;
+    color: var(--color-secondary);
   }
 
   .voice-settings-section-label--spaced {
     margin-top: 4px;
     padding-top: 4px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--color-border);
   }
 
   .voice-slider-row {
@@ -1275,21 +1275,21 @@
 
   .voice-slider {
     width: 100%;
-    accent-color: #5f95ff;
+    accent-color: var(--color-secondary);
   }
 
   .voice-slider-value {
     text-align: right;
     font-variant-numeric: tabular-nums;
-    color: #dfe8ff;
+    color: var(--color-text);
     font-weight: 700;
   }
 
   .show-btn {
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: rgba(90, 129, 210, 0.3);
-    color: #dfe8ff;
+    background: var(--color-control);
+    color: var(--color-text);
     font-size: 10px;
     font-weight: 700;
     padding: 3px 8px;
@@ -1298,9 +1298,9 @@
   }
 
   .show-btn--off {
-    color: rgba(223, 232, 255, 0.55);
-    border-color: rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-text-muted);
+    border-color: var(--color-border);
+    background: var(--color-control);
     opacity: 0.55;
   }
 
@@ -1308,10 +1308,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--color-border);
     border-radius: 10px;
     padding: 8px;
-    background: rgba(9, 14, 22, 0.55);
+    background: var(--color-panel);
   }
 
   .controls-layout {
@@ -1347,9 +1347,9 @@
   }
 
   .count-in-btn {
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-control);
     color: var(--color-text-muted);
     font-size: 12px;
     font-weight: 700;
@@ -1362,7 +1362,7 @@
   .count-in-btn--active {
     color: #fff;
     border-color: rgba(84, 214, 144, 0.65);
-    background: rgba(32, 147, 93, 0.5);
+    background: #23734d;
   }
 
   .mode-buttons {
@@ -1372,9 +1372,9 @@
   }
 
   .mode-btn {
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-control);
     color: var(--color-text-muted);
     font-size: 11px;
     font-weight: 700;
@@ -1387,7 +1387,7 @@
   .mode-btn--active {
     color: #fff;
     border-color: rgba(98, 181, 255, 0.65);
-    background: rgba(34, 110, 186, 0.52);
+    background: #2366a5;
   }
 
   .timeline-field {
@@ -1402,9 +1402,9 @@
   }
 
   .timeline-btn {
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-control);
     color: var(--color-text-muted);
     font-size: 11px;
     font-weight: 700;
@@ -1427,7 +1427,7 @@
   .timeline-zoom-slider,
   .timeline-scroll-slider {
     width: 100%;
-    accent-color: #5f95ff;
+    accent-color: var(--color-secondary);
   }
 
   .timeline-scroll-row {
@@ -1442,7 +1442,7 @@
     text-align: right;
     font-size: 11px;
     font-weight: 700;
-    color: #dfe8ff;
+    color: var(--color-text);
     font-variant-numeric: tabular-nums;
   }
 
@@ -1496,8 +1496,8 @@
     padding: 5px 8px;
     font-size: 11px;
     color: var(--color-text);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: var(--color-control);
+    border: 1px solid var(--color-border);
   }
 
   button:disabled {
@@ -1519,7 +1519,7 @@
   .progress-track {
     height: 8px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.09);
+    background: var(--color-control);
     overflow: hidden;
   }
 
