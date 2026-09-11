@@ -111,6 +111,21 @@ describe('annotation lasso clipboard', () => {
     clearLassoClipboard();
   });
 
+  it('preserves individual sixteenth timing during copy/paste and blocks a conflicting paste', () => {
+    const state = createState();
+    const selection = createSelection(state);
+    selection.selectedItems = selection.selectedItems.filter(item => item.type === 'note');
+    const item = selection.selectedItems[0]!;
+    if (item.type !== 'note') throw new Error('Expected note');
+    Object.assign(item.data, { shape: 'diamond', startColumnIndex: 4.5, endColumnIndex: 4.5, durationMicrobeats: 0.5 });
+    copyLassoSelection(selection);
+    const result = pasteLassoClipboard(state, renderOptions);
+    expect(result?.pastedCount).toBe(1);
+    expect(state.placedNotes.at(-1)).toMatchObject({ startColumnIndex: 5.5, durationMicrobeats: 0.5 });
+    copyLassoSelection(selection);
+    expect(pasteLassoClipboard(state, renderOptions)).toBeNull();
+  });
+
   it('copies and pastes selected lasso contents with fresh identifiers and a visible selection hull', () => {
     const state = createState();
     const selection = createSelection(state);

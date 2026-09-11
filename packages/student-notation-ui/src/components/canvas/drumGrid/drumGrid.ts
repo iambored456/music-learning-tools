@@ -4,7 +4,6 @@ import CanvasContextService from '@services/canvasContextService.ts';
 import { registerDrumGridRenderer } from '@services/runtimeGlobals.ts';
 import { drawDrumGrid, type DrumGridRenderOptions } from './drumGridRenderer.ts';
 import { getDrumNotes, getPlacedTonicSigns } from '@state/selectors.ts';
-import { getVolumeIconState } from './drumGridInteractor.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 
 function renderDrumGrid(): void {
@@ -23,8 +22,7 @@ function renderDrumGrid(): void {
     macrobeatGroupings: store.state.macrobeatGroupings,
     macrobeatBoundaryStyles: store.state.macrobeatBoundaryStyles,
     tempoModulationMarkers: store.state.tempoModulationMarkers,
-    baseMicrobeatPx: store.state.cellWidth,
-    volumeIconState: getVolumeIconState()
+    baseMicrobeatPx: store.state.cellWidth
   };
 
   drawDrumGrid(ctx, renderOptions);

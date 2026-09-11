@@ -1,6 +1,7 @@
 // js/rhythm/sixteenthStampPlacements.ts
 import { getSixteenthStampById } from './sixteenthStamps.ts';
 import store from '@state/initStore.ts';
+import { canPlaceStampAlongsideIndividuals } from './individualSixteenthPlacement.ts';
 import logger from '@utils/logger.ts';
 import type { CanvasSpaceColumn, SixteenthStampPlaybackData, SixteenthStampPlacement } from '@mlt/types';
 
@@ -12,12 +13,14 @@ logger.moduleLoaded('SixteenthStampPlacements', 'stamps');
 /**
  * Places a stamp at the specified grid position
  */
-export function placeSixteenthStamp(sixteenthStampId: number, startTimeIndex: number, row: number, color = '#4a90e2'): SixteenthStampPlacement | null {
+export function placeSixteenthStamp(sixteenthStampId: number, startTimeIndex: number, row: number, color = '#44bcef'): SixteenthStampPlacement | null {
   const stamp = getSixteenthStampById(sixteenthStampId);
   if (!stamp) {
     logger.warn('SixteenthStampPlacements', `Invalid sixteenth stamp ID: ${sixteenthStampId}`, { sixteenthStampId }, 'stamps');
     return null;
   }
+
+  if (!canPlaceStampAlongsideIndividuals(store.state, 'sixteenthStamp', sixteenthStampId, startTimeIndex, row, color)) return null;
 
   // Use store methods for placement with collision detection and state management
   return store.addSixteenthStampPlacement(sixteenthStampId, startTimeIndex, row, color);

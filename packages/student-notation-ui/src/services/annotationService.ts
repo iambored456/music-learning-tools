@@ -27,8 +27,9 @@ import { isPointInPolygon, isPointNearHull } from '@utils/geometryUtils.ts';
 import { getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 import { distanceToLineSegment } from '@services/annotation/annotationGeometry.ts';
 import { eraseAnnotationsAtPoint } from '@services/annotation/annotationEraser.ts';
-import { computeConvexHullForSelectedItems, computeLassoSelection, removeFromLassoSelectionAtPoint } from '@services/annotation/annotationLassoSelection.ts';
+import { computeConvexHullForSelectedItems, computeLassoSelection, findSelectableItemAtPoint, removeFromLassoSelectionAtPoint } from '@services/annotation/annotationLassoSelection.ts';
 import { applyLassoSelectionDrag } from '@services/annotation/annotationSelectionDrag.ts';
+import columnMapService from '@services/columnMapService.ts';
 import { renderArrowAnnotation } from '@services/annotation/annotationArrowRenderer.ts';
 import { getDrawToolsController } from '@services/runtimeGlobals.ts';
 import { buildCanvasFont, getSemanticTypography } from '@services/typographyService.ts';
@@ -119,9 +120,8 @@ function areSettingsEqual<T extends object>(current: T, next: T): boolean {
 class AnnotationService {
   canvas!: HTMLCanvasElement;
   ctx!: CanvasRenderingContext2D;
-  currentTool: ToolName;
+  currentTool: ToolName | 'select';
   toolSettings: ToolSettings | null;
-  tempEraserMode: boolean;
   isDrawing: boolean;
   currentPath: FlexiblePoint[];
   startPoint: FlexiblePoint | null;
@@ -139,7 +139,9 @@ class AnnotationService {
   selectionDragTotal: GridPoint | null;
   lastPointerPosition: { clientX: number; clientY: number } | null;
   initialDragStartRank: number | null;
+  selectionDidMove: boolean;
   private initialized = false;
+  private finishTextEditing: (() => void) | null = null;
   private readonly scrollSyncTargets = new Set<HTMLElement>();
   private readonly handleAnnotationsChanged = (): void => {
     this.selectedAnnotation = null;
@@ -175,7 +177,6 @@ class AnnotationService {
 
   constructor() {
     this.toolSettings = null;
-    this.tempEraserMode = false;
     // Note: annotations are now stored in store.state.annotations
     this.currentTool = null;
     this.isDrawing = false;
@@ -197,6 +198,7 @@ class AnnotationService {
     this.selectionDragTotal = null; // Track total movement to avoid accumulation errors
     this.lastPointerPosition = null;
     this.initialDragStartRank = null; // Track viewport startRank at drag start to compensate scroll
+    this.selectionDidMove = false;
   }
 
   initialize() {
@@ -390,7 +392,7 @@ class AnnotationService {
 
   private shouldTrackLassoOutsideCanvas(event: MouseEvent): boolean {
     return this.isDrawing &&
-      this.currentTool === 'lasso' &&
+      (this.currentTool === 'lasso' || this.currentTool === 'select') &&
       event.target !== this.canvas;
   }
 
@@ -448,9 +450,40 @@ class AnnotationService {
     return this.hoverAnnotation;
   }
 
-  setTool(toolName: ToolName, settings: ToolSettings | null) {
+  finishInteraction(): void {
+    this.finishTextEditing?.();
+    if (this.isDraggingSelection && this.selectionDidMove) {
+      this.emitSelectionMoveChanges();
+      store.recordState();
+    } else if (this.isDragging || this.isResizing) {
+      store.recordState();
+    }
+    this.isDrawing = false;
+    this.isDragging = false;
+    this.isResizing = false;
+    this.isDraggingSelection = false;
+    this.tempAnnotation = null;
+    this.startPoint = null;
+    this.dragOffset = null;
+    this.resizeHandle = null;
+    this.resizeStartBounds = null;
+    this.selectionDragStart = null;
+    this.selectionDragTotal = null;
+    this.selectionDidMove = false;
+    this.selectedAnnotation = null;
+    this.hoverAnnotation = null;
+    store.state.lassoSelection = { selectedItems: [], convexHull: null, isActive: false };
+    if (this.canvas) this.render();
+  }
+
+  setTool(toolName: ToolName | 'select', settings: ToolSettings | null) {
+    if (toolName !== this.currentTool) this.finishInteraction();
     this.currentTool = toolName;
     this.toolSettings = settings;
+    if (toolName !== 'select' && store.state.playbackStartMacrobeatIndex !== null) {
+      store.setPlaybackStartMacrobeat(null);
+      if (this.canvas) this.render();
+    }
 
     // Update cursor based on tool
     if (this.canvas) {
@@ -462,6 +495,9 @@ class AnnotationService {
         case 'marker':
         case 'highlighter':
           this.canvas.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\'><circle cx=\'8\' cy=\'8\' r=\'4\' fill=\'rgba(0,0,0,0.5)\'/></svg>") 8 8, crosshair';
+          break;
+        case 'select':
+          this.canvas.style.cursor = 'default';
           break;
         case 'lasso':
           this.canvas.style.cursor = 'crosshair';
@@ -475,7 +511,7 @@ class AnnotationService {
   }
 
   handleMouseDown(e: MouseEvent) {
-    if (!this.currentTool || !this.toolSettings) {return;}
+    if (e.button !== 0 || !['draw', 'select'].includes(store.state.selectedTool) || !this.currentTool || !this.toolSettings) {return;}
 
     const rect = this.canvas.getBoundingClientRect();
     const canvasX = e.clientX - rect.left;
@@ -485,20 +521,31 @@ class AnnotationService {
     // Convert canvas pixels to grid coordinates
     const gridCoords = this.canvasToGridFresh(canvasX, canvasY);
 
-    // Right-click behavior depends on current tool
-    if (e.button === 2) {
-      // If lasso tool is active and there's a selection, remove clicked item from selection
-      if (this.currentTool === 'lasso' && store.state.lassoSelection?.isActive) {
-        this.removeFromLassoSelection(canvasX, canvasY);
+    if (this.currentTool === 'select') {
+      const selectedItem = findSelectableItemAtPoint({
+        canvasX,
+        canvasY,
+        state: store.state,
+        renderOptions: this.getRenderOptions()
+      });
+      if (selectedItem) {
+        store.setPlaybackStartMacrobeat(null);
+        const selectedItems = [selectedItem];
+        store.state.lassoSelection = {
+          selectedItems,
+          convexHull: computeConvexHullForSelectedItems({ selectedItems, renderOptions: this.getRenderOptions(), state: store.state }),
+          isActive: true
+        };
+        this.selectedAnnotation = null;
+        this.isDraggingSelection = true;
+        this.selectionDidMove = false;
+        this.selectionDragStart = { col: gridCoords.col, row: gridCoords.row };
+        this.selectionDragTotal = { col: 0, row: 0 };
+        this.initialDragStartRank = pitchGridViewportService.getViewportInfo().startRank;
+        this.canvas.style.cursor = 'grabbing';
+        this.render();
         return;
       }
-
-      // Otherwise, activate temporary eraser mode
-      this.tempEraserMode = true;
-      this.isDrawing = true;
-      this.eraseAtPoint(canvasX, canvasY);
-      this.showEraserCursor(canvasX, canvasY);
-      return;
     }
 
     // Check for resize handle on selected text annotation
@@ -526,6 +573,7 @@ class AnnotationService {
 
       if (isNearHull || isInsideHull) {
         this.isDraggingSelection = true;
+        this.selectionDidMove = false;
         // Store original mouse position in grid units (accounts for later scrolling)
         this.selectionDragStart = {
           col: gridCoords.col,
@@ -616,6 +664,7 @@ class AnnotationService {
           settings: { ...this.toolSettings[this.currentTool] }
         };
         break;
+      case 'select':
       case 'lasso':
         const lassoStartPoint = this.getBoundedCanvasPoint(canvasX, canvasY);
         this.tempAnnotation = {
@@ -627,6 +676,7 @@ class AnnotationService {
   }
 
   handleMouseMove(e: MouseEvent) {
+    if ((e.buttons & 2) || !['draw', 'select'].includes(store.state.selectedTool)) return;
     const rect = this.canvas.getBoundingClientRect();
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
@@ -634,13 +684,6 @@ class AnnotationService {
 
     // Convert to grid coordinates
     const gridCoords = this.canvasToGridFresh(canvasX, canvasY);
-
-    // Handle eraser mode
-    if (this.tempEraserMode) {
-      this.eraseAtPoint(canvasX, canvasY);
-      this.showEraserCursor(canvasX, canvasY);
-      return;
-    }
 
     // Handle resizing text annotation
     if (this.isResizing && this.selectedAnnotation?.type === 'text') {
@@ -753,6 +796,7 @@ class AnnotationService {
         }
         this.render();
         break;
+      case 'select':
       case 'lasso':
         if (!isLassoAnnotation(tempAnnotation)) {return;}
         tempAnnotation.path.push(this.getBoundedCanvasPoint(canvasX, canvasY));
@@ -778,7 +822,12 @@ class AnnotationService {
       this.selectionDragTotal = null;
       this.lastPointerPosition = null;
       this.initialDragStartRank = null;
-      store.recordState();
+      if (this.selectionDidMove) {
+        this.emitSelectionMoveChanges();
+        store.recordState();
+      }
+      this.selectionDidMove = false;
+      this.canvas.style.cursor = 'grab';
       return;
     }
 
@@ -793,13 +842,6 @@ class AnnotationService {
     if (!this.isDrawing) {return;}
 
     this.isDrawing = false;
-
-    // Exit temporary eraser mode
-    if (this.tempEraserMode) {
-      this.tempEraserMode = false;
-      this.render(); // Clear the eraser cursor
-      return;
-    }
 
     const tempAnnotation = this.tempAnnotation;
     if (tempAnnotation) {
@@ -826,9 +868,18 @@ class AnnotationService {
       }
 
       // Add completed annotation to list
-      if (this.currentTool === 'lasso') {
-        // Process lasso selection
-        this.handleLassoSelection(e.shiftKey);
+      if ((this.currentTool === 'lasso' || this.currentTool === 'select')) {
+        const isClick = this.currentTool === 'select' && isLassoAnnotation(tempAnnotation) &&
+          tempAnnotation.path.every(point => {
+            const first = tempAnnotation.path[0]!;
+            return Math.hypot(point.x - first.x, point.y - first.y) < 4;
+          });
+        if (isClick && isLassoAnnotation(tempAnnotation)) {
+          this.selectPlaybackMacrobeatAt(tempAnnotation.path[0]?.x ?? 0);
+        } else {
+          store.setPlaybackStartMacrobeat(null);
+          this.handleLassoSelection(e.shiftKey);
+        }
       } else {
         if (isArrowAnnotation(tempAnnotation) || isPathAnnotation(tempAnnotation)) {
           store.state.annotations.push(tempAnnotation);
@@ -902,6 +953,8 @@ class AnnotationService {
 
 	    this.selectionDragTotal.col = nextSelectionDragTotal.col;
 	    this.selectionDragTotal.row = nextSelectionDragTotal.row;
+	    this.selectionDidMove = true;
+	    this.canvas.style.cursor = 'grabbing';
 	    this.render();
 	  }
 
@@ -931,7 +984,7 @@ class AnnotationService {
 	  }
 
   handleMouseLeave(e: MouseEvent) {
-    if (this.isDrawing && this.currentTool === 'lasso') {
+    if (this.isDrawing && (this.currentTool === 'lasso' || this.currentTool === 'select')) {
       return;
     }
     if (this.isDrawing) {
@@ -940,6 +993,7 @@ class AnnotationService {
   }
 
   handleDoubleClick(e: MouseEvent) {
+    if (store.state.selectedTool !== 'select' && !(store.state.selectedTool === 'draw' && store.state.selectedDrawTool === 'text')) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -952,19 +1006,20 @@ class AnnotationService {
   }
 
   editTextAnnotation(annotation: TextAnnotation) {
+    this.finishTextEditing?.();
     // Open text editor for existing annotation
     const { col, row, widthCols, heightRows, text, settings } = annotation;
 
     // Temporarily remove from annotations array
     const index = store.state.annotations.indexOf(annotation);
     if (index > -1) {
-      store.state.annotations.splice(index, 1);
+      store.setAnnotations(store.state.annotations.filter(item => item !== annotation), false);
       this.selectedAnnotation = null;
       this.render();
     }
 
     // Create editable text input with existing text
-    this.createTextAnnotation(col, row, widthCols, heightRows, text, settings);
+    this.createTextAnnotation(col, row, widthCols, heightRows, text, settings, { annotation, index });
   }
 
   createTextAnnotation(
@@ -973,7 +1028,8 @@ class AnnotationService {
     widthCols: number,
     heightRows: number,
     existingText: string | null = null,
-    existingSettings: TextToolSettings | null = null
+    existingSettings: TextToolSettings | null = null,
+    original?: { annotation: TextAnnotation; index: number }
   ) {
     this.isDrawing = false;
 
@@ -1053,6 +1109,7 @@ class AnnotationService {
     const finishText = () => {
       if (finished) {return;}
       finished = true;
+      this.finishTextEditing = null;
 
       const text = input.textContent.trim();
       // Don't save if empty or just placeholder
@@ -1066,15 +1123,19 @@ class AnnotationService {
           text,
           settings: { ...settings }
         };
-        store.state.annotations.push(annotation);
+        const annotations = [...store.state.annotations];
+        annotations.splice(original ? Math.max(0, original.index) : annotations.length, 0, annotation);
+        store.setAnnotations(annotations);
         this.selectedAnnotation = annotation;
-        store.recordState();
         this.render();
       }
+      if ((!text || text === 'Type here...') && original) store.recordState();
       if (document.body.contains(input)) {
         document.body.removeChild(input);
       }
     };
+
+    this.finishTextEditing = finishText;
 
     // Clear placeholder on first input
     let placeholderCleared = false;
@@ -1097,6 +1158,13 @@ class AnnotationService {
       }
       if (e.key === 'Escape') {
         finished = true;
+        this.finishTextEditing = null;
+        e.stopPropagation();
+        if (original) {
+          const annotations = [...store.state.annotations];
+          annotations.splice(Math.max(0, original.index), 0, original.annotation);
+          store.setAnnotations(annotations, false);
+        }
         if (document.body.contains(input)) {
           document.body.removeChild(input);
         }
@@ -1106,8 +1174,7 @@ class AnnotationService {
 
 	  handleLassoSelection(isAdditive = false) {
 	    if (!isLassoAnnotation(this.tempAnnotation)) {return;}
-
-	    const options = this.getRenderOptions();
+    const options = this.getRenderOptions();
 	    store.state.lassoSelection = computeLassoSelection({
 	      lassoPath: this.tempAnnotation.path,
 	      state: store.state,
@@ -1116,12 +1183,33 @@ class AnnotationService {
 	      existingSelectedItems: store.state.lassoSelection?.selectedItems
 	    });
 
-	    // Record state for undo/redo
-	    store.recordState();
+	    // Selection alone does not change the score or create an Undo step.
 
 	    logger.log('AnnotationService', `Lasso selection completed: ${store.state.lassoSelection.selectedItems.length} items selected`, 'annotation');
 	    this.render();
 	  }
+
+  private selectPlaybackMacrobeatAt(canvasX: number): void {
+    const canvasColumn = Math.floor(getColumnFromX(canvasX, this.getRenderOptions()));
+    const entry = columnMapService.getColumnMap(store.state).entries.find(candidate =>
+      candidate.canvasIndex === canvasColumn && candidate.type === 'beat'
+    );
+    store.state.lassoSelection = { selectedItems: [], convexHull: null, isActive: false };
+    store.setPlaybackStartMacrobeat(entry?.macrobeatIndex ?? null);
+    this.selectedAnnotation = null;
+    this.render();
+  }
+
+  private emitSelectionMoveChanges(): void {
+    const types = new Set(store.state.lassoSelection.selectedItems.map(item => item.type));
+    if (types.has('note') || types.has('tonicSign')) store.emit('notesChanged');
+    if (types.has('sixteenthStamp')) store.emit('sixteenthStampPlacementsChanged');
+    if (types.has('sixteenthThreeStamp')) store.emit('sixteenthThreeStampPlacementsChanged');
+    if (types.has('tripletStamp')) store.emit('tripletStampPlacementsChanged');
+    if (types.has('annotation')) store.emit('annotationsChanged');
+    if (types.has('modulationMarker')) store.emit('tempoModulationMarkersChanged');
+    if (types.has('tonicSign')) store.emit('rhythmStructureChanged');
+  }
 
 	  updateLassoConvexHull() {
     // Only update if there's an active lasso selection
@@ -1520,7 +1608,7 @@ class AnnotationService {
 
     ctx.save();
     handles.forEach(handle => {
-      ctx.fillStyle = '#4a90e2';
+      ctx.fillStyle = '#44bcef';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
       ctx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
@@ -1538,12 +1626,9 @@ class AnnotationService {
 
     ctx.save();
 
-    if (isHighlighter) {
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = settings.color;
-    } else {
-      ctx.strokeStyle = settings.color;
-    }
+    const transparency = settings.transparency ?? (isHighlighter ? 70 : 0);
+    ctx.globalAlpha = 1 - Math.max(0, Math.min(95, transparency)) / 100;
+    ctx.strokeStyle = settings.color;
 
     ctx.lineWidth = this.getStrokeWidth(settings.size);
     ctx.lineCap = 'round';
@@ -1627,6 +1712,24 @@ class AnnotationService {
     // When stamp hover is active, let pitch grid own the cursor to avoid flicker.
     const cursorOverrideActive = typeof document !== 'undefined' && document.body?.dataset?.['cursorOverride'] === 'stamp';
 
+    if (this.currentTool === 'select') {
+      const item = findSelectableItemAtPoint({
+        canvasX: x,
+        canvasY: y,
+        state: store.state,
+        renderOptions: this.getRenderOptions()
+      });
+      if (item) {
+        if (!cursorOverrideActive) this.canvas.style.cursor = 'grab';
+        const nextHover = item.type === 'annotation' && (item.data.type === 'arrow' || item.data.type === 'text')
+          ? item.data
+          : null;
+        this.hoverAnnotation = nextHover;
+        if (previousHover !== nextHover) this.render();
+        return;
+      }
+    }
+
     // Check for resize handle on selected text annotation first
     if (this.selectedAnnotation?.type === 'text') {
       const handle = this.getResizeHandleAt(x, y, this.selectedAnnotation);
@@ -1653,7 +1756,7 @@ class AnnotationService {
       const isInsideHull = isPointInPolygon({ x, y }, store.state.lassoSelection.convexHull);
 
       if (isNearHull || isInsideHull) {
-        this.canvas.style.cursor = 'move';
+        this.canvas.style.cursor = this.currentTool === 'select' ? 'grab' : 'move';
         return;
       }
     }
@@ -1821,6 +1924,14 @@ class AnnotationService {
     this.render();
   }
 
+  getEraserTargetNames(x: number, y: number): string[] {
+    const { nextAnnotations } = eraseAnnotationsAtPoint({
+      x, y, annotations: store.state.annotations, getRenderOptions: () => this.getRenderOptions()
+    });
+    return store.state.annotations.filter(annotation => !nextAnnotations.includes(annotation)).map(annotation =>
+      annotation.type === 'highlighter' ? 'Marker' : annotation.type[0]!.toUpperCase() + annotation.type.slice(1));
+  }
+
 	  eraseAtPoint(x: number, y: number) {
 	    const { nextAnnotations, changed } = eraseAnnotationsAtPoint({
 	      x,
@@ -1829,10 +1940,7 @@ class AnnotationService {
 	      getRenderOptions: () => this.getRenderOptions()
 	    });
 
-	    store.state.annotations = nextAnnotations;
-	    if (changed) {
-	      this.render();
-	    }
+	    if (changed) store.setAnnotations(nextAnnotations, false);
 	    return changed;
 	  }
 

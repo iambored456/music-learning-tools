@@ -39,12 +39,13 @@ const SixteenthStampsToolbar = {
       [5, 8, 14, 6, 9, 7],
       [10, 13, 12, 11]
     ];
+    const stampColumnCount = Math.max(...stampRows.map(stampIds => stampIds.length));
     grid.style.gridTemplateRows = `repeat(${stampRows.length}, minmax(0, 1fr))`;
 
     stampRows.forEach((rowStampIds, rowIndex) => {
       const row = document.createElement('div');
       row.className = `sixteenth-stamps-row sixteenth-stamps-row-${rowIndex + 1}`;
-      row.style.gridTemplateColumns = `repeat(${rowStampIds.length}, minmax(0, 1fr))`;
+      row.style.gridTemplateColumns = `repeat(${stampColumnCount}, minmax(0, 1fr))`;
 
       rowStampIds.forEach(stampId => {
         const stamp = SIXTEENTH_STAMPS.find(s => s.id === stampId) as SixteenthStamp | undefined;
@@ -139,7 +140,9 @@ const SixteenthStampsToolbar = {
     }
 
     store.on('toolChanged', ({ newTool }: { newTool?: string } = {}) => {
-      if (newTool && newTool !== 'sixteenthStamp') {
+      if (newTool === 'sixteenthStamp') {
+        this.setInitialSelection(this.selectedSixteenthStampId);
+      } else {
         this.clearSelection();
       }
     });

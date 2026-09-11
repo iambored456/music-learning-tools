@@ -1,4 +1,6 @@
 import store from '@state/initStore.ts';
+import { getNoteEndColumn } from '@mlt/types';
+import { canPlaceIndividualSixteenth } from '@/rhythm/individualSixteenthPlacement.ts';
 import audioPreviewService from '@services/audioPreviewService.ts';
 import { triggerAdsrPlayhead } from '@components/audio/adsr/adsrPlayheadCanvas.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
@@ -28,7 +30,8 @@ export class PitchGridNoteToolInteractor {
       !note.isDrum &&
       note.row === rowIndex &&
       colIndex >= note.startColumnIndex &&
-      colIndex <= note.endColumnIndex
+      colIndex < getNoteEndColumn(note) &&
+      (store.state.selectedNote?.shape !== 'diamond' || note.color === store.state.selectedNote.color)
     );
 
     if (!existingNote) {
@@ -41,7 +44,7 @@ export class PitchGridNoteToolInteractor {
     }
 
     const stamp = rhythmPlaybackService.getSixteenthStampAtPosition(colIndex, rowIndex);
-    if (stamp) {
+    if (stamp && existingNote.shape !== 'diamond') {
       rhythmPlaybackService.playRhythmPattern(stamp.sixteenthStampId, pitch, existingNote.color, existingNote.shape, stamp);
       return {
         handled: true,
@@ -58,7 +61,7 @@ export class PitchGridNoteToolInteractor {
     const pitchColor = store.state.fullRowData[rowIndex]?.hex || '#888888';
     const adsr = store.state.timbres[existingNote.color]?.adsr;
     if (adsr) {
-      triggerAdsrPlayhead(existingNote.uuid, 'attack', pitchColor, adsr);
+      triggerAdsrPlayhead(existingNote.uuid, 'attack', pitchColor, adsr, existingNote.color);
     }
 
     return {
@@ -66,7 +69,8 @@ export class PitchGridNoteToolInteractor {
       state: {
         ...state,
         activePreviewPitches: [pitch],
-        activeNote: existingNote
+        activeNote: existingNote,
+        lastDragRow: rowIndex
       }
     };
   }
@@ -94,6 +98,9 @@ export class PitchGridNoteToolInteractor {
     }
 
     const { shape, color } = selectedNote;
+    if (shape === 'diamond' && !canPlaceIndividualSixteenth(store.state, colIndex, rowIndex, color)) {
+      return { placed: false, state, shouldStartDragging: false };
+    }
 
     // For circle notes (2-column span), also check the second column.
     if (shape === 'circle' && !isNotePlayableAtColumn(colIndex + 1, store.state)) {
@@ -107,6 +114,7 @@ export class PitchGridNoteToolInteractor {
       endColumnIndex: defaultEndColumn,
       color,
       shape,
+      ...(shape === 'diamond' ? { durationMicrobeats: 0.5 } : {}),
       isDrum: false
     };
 
@@ -142,7 +150,8 @@ export class PitchGridNoteToolInteractor {
           addedNote.uuid,
           'attack',
           pitchColor,
-          adsr
+          adsr,
+          addedNote.color
         );
       }
 
@@ -163,6 +172,10 @@ export class PitchGridNoteToolInteractor {
     if (!activeNote) {
       return state;
     }
+
+    if (activeNote.shape === 'diamond' && !canPlaceIndividualSixteenth(
+      store.state, colIndex, rowIndex, activeNote.color, activeNote.uuid
+    )) return state;
 
     const newEndIndex = colIndex;
     const newRow = rowIndex;
@@ -199,7 +212,7 @@ export class PitchGridNoteToolInteractor {
         const pitchColor = store.state.fullRowData[newRow]?.hex || '#888888';
         const adsr = store.state.timbres[nextActiveNote.color]?.adsr;
         if (adsr && nextActiveNote.uuid) {
-          triggerAdsrPlayhead(nextActiveNote.uuid, 'attack', pitchColor, adsr);
+          triggerAdsrPlayhead(nextActiveNote.uuid, 'attack', pitchColor, adsr, nextActiveNote.color);
         }
 
         return {
@@ -214,7 +227,7 @@ export class PitchGridNoteToolInteractor {
     }
 
     // Oval notes: reposition horizontally and allow vertical pitch changes.
-    if (activeNote.shape === 'oval') {
+    if (activeNote.shape === 'oval' || activeNote.shape === 'diamond') {
       const newStartIndex = colIndex;
       if (newStartIndex !== activeNote.startColumnIndex) {
         store.updateNotePosition(activeNote, newStartIndex as CanvasSpaceColumn);
@@ -246,7 +259,7 @@ export class PitchGridNoteToolInteractor {
         const pitchColor = store.state.fullRowData[newRow]?.hex || '#888888';
         const adsr = store.state.timbres[nextActiveNote.color]?.adsr;
         if (adsr && nextActiveNote.uuid) {
-          triggerAdsrPlayhead(nextActiveNote.uuid, 'attack', pitchColor, adsr);
+          triggerAdsrPlayhead(nextActiveNote.uuid, 'attack', pitchColor, adsr, nextActiveNote.color);
         }
 
         return {

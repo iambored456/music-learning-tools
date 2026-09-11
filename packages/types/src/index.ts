@@ -23,6 +23,7 @@ export {
   type PitchViewportRange,
 
   // Notes
+  getNoteEndColumn,
   type NoteShape,
   type PlacedNote,
   type AnimatableNote,

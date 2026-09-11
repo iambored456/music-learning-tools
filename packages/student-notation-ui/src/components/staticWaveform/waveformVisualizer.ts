@@ -24,6 +24,7 @@ interface NoteChangedPayload {
 const MAX_SAMPLES = 512;
 const STANDARD_DEGREES = 360;
 const EXTENDED_DEGREES = 480;
+const WAVEFORM_VERTICAL_FILL = 0.9;
 
 const getAnimationManager = () => getAnimationEffectsManager();
 
@@ -71,7 +72,7 @@ class StaticWaveformVisualizer {
     if (!ctx) {return false;}
 
     this.ctx = ctx;
-    this.currentColor = store.state.selectedNote?.color || '#4a90e2';
+    this.currentColor = store.state.selectedNote?.color || '#44bcef';
     this.isInitialized = true;
     this.eventAbortController = new AbortController();
 
@@ -144,14 +145,43 @@ class StaticWaveformVisualizer {
       this.updateToggleButton();
     };
 
+    const handleAnimationUpdate = (payload?: { type?: string; activeColors?: string[] }) => {
+      if (!this.dynamicVisualizer.isLiveMode() && payload?.type === 'vibrato' &&
+        this.currentColor && payload.activeColors?.includes(this.currentColor)) {
+        this.draw();
+      }
+    };
+
+    const handleTremoloAmplitudeUpdate = (payload?: { activeColors?: string[] }) => {
+      if (!this.dynamicVisualizer.isLiveMode() && this.currentColor &&
+        payload?.activeColors?.includes(this.currentColor)) {
+        this.draw();
+      }
+    };
+
+    const handleVisualEffectChanged = (payload?: { effectType?: string; color?: string }) => {
+      if ((payload?.effectType === 'vibrato' || payload?.effectType === 'tremolo') &&
+        payload.color === this.currentColor) {
+        // Redraw on the next frame after the effect has processed its parameters,
+        // including when disabling an effect removes it from the animation loop.
+        this.generateWaveform();
+      }
+    };
+
     store.on('noteChanged', handleNoteChanged);
     store.on('timbreChanged', handleTimbreChanged);
     store.on('waveformExtendedViewChanged', handleExtendedViewChanged);
+    store.on('animationUpdate', handleAnimationUpdate);
+    store.on('tremoloAmplitudeUpdate', handleTremoloAmplitudeUpdate);
+    store.on('visualEffectChanged', handleVisualEffectChanged);
 
     this.storeCleanups.push(
       () => store.off('noteChanged', handleNoteChanged),
       () => store.off('timbreChanged', handleTimbreChanged),
-      () => store.off('waveformExtendedViewChanged', handleExtendedViewChanged)
+      () => store.off('waveformExtendedViewChanged', handleExtendedViewChanged),
+      () => store.off('animationUpdate', handleAnimationUpdate),
+      () => store.off('tremoloAmplitudeUpdate', handleTremoloAmplitudeUpdate),
+      () => store.off('visualEffectChanged', handleVisualEffectChanged)
     );
 
     const tabButtons = document.querySelectorAll<HTMLElement>('.tab-button');
@@ -487,7 +517,8 @@ class StaticWaveformVisualizer {
 
     const { width, height } = canvas;
     const centerY = height / 2;
-    const amplitude = height / 2;
+    // Leave 5% headroom at each edge for both generated and live waveforms.
+    const amplitude = (height / 2) * WAVEFORM_VERTICAL_FILL;
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
@@ -569,17 +600,33 @@ class StaticWaveformVisualizer {
     const ctx = this.ctx;
     if (!ctx || this.waveformData.length === 0) {return;}
 
-    const color = this.currentColor || '#4a90e2';
+    const color = this.currentColor || '#44bcef';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
 
     const samplesPerPixel = this.waveformData.length / width;
+    // The shared visual offset is in semitones, with upward pitch negative in Y.
+    // Convert to a frequency ratio: higher pitch packs more cycles into the frame.
+    const animationManager = getAnimationManager();
+    const pitchOffset = animationManager?.getVibratoYOffset(color) ?? 0;
+    const frequencyMultiplier = 2 ** (-pitchOffset / 12);
+    const tremoloMultiplier = animationManager?.getTremoloAmplitudeMultiplier(color) ?? 1;
+    const displayedAmplitude = amplitude * tremoloMultiplier;
+    const maxDegrees = store.state.waveformExtendedView ? EXTENDED_DEGREES : STANDARD_DEGREES;
+    const samplesPerCycle = this.waveformData.length * STANDARD_DEGREES / maxDegrees;
 
     for (let x = 0; x < width; x++) {
-      const sampleIndex = Math.floor(x * samplesPerPixel);
-      const sample = this.waveformData[sampleIndex] || 0;
-      const y = centerY - (sample * amplitude);
+      // Wrap at one complete cycle (not at the end of the 480-degree view).
+      // Interpolation keeps small pitch changes smooth and the waveform continuous.
+      const samplePosition = (x * samplesPerPixel * frequencyMultiplier) % samplesPerCycle;
+      const sampleIndex = Math.floor(samplePosition);
+      const nextIndex = (sampleIndex + 1) % samplesPerCycle;
+      const fraction = samplePosition - sampleIndex;
+      const first = this.waveformData[sampleIndex] ?? 0;
+      const second = this.waveformData[nextIndex] ?? 0;
+      const sample = first + (second - first) * fraction;
+      const y = centerY - (sample * displayedAmplitude);
 
       if (x === 0) {
         ctx.moveTo(x, y);
@@ -593,7 +640,12 @@ class StaticWaveformVisualizer {
     ctx.lineTo(0, centerY);
     ctx.closePath();
 
-    const gradient = ctx.createLinearGradient(0, centerY - amplitude, 0, centerY + amplitude);
+    const gradient = ctx.createLinearGradient(
+      0,
+      centerY - displayedAmplitude,
+      0,
+      centerY + displayedAmplitude
+    );
     gradient.addColorStop(0, hexToRgba(color, 0.3));
     gradient.addColorStop(0.5, hexToRgba(color, 0.1));
     gradient.addColorStop(1, hexToRgba(color, 0.3));

@@ -14,14 +14,16 @@ function activatePitchTab(tabId: string): string | null {
   const panels = document.querySelectorAll<HTMLElement>('.pitch-tab-panel');
   const targetButton = document.querySelector<HTMLElement>(`[data-pitch-tab="${tabId}"]`);
 
-  if (!targetButton) {
+  // The combined Pitch controls no longer have a subtab button.
+  const isCombinedPitch = tabId === 'draw' && document.getElementById('draw-panel') !== null;
+  if (!targetButton && !isCombinedPitch) {
     return null;
   }
 
   buttons.forEach(button => button.classList.remove('active'));
   panels.forEach(panel => panel.classList.remove('active'));
 
-  targetButton.classList.add('active');
+  targetButton?.classList.add('active');
   if (tabId === 'draw') {
     ['range-panel', 'mode-panel', 'draw-panel'].forEach(panelId => {
       document.getElementById(panelId)?.classList.add('active');
@@ -30,7 +32,7 @@ function activatePitchTab(tabId: string): string | null {
     document.getElementById(`${tabId}-panel`)?.classList.add('active');
   }
 
-  return targetButton.dataset['pitchTab'] ?? tabId;
+  return targetButton?.dataset['pitchTab'] ?? tabId;
 }
 
 function dispatchPitchTabChanged(tabId: string): void {
@@ -40,7 +42,8 @@ function dispatchPitchTabChanged(tabId: string): void {
 }
 
 export function getActivePitchTab(): string | null {
-  return document.querySelector<HTMLElement>('.pitch-tab-button.active')?.dataset['pitchTab'] ?? null;
+  return document.querySelector<HTMLElement>('.pitch-tab-button.active')?.dataset['pitchTab']
+    ?? (document.getElementById('draw-panel')?.classList.contains('active') ? 'draw' : null);
 }
 
 export function restoreSavedPitchTabSelection(): string | null {

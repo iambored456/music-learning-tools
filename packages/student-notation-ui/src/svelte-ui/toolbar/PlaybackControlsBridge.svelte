@@ -15,16 +15,18 @@
   import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.ts';
   import playIconUrl from '../../../public/assets/icons/play.svg?url';
   import pauseIconUrl from '../../../public/assets/icons/pause.svg?url';
+  import { hourglassIcon } from './playbackIcons';
 
   // Reactive state
   let isPlaying = store.state.isPlaying;
   let isPaused = store.state.isPaused;
+  let isBuffering = $state(TransportService.isBuffering);
   let isLooping = store.state.isLooping;
   let canUndo = store.state.historyIndex > 0;
   let canRedo = store.state.historyIndex < store.state.history.length - 1;
 
   // DOM element references
-  let playBtn: HTMLElement | null = null;
+  let playBtn: HTMLButtonElement | null = null;
   let stopBtn: HTMLElement | null = null;
   let loopBtn: HTMLElement | null = null;
   let clearBtn: HTMLElement | null = null;
@@ -33,6 +35,7 @@
 
   // Event handlers
   function handlePlay() {
+    if (TransportService.isBuffering) return;
     if (isPlaying && isPaused) {
       store.setPlaybackState(true, false);
       TransportService.resume();
@@ -79,7 +82,12 @@
     if (!playBtn) return;
     const playIcon = `<img src="${playIconUrl}" alt="Play">`;
     const pauseIcon = `<img src="${pauseIconUrl}" alt="Pause">`;
-    playBtn.innerHTML = (isPlaying && !isPaused) ? pauseIcon : playIcon;
+    const label = isBuffering ? 'Buffering playback' : (isPlaying && !isPaused) ? 'Pause' : 'Play';
+    playBtn.innerHTML = isBuffering ? hourglassIcon : (isPlaying && !isPaused) ? pauseIcon : playIcon;
+    playBtn.disabled = isBuffering;
+    playBtn.title = label;
+    playBtn.setAttribute('aria-label', label);
+    playBtn.setAttribute('aria-busy', String(isBuffering));
   }
 
   function updateLoopButton() {
@@ -97,7 +105,7 @@
 
   onMount(() => {
     // Find existing DOM elements
-    playBtn = document.getElementById('play-button');
+    playBtn = document.getElementById('play-button') as HTMLButtonElement | null;
     stopBtn = document.getElementById('stop-button');
     loopBtn = document.getElementById('loop-button');
     clearBtn = document.getElementById('clear-button');
@@ -126,6 +134,11 @@
       updateLoopButton();
     };
 
+    const handleBufferingChanged = (value?: boolean) => {
+      isBuffering = value ?? false;
+      updatePlayButton();
+    };
+
     const handleHistoryChanged = () => {
       canUndo = store.state.historyIndex > 0;
       canRedo = store.state.historyIndex < store.state.history.length - 1;
@@ -135,6 +148,13 @@
     store.on('playbackStateChanged', handlePlaybackState);
     store.on('loopingChanged', handleLoopingChanged);
     store.on('historyChanged', handleHistoryChanged);
+    store.on('playbackBufferingChanged', handleBufferingChanged);
+    unsubscribers.push(
+      () => store.off('playbackStateChanged', handlePlaybackState),
+      () => store.off('loopingChanged', handleLoopingChanged),
+      () => store.off('historyChanged', handleHistoryChanged),
+      () => store.off('playbackBufferingChanged', handleBufferingChanged)
+    );
 
     // Initial UI sync
     updatePlayButton();
@@ -144,6 +164,7 @@
   });
 
   onDestroy(() => {
+    unsubscribers.forEach(unsubscribe => unsubscribe());
     // Remove event listeners
     playBtn?.removeEventListener('click', handlePlay);
     stopBtn?.removeEventListener('click', handleStop);

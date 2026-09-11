@@ -23,8 +23,27 @@ let drumsPreloaded = false;
 /** Minimum time between drum triggers */
 const DRUM_START_EPSILON = 1e-4;
 
+function createLoadingPlayers(samples: Record<DrumTrackId, string>) {
+  let resolveLoad!: () => void;
+  let rejectLoad!: (error: Error) => void;
+  const loaded = new Promise<void>((resolve, reject) => {
+    resolveLoad = resolve;
+    rejectLoad = reject;
+  });
+  // Players may begin loading before anyone calls waitForLoad(). Keep a
+  // rejection handled while preserving it for every current/future waiter.
+  void loaded.catch(() => {});
+  const players = new Tone.Players({
+    urls: samples,
+    onload: resolveLoad,
+    onerror: rejectLoad
+  });
+  if (players.loaded) resolveLoad();
+  return { players, loaded, cancelLoad: () => rejectLoad(new Error('Drum players disposed before loading completed')) };
+}
+
 /**
- * Preload drum sample buffers so later Tone.Players construction can reuse cached data.
+ * Preload drum sample URLs into the browser cache for subsequent players.
  * Safe to call repeatedly; concurrent calls share the same promise.
  */
 export function preloadDrumSamples(
@@ -38,10 +57,10 @@ export function preloadDrumSamples(
     return drumPreloadPromise;
   }
 
-  const preloadPlayers = new Tone.Players(samples);
+  const { players: preloadPlayers, loaded } = createLoadingPlayers(samples);
   drumPreloadPromise = (async () => {
     try {
-      await preloadPlayers.loaded;
+      await loaded;
       drumsPreloaded = true;
     } finally {
       preloadPlayers.dispose();
@@ -68,6 +87,7 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
   let drumPlayers: Tone.Players | null = null;
   let drumVolumeNode: Tone.Volume | null = null;
   const lastDrumStartTimes = new Map<string, number>();
+  const trackVolumes: Record<DrumTrackId, number> = { H: 1, M: 1, L: 1 };
 
   /**
    * Get a safe drum start time that prevents overlapping triggers.
@@ -87,7 +107,8 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
   // Initialize drum players
   drumVolumeNode = new Tone.Volume(initialVolume);
 
-  drumPlayers = new Tone.Players(samples).connect(drumVolumeNode);
+  const loading = createLoadingPlayers(samples);
+  drumPlayers = loading.players.connect(drumVolumeNode);
 
   // Connect to synth engine's main volume if available, otherwise to destination
   if (synthEngine) {
@@ -110,6 +131,18 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
       return drumVolumeNode;
     },
 
+    setTrackVolume(trackId: DrumTrackId, volume: number): void {
+      if (!Number.isFinite(volume)) return;
+      const next = Math.max(0, Math.min(1, volume));
+      trackVolumes[trackId] = next;
+      const player = drumPlayers?.player(trackId);
+      if (player) player.volume.value = Tone.gainToDb(next);
+    },
+
+    getTrackVolume(trackId: DrumTrackId): number {
+      return trackVolumes[trackId];
+    },
+
     trigger(trackId: DrumTrackId, time: number): void {
       if (!drumPlayers) return;
 
@@ -123,6 +156,7 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
     },
 
     dispose(): void {
+      loading.cancelLoad();
       drumPlayers?.dispose();
       drumVolumeNode?.dispose();
       drumPlayers = null;
@@ -135,9 +169,7 @@ export function createDrumManager(config: DrumConfig = {}): DrumManagerInstance 
     },
 
     async waitForLoad(): Promise<void> {
-      if (drumPlayers) {
-        await drumPlayers.loaded;
-      }
+      await loading.loaded;
     }
   };
 }

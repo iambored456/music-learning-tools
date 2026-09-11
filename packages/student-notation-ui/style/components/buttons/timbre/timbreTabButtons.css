@@ -406,10 +406,10 @@
 
 .preset-effects-container .preset-button.selected {
     background-color: var(--c-accent-light, #63a9fd) !important;
-    color: var(--c-accent, #4A90E2) !important;
-    border-color: var(--c-accent, #4A90E2) !important;
+    color: var(--c-accent, #44BCEF) !important;
+    border-color: var(--c-accent, #44BCEF) !important;
     font-weight: var(--typography-control-font-weight) !important;
-    box-shadow: 0 0 0 1px var(--c-accent, #4A90E2) !important;
+    box-shadow: 0 0 0 1px var(--c-accent, #44BCEF) !important;
     transform: scale(0.98) !important;
     opacity: 1 !important;
 }
@@ -452,7 +452,7 @@
 .effect-button.active {
     background-color: var(--c-accent-light, #63a9fd);
     color: var(--c-text, #212529);
-    border-color: var(--c-accent, #4A90E2);
+    border-color: var(--c-accent, #44BCEF);
     box-shadow: 0 0 0 2px var(--c-accent, rgba(74, 144, 226, 0.2));
     transform: scale(0.98);
 }

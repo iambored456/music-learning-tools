@@ -67,6 +67,7 @@ export interface StoreConfig {
  * Extended store instance with lifecycle methods
  */
 export interface StoreInstance extends Store {
+  setChannelVolume(color: string, volume: number): void;
   /** Whether this is a cold start (no persisted state) */
   isColdStart: boolean;
   /** Dispose of the store and clean up */
@@ -100,6 +101,43 @@ function restoreTimbres(timbresSnapshot: Record<string, TimbreState>): Record<st
  * Load state from storage
  */
 const VALID_BOUNDARY_STYLES = new Set(['dashed', 'solid', 'anacrusis']);
+
+const LEGACY_VOICE_COLORS: Record<string, string> = {
+  '#4a90e2': '#44bcef',
+  '#2d2d2d': '#d293e0',
+  '#d66573': '#ee9561',
+  '#68a03f': '#81c273'
+};
+
+function migrateVoiceColor(value: unknown): unknown {
+  return typeof value === 'string' ? (LEGACY_VOICE_COLORS[value.toLowerCase()] ?? value) : value;
+}
+
+function migratePersistedVoiceColors(state: Record<string, unknown>): void {
+  const selectedNote = state.selectedNote;
+  if (selectedNote && typeof selectedNote === 'object' && !Array.isArray(selectedNote)) {
+    const note = selectedNote as Record<string, unknown>;
+    note.color = migrateVoiceColor(note.color);
+  }
+
+  [
+    'placedNotes',
+    'sixteenthStampPlacements',
+    'tripletStampPlacements',
+    'sixteenthThreeStampPlacements'
+  ].forEach((collectionName) => {
+    const collection = state[collectionName];
+    if (!Array.isArray(collection)) {
+      return;
+    }
+    collection.forEach((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const coloredEntry = entry as Record<string, unknown>;
+        coloredEntry.color = migrateVoiceColor(coloredEntry.color);
+      }
+    });
+  });
+}
 
 function isValidMacrobeatGroupings(value: unknown): value is Array<2 | 3> {
   return Array.isArray(value)
@@ -205,6 +243,9 @@ function loadStateFromStorage(storage: StorageAdapter | undefined, storageKey: s
 
     // Remove timbres from persisted state - always use startup defaults.
     delete parsedState.timbres;
+    migratePersistedVoiceColors(parsedState);
+    // Circle-and-tail rendering is retired; migrate saved sessions to stadiums.
+    parsedState.longNoteStyle = 'style2';
 
     // Validate pitch range
     if (parsedState.pitchRange) {
@@ -453,6 +494,16 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       store.emit('loopingChanged', isLooping);
     },
 
+    setPlaybackStartMacrobeat(index: number | null): void {
+      const nextIndex = typeof index === 'number' && Number.isInteger(index) &&
+        index >= 0 && index < store.state.macrobeatGroupings.length
+        ? index
+        : null;
+      if (store.state.playbackStartMacrobeatIndex === nextIndex) return;
+      store.state.playbackStartMacrobeatIndex = nextIndex;
+      store.emit('playbackStartMacrobeatChanged', nextIndex);
+    },
+
     setTempo(tempo: number): void {
       store.state.tempo = tempo;
       store.emit('tempoChanged', tempo);
@@ -463,10 +514,21 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
       store.emit('playheadModeChanged', mode);
     },
 
-    setSelectedTool(tool: string, tonicNumber?: string | number): void {
+    setAnnotations(annotations: AppState['annotations'], record = true): void {
+      store.state.annotations = annotations;
+      store.emit('annotationsChanged');
+      if (record) store.recordState();
+    },
+
+    setSelectedTool(tool: string, tonicNumber?: string | number, drawTool?: AppState['selectedDrawTool']): void {
       const oldTool = store.state.selectedTool;
-      store.state.previousTool = oldTool;
+      const oldDrawTool = store.state.selectedDrawTool;
+      if (oldTool !== tool || (drawTool && drawTool !== oldDrawTool)) {
+        store.emit('toolChanging', { newTool: tool, oldTool });
+      }
+      if (oldTool !== tool) store.state.previousTool = oldTool;
       store.state.selectedTool = tool;
+      if (drawTool) store.state.selectedDrawTool = drawTool;
 
       // Update tonic number if provided
       if (tonicNumber !== undefined) {
@@ -481,6 +543,9 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
 
     setSelectedNote(shape: 'circle' | 'oval' | 'diamond', color: string): void {
       const oldNote = { ...store.state.selectedNote };
+      if (oldNote.shape !== shape || oldNote.color !== color) {
+        store.emit('toolChanging', { newTool: store.state.selectedTool, oldTool: store.state.selectedTool });
+      }
       store.state.selectedNote = { shape, color };
       store.emit('noteChanged', { newNote: store.state.selectedNote, oldNote });
     },
@@ -614,6 +679,15 @@ export function createStore(config: StoreConfig = {}): StoreInstance {
     },
 
     // ========== TIMBRE ACTIONS ==========
+    setChannelVolume(color: string, volume: number): void {
+      const timbre = store.state.timbres[color];
+      if (!timbre || !Number.isFinite(volume)) return;
+      const next = Math.max(0, Math.min(1, volume));
+      if ((timbre.channelVolume ?? 1) === next) return;
+      timbre.channelVolume = next;
+      store.emit('channelVolumeChanged', color);
+    },
+
     setADSR(color: string, adsr: Partial<AppState['timbres'][string]['adsr']>): void {
       if (store.state.timbres[color]) {
         store.state.timbres[color].adsr = { ...store.state.timbres[color].adsr, ...adsr };

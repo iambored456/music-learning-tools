@@ -73,7 +73,7 @@ class AdsrComponent {
       throw new Error('ADSR container element not found');
     }
 
-    this.currentColor = store.state.selectedNote?.color || '#4a90e2';
+    this.currentColor = store.state.selectedNote?.color || '#44bcef';
     this.attack = 0;
     this.decay = 0;
     this.sustain = 0;

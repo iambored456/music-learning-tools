@@ -47,7 +47,7 @@ export class PitchGridChordToolInteractor {
     const pitchColor = store.state.fullRowData[rowIndex]?.hex || '#888888';
     const chordAdsr = store.state.timbres[color]?.adsr;
     if (chordAdsr) {
-      triggerAdsrPlayhead('chord_preview', 'attack', pitchColor, chordAdsr);
+      triggerAdsrPlayhead('chord_preview', 'attack', pitchColor, chordAdsr, color);
     }
 
     const nextChordNotes: PlacedNote[] = [];

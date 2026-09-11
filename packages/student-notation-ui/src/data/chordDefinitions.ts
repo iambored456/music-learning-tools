@@ -6,6 +6,7 @@
  */
 
 export type HarmonyChordShapes = Record<string, string[]>;
+export type OptionalChordIntervals = Record<string, string[]>;
 export type IntervalShapes = Record<string, string[]>;
 
 /**
@@ -15,14 +16,14 @@ export type IntervalShapes = Record<string, string[]>;
 export const BASIC_CHORD_SHAPES: HarmonyChordShapes = {
   'X':       ['1P', '3M', '5P'],           // Major triad
   'x':       ['1P', '3m', '5P'],           // Minor triad
-  'x°':      ['1P', '3m', '5d'],           // Diminished triad
+  'xo':      ['1P', '3m', '5d'],           // Diminished triad
   'X+':      ['1P', '3M', '5A'],           // Augmented triad
-  'X⁷':      ['1P', '3M', '5P', '7m'],     // Dominant 7
-  'x⁷':      ['1P', '3m', '5P', '7m'],     // Minor 7
+  'X7':      ['1P', '3M', '5P', '7m'],     // Dominant 7
+  'x7':      ['1P', '3m', '5P', '7m'],     // Minor 7
   'Xmaj7':   ['1P', '3M', '5P', '7M'],     // Major 7
-  'ø⁷':      ['1P', '3m', '5d', '7m'],     // Half-diminished 7
-  'x°⁷':     ['1P', '3m', '5d', '6M'],     // Fully diminished 7
-  'X⁶':      ['1P', '3M', '5P', '6M'],     // Major 6 (add 6)
+  'x∅7':     ['1P', '3m', '5d', '7m'],     // Half-diminished 7
+  'xo7':     ['1P', '3m', '5d', '6M'],     // Fully diminished 7
+  'X6':      ['1P', '3M', '5P', '6M'],     // Major 6 (add 6)
   'Xsus2':   ['1P', '2M', '5P'],           // Suspended 2
   'Xsus4':   ['1P', '4P', '5P']            // Suspended 4
 };
@@ -38,12 +39,20 @@ export const ADVANCED_CHORD_SHAPES: HarmonyChordShapes = {
   'X6/9':      ['1P', '3M', '5P', '6M', '9M'],     // Major 6/9 (9th up an octave)
   'X9':        ['1P', '3M', '5P', '7m', '9M'],     // Dominant 9 (9th up an octave)
   'X11':       ['1P', '3M', '5P', '7m', '9M', '11P'], // Dominant 11 (9th and 11th up an octave)
-  'X13':       ['1P', '3M', '5P', '7m', '9M', '13M'], // Dominant 13 (9th and 13th up an octave)
+  'X13':       ['1P', '3M', '5P', '7m', '9M', '11P', '13M'], // Dominant 13
   'Xmaj9':     ['1P', '3M', '5P', '7M', '9M'],     // Major 9 (9th up an octave)
-  'x⁹':        ['1P', '3m', '5P', '7m', '9M'],     // Minor 9 (9th up an octave)
-  'x⁶':        ['1P', '3m', '5P', '6M'],           // Minor 6
-  'x¹¹':       ['1P', '3m', '5P', '7m', '9M', '11P'], // Minor 11 (9th and 11th up an octave)
-  'Xmaj7♯11':  ['1P', '3M', '5P', '7M', '11A']    // Major 7 sharp 11 (augmented 11th up an octave)
+  'x9':        ['1P', '3m', '5P', '7m', '9M'],     // Minor 9 (9th up an octave)
+  'x6':        ['1P', '3m', '5P', '6M'],           // Minor 6
+  'x11':       ['1P', '3m', '5P', '7m', '9M', '11P'], // Minor 11 (9th and 11th up an octave)
+  'Xmaj7♯11':  ['1P', '3M', '5P', '7M', '9M', '11A'], // Major 7 sharp 11
+  'X7♯5':      ['1P', '3M', '5A', '7m'],               // Dominant 7 sharp 5
+  'Xmaj7♯5':   ['1P', '3M', '5A', '7M'],               // Major 7 sharp 5
+  'X7♯9':      ['1P', '3M', '5P', '7m', '9A'],         // Dominant 7 sharp 9
+  'Xmaj13':    ['1P', '3M', '5P', '7M', '9M', '11P', '13M'], // Major 13
+  'Xmaj13♯11': ['1P', '3M', '5P', '7M', '9M', '11A', '13M'], // Major 13 sharp 11
+  'x13':       ['1P', '3m', '5P', '7m', '9M', '11P', '13M'], // Minor 13
+  'X13♭9':     ['1P', '3M', '5P', '7m', '9m', '13M'], // Dominant 13 flat 9
+  'X7♭9':      ['1P', '3M', '5P', '7m', '9m']        // Dominant 7 flat 9
 };
 
 /**
@@ -52,6 +61,35 @@ export const ADVANCED_CHORD_SHAPES: HarmonyChordShapes = {
 export const CHORD_SHAPES: HarmonyChordShapes = {
   ...BASIC_CHORD_SHAPES,
   ...ADVANCED_CHORD_SHAPES
+};
+
+/**
+ * Intervals that sound by default but may be omitted without changing the
+ * chord's essential identity. Keys match CHORD_SHAPES chord symbols.
+ */
+export const CHORD_OPTIONAL_INTERVALS: OptionalChordIntervals = {
+  'X7': ['5P'],
+  'x7': ['5P'],
+  'Xmaj7': ['5P'],
+  'xmaj7': ['5P'],
+  'X6': ['5P'],
+  'x6': ['5P'],
+  'X9': ['5P'],
+  'x9': ['5P'],
+  'X6/9': ['5P'],
+  'Xmaj9': ['5P'],
+  'Xadd9': ['5P'],
+  'xadd9': ['5P'],
+  'X11': ['5P'],
+  'x11': ['5P'],
+  'X13': ['5P', '9M', '11P'],
+  'Xmaj7♯11': ['5P', '9M'],
+  'X7♯9': ['5P'],
+  'Xmaj13': ['5P', '9M', '11P'],
+  'Xmaj13♯11': ['5P'],
+  'x13': ['5P', '9M'],
+  'X13♭9': ['5P'],
+  'X7♭9': ['5P']
 };
 
 /**

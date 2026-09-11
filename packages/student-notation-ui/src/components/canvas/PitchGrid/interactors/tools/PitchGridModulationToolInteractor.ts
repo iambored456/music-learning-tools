@@ -20,6 +20,7 @@ export class PitchGridModulationToolInteractor {
   private lastModulationHoverResult: ReturnType<typeof hitTestModulationMarker> | null = null;
 
   handleMouseDown(actualX: number, canvasY: number): boolean {
+    if (!['modulation', 'select'].includes(store.state.selectedTool)) return false;
     const hitResult = this.getHoveredMarker(actualX, canvasY);
     if (!hitResult) {
       return false;

@@ -53,7 +53,7 @@ export function createSixteenthStampActions(callbacks: SixteenthStampActionCallb
       sixteenthStampId: number,
       startTimeIndex: number,
       row: number,
-      color = '#4a90e2'
+      color = '#44bcef'
     ): SixteenthStampPlacement {
       const endTimeIndex = startTimeIndex + 2;
 

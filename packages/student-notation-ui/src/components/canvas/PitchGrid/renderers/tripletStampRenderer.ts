@@ -379,7 +379,7 @@ export function renderTripletStampPreview(
   ctx.save();
   ctx.globalAlpha = 0.6;
 
-  const previewColor = options.previewColor || '#4a90e2';
+  const previewColor = options.previewColor || '#44bcef';
   renderTripletNoteheads(ctx, stamp, groupX, rowCenterY, groupWidth, groupHeight, previewColor, options);
 
   ctx.restore();

@@ -67,7 +67,6 @@ const NOTE_SHAPES = new Set<NoteShape>(['circle', 'oval', 'diamond']);
 const BOUNDARY_STYLES = new Set<MacrobeatBoundaryStyle>(['dashed', 'solid', 'anacrusis']);
 const PLAYHEAD_MODES = new Set<AppState['playheadMode']>(['cursor', 'microbeat', 'macrobeat']);
 const DEGREE_DISPLAY_MODES = new Set<AppState['degreeDisplayMode']>(['off', 'diatonic', 'modal']);
-const LONG_NOTE_STYLES = new Set<AppState['longNoteStyle']>(['style1', 'style2']);
 
 function generateDefaultBoundaryStyles(groupings: MacrobeatGrouping[]): MacrobeatBoundaryStyle[] {
   return groupings.slice(0, -1).map((_, index) => (((index + 1) % 4 === 0) ? 'solid' : 'dashed'));
@@ -98,8 +97,8 @@ function clampRow(row: unknown): number {
 
 function normalizePlacedNote(note: Partial<PlacedNote>): PlacedNote | null {
   const row = clampRow(note.globalRow ?? note.row);
-  const startColumnIndex = Number.parseInt(String(note.startColumnIndex ?? ''), 10);
-  const endColumnIndex = Number.parseInt(String(note.endColumnIndex ?? note.startColumnIndex ?? ''), 10);
+  const startColumnIndex = Number.parseFloat(String(note.startColumnIndex ?? ''));
+  const endColumnIndex = Number.parseFloat(String(note.endColumnIndex ?? note.startColumnIndex ?? ''));
   const color = typeof note.color === 'string' ? note.color.trim() : '';
   const rawShape = typeof note.shape === 'string' ? note.shape : 'circle';
   const shape: NoteShape = NOTE_SHAPES.has(rawShape as NoteShape) ? rawShape as NoteShape : 'circle';
@@ -136,6 +135,11 @@ function normalizePlacedNote(note: Partial<PlacedNote>): PlacedNote | null {
     normalized.drumSubdivision = 'single';
   }
 
+  if (shape === 'diamond' && !normalized.isDrum) {
+    normalized.startColumnIndex = (Math.max(0, Math.floor(startColumnIndex * 2)) / 2) as CanvasSpaceColumn;
+    normalized.endColumnIndex = normalized.startColumnIndex;
+    normalized.durationMicrobeats = 0.5;
+  }
   ensureCircleNoteSpan(normalized);
   return normalized;
 }
@@ -397,7 +401,7 @@ function normalizeTimbres(value: unknown, fallback: Record<string, TimbreState>)
 
   for (const [color, timbre] of Object.entries(source)) {
     if (!(color in normalized)) {
-      normalized[color] = restoreSerializedTimbre(color, timbre, Object.values(fallback)[0] ?? getInitialState().timbres['#4a90e2']);
+      normalized[color] = restoreSerializedTimbre(color, timbre, Object.values(fallback)[0] ?? getInitialState().timbres['#44bcef']);
     }
   }
 
@@ -508,9 +512,8 @@ function normalizeSaveData(value: unknown): StudentNotationSaveData {
     showOctaveLabels: typeof raw.showOctaveLabels === 'boolean'
       ? raw.showOctaveLabels
       : initialState.showOctaveLabels,
-    longNoteStyle: LONG_NOTE_STYLES.has(raw.longNoteStyle as AppState['longNoteStyle'])
-      ? raw.longNoteStyle as AppState['longNoteStyle']
-      : initialState.longNoteStyle,
+    // Circle-and-tail rendering is retired; imported scores always use stadiums.
+    longNoteStyle: 'style2',
     playheadMode: PLAYHEAD_MODES.has(raw.playheadMode as AppState['playheadMode'])
       ? raw.playheadMode as AppState['playheadMode']
       : initialState.playheadMode,
@@ -600,9 +603,11 @@ export function applyImportedStudentNotationData(
   store.state.isPlaying = false;
   store.state.isPaused = false;
   store.state.isLooping = false;
+  store.state.playbackStartMacrobeatIndex = null;
 
   store.emit('playbackStateChanged', { isPlaying: false, isPaused: false });
   store.emit('loopingChanged', false);
+  store.emit('playbackStartMacrobeatChanged', null);
   store.emit('tempoChanged', store.state.tempo);
   store.emit('noteChanged', { newNote: store.state.selectedNote, oldNote: oldSelectedNote });
   store.emit('activeChordIntervalsChanged', store.state.activeChordIntervals);

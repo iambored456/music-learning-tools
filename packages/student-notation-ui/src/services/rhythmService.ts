@@ -19,6 +19,7 @@ interface RenderOptions {
 
 interface TimeSignatureSegment {
   label: string;
+  measureNumber: number;
   centerX: number;
   startX: number;
   endX: number;
@@ -57,6 +58,7 @@ const RhythmService = {
     const macrobeatBoundaryStyles: BoundaryStyle[] = state.macrobeatBoundaryStyles ?? [];
     const segments: TimeSignatureSegment[] = [];
     let isAnacrusisSegment = Boolean(state.hasAnacrusis);
+    let measureNumber = isAnacrusisSegment ? 0 : 1;
 
     // getMacrobeatInfo now returns CANVAS-SPACE columns (0 = first musical beat)
     let measureStartColumn = (getMacrobeatInfo(state, 0) as MacrobeatInfo).startColumn;
@@ -97,11 +99,13 @@ const RhythmService = {
 
         segments.push({
           label,
+          measureNumber,
           centerX: (measureStartX + measureEndX) / 2,
           startX: measureStartX,
           endX: measureEndX,
           isAnacrusis: isAnacrusisSegment
         });
+        measureNumber += 1;
 
         // Reset for next measure
         if (!isLastBeat) {

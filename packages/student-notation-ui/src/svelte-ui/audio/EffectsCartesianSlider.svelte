@@ -129,9 +129,9 @@
     };
   }
 
-  function updateValuesFromState(): void {
+  function updateValuesFromState(color: string | null = currentColor): void {
     if (!config || !effectType) {return;}
-    const state = effectsController.getEffectState(effectType) || {};
+    const state = effectsController.getEffectState(effectType, color) || {};
     const nextX = typeof state[config.xParam] === 'number' ? state[config.xParam] : config.xRange.min;
     const nextY = typeof state[config.yParam] === 'number' ? state[config.yParam] : config.yRange.min;
     xValue = nextX;
@@ -226,7 +226,9 @@
         colors = {};
       }
       if (!isDragging) {
-        updateValuesFromState();
+        // Use the event's colour directly. The controller also listens for
+        // noteChanged, and listener order must not decide which voice is shown.
+        updateValuesFromState(nextColor);
       }
     };
 

@@ -22,7 +22,7 @@ export function renderArrowAnnotation(params: {
   ctx.save();
 
   if (isSelected) {
-    ctx.strokeStyle = '#4a90e2';
+    ctx.strokeStyle = '#44bcef';
     ctx.lineWidth = getStrokeWidth(settings.strokeWeight) + 4;
     ctx.globalAlpha = 0.3;
     ctx.setLineDash([]);
@@ -34,7 +34,7 @@ export function renderArrowAnnotation(params: {
   }
 
   if (isHovered && !isSelected) {
-    ctx.strokeStyle = '#4a90e2';
+    ctx.strokeStyle = '#44bcef';
     ctx.lineWidth = getStrokeWidth(settings.strokeWeight) + 4;
     ctx.globalAlpha = 0.15;
     ctx.setLineDash([]);
@@ -45,7 +45,10 @@ export function renderArrowAnnotation(params: {
     ctx.globalAlpha = 1;
   }
 
-  ctx.strokeStyle = isTemp ? 'rgba(0, 0, 0, 0.5)' : '#000000';
+  ctx.strokeStyle = settings.color ?? '#000000';
+  ctx.globalAlpha = isTemp ? 0.5 : 1;
+  ctx.lineCap = settings.roundedEnds ? 'round' : 'butt';
+  ctx.lineJoin = settings.roundedEnds ? 'round' : 'miter';
   ctx.lineWidth = getStrokeWidth(settings.strokeWeight);
   ctx.setLineDash(getLineDash(settings.lineStyle));
 
@@ -58,13 +61,13 @@ export function renderArrowAnnotation(params: {
   let adjustedEndY = endY;
 
   if (settings.startArrowhead !== 'none') {
-    adjustedStartX = startX + Math.cos(angle) * arrowheadSize;
-    adjustedStartY = startY + Math.sin(angle) * arrowheadSize;
+    adjustedStartX = startX + Math.cos(angle) * arrowheadInset(settings.startArrowhead, arrowheadSize);
+    adjustedStartY = startY + Math.sin(angle) * arrowheadInset(settings.startArrowhead, arrowheadSize);
   }
 
   if (settings.endArrowhead !== 'none') {
-    adjustedEndX = endX - Math.cos(angle) * arrowheadSize;
-    adjustedEndY = endY - Math.sin(angle) * arrowheadSize;
+    adjustedEndX = endX - Math.cos(angle) * arrowheadInset(settings.endArrowhead, arrowheadSize);
+    adjustedEndY = endY - Math.sin(angle) * arrowheadInset(settings.endArrowhead, arrowheadSize);
   }
 
   ctx.beginPath();
@@ -81,6 +84,13 @@ export function renderArrowAnnotation(params: {
   }
 
   ctx.restore();
+}
+
+function arrowheadInset(type: AnnotationArrowheadStyle, size: number): number {
+  if (type === 'none' || type === 'bar' || type === 'open-arrow') {return 0;}
+  if (type === 'circle' || type === 'open-circle' || type === 'square' || type === 'open-square') {return size / 3;}
+  if (type === 'diamond' || type === 'open-diamond') {return size / 2;}
+  return size;
 }
 
 function renderArrowhead(params: {
@@ -118,11 +128,46 @@ function renderArrowhead(params: {
       ctx.closePath();
       ctx.stroke();
       break;
+    case 'open-arrow':
+      ctx.beginPath();
+      ctx.moveTo(-size, -size / 2);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(-size, size / 2);
+      ctx.stroke();
+      break;
+    case 'bar':
+      ctx.beginPath();
+      ctx.moveTo(0, -size / 2);
+      ctx.lineTo(0, size / 2);
+      ctx.stroke();
+      break;
+    case 'square':
+    case 'open-square':
+    case 'diamond':
+    case 'open-diamond':
+      ctx.beginPath();
+      if (type === 'square' || type === 'open-square') {
+        ctx.rect(-size / 3, -size / 3, size * 2 / 3, size * 2 / 3);
+      } else {
+        ctx.moveTo(size / 2, 0);
+        ctx.lineTo(0, size / 2);
+        ctx.lineTo(-size / 2, 0);
+        ctx.lineTo(0, -size / 2);
+        ctx.closePath();
+      }
+      if (type.startsWith('open-')) {ctx.stroke();} else {
+        ctx.fillStyle = ctx.strokeStyle as string;
+        ctx.fill();
+      }
+      break;
+    case 'open-circle':
     case 'circle':
       ctx.beginPath();
       ctx.arc(0, 0, size / 3, 0, Math.PI * 2);
-      ctx.fillStyle = ctx.strokeStyle as string;
-      ctx.fill();
+      if (type === 'open-circle') {ctx.stroke();} else {
+        ctx.fillStyle = ctx.strokeStyle as string;
+        ctx.fill();
+      }
       break;
   }
 

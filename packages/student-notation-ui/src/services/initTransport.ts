@@ -54,6 +54,9 @@ const getBeatLineHighlight = () =>
  * Adapter that wraps the engine's transport service with the app's API
  */
 const TransportService = {
+  get isBuffering(): boolean {
+    return engineInstance?.isBuffering ?? false;
+  },
   init() {
     logger.info('EngineTransport', 'Initializing with engine createTransportService()', null, 'transport');
 
@@ -70,6 +73,8 @@ const TransportService = {
           macrobeatBoundaryStyles: store.state.macrobeatBoundaryStyles,
           tempoModulationMarkers: store.state.tempoModulationMarkers,
           isLooping: store.state.isLooping,
+          playbackStartMacrobeatIndex: store.state.playbackStartMacrobeatIndex,
+          macrobeatCount: store.state.macrobeatGroupings.length,
           isPaused: store.state.isPaused,
           cellWidth: store.state.cellWidth,
           placedNotes: store.state.placedNotes as any,
@@ -165,6 +170,17 @@ const TransportService = {
 
       // Visual callbacks - all DOM updates go here
       visualCallbacks: {
+        preparePlayback: () => new Promise<void>((resolve) => {
+          // Yield past a paint before building a potentially large schedule.
+          // The timeout also permits startup in background tabs without rAF.
+          const fallback = setTimeout(finish, 50);
+          const frame = requestAnimationFrame(() => setTimeout(finish, 0));
+          function finish() {
+            clearTimeout(fallback);
+            cancelAnimationFrame(frame);
+            resolve();
+          }
+        }),
         clearPlayheadCanvas: () => {
           const playheadCanvas = getPlayheadCanvas();
           if (!playheadCanvas) return;
@@ -227,8 +243,8 @@ const TransportService = {
         triggerDrumNotePop: (columnIndex, drumTrack) => {
           DrumPlayheadRenderer.triggerNotePop(columnIndex, drumTrack);
         },
-        triggerAdsrVisual: (noteId, phase, color, adsr) => {
-          triggerAdsrPlayhead(noteId, phase, color, adsr);
+        triggerAdsrVisual: (noteId, phase, playheadColor, adsr, voiceColor) => {
+          triggerAdsrPlayhead(noteId, phase, playheadColor, adsr, voiceColor);
         },
         clearAdsrVisuals: () => {
           clearAdsrPlayheads();

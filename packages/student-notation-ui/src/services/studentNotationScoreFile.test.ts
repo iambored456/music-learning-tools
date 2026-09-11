@@ -21,7 +21,7 @@ describe('studentNotationScoreFile', () => {
         startColumnIndex: 0 as CanvasSpaceColumn,
         endColumnIndex: 3 as CanvasSpaceColumn,
         shape: 'oval',
-        color: '#4a90e2',
+        color: '#44bcef',
       },
     ];
     store.state.tempo = 132;
@@ -53,10 +53,10 @@ describe('studentNotationScoreFile', () => {
         macrobeatIndex: 2,
       },
     ];
-    store.state.timbres['#4a90e2'].adsr.attack = 0.42;
-    store.state.timbres['#4a90e2'].coeffs = new Float32Array([1, 0.5, 0.25]);
-    store.state.timbres['#4a90e2'].phases = new Float32Array([0, Math.PI / 2, Math.PI]);
-    store.state.timbres['#4a90e2'].activePresetName = 'custom-blue';
+    store.state.timbres['#44bcef'].adsr.attack = 0.42;
+    store.state.timbres['#44bcef'].coeffs = new Float32Array([1, 0.5, 0.25]);
+    store.state.timbres['#44bcef'].phases = new Float32Array([0, Math.PI / 2, Math.PI]);
+    store.state.timbres['#44bcef'].activePresetName = 'custom-blue';
 
     const serialized = serializeStudentNotationScoreFile(store.state);
     const parsed = parseImportedStudentNotationData(serialized);
@@ -74,9 +74,9 @@ describe('studentNotationScoreFile', () => {
     expect(parsed.data.hasAnacrusis).toBe(true);
     expect(parsed.data.tonicSignGroups.tonicA?.[0]?.tonicNumber).toBe(4);
     expect(parsed.data.tempoModulationMarkers[0]?.ratio).toBe(1.5);
-    expect(parsed.data.timbres['#4a90e2']?.coeffs).toBeInstanceOf(Float32Array);
-    expect(Array.from(parsed.data.timbres['#4a90e2']?.coeffs ?? [])).toEqual([1, 0.5, 0.25]);
-    expect(parsed.data.timbres['#4a90e2']?.activePresetName).toBe('custom-blue');
+    expect(parsed.data.timbres['#44bcef']?.coeffs).toBeInstanceOf(Float32Array);
+    expect(Array.from(parsed.data.timbres['#44bcef']?.coeffs ?? [])).toEqual([1, 0.5, 0.25]);
+    expect(parsed.data.timbres['#44bcef']?.activePresetName).toBe('custom-blue');
 
     const targetStore = createStore();
     applyImportedStudentNotationData(targetStore, parsed);
@@ -88,8 +88,8 @@ describe('studentNotationScoreFile', () => {
     expect(targetStore.state.macrobeatBoundaryStyles).toEqual(['solid', 'dashed']);
     expect(targetStore.state.tonicSignGroups.tonicA?.[0]?.columnIndex).toBe(5);
     expect(targetStore.state.tempoModulationMarkers[0]?.columnIndex).toBe(8);
-    expect(targetStore.state.timbres['#4a90e2']?.coeffs).toBeInstanceOf(Float32Array);
-    const restoredPhases = Array.from(targetStore.state.timbres['#4a90e2']?.phases ?? []);
+    expect(targetStore.state.timbres['#44bcef']?.coeffs).toBeInstanceOf(Float32Array);
+    const restoredPhases = Array.from(targetStore.state.timbres['#44bcef']?.phases ?? []);
     expect(restoredPhases).toHaveLength(3);
     expect(restoredPhases[0]).toBeCloseTo(0, 6);
     expect(restoredPhases[1]).toBeCloseTo(Math.PI / 2, 6);
@@ -138,7 +138,7 @@ describe('studentNotationScoreFile', () => {
             endColumn: 12,
             row: 12,
             globalRow: 12,
-            color: '#4a90e2',
+            color: '#44bcef',
             timestamp: 1,
             shapeOffsets: {},
           },

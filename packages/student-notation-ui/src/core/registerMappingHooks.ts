@@ -42,11 +42,15 @@ export function registerColumnMapBridge(store: StoreInstance): void {
     getColumnMap: (state) => columnMapService.getColumnMap(state),
     visualToTimeIndex: (state, visualIndex) => {
       const map = columnMapService.getColumnMap(state);
-      return map.visualToTime.get(visualIndex) ?? null;
+      const base = Math.floor(visualIndex);
+      const time = map.visualToTime.get(base);
+      return time == null ? null : time + visualIndex - base;
     },
     timeIndexToVisualColumn: (state, timeIndex) => {
       const map = columnMapService.getColumnMap(state);
-      return map.timeToVisual.get(timeIndex) ?? null;
+      const base = Math.floor(timeIndex);
+      const visual = map.timeToVisual.get(base);
+      return visual == null ? null : visual + timeIndex - base;
     },
     getTimeBoundaryAfterMacrobeat: (state, index) => {
       const map = columnMapService.getColumnMap(state);

@@ -7,6 +7,7 @@ interface MainTabStateOptions {
   initializeTempoSlider: (delayMs: number) => void;
   stabilizeMainTabButtonWidths?: () => void;
   afterActivate?: () => void;
+  onLeavePitch?: () => void;
   onMissingTab?: (tabId: string) => void;
 }
 
@@ -25,6 +26,10 @@ function activateMainTab(tabId: string, options: Pick<MainTabStateOptions, 'stab
   options.stabilizeMainTabButtonWidths?.();
 
   return targetButton.dataset['tab'] ?? tabId;
+}
+
+export function shouldRestoreNoteBank(previousTab: string | null, nextTab: string): boolean {
+  return previousTab === 'pitch' && nextTab !== 'pitch';
 }
 
 export function restoreSavedMainTabSelection(options: MainTabStateOptions): void {
@@ -55,6 +60,8 @@ export function bindMainTabButtons(
         return;
       }
 
+      const previousTab = document.querySelector<HTMLElement>('.tab-button.active')?.dataset['tab'] ?? null;
+
       const activeTab = activateMainTab(tabId, options);
       if (!activeTab) {
         options.onMissingTab?.(tabId);
@@ -62,6 +69,9 @@ export function bindMainTabButtons(
       }
 
       saveCurrentTab(activeTab);
+      if (shouldRestoreNoteBank(previousTab, activeTab)) {
+        options.onLeavePitch?.();
+      }
       if (activeTab === 'rhythm') {
         options.initializeTempoSlider(50);
       }

@@ -28,7 +28,7 @@
   let isDraggingCutoff = false;
   let isDraggingBlend = false;
   let isDraggingVerticalBlend = false;
-  let currentColor: string | null = store.state.selectedNote?.color || '#4a90e2';
+  let currentColor: string | null = store.state.selectedNote?.color || '#44bcef';
 
   // DOM element references
   let blendThumb: HTMLElement | null = null;

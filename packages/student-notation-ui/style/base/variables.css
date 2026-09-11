@@ -14,7 +14,7 @@
   --c-gridline: #e9ecef;        /* Gridlines / very light dividers */
   --c-danger: #dc3545;          /* Destructive actions */
   --c-warning: #ffc107;         /* Highlight accents (loop, macrobeat) */
-  --c-accent: #4a90e2;          /* Primary accent (toolbar actives) - DYNAMIC: changes to note color */
+  --c-accent: #44bcef;          /* Primary accent (toolbar actives) - DYNAMIC: changes to note color */
   --c-accent-hover: var(--c-accent-neutral-hover, #ffb300); /* Accent hover / pressed (neutral override) */
   --c-accent-light: #63a9fd;    /* Subtle accent highlight - DYNAMIC: changes to note color */
   --c-accent-rgb: 74, 144, 226; /* Accent in rgb for box-shadows */
@@ -135,24 +135,3 @@
   --text-color-notation-outline: #000;
 }
 
-/* Explicit dark-mode palette controlled by sidebar toggle */
-body.dark-mode {
-  --c-bg: #101418;
-  --c-surface: #20262d;
-  --c-surface-muted: #2a323b;
-  --c-surface-overlay: rgba(24, 30, 38, 0.9);
-  --c-text: #e9eef4;
-  --c-text-muted: #aab6c2;
-  --c-border: #3a4551;
-  --c-border-strong: #556170;
-  --c-gridline: #323c46;
-  --c-anacrusis-border: #5f6f80;
-  --c-anacrusis-bg: rgba(95, 111, 128, 0.24);
-  --c-anacrusis-accent: #9fb0c0;
-  --box-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --box-shadow-md: 0 6px 14px rgba(0, 0, 0, 0.45);
-  --text-color-primary: var(--c-text);
-  --text-color-secondary: var(--c-text-muted);
-  --text-color-danger: var(--c-danger);
-  color-scheme: dark;
-}

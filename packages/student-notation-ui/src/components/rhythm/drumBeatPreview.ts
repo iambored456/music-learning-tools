@@ -33,7 +33,7 @@ function renderPreview(ctx: CanvasRenderingContext2D, pattern: DrumBeatPattern):
   };
   const rowHeight = getDrumRowHeightFromCellHeight(state.cellHeight);
   const shapeHeight = getDrumShapeBoxHeightFromCellWidth(state.cellWidth);
-  const color = state.selectedNote?.color ?? '#4a90e2';
+  const color = state.selectedNote?.color ?? '#44bcef';
 
   ctx.save();
   ctx.globalAlpha = 0.55;

@@ -7,12 +7,14 @@
 export {
   // Types
   type HarmonyChordShapes,
+  type OptionalChordIntervals,
   type IntervalShapes,
 
   // Chord shape definitions
   BASIC_CHORD_SHAPES,
   ADVANCED_CHORD_SHAPES,
   CHORD_SHAPES,
+  CHORD_OPTIONAL_INTERVALS,
   INTERVAL_SHAPES,
   OCTAVE_EQUIVALENCE,
 

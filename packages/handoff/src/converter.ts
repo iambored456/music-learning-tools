@@ -31,6 +31,7 @@ export interface StudentNotationNote {
   globalRow?: number;
   startColumnIndex: number;
   endColumnIndex: number;
+  durationMicrobeats?: number;
   shape: 'circle' | 'oval' | 'diamond';
   color: string;
   isDrum?: boolean;
@@ -233,6 +234,7 @@ export function convertToSnapshot(
       snapshotNotes.push({
         startMicrobeatCol: note.startColumnIndex,
         endMicrobeatCol: note.endColumnIndex,
+        ...(note.durationMicrobeats !== undefined ? { durationMicrobeats: note.durationMicrobeats } : {}),
         midiPitch: midi,
         pitchName,
         shape: note.shape,
@@ -354,6 +356,7 @@ export function convertFromSnapshot(
         globalRow,
         startColumnIndex: snapshotNote.startMicrobeatCol,
         endColumnIndex: snapshotNote.endMicrobeatCol,
+        ...(snapshotNote.durationMicrobeats !== undefined ? { durationMicrobeats: snapshotNote.durationMicrobeats } : {}),
         shape: snapshotNote.shape,
         color: voice.color,
         isDrum: false,

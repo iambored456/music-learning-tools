@@ -15,11 +15,14 @@ export interface AnnotationCanvasPoint {
 }
 
 export type AnnotationLineStyle = 'solid' | 'dashed-big' | 'dashed-small' | 'dotted';
-export type AnnotationArrowheadStyle = 'filled' | 'filled-arrow' | 'unfilled' | 'unfilled-arrow' | 'circle' | 'none';
+export type AnnotationArrowheadStyle = 'filled' | 'filled-arrow' | 'unfilled' | 'unfilled-arrow' | 'circle' | 'none'
+  | 'open-arrow' | 'open-circle' | 'open-square' | 'open-diamond' | 'bar' | 'square' | 'diamond';
 export type AnnotationPathTool = 'marker' | 'highlighter';
 export type AnnotationType = 'arrow' | 'text' | AnnotationPathTool;
 
 export interface ArrowAnnotationSettings {
+  color?: string;
+  roundedEnds?: boolean;
   lineStyle: AnnotationLineStyle;
   strokeWeight: number;
   startArrowhead: AnnotationArrowheadStyle;
@@ -41,6 +44,8 @@ export interface TextAnnotationSettings {
 export interface PathAnnotationSettings {
   color: string;
   size: number;
+  /** 0 is opaque; values are capped at 95 so strokes remain visible. Omitted on older strokes. */
+  transparency?: number;
 }
 
 export interface BaseAnnotation {

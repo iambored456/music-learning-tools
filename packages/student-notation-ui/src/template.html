@@ -9,27 +9,20 @@
 <span class="app-title-text">Student Notation</span>
 </div>
 </div>
-<div class="sidebar-container">
-<h4 class="sidebar-section-header">Colour Theme</h4>
-<div class="sidebar-theme-toggle-container">
-  <div class="sidebar-theme-toggle" id="theme-toggle" role="radiogroup" aria-label="Colour theme">
-    <input type="radio" name="theme" id="theme-light" value="light" checked>
-    <label for="theme-light">Light</label>
-    <input type="radio" name="theme" id="theme-dark" value="dark">
-    <label for="theme-dark">Dark</label>
-    <div class="sidebar-theme-slider"></div>
-  </div>
-</div>
+<div class="sidebar-container sidebar-file-actions" aria-label="File actions">
+<button class="sidebar-button" id="save-as-button" title="Save As"><img src="assets/sidebar/saveAs.svg" alt=""><span class="sidebar-button-text">Save As</span></button>
+<button class="sidebar-button" id="import-button" title="Open"><img src="assets/sidebar/open.svg" alt=""><span class="sidebar-button-text">Open</span></button>
+<button class="sidebar-button" id="print-button" title="Print"><img src="assets/sidebar/print.svg" alt=""><span class="sidebar-button-text">Print</span></button>
+<button class="sidebar-button" id="reset-canvas-button" title="New File"><img src="assets/sidebar/newPage.svg" alt=""><span class="sidebar-button-text">New Page</span></button>
 </div>
 <div class="sidebar-container">
-<h4 class="sidebar-section-header">Styling</h4>
-<button class="sidebar-toggle-button" id="red-c-lines-toggle" type="button" aria-pressed="false">Red C-line</button>
+<h4 class="sidebar-section-header">Visibility</h4>
+<div class="sidebar-visibility-grid" role="group" aria-label="Score visibility">
+  <button class="sidebar-visibility-button" id="hide-drumgrid-toggle" type="button" title="Toggle Drum Grid" aria-pressed="false"><span class="sidebar-button-text">Hide Drum Grid</span></button>
+  <button class="sidebar-visibility-button" id="hide-buttongrid-toggle" type="button" title="Toggle Button Grid" aria-pressed="false"><span class="sidebar-button-text">Hide Button Grid</span></button>
+  <button class="sidebar-visibility-button" id="hide-leftlegend-toggle" type="button" aria-pressed="false">Hide Left Legend</button>
+  <button class="sidebar-visibility-button" id="hide-rightlegend-toggle" type="button" aria-pressed="false">Hide Right Legend</button>
 </div>
-<div class="sidebar-container">
-<button class="sidebar-button" id="save-as-button" title="Save As"><img src="assets/sidebar/saveAs.svg" alt="Save As"><span class="sidebar-button-text">Save As</span></button>
-<button class="sidebar-button" id="import-button" title="Open"><img src="assets/sidebar/open.svg" alt="Open"><span class="sidebar-button-text">Open</span></button>
-<button class="sidebar-button" id="print-button" title="Print"><img src="assets/sidebar/print.svg" alt="Print"><span class="sidebar-button-text">Print</span></button>
-<button class="sidebar-button" id="reset-canvas-button" title="New File"><img src="assets/sidebar/newPage.svg" alt="New Page"><span class="sidebar-button-text">New Page</span></button>
 </div>
 <div class="sidebar-container">
 <h4 class="sidebar-section-header">Handoff</h4>
@@ -38,26 +31,6 @@
 <path d="M7 17L17 7"/><path d="M7 7h10v10"/>
 </svg>
 <span class="sidebar-button-text">Take to Singing Trainer</span></button>
-</div>
-<div class="sidebar-container">
-<button class="sidebar-button" id="hide-drumgrid-toggle" title="Toggle Drum Grid"><img src="assets/sidebar/hideDrums.svg" alt="Toggle Drum Grid"><span class="sidebar-button-text">Hide Drum Grid</span></button>
-<button class="sidebar-button" id="hide-buttongrid-toggle" title="Toggle Button Grid"><img src="assets/sidebar/hideAnalysis.svg" alt="Toggle Button Grid"><span class="sidebar-button-text">Hide Button Grid</span></button>
-<div class="sidebar-legend-toggle-row" role="group" aria-label="Legend visibility">
-  <button class="sidebar-toggle-button" id="hide-leftlegend-toggle" type="button">Hide Left Legend</button>
-  <button class="sidebar-toggle-button" id="hide-rightlegend-toggle" type="button">Hide Right Legend</button>
-</div>
-</div>
-<div class="sidebar-container">
-<h4 class="sidebar-section-header">Long Notes Style</h4>
-<div class="toggle-button-group"><button class="sidebar-toggle-button active" id="long-note-style1-btn">Circle & Tails</button><button class="sidebar-toggle-button" id="long-note-style2-btn">Stadium</button></div>
-</div>
-<div class="sidebar-container">
-<h4 class="sidebar-section-header">Playhead</h4>
-<div class="toggle-button-group"><button class="sidebar-toggle-button active" id="playhead-mode-cursor-btn">Cursor Playhead</button><button class="sidebar-toggle-button" id="playhead-mode-microbeat-btn">Pulsing Microbeat</button><button class="sidebar-toggle-button" id="playhead-mode-macrobeat-btn">Pulsing Macrobeat</button></div>
-</div>
-<div class="sidebar-container">
-<h4 class="sidebar-section-header">Performance</h4>
-<button class="sidebar-toggle-button active" id="adsr-playheads-toggle" type="button" aria-pressed="true" title="Toggle ADSR playheads to compare playback performance">ADSR Playheads: On</button>
 </div>
 </aside>
 <main id="app-container" role="main">
@@ -87,6 +60,10 @@
     <!-- Primary Toolbar -->
     <div id="toolbar-primary" class="toolbar-primary">
         <div class="primary-toolbar-grid-5x5">
+            <span class="toolbar-group-outline toolbar-group-outline--notes" aria-hidden="true"></span>
+            <span class="toolbar-group-outline toolbar-group-outline--playback" aria-hidden="true"></span>
+            <span class="toolbar-group-outline toolbar-group-outline--tools" aria-hidden="true"></span>
+            <div class="channel-volume-controls" data-svelte-component="channel-volume-controls"></div>
             <!-- Row 1: settings, volume, blue notes -->
             <button class="toolkit-icon-button" id="settings-button" title="Settings"><img src="assets/icons/settings.svg" alt="Settings"></button>
             <div id="volume-control-wrapper">
@@ -95,9 +72,9 @@
                     <input type="range" id="vertical-volume-slider" orient="vertical" min="0" max="100" value="70" step="1" />
                 </div>
             </div>
-            <div class="note circle-note" data-type="circle" data-color="#4a90e2"></div>
-            <div class="note oval-note" data-type="oval" data-color="#4a90e2"></div>
-            <div class="note diamond-note" data-type="diamond" data-color="#4a90e2" aria-label="Sixteenth note jewel">
+            <div class="note circle-note" data-type="circle" data-color="#44bcef"></div>
+            <div class="note oval-note" data-type="oval" data-color="#44bcef"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#44bcef" aria-label="Place individual sixteenth note" title="Individual sixteenth note; opens rhythm stamps">
                 <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
                     <path d="M60 5 L35 30 L35 90 L60 115 L85 90 L85 30 Z" />
                 </svg>
@@ -105,9 +82,9 @@
             <!-- Row 2: zoom in/out, black notes -->
             <button class="toolkit-icon-button" id="grid-zoom-in" title="Zoom In"><img src="assets/icons/zoomIn.svg" alt="Zoom In"></button>
             <button class="toolkit-icon-button" id="grid-zoom-out" title="Zoom Out"><img src="assets/icons/zoomOut.svg" alt="Zoom Out"></button>
-            <div class="note circle-note" data-type="circle" data-color="#2d2d2d"></div>
-            <div class="note oval-note" data-type="oval" data-color="#2d2d2d"></div>
-            <div class="note diamond-note" data-type="diamond" data-color="#2d2d2d" aria-label="Sixteenth note jewel">
+            <div class="note circle-note" data-type="circle" data-color="#d293e0"></div>
+            <div class="note oval-note" data-type="oval" data-color="#d293e0"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#d293e0" aria-label="Place individual sixteenth note" title="Individual sixteenth note; opens rhythm stamps">
                 <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
                     <path d="M60 5 L35 30 L35 90 L60 115 L85 90 L85 30 Z" />
                 </svg>
@@ -115,9 +92,9 @@
             <!-- Row 3: redo/undo, red notes -->
             <button class="toolkit-icon-button" id="redo-button" title="Redo"><img src="assets/icons/redo.svg" alt="Redo"></button>
             <button class="toolkit-icon-button" id="undo-button" title="Undo"><img src="assets/icons/undo.svg" alt="Undo"></button>
-            <div class="note circle-note" data-type="circle" data-color="#d66573"></div>
-            <div class="note oval-note" data-type="oval" data-color="#d66573"></div>
-            <div class="note diamond-note" data-type="diamond" data-color="#d66573" aria-label="Sixteenth note jewel">
+            <div class="note circle-note" data-type="circle" data-color="#ee9561"></div>
+            <div class="note oval-note" data-type="oval" data-color="#ee9561"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#ee9561" aria-label="Place individual sixteenth note" title="Individual sixteenth note; opens rhythm stamps">
                 <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
                     <path d="M60 5 L35 30 L35 90 L60 115 L85 90 L85 30 Z" />
                 </svg>
@@ -127,31 +104,33 @@
             <button class="toolkit-icon-button eraser-button" id="eraser-tool-button" title="Eraser">
                 <img src="assets/icons/eraser.svg" alt="Eraser" class="eraser-icon">
             </button>
-            <div class="note circle-note" data-type="circle" data-color="#68a03f"></div>
-            <div class="note oval-note" data-type="oval" data-color="#68a03f"></div>
-            <div class="note diamond-note" data-type="diamond" data-color="#68a03f" aria-label="Sixteenth note jewel">
+            <div class="note circle-note" data-type="circle" data-color="#81c273"></div>
+            <div class="note oval-note" data-type="oval" data-color="#81c273"></div>
+            <div class="note diamond-note" data-type="diamond" data-color="#81c273" aria-label="Place individual sixteenth note" title="Individual sixteenth note; opens rhythm stamps">
                 <svg class="diamond-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
                     <path d="M60 5 L35 30 L35 90 L60 115 L85 90 L85 30 Z" />
                 </svg>
             </div>
-            <!-- Row 5: lasso/marker shortcuts, playback controls -->
-            <button class="toolkit-icon-button" id="lasso-shortcut-button" title="Lasso Tool">
-                <img src="assets/icons/lasso-tool.svg" alt="Lasso Tool">
+            <!-- Row 5: draw/select shortcuts, playback controls -->
+            <button class="toolkit-icon-button" id="marker-shortcut-button" title="Draw with Marker" aria-label="Draw with Marker" aria-pressed="false">
+                <img src="assets/icons/marker-tool.svg" alt="">
             </button>
-            <button class="toolkit-icon-button" id="marker-shortcut-button" title="Marker Tool">
-                <img src="assets/icons/marker-tool.svg" alt="Marker Tool">
+            <button class="toolkit-icon-button" id="select-tool-button" title="Select objects; drag to select a group. Choose a measure above the grid to set playback start." aria-label="Select" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M5 3v16l4-4 3 6 3-1-3-6h6z" fill="currentColor"/></svg>
             </button>
-            <button class="toolkit-icon-button" id="play-button" title="Play"><img src="assets/icons/play.svg" alt="Play"></button>
-            <button class="toolkit-icon-button" id="stop-button" title="Stop"><img src="assets/icons/stop.svg" alt="Stop"></button>
-            <button class="toolkit-icon-button" id="loop-button" title="Loop"><img src="assets/icons/loop.svg" alt="Loop"></button>
+            <div class="toolbar-playback-group">
+                <button class="toolkit-icon-button" id="play-button" title="Play"><img src="assets/icons/play.svg" alt="Play"></button>
+                <button class="toolkit-icon-button" id="stop-button" title="Stop"><img src="assets/icons/stop.svg" alt="Stop"></button>
+                <button class="toolkit-icon-button" id="loop-button" title="Loop"><img src="assets/icons/loop.svg" alt="Loop"></button>
+            </div>
         </div>
     </div>
     <!-- Secondary Toolbar -->
     <div id="toolbar-secondary" class="toolbar-secondary">
         <div class="tab-sidebar">
             <button class="tab-button" data-tab="timbre">Timbre</button>
-            <button class="tab-button" data-tab="pitch">Pitch</button>
             <button class="tab-button" data-tab="chords">Chords</button>
+            <button class="tab-button" data-tab="pitch">Pitch</button>
             <button class="tab-button" data-tab="rhythm">Rhythm</button>
         </div>
         <div class="tab-content">
@@ -286,9 +265,6 @@
               <!-- Pitch Tab -->
             <div class="tab-panel" id="pitch-panel">
                 <div class="control-section pitch-tabs-container">
-                    <div class="pitch-tabs">
-                        <button class="pitch-tab-button active" data-pitch-tab="draw">Range / Mode / Draw</button>
-                    </div>
                     <div class="pitch-tab-content">
                         <div class="pitch-tab-panel active" id="range-panel">
                             <div class="range-content-box">
@@ -346,33 +322,21 @@
                                         <div class="tonic-modes-container">
                                             <div class="tonic-modes-grid">
                                                 <button class="tonic-mode-button" data-tonic="1" type="button" aria-label="Tonic mode 1 Major">
-                                                    <img src="assets/tabicons/tonicShape_1.svg" alt="Major" class="tonic-mode-icon">
+                                                    <img class="tonic-mode-icon" src="assets/tabicons/tonicShape_1.svg" alt="" aria-hidden="true">
                                                     <span class="tonic-mode-label">Major</span>
                                                 </button>
-                                                <button class="tonic-mode-button" data-tonic="2" type="button" aria-label="Tonic mode 2 Dorian">
-                                                    <img src="assets/tabicons/tonicShape_2.svg" alt="Dorian" class="tonic-mode-icon">
-                                                    <span class="tonic-mode-label">Dorian</span>
-                                                </button>
-                                                <button class="tonic-mode-button" data-tonic="3" type="button" aria-label="Tonic mode 3 Phrygian">
-                                                    <img src="assets/tabicons/tonicShape_3.svg" alt="Phrygian" class="tonic-mode-icon">
-                                                    <span class="tonic-mode-label">Phrygian</span>
-                                                </button>
-                                                <button class="tonic-mode-button" data-tonic="4" type="button" aria-label="Tonic mode 4 Lydian">
-                                                    <img src="assets/tabicons/tonicShape_4.svg" alt="Lydian" class="tonic-mode-icon">
-                                                    <span class="tonic-mode-label">Lydian</span>
-                                                </button>
-                                                <button class="tonic-mode-button" data-tonic="5" type="button" aria-label="Tonic mode 5 Mixolydian">
-                                                    <img src="assets/tabicons/tonicShape_5.svg" alt="Mixolydian" class="tonic-mode-icon">
-                                                    <span class="tonic-mode-label">Mixolydian</span>
-                                                </button>
                                                 <button class="tonic-mode-button" data-tonic="6" type="button" aria-label="Tonic mode 6 Minor">
-                                                    <img src="assets/tabicons/tonicShape_6.svg" alt="Minor" class="tonic-mode-icon">
+                                                    <img class="tonic-mode-icon" src="assets/tabicons/tonicShape_6.svg" alt="" aria-hidden="true">
                                                     <span class="tonic-mode-label">Minor</span>
                                                 </button>
-                                                <button class="tonic-mode-button" data-tonic="7" type="button" aria-label="Tonic mode 7 Locrian">
-                                                    <img src="assets/tabicons/tonicShape_7.svg" alt="Locrian" class="tonic-mode-icon">
-                                                    <span class="tonic-mode-label">Locrian</span>
-                                                </button>
+                                                <select id="tonic-other-modes" class="tonic-mode-select" aria-label="Other tonic modes">
+                                                    <option value="" disabled selected>Modes</option>
+                                                    <option value="2">&#9313; Dorian</option>
+                                                    <option value="3">&#9314; Phrygian</option>
+                                                    <option value="4">&#9315; Lydian</option>
+                                                    <option value="5">&#9316; Mixolydian</option>
+                                                    <option value="7">&#9318; Locrian</option>
+                                                </select>
                                             </div>
                                         </div>
                                     </div>
@@ -384,13 +348,14 @@
                                             <button class="degree-visibility-button disabled" id="pitch-octave-labels-toggle" type="button" aria-pressed="false" disabled>
                                                 Show Octave
                                             </button>
-                                            <button class="degree-visibility-button" id="degree-visibility-toggle" type="button">
+                                            <hr class="pitch-label-divider">
+                                            <button class="degree-visibility-button disabled" id="degree-visibility-toggle" type="button" aria-disabled="true">
                                                 Show Degrees
                                             </button>
                                         </div>
-                                        <div class="degree-mode-toggle-container" id="degree-mode-toggle">
-                                            <button class="degree-mode-button" data-mode="diatonic" type="button">Scale</button>
-                                            <button class="degree-mode-button" data-mode="modal" type="button">Mode</button>
+                                        <div class="degree-mode-toggle-container disabled" id="degree-mode-toggle">
+                                            <button class="degree-mode-button disabled" data-mode="diatonic" type="button" aria-disabled="true">Scale</button>
+                                            <button class="degree-mode-button disabled" data-mode="modal" type="button" aria-disabled="true">Mode</button>
                                         </div>
                                         <div class="focus-colours-container">
                                             <button
@@ -398,7 +363,7 @@
                                                 id="focus-colours-toggle"
                                                 type="button"
                                                 aria-pressed="false"
-                                                disabled
+                                                aria-disabled="true"
                                             >
                                                 Focus Colours
                                             </button>
@@ -458,31 +423,39 @@
                     <div class="chords-panel-section chords-grid-section">
                         <h4 class="panel-section-title">Chords</h4>
                         <div class="chords-grid-column">
-                            <div class="harmony-preset-grid chords-grid chords-grid-6col" id="chords-preset-grid">
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;]" title="Major triad">X</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;]" title="Minor triad">x</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;]" title="Diminished triad">x°</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;6m&quot;]" title="Augmented triad">X+</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;]" title="Dominant 7">X⁷</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;]" title="Minor 7">x⁷</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;]" title="Major 7">X<sup>maj7</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;, &quot;7m&quot;]" title="Half-diminished 7">ø⁷</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;, &quot;6M&quot;]" title="Fully diminished 7">x°⁷</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;6M&quot;]" title="Major 6">X⁶</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;2M&quot;, &quot;5P&quot;]" title="Suspended 2">X<sup>sus2</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;4P&quot;, &quot;5P&quot;]" title="Suspended 4">X<sup>sus4</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7M&quot;]" title="Minor-major 7">x<sup>maj7</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;9M&quot;]" title="Major add 9">X<sup>add9</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;9M&quot;]" title="Minor add 9">x<sup>add9</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;6M&quot;, &quot;9M&quot;]" title="Major 6/9">X<sup>6/9</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;]" title="Dominant 9">X<sup>9</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;]" title="Dominant 11">X<sup>11</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;13M&quot;]" title="Dominant 13">X<sup>13</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;9M&quot;]" title="Major 9">X<sup>maj9</sup></button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;]" title="Minor 9">x⁹</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;6M&quot;]" title="Minor 6">x⁶</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;]" title="Minor 11">x¹¹</button>
-                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;11A&quot;]" title="Major 7 sharp 11 (Lydian)">X<sup>maj7♯11</sup></button>
+                            <div class="harmony-preset-grid chords-grid chords-grid-8col" id="chords-preset-grid">
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;]" title="Major triad"><span class="chord-symbol"><span class="chord-symbol-root">X</span></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;]" title="Minor triad"><span class="chord-symbol"><span class="chord-symbol-root">x</span></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;]" title="Diminished triad"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>o</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;6m&quot;]" title="Augmented triad"><span class="chord-symbol"><span class="chord-symbol-root">X+</span></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;2M&quot;, &quot;5P&quot;]" title="Suspended 2"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>sus2</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;4P&quot;, &quot;5P&quot;]" title="Suspended 4"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>sus4</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;]" title="Dominant 7"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>7</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;]" title="Minor 7"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>7</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;]" title="Major 7"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>maj7</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7M&quot;]" title="Minor-major 7"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>maj7</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;, &quot;7m&quot;]" title="Half-diminished 7"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>∅7</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5d&quot;, &quot;6M&quot;]" title="Fully diminished 7"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>o7</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;6M&quot;]" title="Major 6"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>6</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;6M&quot;]" title="Minor 6"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>6</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;]" title="Dominant 9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;]" title="Minor 9"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;6M&quot;, &quot;9M&quot;]" title="Major 6/9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>6/9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;9M&quot;]" title="Major 9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>maj9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;9M&quot;]" title="Major add 9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>add9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;9M&quot;]" title="Minor add 9"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>add9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;]" title="Dominant 11"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>11</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;]" title="Minor 11"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>11</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;13M&quot;]" title="Dominant 13"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>13</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;9M&quot;, &quot;11A&quot;]" title="Major 7 sharp 11 (Lydian)"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>maj7♯11</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5A&quot;, &quot;7m&quot;]" title="Dominant 7 sharp 5"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>7♯5</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5A&quot;, &quot;7M&quot;]" title="Major 7 sharp 5"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>maj7♯5</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9A&quot;]" title="Dominant 7 sharp 9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>7♯9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;9M&quot;, &quot;11P&quot;, &quot;13M&quot;]" title="Major 13"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>maj13</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7M&quot;, &quot;9M&quot;, &quot;11A&quot;, &quot;13M&quot;]" title="Major 13 sharp 11"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>maj13♯11</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3m&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9M&quot;, &quot;11P&quot;, &quot;13M&quot;]" title="Minor 13"><span class="chord-symbol"><span class="chord-symbol-root">x</span><sup>13</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9m&quot;, &quot;13M&quot;]" title="Dominant 13 flat 9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>13♭9</sup></span></button>
+                                <button class="harmony-preset-button" data-chord-intervals="[&quot;1P&quot;, &quot;3M&quot;, &quot;5P&quot;, &quot;7m&quot;, &quot;9m&quot;]" title="Dominant 7 flat 9"><span class="chord-symbol"><span class="chord-symbol-root">X</span><sup>7♭9</sup></span></button>
                             </div>
                         </div>
                     </div>
@@ -503,83 +476,60 @@
                                             </button>
                                         </div>
                                         <div class="draw-tool-options" id="arrow-tool-options">
-                                            <div class="draw-option-group">
-                                                <div class="draw-toolbar-row">
-                                                    <!-- Stroke weight popup -->
+                                            <div class="draw-option-group arrow-toolbar">
+                                                <div class="arrow-toolbar-row">
                                                     <div class="draw-popup-trigger">
-                                                        <button class="draw-toolbar-button" title="Stroke width">
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <line x1="4" y1="12" x2="20" y2="12"/>
-                                                            </svg>
-                                                        </button>
-                                                        <div class="draw-popup-menu">
-                                                            <div class="draw-option-label">Stroke</div>
-                                                            <input type="range" id="arrow-stroke-weight" min="1" max="20" value="4" aria-label="Arrow stroke weight">
+                                                    <button class="draw-toolbar-button" id="arrow-color-trigger" type="button" title="Colour" aria-label="Arrow colour">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="5" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/></svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu arrow-colour-popup">
+                                                        <div class="draw-option-label">Colour</div>
+                                                        <div class="draw-color-picker">
+                                                            <button class="draw-color-button active" data-color="#000000" style="background-color: #000000;" aria-label="Black arrow"></button>
+                                                            <button class="draw-color-button" data-color="#44bcef" style="background-color: #44bcef;" aria-label="Blue arrow"></button>
+                                                            <button class="draw-color-button" data-color="#ee9561" style="background-color: #ee9561;" aria-label="Orange arrow"></button>
+                                                            <button class="draw-color-button" data-color="#81c273" style="background-color: #81c273;" aria-label="Green arrow"></button>
                                                         </div>
                                                     </div>
-
-                                                    <!-- Line style popup -->
+                                                    </div>
                                                     <div class="draw-popup-trigger">
-                                                        <button class="draw-toolbar-button" title="Line style">
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <line x1="4" y1="8" x2="20" y2="8" stroke-dasharray="4 3"/>
-                                                                <line x1="4" y1="16" x2="20" y2="16"/>
-                                                            </svg>
-                                                        </button>
-                                                        <div class="draw-popup-menu">
-                                                            <div class="draw-option-label">Line Style</div>
-                                                            <div class="draw-button-group">
-                                                                <button class="draw-option-button active" data-line-style="solid">Solid</button>
-                                                                <button class="draw-option-button" data-line-style="dashed-big">Dashed</button>
-                                                                <button class="draw-option-button" data-line-style="dotted">Dotted</button>
-                                                            </div>
+                                                    <button class="draw-toolbar-button" type="button" title="Stroke style" aria-label="Stroke style">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 5H21" stroke-width="2"/><path d="M3 11H21" stroke-width="4"/><path d="M3 19H21" stroke-width="6"/></svg>
+                                                    </button>
+                                                    <div class="draw-popup-menu arrow-stroke-popup">
+                                                        <div class="arrow-line-style-grid" aria-label="Line style">
+                                                            <button class="draw-option-button active" data-line-style="solid" title="Solid" aria-label="Solid"><svg viewBox="0 0 32 16" aria-hidden="true"><path d="M4 8H28"/></svg></button>
+                                                            <button class="draw-option-button" data-line-style="dashed-big" title="Long dashed" aria-label="Long dashed"><svg viewBox="0 0 32 16" aria-hidden="true"><path d="M4 8H28" stroke-dasharray="10 4"/></svg></button>
+                                                            <button class="draw-option-button" data-line-style="dashed-small" title="Short dashed" aria-label="Short dashed"><svg viewBox="0 0 32 16" aria-hidden="true"><path d="M4 8H28" stroke-dasharray="5 3"/></svg></button>
+                                                            <button class="draw-option-button" data-line-style="dotted" title="Dotted" aria-label="Dotted"><svg viewBox="0 0 32 16" aria-hidden="true"><path d="M4 8H28" stroke-dasharray="0.5 3" stroke-linecap="round"/></svg></button>
                                                         </div>
+                                                        <label class="arrow-rounded-row" for="arrow-rounded-ends">Rounded end points<input type="checkbox" role="switch" id="arrow-rounded-ends" class="arrow-rounded-switch"></label>
+                                                        <label for="arrow-stroke-weight">Stroke weight</label>
+                                                        <div class="arrow-weight-row">
+                                                            <input type="range" id="arrow-stroke-weight" min="1" max="20" value="4" aria-label="Arrow stroke weight">
+                                                            <input type="number" id="arrow-stroke-weight-number" min="1" max="20" value="4" aria-label="Arrow stroke weight value">
+                                                        </div>
+                                                    </div>
                                                     </div>
                                                 </div>
-                                                <div class="draw-toolbar-row">
-                                                    <!-- Left arrowhead popup -->
+                                                <div class="arrow-toolbar-row">
                                                     <div class="draw-popup-trigger">
-                                                        <button class="draw-toolbar-button" id="arrow-start-head-trigger" title="Start head">
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <polyline points="9,5 3,12 9,19"/>
-                                                                <line x1="3" y1="12" x2="21" y2="12"/>
-                                                            </svg>
-                                                        </button>
-                                                                <div class="draw-popup-menu">
-                                                                    <div class="draw-option-label">Start</div>
-                                                                    <div class="draw-button-group">
-                                                                    <button class="draw-option-button active" data-arrow-start="none">No head</button>
-                                                                    <button class="draw-option-button" data-arrow-start="filled-arrow">Arrow</button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                    <!-- Swap heads -->
-                                                    <button class="draw-toolbar-button" id="arrow-swap-heads" title="Swap heads">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <polyline points="9 5 15 5 15 11"/>
-                                                            <polyline points="15 19 9 19 9 13"/>
-                                                            <line x1="9" y1="5" x2="5" y2="9"/>
-                                                            <line x1="15" y1="19" x2="19" y2="15"/>
-                                                        </svg>
+                                                    <button class="draw-toolbar-button" id="arrow-start-head-trigger" type="button" title="Line start" aria-label="Line start"></button>
+                                                    <div class="draw-popup-menu arrow-endpoint-popup">
+                                                        <div class="arrow-endpoint-grid" data-endpoint-side="start" aria-label="Line start shape"></div>
+                                                    </div>
+                                                    </div>
+                                                    <button class="draw-toolbar-button" id="arrow-swap-heads" type="button" title="Swap line ends" aria-label="Swap line ends">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m9 9-3 3 3 3m6-6 3 3-3 3"/></svg>
                                                     </button>
-                                                    <!-- Right arrowhead popup -->
                                                     <div class="draw-popup-trigger">
-                                                        <button class="draw-toolbar-button" id="arrow-end-head-trigger" title="End head">
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <polyline points="15,5 21,12 15,19"/>
-                                                                <line x1="3" y1="12" x2="21" y2="12"/>
-                                                            </svg>
-                                                        </button>
-                                                                <div class="draw-popup-menu">
-                                                                    <div class="draw-option-label">End</div>
-                                                                    <div class="draw-button-group">
-                                                                    <button class="draw-option-button active" data-arrow-end="filled-arrow">Arrow</button>
-                                                                    <button class="draw-option-button" data-arrow-end="none">No head</button>
-                                                                    </div>
-                                                                    <div class="draw-option-label">Head Size</div>
-                                                                    <input type="range" id="arrow-head-size" min="8" max="32" value="12" aria-label="Arrowhead size">
-                                                                </div>
-                                                            </div>
+                                                    <button class="draw-toolbar-button" id="arrow-end-head-trigger" type="button" title="Line end" aria-label="Line end"></button>
+                                                    <div class="draw-popup-menu arrow-endpoint-popup">
+                                                        <div class="arrow-endpoint-grid" data-endpoint-side="end" aria-label="Line end shape"></div>
+                                                        <label for="arrow-head-size">Head size</label>
+                                                        <input type="range" id="arrow-head-size" min="8" max="32" value="12" aria-label="Arrowhead size">
+                                                    </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -596,54 +546,35 @@
                                             </button>
                                         </div>
                                         <div class="draw-tool-options" id="text-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row text-tool-layout">
-                                                <div class="draw-stack-column text-popup-column">
-                                                    <!-- Size popup -->
-                                                    <div class="draw-popup-trigger">
-                                                        <button class="draw-toolbar-button" title="Text size">
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <path d="M4 18h16"/>
-                                                                <path d="M8 18l4-12 4 12"/>
-                                                                <path d="M10 12h4"/>
-                                                            </svg>
-                                                        </button>
-                                                        <div class="draw-popup-menu">
-                                                            <div class="draw-option-label">Size (px)</div>
-                                                            <input type="number" id="text-size-input" min="8" max="72" value="16" aria-label="Text size (px)">
-                                                        </div>
+                                            <div class="draw-option-group text-format-toolbar">
+                                                <div class="text-format-row text-format-row-primary">
+                                                    <div class="text-size-stepper" role="group" aria-label="Text size">
+                                                        <button type="button" id="text-size-decrease" aria-label="Decrease text size">&minus;</button>
+                                                        <input type="number" id="text-size-input" min="8" max="72" value="16" aria-label="Text size (px)">
+                                                        <button type="button" id="text-size-increase" aria-label="Increase text size">+</button>
                                                     </div>
-                                                    <!-- Colour popup -->
                                                     <div class="draw-popup-trigger">
-                                                        <button class="draw-toolbar-button" title="Text colour">
-                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <path d="M12 3l6 16"/>
-                                                                <path d="M6 19l6-16"/>
-                                                                <path d="M10 12h4"/>
-                                                            </svg>
-                                                        </button>
+                                                        <button class="draw-toolbar-button text-colour-trigger" type="button" title="Text colour" aria-label="Text colour"><span aria-hidden="true">A</span><span class="text-colour-bar"></span></button>
                                                         <div class="draw-popup-menu">
                                                             <div class="draw-option-label">Colour</div>
                                                             <div class="draw-color-picker">
                                                                 <button class="draw-color-button active" data-color="#000000" style="background-color: #000000;" aria-label="Black text"></button>
-                                                                <button class="draw-color-button" data-color="#4a90e2" style="background-color: #4a90e2;" aria-label="Blue text"></button>
-                                                                <button class="draw-color-button" data-color="#d66573" style="background-color: #d66573;" aria-label="Red text"></button>
-                                                                <button class="draw-color-button" data-color="#68a03f" style="background-color: #68a03f;" aria-label="Green text"></button>
+                                                                <button class="draw-color-button" data-color="#44bcef" style="background-color: #44bcef;" aria-label="Blue text"></button>
+                                                                <button class="draw-color-button" data-color="#ee9561" style="background-color: #ee9561;" aria-label="Orange text"></button>
+                                                                <button class="draw-color-button" data-color="#81c273" style="background-color: #81c273;" aria-label="Green text"></button>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <!-- Style buttons -->
-                                                <div class="text-style-rows">
-                                                    <div class="draw-button-group">
-                                                        <button class="draw-option-button" data-text-style="bold">B</button>
-                                                        <button class="draw-option-button" data-text-style="italic">I</button>
-                                                        <button class="draw-option-button" data-text-style="underline">U</button>
-                                                    </div>
-                                                    <div class="draw-button-group">
-                                                        <button class="draw-option-button" data-text-style="background">Bg</button>
-                                                        <button class="draw-option-button" data-text-style="superscript">x<sup>2</sup></button>
-                                                        <button class="draw-option-button" data-text-style="subscript">x<sub>2</sub></button>
-                                                    </div>
+                                                <div class="text-format-row">
+                                                    <button type="button" class="draw-option-button text-format-button" data-text-style="bold" title="Bold" aria-label="Bold"><b aria-hidden="true">B</b></button>
+                                                    <button type="button" class="draw-option-button text-format-button" data-text-style="italic" title="Italic" aria-label="Italic"><i aria-hidden="true">I</i></button>
+                                                    <button type="button" class="draw-option-button text-format-button" data-text-style="underline" title="Underline" aria-label="Underline"><u aria-hidden="true">U</u></button>
+                                                </div>
+                                                <div class="text-format-row">
+                                                    <button type="button" class="draw-option-button text-format-button" data-text-style="superscript" title="Superscript" aria-label="Superscript"><span aria-hidden="true">x<sup>2</sup></span></button>
+                                                    <button type="button" class="draw-option-button text-format-button" data-text-style="subscript" title="Subscript" aria-label="Subscript"><span aria-hidden="true">x<sub>2</sub></span></button>
+                                                    <button type="button" class="draw-option-button text-format-button" data-text-style="background" title="White background" aria-label="White background"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="3" fill="white" stroke="currentColor"/><path d="m7 17 5-10 5 10m-8-3h6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
                                                 </div>
                                             </div>
                                         </div>
@@ -656,98 +587,40 @@
                                             </button>
                                         </div>
                                         <div class="draw-tool-options" id="marker-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row draw-stack-column">
-                                                <!-- Size popup -->
+                                            <div class="draw-option-group draw-toolbar-row draw-stack-column marker-toolbar">
                                                 <div class="draw-popup-trigger">
-                                                    <button class="draw-toolbar-button" title="Marker size">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M6 19l12-14"/>
-                                                            <path d="M6 19l-2 4 4-2"/>
-                                                        </svg>
+                                                    <button class="draw-toolbar-button" id="marker-color-trigger" type="button" title="Marker colour" aria-label="Marker colour">
+                                                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg>
                                                     </button>
                                                     <div class="draw-popup-menu">
-                                                        <div class="draw-option-label">Size</div>
-                                                        <input type="range" id="marker-size-input" min="2" max="20" value="6" aria-label="Marker size">
-                                                    </div>
-                                                </div>
-                                                <!-- Colours popup -->
-                                                <div class="draw-popup-trigger">
-                                                    <button class="draw-toolbar-button" title="Marker colour">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <path d="M19 4l-7 7"/>
-                                                            <path d="M5 20l3.5-1.5"/>
-                                                            <path d="M16 7l1.5 1.5"/>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="draw-popup-menu">
-                                                        <div class="draw-option-label">Colours</div>
+                                                        <div class="draw-option-label">Colour</div>
                                                         <div class="draw-color-picker">
-                                                            <button class="draw-color-button" data-color="#4a90e2" style="background-color: #4a90e2;" aria-label="Blue marker"></button>
-                                                            <button class="draw-color-button" data-color="#2d2d2d" style="background-color: #2d2d2d;" aria-label="Black marker"></button>
-                                                            <button class="draw-color-button" data-color="#d66573" style="background-color: #d66573;" aria-label="Red marker"></button>
-                                                            <button class="draw-color-button" data-color="#68a03f" style="background-color: #68a03f;" aria-label="Green marker"></button>
+                                                            <button class="draw-color-button" data-color="#44bcef" style="background-color: #44bcef;" aria-label="Blue marker"></button>
+                                                            <button class="draw-color-button" data-color="#d293e0" style="background-color: #d293e0;" aria-label="Purple marker"></button>
+                                                            <button class="draw-color-button" data-color="#ee9561" style="background-color: #ee9561;" aria-label="Orange marker"></button>
+                                                            <button class="draw-color-button" data-color="#81c273" style="background-color: #81c273;" aria-label="Green marker"></button>
+                                                            <button class="draw-color-button" data-color="#9fc5ff" style="background-color: #9fc5ff;" aria-label="Light blue marker"></button>
+                                                            <button class="draw-color-button" data-color="#c2c2c2" style="background-color: #c2c2c2;" aria-label="Gray marker"></button>
+                                                            <button class="draw-color-button" data-color="#ffd166" style="background-color: #ffd166;" aria-label="Yellow marker"></button>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Highlighter Tool Panel -->
-                                    <div class="draw-tool-panel" id="draw-highlighter-controls" data-draw-tool="highlighter">
-                                        <div class="draw-tool-header">
-                                            <button class="draw-tool-button" data-draw-tool="highlighter" title="Highlighter Tool">
-                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity="0.5">
-                                                    <!-- Flat highlighter head -->
-                                                    <rect x="3" y="3" width="4" height="18" rx="1"/>
-                                                    <path d="M7 5h12l-2 14H7z"/>
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        <div class="draw-tool-options" id="highlighter-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row draw-stack-column">
-                                                <!-- Size popup -->
                                                 <div class="draw-popup-trigger">
-                                                    <button class="draw-toolbar-button" title="Highlighter size">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <rect x="5" y="5" width="10" height="10" rx="2"/>
-                                                            <path d="M9 15l-2 4"/>
-                                                        </svg>
+                                                    <button class="draw-toolbar-button" type="button" title="Marker size and transparency" aria-label="Marker size and transparency">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 5H21" stroke-width="2"/><path d="M3 11H21" stroke-width="4"/><path d="M3 19H21" stroke-width="6"/></svg>
                                                     </button>
-                                                    <div class="draw-popup-menu">
-                                                        <div class="draw-option-label">Size</div>
-                                                        <input type="range" id="highlighter-size-input" min="4" max="30" value="10" aria-label="Highlighter size">
-                                                    </div>
-                                                </div>
-                                                <!-- Colours popup -->
-                                                <div class="draw-popup-trigger">
-                                                    <button class="draw-toolbar-button" title="Highlighter colour">
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <rect x="7" y="7" width="10" height="10" rx="2"/>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="draw-popup-menu">
-                                                        <div class="draw-option-label">Colours</div>
-                                                        <div class="draw-color-picker">
-                                                            <button class="draw-color-button" data-color="#9fc5ff" style="background-color: #9fc5ff;" aria-label="Light blue highlighter"></button>
-                                                            <button class="draw-color-button" data-color="#c2c2c2" style="background-color: #c2c2c2;" aria-label="Gray highlighter"></button>
-                                                            <button class="draw-color-button" data-color="#ffd166" style="background-color: #ffd166;" aria-label="Yellow highlighter"></button>
+                                                    <div class="draw-popup-menu marker-appearance-popup">
+                                                        <label for="marker-size-input">Size</label>
+                                                        <div class="marker-slider-row">
+                                                            <input type="range" id="marker-size-input" min="2" max="30" value="6" aria-label="Marker size">
+                                                            <input type="number" id="marker-size-number" min="2" max="30" value="6" aria-label="Marker size value">
+                                                        </div>
+                                                        <label for="marker-transparency-input">Transparency</label>
+                                                        <div class="marker-slider-row">
+                                                            <input type="range" id="marker-transparency-input" min="0" max="95" value="0" aria-label="Marker transparency" aria-valuetext="0% transparent">
+                                                            <input type="number" id="marker-transparency-number" min="0" max="95" value="0" aria-label="Marker transparency percent">
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Lasso Tool Panel -->
-                                    <div class="draw-tool-panel" id="draw-lasso-controls" data-draw-tool="lasso">
-                                        <div class="draw-tool-header">
-                                            <button class="draw-tool-button" data-draw-tool="lasso" title="Lasso Select">
-                                                <img src="assets/icons/lasso-tool.svg" alt="Lasso Select">
-                                            </button>
-                                        </div>
-                                        <div class="draw-tool-options" id="lasso-tool-options">
-                                            <div class="draw-option-group draw-toolbar-row">
-                                                <div class="draw-option-help">
-                                                    Draw around notes to select and drag them as a group.
                                                 </div>
                                             </div>
                                         </div>
@@ -885,7 +758,6 @@
                 </div>
                 <div class="button-grid-right-cell">
                     <div class="macrobeat-floating-panel" aria-label="Add or delete beat">
-                        <span class="macrobeat-floating-label">Add/Del Beat</span>
                         <div class="macrobeat-adjust-group">
                             <button class="toolkit-button" id="macrobeat-decrease" aria-label="Delete beat">–</button>
                             <button class="toolkit-button" id="macrobeat-increase" aria-label="Add beat">+</button>

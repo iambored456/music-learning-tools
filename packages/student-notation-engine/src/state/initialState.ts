@@ -52,10 +52,10 @@ const DEFAULT_TREMOLO = {
 function createDefaultTimbres(): TimbresMap {
   const bins = 32;
   const startupPresetByColor: Record<string, 'sine' | 'triangle' | 'square' | 'sawtooth'> = {
-    '#4a90e2': 'sine',
-    '#2d2d2d': 'triangle',
-    '#d66573': 'square',
-    '#68a03f': 'sawtooth'
+    '#44bcef': 'sine',
+    '#d293e0': 'triangle',
+    '#ee9561': 'square',
+    '#81c273': 'sawtooth'
   };
   const presetGain: Record<'sine' | 'triangle' | 'square' | 'sawtooth', number> = {
     sine: 1.0,
@@ -181,21 +181,17 @@ export function getInitialState(): AppState {
     // --- Timbres & Colors ---
     timbres,
     colorPalette: {
-      '#4a90e2': { primary: '#4a90e2', light: '#a8c8f0' },
-      '#e24a4a': { primary: '#e24a4a', light: '#f0a8a8' },
-      '#4ae24a': { primary: '#4ae24a', light: '#a8f0a8' },
-      '#e2e24a': { primary: '#e2e24a', light: '#f0f0a8' },
-      '#e24ae2': { primary: '#e24ae2', light: '#f0a8f0' },
-      '#4ae2e2': { primary: '#4ae2e2', light: '#a8f0f0' },
-      '#e2a04a': { primary: '#e2a04a', light: '#f0d0a8' },
-      '#a04ae2': { primary: '#a04ae2', light: '#d0a8f0' }
+      '#44bcef': { primary: '#44bcef', light: '#5fd3ff' },
+      '#d293e0': { primary: '#d293e0', light: '#e9a9f7' },
+      '#ee9561': { primary: '#ee9561', light: '#ffab77' },
+      '#81c273': { primary: '#81c273', light: '#97d889' }
     },
 
     // --- UI & View State ---
     selectedTool: 'note',
     previousTool: 'note',
     selectedToolTonicNumber: 0, // Sentinel: no tonic mode selected yet (valid modes are 1-7).
-    selectedNote: { shape: 'circle', color: '#4a90e2' },
+    selectedNote: { shape: 'circle', color: '#44bcef' },
     deviceProfile: {
       isMobile: false,
       isTouch: false,
@@ -228,6 +224,7 @@ export function getInitialState(): AppState {
     isPlaying: false,
     isPaused: false,
     isLooping: false,
+    playbackStartMacrobeatIndex: null,
     tempo: 90,
     playheadMode: 'cursor',
 
@@ -254,6 +251,6 @@ export function getInitialState(): AppState {
     },
 
     // --- Long Notes Style ---
-    longNoteStyle: 'style1'
+    longNoteStyle: 'style2'
   };
 }

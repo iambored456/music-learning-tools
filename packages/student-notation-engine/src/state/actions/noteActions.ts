@@ -5,7 +5,9 @@
  * All dependencies (selectors, services) are injected via callbacks.
  */
 
+import { getNoteEndColumn } from '@mlt/types';
 import type {
+  Annotation,
   PlacedNote,
   TonicSign,
   Store,
@@ -88,6 +90,48 @@ function generateUUID(): string {
 }
 
 /**
+ * Rebase persisted annotation geometry when zero-time canvas columns are added
+ * or removed. Each horizontal boundary is transformed independently so arrows
+ * and freehand paths that cross the insertion point retain their time-aligned
+ * endpoints, while text boxes spanning it grow or shrink with the grid.
+ */
+function shiftAnnotationsAtBoundary(
+  annotations: Annotation[],
+  boundaryColumn: number,
+  columnDelta: number
+): boolean {
+  let changed = false;
+  const shiftColumn = (column: number): number => {
+    if (column < boundaryColumn) return column;
+    changed = true;
+    return column + columnDelta;
+  };
+
+  annotations.forEach(annotation => {
+    if (annotation.type === 'arrow') {
+      annotation.startCol = shiftColumn(annotation.startCol);
+      annotation.endCol = shiftColumn(annotation.endCol);
+      return;
+    }
+
+    if (annotation.type === 'text') {
+      const oldEndCol = annotation.col + annotation.widthCols;
+      const newCol = shiftColumn(annotation.col);
+      const newEndCol = shiftColumn(oldEndCol);
+      annotation.col = newCol;
+      annotation.widthCols = newEndCol - newCol;
+      return;
+    }
+
+    annotation.path.forEach(point => {
+      point.col = shiftColumn(point.col);
+    });
+  });
+
+  return changed;
+}
+
+/**
  * Create note action methods bound to a store instance
  */
 export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
@@ -104,6 +148,14 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
      * IMPORTANT: This function no longer records history. The calling function is responsible for that.
      */
     addNote(this: Store, note: Partial<PlacedNote>): PlacedNote | null {
+      if (note.shape === 'diamond' && !note.isDrum) {
+        note = { ...note, durationMicrobeats: 0.5, endColumnIndex: note.startColumnIndex };
+      }
+      if (!note.isDrum && typeof note.startColumnIndex === 'number' && typeof note.endColumnIndex === 'number' &&
+          this.state.placedNotes.some(existing => !existing.isDrum && existing.row === note.row && existing.color === note.color &&
+            (note.shape === 'diamond' || existing.shape === 'diamond') &&
+            note.startColumnIndex! < getNoteEndColumn(existing) &&
+            getNoteEndColumn(note as PlacedNote) > existing.startColumnIndex)) return null;
       // Check if there's already a note of the same color at the same position (row + startColumnIndex)
       const existingNote = this.state.placedNotes.find(existingNote =>
         !existingNote.isDrum &&
@@ -149,6 +201,7 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
     },
 
     updateNoteTail(this: Store, note: PlacedNote, newEndColumn: CanvasSpaceColumn): void {
+      if (note.shape === 'diamond' && !note.isDrum) return;
       let nextEnd = newEndColumn;
       if (note.shape === 'circle') {
         nextEnd = Math.max(note.startColumnIndex + 1, newEndColumn) as CanvasSpaceColumn;
@@ -159,6 +212,7 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
 
     updateMultipleNoteTails(this: Store, notes: PlacedNote[], newEndColumn: CanvasSpaceColumn): void {
       notes.forEach((note) => {
+        if (note.shape === 'diamond' && !note.isDrum) return;
         let nextEnd = newEndColumn;
         if (note.shape === 'circle') {
           nextEnd = Math.max(note.startColumnIndex + 1, newEndColumn) as CanvasSpaceColumn;
@@ -261,7 +315,7 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
         } else {
           // For non-circle notes, check if note overlaps with eraser's 2×3 coverage area
           const noteInEraseArea = noteRow >= eraseStartRow && noteRow <= eraseEndRow &&
-            note.startColumnIndex <= eraseEndCol && note.endColumnIndex >= col;
+            note.startColumnIndex < col + width && getNoteEndColumn(note) > col;
 
           if (noteInEraseArea) {
             return false; // Remove this note
@@ -305,8 +359,9 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
 
     toggleDrumNote(
       this: Store,
-      drumHit: Partial<PlacedNote> & { drumTrack: number | string; startColumnIndex: CanvasSpaceColumn }
-    ): void {
+      drumHit: Partial<PlacedNote> & { drumTrack: number | string; startColumnIndex: CanvasSpaceColumn },
+      record = true
+    ): boolean {
       const targetTrack = String(drumHit.drumTrack);
       const existingIndex = this.state.placedNotes.findIndex(note =>
         note.isDrum &&
@@ -334,12 +389,14 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
         this.state.placedNotes.push(newDrumNote);
       }
       this.emit('notesChanged');
-      this.recordState();
+      if (record) this.recordState();
+      return true;
     },
 
     addTonicSignGroup(
       this: Store,
-      tonicSignGroup: Array<Pick<TonicSign, 'preMacrobeatIndex' | 'columnIndex' | 'row' | 'tonicNumber' | 'globalRow' | 'uuid'>>
+      tonicSignGroup: Array<Pick<TonicSign, 'preMacrobeatIndex' | 'columnIndex' | 'row' | 'tonicNumber' | 'globalRow' | 'uuid'>>,
+      record = true
     ): void {
       log('debug', 'Starting addTonicSignGroup', { tonicSignGroup });
 
@@ -391,7 +448,13 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
         });
       });
 
-      const uuid = generateUUID();
+      const annotationsShifted = shiftAnnotationsAtBoundary(
+        this.state.annotations,
+        boundaryColumn,
+        2
+      );
+
+      const uuid = firstSign.uuid || generateUUID();
       const groupWithId = tonicSignGroup.map(sign => ({
         ...sign,
         uuid,
@@ -402,8 +465,9 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
 
       log('debug', 'Emitting events: notesChanged, rhythmStructureChanged');
       this.emit('notesChanged');
+      if (annotationsShifted) this.emit('annotationsChanged');
       this.emit('rhythmStructureChanged');
-      this.recordState();
+      if (record) this.recordState();
     },
 
     /**
@@ -451,7 +515,14 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
         });
       });
 
+      const annotationsShifted = shiftAnnotationsAtBoundary(
+        this.state.annotations,
+        boundaryColumn,
+        -2
+      );
+
       this.emit('notesChanged');
+      if (annotationsShifted) this.emit('annotationsChanged');
       this.emit('rhythmStructureChanged');
 
       if (record) {
@@ -464,6 +535,7 @@ export function createNoteActions(callbacks: NoteActionCallbacks = {}) {
     clearAllNotes(this: Store): void {
       this.state.placedNotes = [];
       this.state.tonicSignGroups = {};
+      this.setPlaybackStartMacrobeat(null);
       this.emit('notesChanged');
       this.emit('rhythmStructureChanged');
       this.recordState();

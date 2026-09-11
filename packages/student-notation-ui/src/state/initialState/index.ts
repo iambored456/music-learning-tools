@@ -72,7 +72,7 @@ export const initialState: AppState = {
   selectedTool: 'note',
   previousTool: 'note',
   selectedToolTonicNumber: 0, // Sentinel: no tonic mode selected yet (valid modes are 1-7).
-  selectedNote: { shape: 'circle', color: '#4a90e2' },
+  selectedNote: { shape: 'circle', color: '#44bcef' },
   deviceProfile: {
     isMobile: false,
     isTouch: false,
@@ -105,6 +105,7 @@ export const initialState: AppState = {
   isPlaying: false,
   isPaused: false,
   isLooping: false,
+  playbackStartMacrobeatIndex: null,
   tempo: 90,
   playheadMode: 'cursor',
 
@@ -131,7 +132,7 @@ export const initialState: AppState = {
   },
 
   // --- Long Notes Style ---
-  longNoteStyle: 'style1'  // 'style1' = tail line, 'style2' = stadium/capsule shape
+  longNoteStyle: 'style2'  // 'style1' = tail line, 'style2' = stadium/capsule shape
 };
 
 

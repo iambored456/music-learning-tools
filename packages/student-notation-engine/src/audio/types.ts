@@ -95,6 +95,8 @@ export interface SynthEngineInstance {
 
   /** Set the master volume in dB */
   setVolume(dB: number): void;
+  /** Set a colour channel's linear level, independently of its preset. */
+  setChannelVolume(color: string, volume: number): void;
 
   /** Get the master gain node for external connections */
   getMasterGainNode(): Tone.Gain | null;
@@ -134,6 +136,8 @@ export interface SynthEngineInstance {
  * Transport Service Instance
  */
 export interface TransportServiceInstance {
+  /** Loading/preparing audio or waiting for the scheduled playback start. */
+  readonly isBuffering: boolean;
   /** Initialize the transport */
   init(): void;
 
@@ -184,6 +188,7 @@ export interface SynthEngineConfig {
  * Placed note for scheduling
  */
 export interface SchedulableNote {
+  durationMicrobeats?: number;
   uuid: string;
   startColumnIndex: number;
   endColumnIndex: number;
@@ -263,6 +268,8 @@ export interface TransportState {
     xPosition?: number | null;
   }>;
   isLooping: boolean;
+  playbackStartMacrobeatIndex: number | null;
+  macrobeatCount?: number;
   isPaused: boolean;
   cellWidth: number;
   placedNotes: SchedulableNote[];
@@ -275,6 +282,8 @@ export interface TransportState {
  * Callbacks for transport visual updates (decouples from DOM)
  */
 export interface TransportVisualCallbacks {
+  /** Give startup feedback a chance to paint before synchronous scheduling. */
+  preparePlayback?: () => Promise<void>;
   /** Clear playhead canvas */
   clearPlayheadCanvas?: () => void;
   /** Clear drum playhead canvas */
@@ -292,7 +301,13 @@ export interface TransportVisualCallbacks {
   /** Trigger note pop animation on drum grid */
   triggerDrumNotePop?: (columnIndex: number, drumTrack: number) => void;
   /** Trigger ADSR playhead visual */
-  triggerAdsrVisual?: (noteId: string, phase: 'attack' | 'release', color: string, adsr: any) => void;
+  triggerAdsrVisual?: (
+    noteId: string,
+    phase: 'attack' | 'release',
+    playheadColor: string,
+    adsr: any,
+    voiceColor: string
+  ) => void;
   /** Clear all ADSR visuals */
   clearAdsrVisuals?: () => void;
   /** Get canvas logical width */

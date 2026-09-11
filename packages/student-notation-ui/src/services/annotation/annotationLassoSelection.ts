@@ -3,9 +3,13 @@ import { getSixteenthStampById } from '@/rhythm/sixteenthStamps.ts';
 import { getSixteenthThreeStampById } from '@/rhythm/sixteenthThreeStamps.ts';
 import { getTripletStampById, tripletCenterPercents } from '@/rhythm/tripletStamps.ts';
 import { timeToCanvas } from '@services/columnMapService.ts';
+import columnMapService from '@services/columnMapService.ts';
 import store from '@state/initStore.ts';
 import { calculateConvexHull, polygonIntersectsEllipse, polygonIntersectsRect } from '@utils/geometryUtils.ts';
+import { distanceToLineSegment } from './annotationGeometry.ts';
+import { getModulationMarkerCanvasX } from '@components/canvas/PitchGrid/renderers/modulationRenderer.ts';
 import type {
+  Annotation,
   AppState,
   GeometryPoint,
   LassoSelectedItem,
@@ -14,6 +18,7 @@ import type {
   SixteenthStampPlacement,
   SixteenthThreeStampPlacement,
   TripletStampPlacement,
+  TonicSign,
 } from '@mlt/types';
 import type { RendererOptions } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 
@@ -21,7 +26,7 @@ type SelectedItem = LassoSelectedItem;
 type LassoState = Pick<
   AppState,
   'placedNotes' | 'sixteenthStampPlacements' | 'sixteenthThreeStampPlacements' | 'tripletStampPlacements' | 'tempoModulationMarkers'
->;
+> & Partial<Pick<AppState, 'tonicSignGroups' | 'annotations'>>;
 
 interface SelectionComputationResult {
   selectedItems: SelectedItem[];
@@ -44,6 +49,7 @@ interface Ellipse {
 }
 
 const THREE_STAMP_TIME_SPAN = 1.5;
+const ANNOTATION_HIT_PADDING = 8;
 
 export function buildNoteSelectionId(note: PlacedNote): string {
   return `note-${note.row}-${note.startColumnIndex}-${note.color}-${note.shape}`;
@@ -60,6 +66,161 @@ export function buildSixteenthThreeStampSelectionId(stamp: SixteenthThreeStampPl
 export function buildTripletStampSelectionId(triplet: TripletStampPlacement, state: LassoState | AppState): string {
   const tripletStartCol = timeToCanvas(triplet.startTimeIndex, state as AppState);
   return `triplet-stamp-${triplet.row}-${tripletStartCol}-${triplet.tripletStampId}`;
+}
+
+function getNoteEllipse(note: PlacedNote, renderOptions: RendererOptions): Ellipse {
+  const xStart = getColumnX(note.startColumnIndex, renderOptions);
+  const actualCellWidth = getColumnX(note.startColumnIndex + (note.shape === 'diamond' ? 0.5 : 1), renderOptions) - xStart || renderOptions.cellWidth;
+  return {
+    centerX: note.shape === 'circle' ? xStart + actualCellWidth : xStart + actualCellWidth / 2,
+    centerY: getRowY(note.globalRow ?? note.row, renderOptions),
+    rx: note.shape === 'circle' ? actualCellWidth : actualCellWidth / 2,
+    ry: renderOptions.cellHeight / 2
+  };
+}
+
+function getNoteHullPoints(note: PlacedNote, renderOptions: RendererOptions): GeometryPoint[] {
+  const ellipse = getNoteEllipse(note, renderOptions);
+  const points = ellipseToPoints(ellipse);
+  if (note.endColumnIndex > note.startColumnIndex + 1) {
+    const endX = getColumnX(note.endColumnIndex + 1, renderOptions);
+    points.push(...rectToPoints({
+      x: Math.min(ellipse.centerX, endX),
+      y: ellipse.centerY - ellipse.ry,
+      width: Math.abs(endX - ellipse.centerX),
+      height: ellipse.ry * 2
+    }));
+  }
+  return points;
+}
+
+function isPointNearNote(x: number, y: number, note: PlacedNote, renderOptions: RendererOptions, threshold: number): boolean {
+  const ellipse = getNoteEllipse(note, renderOptions);
+  if (distanceToEllipse(x, y, ellipse) <= threshold) return true;
+  if (note.endColumnIndex <= note.startColumnIndex + 1) return false;
+  const endX = getColumnX(note.endColumnIndex + 1, renderOptions);
+  return distanceToRect(x, y, {
+    x: Math.min(ellipse.centerX, endX),
+    y: ellipse.centerY - ellipse.ry,
+    width: Math.abs(endX - ellipse.centerX),
+    height: ellipse.ry * 2
+  }) <= threshold;
+}
+
+function getTonicGeometry(sign: TonicSign, state: AppState, renderOptions: RendererOptions): Ellipse {
+  let canvasColumn = sign.columnIndex;
+  if (sign.uuid) {
+    const entry = columnMapService.getColumnMap(state).entries.find(candidate =>
+      candidate.type === 'tonic' && candidate.tonicSignUuid === sign.uuid
+    );
+    if (typeof entry?.canvasIndex === 'number') canvasColumn = entry.canvasIndex as typeof canvasColumn;
+  }
+  const x = getColumnX(canvasColumn, renderOptions);
+  const width = (getColumnX(canvasColumn + 2, renderOptions) - x) || renderOptions.cellWidth * 2;
+  return {
+    centerX: x + width / 2,
+    centerY: getRowY(sign.globalRow ?? sign.row, renderOptions),
+    rx: Math.min(width, renderOptions.cellHeight) * 0.45,
+    ry: Math.min(width, renderOptions.cellHeight) * 0.45
+  };
+}
+
+function annotationPoints(annotation: Annotation, renderOptions: RendererOptions): GeometryPoint[] {
+  if (annotation.type === 'arrow') {
+    return [
+      { x: getColumnX(annotation.startCol, renderOptions), y: getRowY(annotation.startRow, renderOptions) },
+      { x: getColumnX(annotation.endCol, renderOptions), y: getRowY(annotation.endRow, renderOptions) }
+    ];
+  }
+  if (annotation.type === 'text') {
+    return rectToPoints({
+      x: getColumnX(annotation.col, renderOptions),
+      y: getRowY(annotation.row, renderOptions),
+      width: getColumnX(annotation.col + annotation.widthCols, renderOptions) - getColumnX(annotation.col, renderOptions),
+      height: annotation.heightRows * renderOptions.cellHeight / 2
+    });
+  }
+  return annotation.path.map(point => ({
+    x: getColumnX(point.col, renderOptions),
+    y: getRowY(point.row, renderOptions)
+  }));
+}
+
+function isPointNearAnnotation(x: number, y: number, annotation: Annotation, renderOptions: RendererOptions, threshold: number): boolean {
+  const points = annotationPoints(annotation, renderOptions) as Array<{ x: number; y: number }>;
+  const strokeThreshold = annotation.type === 'text'
+    ? threshold
+    : Math.max(threshold, (annotation.type === 'arrow' ? annotation.settings.strokeWeight ?? 0 : annotation.settings.size ?? 0) / 2);
+  if (annotation.type === 'text' && points.length === 4) {
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    return distanceToRect(x, y, { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }) <= threshold;
+  }
+  if (points.length === 1) return Math.hypot(x - points[0]!.x, y - points[0]!.y) <= strokeThreshold;
+  return points.slice(1).some((point, index) =>
+    distanceToLineSegment(x, y, points[index]!.x, points[index]!.y, point.x, point.y) <= strokeThreshold
+  );
+}
+
+function annotationHullPoints(annotation: Annotation, renderOptions: RendererOptions): GeometryPoint[] {
+  const points = annotationPoints(annotation, renderOptions) as Array<{ x: number; y: number }>;
+  if (annotation.type === 'text' || points.length === 0) return points;
+  const padding = Math.max(ANNOTATION_HIT_PADDING, (annotation.type === 'arrow' ? annotation.settings.strokeWeight ?? 0 : annotation.settings.size ?? 0) / 2);
+  const xs = points.map(point => point.x);
+  const ys = points.map(point => point.y);
+  return rectToPoints({
+    x: Math.min(...xs) - padding,
+    y: Math.min(...ys) - padding,
+    width: Math.max(...xs) - Math.min(...xs) + padding * 2,
+    height: Math.max(...ys) - Math.min(...ys) + padding * 2
+  });
+}
+
+export function findSelectableItemAtPoint(params: {
+  canvasX: number;
+  canvasY: number;
+  state: AppState;
+  renderOptions: RendererOptions;
+  thresholdPx?: number;
+}): SelectedItem | null {
+  const { canvasX, canvasY, state, renderOptions } = params;
+  const threshold = params.thresholdPx ?? 6;
+
+  for (let index = state.annotations.length - 1; index >= 0; index--) {
+    const annotation = state.annotations[index]!;
+    if (isPointNearAnnotation(canvasX, canvasY, annotation, renderOptions, Math.max(threshold, ANNOTATION_HIT_PADDING))) {
+      return { type: 'annotation', id: `annotation-${index}`, data: annotation, index };
+    }
+  }
+  for (let index = state.tempoModulationMarkers.length - 1; index >= 0; index--) {
+    const marker = state.tempoModulationMarkers[index]!;
+    if (marker.active && Math.abs(canvasX - getModulationMarkerCanvasX(marker, renderOptions as AppState & RendererOptions)) <= threshold) {
+      return { type: 'modulationMarker', id: `modulation-${marker.id}`, data: marker, index };
+    }
+  }
+  for (let index = state.tripletStampPlacements.length - 1; index >= 0; index--) {
+    const stamp = state.tripletStampPlacements[index]!;
+    if (isPointNearTripletStamp(canvasX, canvasY, stamp, state, renderOptions, threshold)) return { type: 'tripletStamp', id: buildTripletStampSelectionId(stamp, state), data: stamp, index };
+  }
+  for (let index = state.sixteenthThreeStampPlacements.length - 1; index >= 0; index--) {
+    const stamp = state.sixteenthThreeStampPlacements[index]!;
+    if (isPointNearSixteenthThreeStamp(canvasX, canvasY, stamp, state, renderOptions, threshold)) return { type: 'sixteenthThreeStamp', id: buildSixteenthThreeStampSelectionId(stamp), data: stamp, index };
+  }
+  for (let index = state.sixteenthStampPlacements.length - 1; index >= 0; index--) {
+    const stamp = state.sixteenthStampPlacements[index]!;
+    if (isPointNearSixteenthStamp(canvasX, canvasY, stamp, state, renderOptions, threshold)) return { type: 'sixteenthStamp', id: buildSixteenthStampSelectionId(stamp), data: stamp, index };
+  }
+  for (const [groupId, signs] of Object.entries(state.tonicSignGroups)) {
+    const sign = signs.find(candidate => distanceToEllipse(canvasX, canvasY, getTonicGeometry(candidate, state, renderOptions)) <= threshold);
+    if (sign) return { type: 'tonicSign', id: `tonic-${groupId}`, data: sign, groupId };
+  }
+  for (let index = state.placedNotes.length - 1; index >= 0; index--) {
+    const note = state.placedNotes[index]!;
+    if (!note.isDrum && isPointNearNote(canvasX, canvasY, note, renderOptions, threshold)) {
+      return { type: 'note', id: buildNoteSelectionId(note), data: note, index };
+    }
+  }
+  return null;
 }
 
 function getSixteenthStampBaseRect(
@@ -431,23 +592,15 @@ export function computeLassoSelection(params: {
       return;
     }
 
-    const colIndex = note.startColumnIndex;
-    const xStart = getColumnX(colIndex, renderOptions);
-    const baseY = getRowY(note.row, renderOptions);
-
-    const { cellWidth, cellHeight } = renderOptions;
-    let actualCellWidth = cellWidth;
-    if (renderOptions.tempoModulationMarkers && renderOptions.tempoModulationMarkers.length > 0) {
-      const nextX = getColumnX(colIndex + 1, renderOptions);
-      actualCellWidth = nextX - xStart;
-    }
-
-    const centerX = note.shape === 'oval' ? xStart + actualCellWidth : xStart + (actualCellWidth / 2);
-    const centerY = baseY;
-    const rx = note.shape === 'oval' ? actualCellWidth : actualCellWidth / 2;
-    const ry = cellHeight / 2;
-
-    if (polygonIntersectsEllipse(lassoPath, { centerX, centerY, rx, ry })) {
+    const ellipse = getNoteEllipse(note, renderOptions);
+    const tailPoints = getNoteHullPoints(note, renderOptions);
+    const tailXs = tailPoints.map(point => point.x ?? 0);
+    const tailYs = tailPoints.map(point => point.y ?? 0);
+    const intersectsTail = polygonIntersectsRect(lassoPath, {
+      x: Math.min(...tailXs), y: Math.min(...tailYs),
+      width: Math.max(...tailXs) - Math.min(...tailXs), height: Math.max(...tailYs) - Math.min(...tailYs)
+    });
+    if (polygonIntersectsEllipse(lassoPath, ellipse) || intersectsTail) {
       const id = buildNoteSelectionId(note);
       if (!selectedItems.find(item => item.id === id)) {
         selectedItems.push({ type: 'note', id, data: note, index });
@@ -485,6 +638,40 @@ export function computeLassoSelection(params: {
     }
   });
 
+  Object.entries(state.tonicSignGroups ?? {}).forEach(([groupId, signs]) => {
+    const sign = signs.find(candidate => polygonIntersectsEllipse(lassoPath, getTonicGeometry(candidate, state as AppState, renderOptions)));
+    const id = `tonic-${groupId}`;
+    if (sign && !selectedItems.find(item => item.id === id)) selectedItems.push({ type: 'tonicSign', id, data: sign, groupId });
+  });
+
+  state.tempoModulationMarkers.forEach((marker, index) => {
+    if (!marker.active) return;
+    const x = getModulationMarkerCanvasX(marker, renderOptions as AppState & RendererOptions);
+    const id = `modulation-${marker.id}`;
+    const viewportHeight = (renderOptions as RendererOptions & { viewportHeight?: number }).viewportHeight ?? 10000;
+    if (polygonIntersectsRect(lassoPath, { x: x - 4, y: 0, width: 8, height: viewportHeight }) && !selectedItems.find(item => item.id === id)) {
+      selectedItems.push({ type: 'modulationMarker', id, data: marker, index });
+    }
+  });
+
+  (state.annotations ?? []).forEach((annotation, index) => {
+    const annotationCanvasPoints = annotationPoints(annotation, renderOptions) as Array<{ x: number; y: number }>;
+    const sampledPoints = annotationCanvasPoints.flatMap((point, index) => {
+      const next = annotationCanvasPoints[index + 1];
+      return next ? [point, { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 }] : [point];
+    });
+    const intersects = annotation.type === 'text'
+      ? polygonIntersectsRect(lassoPath, {
+          x: Math.min(...annotationCanvasPoints.map(point => point.x)),
+          y: Math.min(...annotationCanvasPoints.map(point => point.y)),
+          width: Math.max(...annotationCanvasPoints.map(point => point.x)) - Math.min(...annotationCanvasPoints.map(point => point.x)),
+          height: Math.max(...annotationCanvasPoints.map(point => point.y)) - Math.min(...annotationCanvasPoints.map(point => point.y))
+        })
+      : sampledPoints.some(point => polygonIntersectsEllipse(lassoPath, { centerX: point.x, centerY: point.y, rx: ANNOTATION_HIT_PADDING, ry: ANNOTATION_HIT_PADDING }));
+    const id = `annotation-${index}`;
+    if (intersects && !selectedItems.find(item => item.id === id)) selectedItems.push({ type: 'annotation', id, data: annotation, index });
+  });
+
   const convexHull = computeConvexHullForSelectedItems({ selectedItems, renderOptions, state });
   return { selectedItems, convexHull, isActive: selectedItems.length > 0 };
 }
@@ -510,11 +697,14 @@ export function computeConvexHullForSelectedItems(params: {
     if (item.type === 'tripletStamp') {
       return getTripletStampHullPoints(item.data, canvasState, renderOptions);
     }
-    if (item.type === 'note') {
-      const x = getColumnX(item.data.startColumnIndex, renderOptions);
-      const y = getRowY(item.data.row, renderOptions);
-      return [{ x, y }];
+    if (item.type === 'note') return getNoteHullPoints(item.data, renderOptions);
+    if (item.type === 'tonicSign') return ellipseToPoints(getTonicGeometry(item.data, canvasState, renderOptions));
+    if (item.type === 'modulationMarker') {
+      const x = getModulationMarkerCanvasX(item.data, renderOptions as AppState & RendererOptions);
+      const viewportHeight = (renderOptions as RendererOptions & { viewportHeight?: number }).viewportHeight ?? 10000;
+      return rectToPoints({ x: x - 4, y: 0, width: 8, height: viewportHeight });
     }
+    if (item.type === 'annotation') return annotationHullPoints(item.data, renderOptions);
 
     return [];
   });
@@ -536,9 +726,15 @@ export function removeFromLassoSelectionAtPoint(params: {
   }
 
   const threshold = params.thresholdPx ?? 15;
-  let clickedItemId: string | null = null;
+  let clickedItemId: string | null = findSelectableItemAtPoint({
+    canvasX,
+    canvasY,
+    state,
+    renderOptions,
+    thresholdPx: threshold
+  })?.id ?? null;
 
-  state.placedNotes.forEach((note) => {
+  if (!clickedItemId) state.placedNotes.forEach((note) => {
     const colIndex = note.startColumnIndex;
     const centerX = getColumnX(colIndex, renderOptions);
     const centerY = getRowY(note.row, renderOptions);

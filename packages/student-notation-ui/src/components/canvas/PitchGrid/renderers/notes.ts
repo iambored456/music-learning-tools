@@ -2,6 +2,8 @@
 import { getColumnX, getRowY, getCurrentCoordinateMapping } from './rendererUtils.ts';
 import TonalService from '@services/tonalService.ts';
 import store from '@state/initStore.ts';
+import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.ts';
+import { getNoteEndColumn } from '@mlt/types';
 import columnMapService from '@services/columnMapService.ts';
 import { getAnimationEffectsManager as getRuntimeAnimationEffectsManager } from '@services/runtimeGlobals.ts';
 import { buildCanvasFont, getSemanticTextColor } from '@services/typographyService.ts';
@@ -200,11 +202,12 @@ function drawDelayGhostNotes(
 
     // Draw ghost note outline
     ctx.beginPath();
-    ctx.ellipse(echoX, centerY, echoRx, echoRy, 0, 0, 2 * Math.PI);
+    if (note.shape !== 'diamond') ctx.ellipse(echoX, centerY, echoRx, echoRy, 0, 0, 2 * Math.PI);
     ctx.strokeStyle = note.color;
     ctx.lineWidth = Math.max(0.5, echoRx * 0.1);
     ctx.setLineDash([2, 2]); // Dashed line for ghost effect
-    ctx.stroke();
+    if (note.shape === 'diamond') ctx.stroke(new Path2D(diamondPath(echoX, centerY, echoRx * 2, echoRy * 2)));
+    else ctx.stroke();
 
     ctx.restore();
   });
@@ -236,8 +239,12 @@ function drawEnvelopeFill(
   gradient.addColorStop(1, `${note.color}BF`);
 
   ctx.beginPath();
-  ctx.ellipse(centerX, centerY, rx, ry, 0, 0, 2 * Math.PI);
-  ctx.clip();
+  if (note.shape === 'diamond') {
+    ctx.clip(new Path2D(diamondPath(centerX, centerY, rx * 2, ry * 2)));
+  } else {
+    ctx.ellipse(centerX, centerY, rx, ry, 0, 0, 2 * Math.PI);
+    ctx.clip();
+  }
   ctx.fillStyle = gradient;
   ctx.fillRect(centerX - rx - 10, centerY - ry - 10, (rx + 10) * 2, (ry + 10) * 2);
 
@@ -338,8 +345,7 @@ function drawStadiumShape(
   ctx.restore();
 
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
-    const stadiumCenterX = (leftCenterX + rightCenterX) / 2;
-    drawNoteLabelText(ctx, note, options, stadiumCenterX, centerY, ry, ry);
+    drawNoteLabelText(ctx, note, options, leftCenterX, centerY, ry, ry);
   }
 }
 
@@ -373,57 +379,7 @@ function calculateTailYOffset(note: PlacedNote, allNotes: PlacedNote[], options:
 }
 
 function getScaleDegreeLabel(note: PlacedNote, options: PitchRendererOptions): ScaleDegreeResult {
-  const degreeStr = TonalService.getDegreeForNote(note, options as AppState);
-  if (!degreeStr) {
-    return { label: null, isAccidental: false };
-  }
-
-  const isAccidental = TonalService.hasAccidental(degreeStr);
-  if (!isAccidental) {
-    return { label: degreeStr, isAccidental: false };
-  }
-
-  const accidentalMode = store.state.accidentalMode || {};
-  const sharpEnabled = accidentalMode.sharp ?? true;
-  const flatEnabled = accidentalMode.flat ?? true;
-
-  if (!sharpEnabled && !flatEnabled) {
-    return { label: null, isAccidental: true };
-  }
-
-  let sharpLabel = degreeStr.includes(SHARP_SYMBOL) ? degreeStr : null;
-  let flatLabel = degreeStr.includes(FLAT_SYMBOL) ? degreeStr : null;
-  const enharmonic = TonalService.getEnharmonicDegree(degreeStr);
-
-  if (enharmonic) {
-    if (enharmonic.includes(SHARP_SYMBOL) && !sharpLabel) {
-      sharpLabel = enharmonic;
-    }
-    if (enharmonic.includes(FLAT_SYMBOL) && !flatLabel) {
-      flatLabel = enharmonic;
-    }
-  }
-
-  let label: string | null = null;
-  if (sharpEnabled && flatEnabled) {
-    const parts: string[] = [];
-    if (sharpLabel) {
-      parts.push(sharpLabel);
-    }
-    if (flatLabel && (!sharpLabel || flatLabel !== sharpLabel)) {
-      parts.push(flatLabel);
-    }
-    label = parts.join(DEGREE_SEPARATOR);
-    if (!label) {
-      label = degreeStr;
-    }
-  } else if (sharpEnabled) {
-    label = sharpLabel || degreeStr;
-  } else if (flatEnabled) {
-    label = flatLabel || degreeStr;
-  }
-
-  return { label, isAccidental: true };
+  return TonalService.getDegreeLabelForNote(note, options as AppState);
 }
 
 function getDegreeFontMultiplier(label: string | null): DegreeFontResult {
@@ -712,7 +668,7 @@ export function drawTwoColumnOvalNote(
 
   // Long note rendering: Two styles available for notes with extended duration
   const hasTail = hasVisibleTail(note);
-  const longNoteStyle = store.state.longNoteStyle || 'style1';
+  const longNoteStyle = store.state.longNoteStyle || 'style2';
 
   if (hasTail && longNoteStyle === 'style2') {
     // Style 2: Stadium/capsule shape - a continuous rounded rectangle from start to end
@@ -735,11 +691,11 @@ export function drawTwoColumnOvalNote(
     return;
   }
 
-  // Style 1 (default): Tail line + circle
+  // Style 1: Tail line + circle
   // - Draws a horizontal line from the circle center to endColumnIndex + 1
   // - Then draws the circular note head on top
   if (hasTail) {
-    const originalEndX = getColumnX(note.endColumnIndex + 1, options);
+    const originalEndX = getColumnX(getNoteEndColumn(note), options);
     const tailYOffset = calculateTailYOffset(note, getPlacedNotes(), options);
     const tailY = y + tailYOffset;
 
@@ -864,6 +820,33 @@ export function drawSingleColumnOvalNote(
   }
 }
 
+export function drawIndividualSixteenthNote(
+  ctx: CanvasRenderingContext2D, options: PitchRendererOptions, note: PlacedNote, rowIndex: number
+): void {
+  const x = getColumnX(note.startColumnIndex, options);
+  const width = getColumnX(note.startColumnIndex + 0.5, options) - x;
+  const lineWidth = Math.max(MIN_STROKE_WIDTH_THICK, width * STROKE_WIDTH_RATIO);
+  const rx = (width - lineWidth) / 2;
+  const ry = (options.cellHeight - lineWidth) / 2;
+  if (!hasRenderableDimensions(rx, ry)) return;
+  const cx = x + width / 2 + calculateColorOffset(note, getPlacedNotes(), options);
+  const cy = getRowY(rowIndex, options) + calculateVibratoYOffset(note, options);
+  drawDelayGhostNotes(ctx, note, options, cx, cy, rx, ry);
+  ctx.save();
+  drawEnvelopeFill(ctx, note, cx, cy, rx, ry);
+  const glow = applyReverbGlow(ctx, note, options);
+  ctx.shadowColor = note.color;
+  ctx.shadowBlur = SHADOW_BLUR_RADIUS + (glow.shouldApply ? glow.blur : 0);
+  ctx.shadowOffsetX = glow.shouldApply ? glow.spread : 0;
+  ctx.strokeStyle = note.color;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke(new Path2D(diamondPath(cx, cy, rx * 2, ry * 2)));
+  ctx.restore();
+  if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
+    drawNoteLabelText(ctx, note, options, cx, cy, rx, ry);
+  }
+}
+
 export function drawTonicShape(
   ctx: CanvasRenderingContext2D,
   options: PitchRendererOptions,
@@ -936,7 +919,7 @@ interface NoteMarkerAnalysis {
 
 export function analyzeNoteCrossesMarkers(note: PlacedNote, options: PitchRendererOptions): NoteMarkerAnalysis {
   const noteStartX = getColumnX(note.startColumnIndex, options);
-  const noteEndX = getColumnX(note.endColumnIndex + 1, options);
+  const noteEndX = getColumnX(getNoteEndColumn(note), options);
   const { tempoModulationMarkers } = options;
 
   if (!tempoModulationMarkers || tempoModulationMarkers.length === 0) {

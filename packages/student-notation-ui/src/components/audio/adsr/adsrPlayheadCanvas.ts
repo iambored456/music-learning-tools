@@ -2,6 +2,7 @@ import {
   getAdsrPlayheadsEnabled,
   subscribeToAdsrPlayheadsEnabled
 } from '@services/adsrPlayheadSettings.ts';
+import store from '@state/initStore.ts';
 
 export const MAX_CONCURRENT_ADSR_PLAYHEADS = 8;
 
@@ -258,10 +259,18 @@ export function refreshAdsrPlayheadGeometry(): void {
 export function triggerAdsrPlayhead(
   noteId: string,
   phase: 'attack' | 'release',
-  color: string,
-  adsr: AdsrPlayheadEnvelope | null | undefined
+  playheadColor: string,
+  adsr: AdsrPlayheadEnvelope | null | undefined,
+  voiceColor: string
 ): void {
   if (!isEnabled || !binding || !adsr) {
+    return;
+  }
+
+  // The visible envelope belongs to the selected (or last selected) voice.
+  // Notes from other voices use different ADSR values and must not animate
+  // across that curve.
+  if (voiceColor !== store.state.selectedNote?.color) {
     return;
   }
 
@@ -274,7 +283,7 @@ export function triggerAdsrPlayhead(
     const capturedAdsr = { ...adsr };
     playheads.set(noteId, {
       noteId,
-      color,
+      color: playheadColor,
       adsr: capturedAdsr,
       points: binding.getEnvelopePoints(capturedAdsr),
       phase: 'attack',
@@ -286,7 +295,7 @@ export function triggerAdsrPlayhead(
       return;
     }
 
-    playhead.color = color;
+    playhead.color = playheadColor;
     playhead.adsr = { ...adsr };
     playhead.points = binding.getEnvelopePoints(playhead.adsr);
     playhead.phase = 'release';

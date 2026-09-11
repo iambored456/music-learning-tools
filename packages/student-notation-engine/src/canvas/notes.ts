@@ -475,8 +475,7 @@ export function createNoteRenderer(callbacks: NoteRenderCallbacks) {
     ctx.restore();
 
     if (options.degreeDisplayMode !== 'off') {
-      const stadiumCenterX = (leftCenterX + rightCenterX) / 2;
-      drawScaleDegreeText(ctx, note, options, stadiumCenterX, centerY, ry);
+      drawScaleDegreeText(ctx, note, options, leftCenterX, centerY, ry);
     }
   }
 
@@ -511,7 +510,7 @@ export function createNoteRenderer(callbacks: NoteRenderCallbacks) {
     const ry = (cellHeight / 2) - (dynamicStrokeWidth / 2);
 
     const hasTail = hasVisibleTail(note);
-    const longNoteStyle = options.longNoteStyle || 'style1';
+    const longNoteStyle = options.longNoteStyle || 'style2';
 
     if (hasTail && longNoteStyle === 'style2') {
       const leftCenterX = centerX;

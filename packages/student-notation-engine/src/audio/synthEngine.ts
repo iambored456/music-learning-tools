@@ -24,7 +24,6 @@ import type {
 
 const HARD_STOP_FADE_SECONDS = 0.03;
 const MODULATION_RAMP_SECONDS = 0.035;
-const TREMOLO_GAIN_DELTA_SCALE = 0.5;
 
 /**
  * Create a new synth engine instance
@@ -57,6 +56,9 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
 
   // Copy of timbres for internal mutation
   const internalTimbres: Record<string, InternalTimbreState> = { ...timbres };
+  const channelVolumes: Record<string, number> = Object.fromEntries(
+    Object.entries(timbres).map(([color, timbre]) => [color, timbre.channelVolume ?? 1])
+  );
 
   // Audio diagnostics (gated behind window.__audioDiag)
   let diagIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -175,23 +177,19 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     }
   }
 
-  function getTremoloGainDelta(span: number): number {
-    const normalizedSpan = Math.min(1, Math.max(0, span / 100));
-    return normalizedSpan * TREMOLO_GAIN_DELTA_SCALE;
-  }
-
   // [PERF:SHARED-LFO] Update or create/destroy shared tremolo LFO for a color.
-  // The LFO is centered on 0 and added to tremoloGain.gain (intrinsic=1),
-  // so tremolo oscillates around normal level instead of only reducing gain.
+  // Tone.LFO.connect() zeros the target AudioParam's intrinsic value, so the
+  // LFO must supply the complete gain range: 1 - depth to 1 (subtractive tremolo).
   function updateSharedTremolo(color: string, params: { speed: number; span: number }): void {
     const isActive = params.speed > 0 && params.span > 0;
 
     if (isActive) {
       const freqHz = (params.speed / 100) * 16;       // 0-100% → 0-16 Hz
-      const gainDelta = getTremoloGainDelta(params.span); // 0-100% -> +/-0.5 gain
+      const depth = Math.min(1, Math.max(0, params.span / 100));
+      const minGain = 1 - depth;
 
       if (!sharedTremoloLFOs[color]) {
-        const lfo = new Tone.LFO({ frequency: freqHz, min: -gainDelta, max: gainDelta, type: 'sine' });
+        const lfo = new Tone.LFO({ frequency: freqHz, min: minGain, max: 1, type: 'sine' });
         lfo.start();
         sharedTremoloLFOs[color] = lfo;
 
@@ -202,13 +200,13 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
             try { lfo.connect(voice.tremoloInput); } catch { /* voice may be disposed */ }
           });
         }
-        log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared tremolo LFO for ${color}`, { freqHz, gainDelta }, 'audio');
+        log.debug('SynthEngine', `[PERF:SHARED-LFO] Created shared tremolo LFO for ${color}`, { freqHz, minGain }, 'audio');
       } else {
         // Update existing LFO parameters
         const lfo = sharedTremoloLFOs[color]!;
         lfo.frequency.rampTo(freqHz, MODULATION_RAMP_SECONDS);
-        lfo.min = -gainDelta;
-        lfo.max = gainDelta;
+        lfo.min = minGain;
+        lfo.max = 1;
       }
     } else {
       // Disable: dispose shared tremolo LFO, reset voice gains to pass-through
@@ -326,6 +324,7 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
     } as any).connect(masterGain) as any;
 
     synth.maxPolyphony = Infinity;
+    synth.volume.value = Tone.gainToDb(channelVolumes[color] ?? 1);
     synth.debug = false;
 
     if (effectsManager) {
@@ -538,6 +537,12 @@ export function createSynthEngine(config: SynthEngineConfig): SynthEngineInstanc
       } catch (error) {
         log.warn('SynthEngine', 'Unable to update BPM on Tone.Transport', { tempo, error }, 'audio');
       }
+    },
+
+    setChannelVolume(color: string, volume: number) {
+      if (!Number.isFinite(volume)) return;
+      channelVolumes[color] = Math.max(0, Math.min(1, volume));
+      synths[color]?.volume.rampTo(Tone.gainToDb(channelVolumes[color]), 0.02);
     },
 
     setVolume(dB: number) {

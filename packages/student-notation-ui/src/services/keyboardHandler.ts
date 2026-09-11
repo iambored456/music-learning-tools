@@ -46,6 +46,11 @@ export function initKeyboardHandler(): void {
     if (['input', 'textarea'].includes(tagName) || isEditable) {
       return;
     }
+    if (e.key === 'Escape') {
+      store.setSelectedTool('select');
+      e.preventDefault();
+      return;
+    }
     const isShortcut = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
 
@@ -133,6 +138,15 @@ export function initKeyboardHandler(): void {
               if (stampIndex !== -1) {
                 store.state.sixteenthThreeStampPlacements.splice(stampIndex, 1);
               }
+            } else if (item.type === 'annotation') {
+              const annotationIndex = store.state.annotations.indexOf(item.data);
+              if (annotationIndex !== -1) store.state.annotations.splice(annotationIndex, 1);
+            } else if (item.type === 'modulationMarker') {
+              store.removeModulationMarker(item.data.id, false);
+            } else if (item.type === 'tonicSign') {
+              const group = store.state.tonicSignGroups[item.groupId];
+              const firstSign = group?.[0];
+              if (firstSign) store.eraseTonicSignAt(firstSign.columnIndex, false);
             }
           });
 

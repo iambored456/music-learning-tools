@@ -75,7 +75,7 @@
   let decay = 0;
   let sustain = 0;
   let release = 0;
-  let currentColor: string = store.state.selectedNote?.color || '#4a90e2';
+  let currentColor: string = store.state.selectedNote?.color || '#44bcef';
   let timeAxisScale = store.state.adsrTimeAxisScale;
 
   let width = 0;
@@ -419,6 +419,7 @@
     const handleNoteChanged = (payload: NoteChangedPayload = {}) => {
       const nextColor = payload.newNote?.color;
       if (nextColor && nextColor !== currentColor) {
+        clearAdsrPlayheads();
         currentColor = nextColor;
         updateFromStore();
       }

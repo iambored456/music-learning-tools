@@ -23,7 +23,7 @@
 
 /* Enhance appearance when active */
 .waveform-display-wrapper.live-mode {
-    border-color: var(--c-accent, #4A90E2);
+    border-color: var(--c-accent, #44BCEF);
     box-shadow: 
         inset 0 1px 3px rgba(0, 0, 0, 0.1),
         0 0 0 2px rgba(74, 144, 226, 0.1);
@@ -85,19 +85,6 @@
     .waveform-display-wrapper {
         max-width: min(100%, calc(200cqh));
     }
-}
-
-/* Dark mode support (explicitly controlled by theme toggle) */
-body.dark-mode .waveform-display-wrapper {
-    background: var(--c-surface);
-    border-color: var(--c-border);
-}
-
-body.dark-mode .waveform-display-wrapper.live-mode {
-    border-color: var(--c-accent, #4A90E2);
-    box-shadow: 
-        inset 0 1px 3px rgba(0, 0, 0, 0.2),
-        0 0 0 2px rgba(74, 144, 226, 0.15);
 }
 
 /* Optional: Add a subtle background pattern for the static mode */
@@ -181,17 +168,17 @@ body.dark-mode .waveform-display-wrapper.live-mode {
 }
 
 .waveform-speed-btn.active {
-    background-color: var(--c-accent-neutral-light, #ffd54f) !important;
+    background-color: var(--c-surface-muted) !important;
     color: var(--c-text, #212529) !important;
-    border-color: var(--c-accent-neutral, #ffc107) !important;
-    box-shadow: 0 0 0 1px var(--c-accent-neutral, #ffc107) !important;
+    border-color: var(--c-border-strong) !important;
+    box-shadow: 0 0 0 1px var(--c-border-strong) !important;
     transform: scale(0.98) !important;
 }
 
 .waveform-speed-btn.active:hover {
-    background-color: var(--c-accent-neutral-light, #ffd54f) !important;
+    background-color: var(--c-border) !important;
     color: var(--c-text, #212529) !important;
-    border-color: var(--c-accent-neutral, #ffc107) !important;
+    border-color: var(--c-border-strong) !important;
 }
 
 .waveform-speed-slider-popover {
@@ -254,27 +241,13 @@ body.dark-mode .waveform-display-wrapper.live-mode {
 .waveform-speed-slider-shell:focus-visible .waveform-speed-slider-thumb {
     box-shadow:
         0 1px 4px rgba(0, 0, 0, 0.28),
-        0 0 0 2px var(--c-accent, #4A90E2);
+        0 0 0 2px var(--c-accent, #44BCEF);
 }
 
 /* Speed controls are always visible */
 .waveform-speed-controls {
     opacity: 1;
     pointer-events: auto;
-}
-
-/* Dark mode support for speed controls and toggle */
-body.dark-mode .waveform-speed-btn,
-body.dark-mode .waveform-speed-slider-popover,
-body.dark-mode .waveform-toggle-btn {
-    background-color: var(--c-surface);
-    border-color: var(--c-border);
-    color: var(--c-text);
-}
-
-body.dark-mode .waveform-speed-btn:hover,
-body.dark-mode .waveform-toggle-btn:hover {
-    background-color: var(--c-border);
 }
 
 /* Reduced motion support */

@@ -513,6 +513,9 @@ export function createRhythmActions(callbacks: RhythmActionCallbacks = {}) {
 
         this.state.macrobeatGroupings.pop();
         this.state.macrobeatBoundaryStyles.pop();
+        if ((this.state.playbackStartMacrobeatIndex ?? -1) >= this.state.macrobeatGroupings.length) {
+          this.setPlaybackStartMacrobeat(null);
+        }
 
         if (notesToRemove.length > 0) {
           this.emit('notesChanged');

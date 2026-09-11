@@ -1,3 +1,4 @@
+import store from '@state/initStore.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
 import { getLogicalCanvasHeight, getLogicalCanvasWidth } from '@utils/canvasDimensions.ts';
 
@@ -147,7 +148,7 @@ export class PitchGridMobileLongPressNotePlacementInteractor {
     const x = touch.clientX - rect.left;
     const y = touch.clientY - rect.top;
     const scrollLeft = document.getElementById('canvas-container')?.scrollLeft ?? 0;
-    const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft);
+    const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft, store.state.selectedTool === 'note' && store.state.selectedNote?.shape === 'diamond' ? 2 : 1);
     const rowIndex = GridCoordsService.getPitchRowIndex(y);
 
     return { colIndex, rowIndex };

@@ -4,7 +4,6 @@ import { shouldDrawVerticalLineAtColumn, isTonicColumn } from '../../../../utils
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
-import { isRedCLinesEnabled } from '@services/gridStyleSettings.ts';
 import type { AppState } from '@mlt/types';
 
 type PlacedTonicSigns = ReturnType<typeof getPlacedTonicSigns>;
@@ -164,8 +163,8 @@ function drawHorizontalMusicLines(ctx: CanvasRenderingContext2D, options: GridRe
     }
 
     const style = getLineStyleFromPitchClass(pitchClass);
-    const useRedCLine = pitchClass === 'C' && isRedCLinesEnabled();
-    const lineColor = useRedCLine ? 'rgba(255, 0, 0, 0.9)' : style.color;
+    const isCLine = pitchClass === 'C';
+    const lineColor = isCLine ? 'rgba(255, 0, 0, 0.9)' : style.color;
 
     // Canvas-space: column 0 = first musical beat, musicalColumnWidths.length = after last beat
     // Check for non-empty array (empty array is truthy but useless)
@@ -196,7 +195,7 @@ function drawHorizontalMusicLines(ctx: CanvasRenderingContext2D, options: GridRe
         ctx.moveTo(seg.from, y);
         ctx.lineTo(seg.to, y);
         ctx.lineWidth = style.lineWidth;
-        ctx.strokeStyle = seg.light && !useRedCLine ? anacrusisStroke : lineColor;
+        ctx.strokeStyle = seg.light && !isCLine ? anacrusisStroke : lineColor;
         ctx.setLineDash(style.dash);
         ctx.globalAlpha = seg.light ? 0.6 : 1;
         ctx.stroke();

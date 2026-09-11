@@ -28,6 +28,11 @@ import type {
  * @returns True if notes overlap
  */
 export function notesOverlap(note1: SnapshotNote, note2: SnapshotNote): boolean {
+  if (note1.durationMicrobeats !== undefined || note2.durationMicrobeats !== undefined) {
+    const end1 = note1.durationMicrobeats !== undefined ? note1.startMicrobeatCol + note1.durationMicrobeats : note1.endMicrobeatCol + 1;
+    const end2 = note2.durationMicrobeats !== undefined ? note2.startMicrobeatCol + note2.durationMicrobeats : note2.endMicrobeatCol + 1;
+    return note1.startMicrobeatCol < end2 && note2.startMicrobeatCol < end1;
+  }
   // Notes overlap if their ranges intersect (both endpoints inclusive)
   // No overlap only if one note entirely precedes the other
   const note1EndsBeforeNote2Starts = note1.endMicrobeatCol < note2.startMicrobeatCol;
@@ -46,6 +51,14 @@ export function notesOverlap(note1: SnapshotNote, note2: SnapshotNote): boolean 
  */
 export function getOverlapColumns(note1: SnapshotNote, note2: SnapshotNote): number[] {
   const start = Math.max(note1.startMicrobeatCol, note2.startMicrobeatCol);
+  if (note1.durationMicrobeats !== undefined || note2.durationMicrobeats !== undefined) {
+    const end1 = note1.durationMicrobeats !== undefined ? note1.startMicrobeatCol + note1.durationMicrobeats : note1.endMicrobeatCol + 1;
+    const end2 = note2.durationMicrobeats !== undefined ? note2.startMicrobeatCol + note2.durationMicrobeats : note2.endMicrobeatCol + 1;
+    const end = Math.min(end1, end2);
+    const columns: number[] = [];
+    for (let col = start; col < end; col += 0.5) columns.push(col);
+    return columns;
+  }
   const end = Math.min(note1.endMicrobeatCol, note2.endMicrobeatCol);
 
   if (start > end) {

@@ -24,6 +24,13 @@ const DEFAULT_DRUM_LAYER_SAMPLES = getDrumSampleSet() as Record<DrumTrack, strin
 
 let activeDrumManager: DrumManagerInstance | null = null;
 let activeDrumLayerSamples: Record<DrumTrack, string> = { ...DEFAULT_DRUM_LAYER_SAMPLES };
+const activeDrumLayerVolumes: Record<DrumTrack, number> = { H: 1, M: 1, L: 1 };
+
+function applyDrumLayerVolumes(manager: DrumManagerInstance): void {
+  (['H', 'M', 'L'] as const).forEach(trackId => {
+    manager.setTrackVolume(trackId, activeDrumLayerVolumes[trackId]);
+  });
+}
 
 function createEngineDrumManager(
   samples: Record<DrumTrack, string>,
@@ -48,6 +55,7 @@ function syncWindowDrumVolumeNode(manager: DrumManagerInstance): void {
 function ensureActiveDrumManager(): DrumManagerInstance {
   if (!activeDrumManager) {
     activeDrumManager = createEngineDrumManager(activeDrumLayerSamples);
+    applyDrumLayerVolumes(activeDrumManager);
   }
 
   syncWindowDrumVolumeNode(activeDrumManager);
@@ -61,6 +69,14 @@ const sharedDrumManagerProxy: DrumManagerInstance = {
 
   getVolumeNode(): Tone.Volume | null {
     return ensureActiveDrumManager().getVolumeNode();
+  },
+
+  setTrackVolume(trackId: DrumTrack, volume: number): void {
+    setDrumLayerVolume(trackId, volume);
+  },
+
+  getTrackVolume(trackId: DrumTrack): number {
+    return activeDrumLayerVolumes[trackId];
   },
 
   trigger(trackId: DrumTrack, time: number): void {
@@ -94,6 +110,17 @@ export function getCurrentDrumLayerSamples(): Record<DrumTrack, string> {
   return { ...activeDrumLayerSamples };
 }
 
+export function getDrumLayerVolume(trackId: DrumTrack): number {
+  return activeDrumLayerVolumes[trackId];
+}
+
+export function setDrumLayerVolume(trackId: DrumTrack, volume: number): void {
+  if (!Number.isFinite(volume)) return;
+  const next = Math.max(0, Math.min(1, volume));
+  activeDrumLayerVolumes[trackId] = next;
+  activeDrumManager?.setTrackVolume(trackId, next);
+}
+
 export async function setDrumLayerSamples(
   nextSamples: Partial<Record<DrumTrack, string>>
 ): Promise<void> {
@@ -117,6 +144,7 @@ export async function setDrumLayerSamples(
     : 0;
 
   const nextManager = createEngineDrumManager(mergedSamples, initialVolume);
+  applyDrumLayerVolumes(nextManager);
 
   try {
     await nextManager.waitForLoad();
@@ -133,7 +161,13 @@ export async function setDrumLayerSamples(
 }
 
 export async function preloadDrumSamples(): Promise<void> {
-  await ensureActiveDrumManager().waitForLoad();
+  try {
+    await ensureActiveDrumManager().waitForLoad();
+  } catch (error) {
+    // Speculative preloads are fire-and-forget. Transport still receives the
+    // original rejection if playback actually needs these samples.
+    console.warn('Unable to preload drum samples', error);
+  }
 }
 
 export function getDrumPlayers(): Tone.Players | null {

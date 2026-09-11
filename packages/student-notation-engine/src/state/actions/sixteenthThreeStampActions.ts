@@ -60,7 +60,7 @@ export function createSixteenthThreeStampActions(callbacks: SixteenthThreeStampA
       sixteenthThreeStampId: number,
       startTimeIndex: number,
       row: number,
-      color = '#4a90e2'
+      color = '#44bcef'
     ): SixteenthThreeStampPlacement {
       const endTimeIndex = startTimeIndex + THREE_STAMP_SPAN;
 

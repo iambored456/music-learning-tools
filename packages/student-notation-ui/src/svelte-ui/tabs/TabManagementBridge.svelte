@@ -8,6 +8,7 @@
    * - Pitch sub-tabs (Range, Chords, Draw)
    */
   import logger from '@utils/logger.ts';
+  import store from '@state/initStore.ts';
   import { invokeTempoSliderInitializer } from '@services/runtimeGlobals.ts';
   import {
     bindPitchTabButtons,
@@ -48,6 +49,7 @@
     const tempoPanel = document.querySelector<HTMLElement>('.rhythm-tempo-container');
     const rhythmPanel = document.getElementById('rhythm-panel');
     const stampTabs = rhythmPanel?.querySelector<HTMLElement>('.rhythm-stamp-tabs-container');
+    rhythmPanel?.classList.add('rhythm-combined-content');
     if (generalPanel && rhythmPanel && stampTabs) {
       generalPanel.classList.remove('rhythm-stamp-tab-panel', 'active');
       generalPanel.classList.add('rhythm-general-panel');
@@ -92,6 +94,7 @@
       initializeTempoSlider,
       stabilizeMainTabButtonWidths: stabilizeMainTabs,
       afterActivate: syncAfterActivate,
+      onLeavePitch: () => store.setSelectedTool('note'),
       onMissingTab: (tabId) => {
         logger.warn('TabManagement', `Could not restore tab: ${tabId}. Tab button or panel not found.`);
       }

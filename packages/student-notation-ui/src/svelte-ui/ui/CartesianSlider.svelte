@@ -54,7 +54,7 @@
 
   // Pull theme colors from CSS variables with defaults
   const defaultColors = {
-    accent: '#4a90e2',
+    accent: '#44bcef',
     fill: '#1f1f1f',
     stroke: '#555',
     grid: '#333',

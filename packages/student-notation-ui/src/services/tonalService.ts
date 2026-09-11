@@ -26,6 +26,20 @@ const SEMITONE_TO_DIATONIC: Record<number, DiatonicMapping> = {
 const MODE_NAMES = ['major', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'minor', 'locrian'];
 const INTERVALS_FROM_MAJOR = ['1P', '2M', '3M', '4P', '5P', '6M', '7M'];
 
+const MODE_SCALE_DEGREES: Record<string, Readonly<Record<number, string>>> = {
+  major: { 0: '1', 2: '2', 4: '3', 5: '4', 7: '5', 9: '6', 11: '7' },
+  dorian: { 0: '1', 2: '2', 3: '♭3', 5: '4', 7: '5', 9: '6', 10: '♭7' },
+  phrygian: { 0: '1', 1: '♭2', 3: '♭3', 5: '4', 7: '5', 8: '♭6', 10: '♭7' },
+  lydian: { 0: '1', 2: '2', 4: '3', 6: '♯4', 7: '5', 9: '6', 11: '7' },
+  mixolydian: { 0: '1', 2: '2', 4: '3', 5: '4', 7: '5', 9: '6', 10: '♭7' },
+  minor: { 0: '1', 2: '2', 3: '♭3', 5: '4', 7: '5', 8: '♭6', 10: '♭7' },
+  locrian: { 0: '1', 1: '♭2', 3: '♭3', 5: '4', 6: '♭5', 8: '♭6', 10: '♭7' }
+};
+
+const SHARP_SYMBOL = '\u266F';
+const FLAT_SYMBOL = '\u266D';
+const DEGREE_SEPARATOR = '/';
+
 const CHROMA_PITCH_CLASS_LABELS: Array<{ natural?: string; sharp: string; flat: string }> = [
   { natural: 'C', sharp: 'C', flat: 'C' },
   { sharp: 'C#', flat: 'Db' },
@@ -153,6 +167,29 @@ function hasAccidental(degreeStr: string | null | undefined): boolean {
   return Boolean(degreeStr && (degreeStr.includes('♯') || degreeStr.includes('♭')));
 }
 
+function isNoteInCurrentMode(note: PlacedNote, state: AppState): boolean {
+  if (state.degreeDisplayMode !== 'modal') {
+    return false;
+  }
+
+  const { keyTonic, keyMode } = getKeyContextForColumn(state, note.startColumnIndex);
+  const scaleDegrees = MODE_SCALE_DEGREES[keyMode];
+  if (!keyTonic || !scaleDegrees) {
+    return false;
+  }
+
+  const rowIndex = note.globalRow ?? note.row;
+  const notePitch = state.fullRowData[rowIndex]?.toneNote;
+  if (!notePitch) {
+    return false;
+  }
+
+  const interval = Interval.distance(keyTonic, Note.pitchClass(notePitch) || notePitch);
+  const intervalDetails = Interval.get(interval);
+  const semitones = ((intervalDetails.semitones % 12) + 12) % 12;
+  return Boolean(scaleDegrees[semitones]);
+}
+
 const TonalService = {
   // Export helper functions for external use
   getEnharmonicDegree,
@@ -188,7 +225,13 @@ const TonalService = {
     }
 
     const interval = Interval.distance(referenceTonic, notePitchClass);
-    const formattedInterval = formatInterval(interval);
+    let formattedInterval = formatInterval(interval);
+
+    if (degreeDisplayMode === 'modal') {
+      const intervalDetails = Interval.get(interval);
+      const semitones = ((intervalDetails.semitones % 12) + 12) % 12;
+      formattedInterval = MODE_SCALE_DEGREES[keyMode]?.[semitones] ?? formattedInterval;
+    }
 
     if (note.enharmonicPreference && formattedInterval && hasAccidental(formattedInterval)) {
       const enharmonicEquivalent = getEnharmonicDegree(formattedInterval);
@@ -198,6 +241,62 @@ const TonalService = {
     }
 
     return formattedInterval;
+  },
+
+  getDegreeLabelForNote(note: PlacedNote, state: AppState): { label: string | null; isAccidental: boolean } {
+    const degreeStr = TonalService.getDegreeForNote(note, state);
+    if (!degreeStr) {
+      return { label: null, isAccidental: false };
+    }
+
+    const isAccidental = hasAccidental(degreeStr);
+    if (!isAccidental) {
+      return { label: degreeStr, isAccidental: false };
+    }
+
+    const accidentalMode = state.accidentalMode || {};
+    const sharpEnabled = accidentalMode.sharp ?? true;
+    const flatEnabled = accidentalMode.flat ?? true;
+    if (!sharpEnabled && !flatEnabled) {
+      return { label: null, isAccidental: true };
+    }
+
+    const enharmonic = getEnharmonicDegree(degreeStr);
+    const sharpLabel = degreeStr.includes(SHARP_SYMBOL)
+      ? degreeStr
+      : enharmonic?.includes(SHARP_SYMBOL) ? enharmonic : null;
+    const flatLabel = degreeStr.includes(FLAT_SYMBOL)
+      ? degreeStr
+      : enharmonic?.includes(FLAT_SYMBOL) ? enharmonic : null;
+
+    // A modal scale tone has one conventional spelling (for example, Dorian's
+    // flat 3). Keep that spelling singular when both accidental views are on.
+    // Pitches outside the mode continue to show both enharmonic spellings.
+    if (isNoteInCurrentMode(note, state)) {
+      if (degreeStr.includes(SHARP_SYMBOL) && sharpEnabled) {
+        return { label: degreeStr, isAccidental: true };
+      }
+      if (degreeStr.includes(FLAT_SYMBOL) && flatEnabled) {
+        return { label: degreeStr, isAccidental: true };
+      }
+      if (sharpEnabled && sharpLabel) {
+        return { label: sharpLabel, isAccidental: true };
+      }
+      if (flatEnabled && flatLabel) {
+        return { label: flatLabel, isAccidental: true };
+      }
+    }
+
+    if (sharpEnabled && flatEnabled) {
+      return {
+        label: [sharpLabel, flatLabel].filter((label): label is string => Boolean(label)).join(DEGREE_SEPARATOR) || degreeStr,
+        isAccidental: true
+      };
+    }
+    if (sharpEnabled) {
+      return { label: sharpLabel || degreeStr, isAccidental: true };
+    }
+    return { label: flatLabel || degreeStr, isAccidental: true };
   },
 
   getPitchClassForNote(note: PlacedNote, state: AppState): string | null {

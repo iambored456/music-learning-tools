@@ -18,7 +18,7 @@ const GridCoordsService = {
    * @param x - Pixel coordinate relative to canvas origin
    * @returns Canvas-space column index (0 = first musical beat)
    */
-  getColumnIndex(x: number): CanvasSpaceColumn {
+  getColumnIndex(x: number, subdivision = 1): CanvasSpaceColumn {
     const { cellWidth, tempoModulationMarkers, cellHeight, musicalColumnWidths } = store.state;
     const columnWidths = store.state.columnWidths || [];
 
@@ -40,7 +40,7 @@ const GridCoordsService = {
 
     // getColumnFromX returns canvas-space index (0 = first musical beat)
     const fractionalColumn = getColumnFromX(x, renderOptions);
-    const canvasSpaceColumn = Math.floor(fractionalColumn);
+    const canvasSpaceColumn = Math.floor(fractionalColumn * subdivision) / subdivision;
 
     return canvasSpaceColumn as CanvasSpaceColumn;
   },

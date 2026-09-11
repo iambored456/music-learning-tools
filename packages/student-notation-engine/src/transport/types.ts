@@ -85,6 +85,7 @@ export interface TimeMapState {
   macrobeatBoundaryStyles: string[];
   tempoModulationMarkers?: ModulationMarkerData[];
   isLooping: boolean;
+  playbackStartMacrobeatIndex?: number | null;
   cellWidth: number;
 }
 
@@ -121,6 +122,10 @@ export interface DrumManagerInstance {
   getPlayers(): Tone.Players | null;
   /** Get the volume control node */
   getVolumeNode(): Tone.Volume | null;
+  /** Set one drum layer's linear volume (0-1). */
+  setTrackVolume(trackId: DrumTrackId, volume: number): void;
+  /** Get one drum layer's current linear volume (0-1). */
+  getTrackVolume(trackId: DrumTrackId): number;
   /** Trigger a drum hit */
   trigger(trackId: DrumTrackId, time: number): void;
   /** Reset timing state */

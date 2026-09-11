@@ -18,6 +18,7 @@ import FileActionsBridge from './toolbar/FileActionsBridge.svelte';
 import GridControlsBridge from './toolbar/GridControlsBridge.svelte';
 import ModulationBridge from './toolbar/ModulationBridge.svelte';
 import SidebarBridge from './toolbar/SidebarBridge.svelte';
+import ChannelVolumeControls from './toolbar/ChannelVolumeControls.svelte';
 import ToolSelectorBridge from './toolbar/ToolSelectorBridge.svelte';
 import AudioControlsBridge from './toolbar/AudioControlsBridge.svelte';
 import MobilePocketConsoleBridge from './toolbar/MobilePocketConsoleBridge.svelte';
@@ -118,6 +119,7 @@ const componentRegistry: Record<string, any> = {
   'grid-controls-bridge': GridControlsBridge,
   'modulation-bridge': ModulationBridge,
   'sidebar-bridge': SidebarBridge,
+  'channel-volume-controls': ChannelVolumeControls,
   'tool-selector-bridge': ToolSelectorBridge,
   'audio-controls-bridge': AudioControlsBridge,
   'mobile-pocket-console-bridge': MobilePocketConsoleBridge,

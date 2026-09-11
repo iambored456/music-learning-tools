@@ -15,23 +15,13 @@
   let decreaseBtn: HTMLElement | null = null;
   let floatingPanel: HTMLElement | null = null;
 
-  // Helper function to jump to pitch range tab
-  function jumpToPitchRangeTab() {
-    const pitchTab = document.querySelector<HTMLButtonElement>('.tab-button[data-tab="pitch"]');
-    const rangeTab = document.querySelector<HTMLButtonElement>('.pitch-tab-button[data-pitch-tab="range"]');
-    pitchTab?.click();
-    rangeTab?.click();
-  }
-
   // Event handlers
   function handleZoomIn() {
-    jumpToPitchRangeTab();
     store.emit('zoomIn', { source: 'button' });
     zoomInBtn?.blur();
   }
 
   function handleZoomOut() {
-    jumpToPitchRangeTab();
     store.emit('zoomOut', { source: 'button' });
     zoomOutBtn?.blur();
   }

@@ -5,6 +5,7 @@ import {
   buildTripletStampSelectionId,
   computeConvexHullForSelectedItems
 } from './annotationLassoSelection.ts';
+import { canPlaceIndividualSixteenth } from '@/rhythm/individualSixteenthPlacement.ts';
 import { canvasToTime, timeToCanvas } from '@services/columnMapService.ts';
 import type { RendererOptions } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import type {
@@ -21,9 +22,14 @@ import type {
 const DEFAULT_PASTE_COL_OFFSET = 1;
 const DEFAULT_PASTE_ROW_OFFSET = 1;
 const THREE_STAMP_TIME_SPAN = 1.5;
+type ClipboardItem = Extract<LassoSelectedItem, { type: 'note' | 'sixteenthStamp' | 'sixteenthThreeStamp' | 'tripletStamp' }>;
+
+function isClipboardItem(item: LassoSelectedItem): item is ClipboardItem {
+  return item.type === 'note' || item.type === 'sixteenthStamp' || item.type === 'sixteenthThreeStamp' || item.type === 'tripletStamp';
+}
 
 interface ClipboardSnapshot {
-  items: LassoSelectedItem[];
+  items: ClipboardItem[];
   pasteCount: number;
 }
 
@@ -72,11 +78,11 @@ function getColumnLimit(state: AppState): number | null {
   return columnCount > 0 ? columnCount : null;
 }
 
-function getSourceRow(item: LassoSelectedItem): number {
+function getSourceRow(item: ClipboardItem): number {
   return typeof item.data.globalRow === 'number' ? item.data.globalRow : item.data.row;
 }
 
-function getItemRows(item: LassoSelectedItem): number[] {
+function getItemRows(item: ClipboardItem): number[] {
   const baseRow = getSourceRow(item);
   const offsets = 'shapeOffsets' in item.data && item.data.shapeOffsets
     ? Object.values(item.data.shapeOffsets)
@@ -84,7 +90,7 @@ function getItemRows(item: LassoSelectedItem): number[] {
   return [baseRow, ...offsets.map(offset => baseRow + offset)];
 }
 
-function getItemColumnBounds(item: LassoSelectedItem, state: AppState): { minCol: number; maxCol: number } {
+function getItemColumnBounds(item: ClipboardItem, state: AppState): { minCol: number; maxCol: number } {
   if (item.type === 'note') {
     return {
       minCol: item.data.startColumnIndex,
@@ -115,7 +121,7 @@ function getItemColumnBounds(item: LassoSelectedItem, state: AppState): { minCol
   };
 }
 
-function getSelectionBounds(items: LassoSelectedItem[], state: AppState): SelectionBounds {
+function getSelectionBounds(items: ClipboardItem[], state: AppState): SelectionBounds {
   const initial: SelectionBounds = {
     minCol: Number.POSITIVE_INFINITY,
     maxCol: Number.NEGATIVE_INFINITY,
@@ -155,7 +161,7 @@ function constrainOffset(desiredOffset: number, minValue: number, maxValue: numb
   return Math.max(minOffset, Math.min(desiredOffset, maxOffset));
 }
 
-function getPasteOffsets(items: LassoSelectedItem[], state: AppState, pasteCount: number): PasteOffsets {
+function getPasteOffsets(items: ClipboardItem[], state: AppState, pasteCount: number): PasteOffsets {
   const bounds = getSelectionBounds(items, state);
   return {
     col: constrainOffset(DEFAULT_PASTE_COL_OFFSET * pasteCount, bounds.minCol, bounds.maxCol, getColumnLimit(state)),
@@ -163,7 +169,7 @@ function getPasteOffsets(items: LassoSelectedItem[], state: AppState, pasteCount
   };
 }
 
-function offsetRow(item: LassoSelectedItem, rowOffset: number, state: AppState): number {
+function offsetRow(item: ClipboardItem, rowOffset: number, state: AppState): number {
   const nextRow = Math.round(getSourceRow(item) + rowOffset);
   const rowLimit = getRowLimit(state);
   if (rowLimit === null) {
@@ -280,7 +286,7 @@ export function copyLassoSelection(selection: LassoSelection | null | undefined)
   }
 
   clipboard = {
-    items: cloneJson(selection.selectedItems),
+    items: cloneJson(selection.selectedItems.filter(isClipboardItem)),
     pasteCount: 0
   };
 
@@ -305,6 +311,7 @@ export function pasteLassoClipboard(state: AppState, renderOptions: RendererOpti
   clipboard.items.forEach(item => {
     if (item.type === 'note') {
       const note = copyNote(item, offsets, state);
+      if (note.shape === 'diamond' && !note.isDrum && !canPlaceIndividualSixteenth(state, note.startColumnIndex, note.globalRow ?? note.row, note.color)) return;
       state.placedNotes.push(note);
       selectedItems.push({ type: 'note', id: buildNoteSelectionId(note), data: note, index: state.placedNotes.length - 1 });
       changed.notes = true;
@@ -333,6 +340,7 @@ export function pasteLassoClipboard(state: AppState, renderOptions: RendererOpti
       return;
     }
 
+    if (item.type !== 'tripletStamp') return;
     const triplet = copyTripletStamp(item, offsets, state);
     if (!triplet) {
       return;

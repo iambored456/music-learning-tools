@@ -1,3 +1,4 @@
+import { arrowEndpoints, arrowEndpointIcon } from './arrowIcons.ts';
 // js/components/Draw/drawToolsController.js
 
 import annotationService from '@services/annotationService.ts';
@@ -6,7 +7,6 @@ import logger from '@utils/logger.ts';
 import type {
   AnnotationArrowheadStyle,
   AnnotationLineStyle,
-  AppState,
   ArrowAnnotationSettings,
   PathAnnotationSettings,
   TextAnnotationSettings
@@ -38,12 +38,11 @@ interface OptionsContainers {
   arrow: HTMLElement | null;
   text: HTMLElement | null;
   marker: HTMLElement | null;
-  highlighter: HTMLElement | null;
   lasso: HTMLElement | null;
 }
 
 const VALID_ARROW_LINE_STYLES = ['solid', 'dashed-big', 'dashed-small', 'dotted'] as const satisfies readonly AnnotationLineStyle[];
-const VALID_ARROWHEAD_STYLES = ['filled', 'filled-arrow', 'unfilled', 'unfilled-arrow', 'circle', 'none'] as const satisfies readonly AnnotationArrowheadStyle[];
+const VALID_ARROWHEAD_STYLES = ['filled', 'filled-arrow', 'unfilled', 'unfilled-arrow', 'circle', 'none', 'open-arrow', 'open-circle', 'open-square', 'open-diamond', 'bar', 'square', 'diamond'] as const satisfies readonly AnnotationArrowheadStyle[];
 
 function isAnnotationLineStyle(value: string): value is AnnotationLineStyle {
   return VALID_ARROW_LINE_STYLES.includes(value as AnnotationLineStyle);
@@ -54,23 +53,28 @@ function isAnnotationArrowheadStyle(value: string): value is AnnotationArrowhead
 }
 
 class DrawToolsController {
-  private currentTool: ToolName = null;
+  private get currentTool(): ToolName {
+    return store.state.selectedTool === 'draw' ? store.state.selectedDrawTool ?? 'arrow' : null;
+  }
+  private initialized = false;
   private toolButtons: HTMLElement[] = [];
   private toolPanels: HTMLElement[] = [];
   private popupTriggers: HTMLElement[] = [];
   private contentBox: HTMLElement | null = null;
+  private markerHasSelectedColour = false;
+  private lastCircleNoteColor = store.state.selectedNote.color;
   private boundListeners = new WeakMap<EventTarget, Set<string>>();
-  private lastSelectedNote: AppState['selectedNote'] | null = null;
   private optionsContainers: OptionsContainers = {
     arrow: null,
     text: null,
     marker: null,
-    highlighter: null,
     lasso: null
   };
 
   private settings: ToolSettings = {
     arrow: {
+      color: '#000000',
+      roundedEnds: false,
       lineStyle: 'solid',
       strokeWeight: 4,
       startArrowhead: 'none',
@@ -83,13 +87,14 @@ class DrawToolsController {
       bold: false,
       italic: false,
       underline: false,
-      background: false,
+      background: true,
       superscript: false,
       subscript: false
     },
     marker: {
-      color: '#4a90e2',
-      size: 6
+      color: '#44bcef',
+      size: 6,
+      transparency: 0
     },
     highlighter: {
       color: '#9fc5ff',
@@ -99,6 +104,7 @@ class DrawToolsController {
   };
 
   initialize() {
+    if (this.initialized) return;
     this.toolButtons = Array.from(document.querySelectorAll<HTMLElement>('.draw-tool-button'));
     this.toolPanels = Array.from(document.querySelectorAll<HTMLElement>('.draw-tool-panel'));
     this.popupTriggers = Array.from(document.querySelectorAll<HTMLElement>('.draw-popup-trigger'));
@@ -108,7 +114,6 @@ class DrawToolsController {
       arrow: document.getElementById('arrow-tool-options'),
       text: document.getElementById('text-tool-options'),
       marker: document.getElementById('marker-tool-options'),
-      highlighter: document.getElementById('highlighter-tool-options'),
       lasso: document.getElementById('lasso-tool-options')
     };
 
@@ -119,22 +124,19 @@ class DrawToolsController {
 
     this.attachEventListeners();
     this.setupPopupTriggers();
-    this.setupChordTabListeners();
-    this.setupMainTabListeners();
     this.populateAllPanels();
 
-    store.on<{ newNote?: AppState['selectedNote'] }>('noteChanged', ({ newNote } = {}) => {
-      this.lastSelectedNote = newNote ?? null;
-      if (this.currentTool) {
-        this.deselectAllTools();
+    this.initialized = true;
+    store.on('toolChanged', () => this.syncToolSelection());
+    store.on('noteChanged', () => {
+      if (store.state.selectedNote.shape === 'circle') {
+        this.lastCircleNoteColor = store.state.selectedNote.color;
       }
     });
+    this.syncToolSelection();
   }
 
   private attachEventListeners() {
-    this.toolPanels.forEach(panel => {
-      panel.setAttribute('aria-hidden', panel.classList.contains('active') ? 'false' : 'true');
-    });
     this.toolButtons.forEach(button => {
       button.setAttribute('aria-pressed', 'false');
       button.addEventListener('click', () => {
@@ -203,99 +205,36 @@ class DrawToolsController {
     });
   }
 
-  private setupMainTabListeners() {
-    const mainTabButtons = document.querySelectorAll('.tab-button');
-    mainTabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetTab = (button as HTMLElement).dataset['tab'];
-        if (targetTab !== 'pitch' && this.currentTool) {
-          this.deselectAllTools();
-          this.restoreLastSelectedNote();
-        }
-      });
-    });
-  }
-
-  private setupChordTabListeners() {
-    const pitchTabButtons = document.querySelectorAll('.pitch-tab-button');
-    pitchTabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetTab = (button as HTMLElement).dataset['pitchTab'];
-        if (targetTab === 'draw') {
-          if (!this.currentTool) {
-            this.selectTool('arrow');
-          }
-          return;
-        }
-        if (targetTab !== 'draw' && this.currentTool) {
-          this.deselectAllTools();
-          this.restoreLastSelectedNote();
-        }
-      });
-    });
-  }
-
-  private restoreLastSelectedNote() {
-    if (this.lastSelectedNote) {
-      store.setSelectedNote(this.lastSelectedNote.shape, this.lastSelectedNote.color);
-      store.setSelectedTool('note');
-    } else if (store.state.selectedNote) {
-      store.setSelectedNote(store.state.selectedNote.shape, store.state.selectedNote.color);
-      store.setSelectedTool('note');
-    }
-  }
-
-  private deselectAllTools() {
-    this.closePopups();
-    this.toolButtons.forEach(btn => {
-      btn.classList.remove('active');
-      btn.setAttribute('aria-pressed', 'false');
-    });
-    this.toolPanels.forEach(panel => {
-      panel.classList.remove('active');
-      panel.setAttribute('aria-hidden', 'true');
-    });
-    this.currentTool = null;
-    this.contentBox?.removeAttribute('data-active-draw-tool');
-    annotationService.setTool(null, null);
-    if (store.state.selectedTool === 'draw') {
-      store.setSelectedTool('note');
-    }
-  }
-
   selectTool(toolName: DrawableToolName): void {
+    if (this.currentTool === toolName) {
+      store.setSelectedNote('circle', this.lastCircleNoteColor);
+      store.setSelectedTool('note');
+      return;
+    }
+
+    if (toolName === 'marker' && !this.markerHasSelectedColour) {
+      this.settings.marker.color = store.state.selectedNote.color;
+      this.markerHasSelectedColour = true;
+      this.populateMarkerOptions();
+    }
+    store.setSelectedTool('draw', undefined, toolName);
+  }
+
+  private syncToolSelection(): void {
     this.closePopups();
-    this.toolButtons.forEach(btn => {
-      btn.classList.remove('active');
-      btn.setAttribute('aria-pressed', 'false');
+    const toolName = this.currentTool;
+    this.toolButtons.forEach(button => {
+      const active = button.dataset['drawTool'] === toolName;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
     });
     this.toolPanels.forEach(panel => {
-      panel.classList.remove('active');
-      panel.setAttribute('aria-hidden', 'true');
+      const active = panel.dataset['drawTool'] === toolName;
+      panel.classList.toggle('active', active);
     });
-
-    const selectedButton = Array.from(this.toolButtons).find(
-      btn => (btn).dataset['drawTool'] === toolName
-    );
-    if (selectedButton) {
-      selectedButton.classList.add('active');
-      selectedButton.setAttribute('aria-pressed', 'true');
-    }
-
-    const selectedPanel = Array.from(this.toolPanels).find(
-      panel => panel.dataset['drawTool'] === toolName
-    );
-    if (selectedPanel) {
-      selectedPanel.classList.add('active');
-      selectedPanel.setAttribute('aria-hidden', 'false');
-    }
-
-    this.currentTool = toolName;
-    this.contentBox?.setAttribute('data-active-draw-tool', toolName);
-    annotationService.setTool(toolName, this.settings);
-    store.setSelectedTool('draw');
-    // Reset selected note safely for drawing mode
-    store.state.selectedNote = { shape: 'circle', color: store.state.selectedNote?.color || '#4a90e2' };
+    if (toolName) this.contentBox?.setAttribute('data-active-draw-tool', toolName);
+    else this.contentBox?.removeAttribute('data-active-draw-tool');
+    annotationService.setTool(store.state.selectedTool === 'select' ? 'select' : toolName, this.settings);
   }
 
   getSettings(): ToolSettings {
@@ -305,6 +244,8 @@ class DrawToolsController {
   applyArrowSettings(settings: Partial<ToolSettings['arrow']>): void {
     this.settings.arrow = {
       ...this.settings.arrow,
+      color: '#000000',
+      roundedEnds: false,
       ...settings
     };
     this.renderArrowOptions();
@@ -332,7 +273,6 @@ class DrawToolsController {
     this.populateArrowOptions();
     this.populateTextOptions();
     this.populateMarkerOptions();
-    this.populateHighlighterOptions();
   }
 
   private populateArrowOptions() {
@@ -341,42 +281,58 @@ class DrawToolsController {
     const startHeadTrigger = container.querySelector<HTMLButtonElement>('#arrow-start-head-trigger');
     const endHeadTrigger = container.querySelector<HTMLButtonElement>('#arrow-end-head-trigger');
 
-    const getArrowheadIcon = (side: 'start' | 'end', type: AnnotationArrowheadStyle): string => {
-      if (type !== 'filled-arrow') {
-        return `
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="4" y1="12" x2="20" y2="12"/>
-          </svg>
-        `;
-      }
-      if (side === 'start') {
-        return `
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9,5 3,12 9,19"/>
-            <line x1="3" y1="12" x2="21" y2="12"/>
-          </svg>
-        `;
-      }
-      return `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="15,5 21,12 15,19"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-        </svg>
-      `;
-    };
-
+    container.querySelectorAll<HTMLElement>('[data-endpoint-side]').forEach(grid => {
+      if (grid.childElementCount) {return;}
+      const side = grid.dataset['endpointSide'] === 'start' ? 'start' : 'end';
+      grid.innerHTML = arrowEndpoints.map(({ value, label }) =>
+        `<button type="button" class="draw-option-button" data-arrow-${side}="${value}" title="${label}" aria-label="${label}">${arrowEndpointIcon(side, value)}</button>`
+      ).join('');
+    });
     const renderHeadIcon = (trigger: HTMLButtonElement | null, side: 'start' | 'end', type: AnnotationArrowheadStyle) => {
-      if (!trigger) {return;}
-      trigger.innerHTML = getArrowheadIcon(side, type);
+      if (trigger) {trigger.innerHTML = arrowEndpointIcon(side, type);}
     };
-    const strokeInput = container.querySelector<HTMLInputElement>('#arrow-stroke-weight');
-    if (strokeInput) {
-      strokeInput.value = `${this.settings.arrow.strokeWeight}`;
-      this.bindOnce(strokeInput, 'input', () => {
-        this.settings.arrow.strokeWeight = parseInt(strokeInput.value, 10);
+    const colourTrigger = container.querySelector<HTMLButtonElement>('#arrow-color-trigger');
+    const colourButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.draw-color-button'));
+    const renderColour = () => {
+      const colour = this.settings.arrow.color ?? '#000000';
+      if (colourTrigger) {colourTrigger.style.color = colour;}
+      colourButtons.forEach(button => {
+        const selected = button.dataset['color'] === colour;
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-pressed', String(selected));
+      });
+    };
+    renderColour();
+    colourButtons.forEach(button => this.bindOnce(button, 'click', () => {
+      this.settings.arrow.color = button.dataset['color'] ?? '#000000';
+      renderColour();
+      this.syncActiveAnnotationTool('arrow');
+    }));
+    const roundedInput = container.querySelector<HTMLInputElement>('#arrow-rounded-ends');
+    if (roundedInput) {
+      roundedInput.checked = this.settings.arrow.roundedEnds ?? false;
+      this.bindOnce(roundedInput, 'change', () => {
+        this.settings.arrow.roundedEnds = roundedInput.checked;
         this.syncActiveAnnotationTool('arrow');
       });
     }
+    const strokeInput = container.querySelector<HTMLInputElement>('#arrow-stroke-weight');
+    const strokeNumber = container.querySelector<HTMLInputElement>('#arrow-stroke-weight-number');
+    const updateStroke = (input: HTMLInputElement) => {
+      if (!input.value || !Number.isFinite(input.valueAsNumber)) {return;}
+      this.settings.arrow.strokeWeight = Math.max(1, Math.min(20, Math.round(input.valueAsNumber)));
+      if (strokeInput) {strokeInput.value = String(this.settings.arrow.strokeWeight);}
+      if (strokeNumber) {strokeNumber.value = String(this.settings.arrow.strokeWeight);}
+      this.syncActiveAnnotationTool('arrow');
+    };
+    [strokeInput, strokeNumber].forEach(input => {
+      if (!input) {return;}
+      input.value = String(this.settings.arrow.strokeWeight);
+      this.bindOnce(input, 'input', () => updateStroke(input));
+      this.bindOnce(input, 'change', () => {
+        input.value = String(this.settings.arrow.strokeWeight);
+      });
+    });
 
     const headSizeInput = container.querySelector<HTMLInputElement>('#arrow-head-size');
     if (headSizeInput) {
@@ -390,7 +346,11 @@ class DrawToolsController {
     const lineStyleButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-line-style]'));
     if (lineStyleButtons.length) {
       const setActive = (style: AnnotationLineStyle) => {
-        lineStyleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['lineStyle'] === style));
+        lineStyleButtons.forEach(btn => {
+          const selected = btn.dataset['lineStyle'] === style;
+          btn.classList.toggle('active', selected);
+          btn.setAttribute('aria-pressed', String(selected));
+        });
       };
       setActive(this.settings.arrow.lineStyle);
       lineStyleButtons.forEach(btn => {
@@ -408,7 +368,7 @@ class DrawToolsController {
     const startButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-arrow-start]'));
     if (startButtons.length) {
       const setActiveStart = (val: AnnotationArrowheadStyle) => {
-        startButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['arrowStart'] === val));
+        startButtons.forEach(btn => { const selected = btn.dataset['arrowStart'] === val; btn.classList.toggle('active', selected); btn.setAttribute('aria-pressed', String(selected)); });
         renderHeadIcon(startHeadTrigger, 'start', val);
       };
       setActiveStart(this.settings.arrow.startArrowhead);
@@ -426,7 +386,7 @@ class DrawToolsController {
     const endButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-arrow-end]'));
     if (endButtons.length) {
       const setActiveEnd = (val: AnnotationArrowheadStyle) => {
-        endButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['arrowEnd'] === val));
+        endButtons.forEach(btn => { const selected = btn.dataset['arrowEnd'] === val; btn.classList.toggle('active', selected); btn.setAttribute('aria-pressed', String(selected)); });
         renderHeadIcon(endHeadTrigger, 'end', val);
       };
       setActiveEnd(this.settings.arrow.endArrowhead);
@@ -449,12 +409,12 @@ class DrawToolsController {
         this.settings.arrow.endArrowhead = prevStart;
         if (startButtons.length) {
           const val = this.settings.arrow.startArrowhead;
-          startButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['arrowStart'] === val));
+          startButtons.forEach(btn => { const selected = btn.dataset['arrowStart'] === val; btn.classList.toggle('active', selected); btn.setAttribute('aria-pressed', String(selected)); });
           renderHeadIcon(startHeadTrigger, 'start', val);
         }
         if (endButtons.length) {
           const val = this.settings.arrow.endArrowhead;
-          endButtons.forEach(btn => btn.classList.toggle('active', btn.dataset['arrowEnd'] === val));
+          endButtons.forEach(btn => { const selected = btn.dataset['arrowEnd'] === val; btn.classList.toggle('active', selected); btn.setAttribute('aria-pressed', String(selected)); });
           renderHeadIcon(endHeadTrigger, 'end', val);
         }
         this.syncActiveAnnotationTool('arrow');
@@ -467,11 +427,19 @@ class DrawToolsController {
     if (!container) {return;}
     const sizeInput = container.querySelector<HTMLInputElement>('#text-size-input');
     if (sizeInput) {
-      sizeInput.value = `${this.settings.text.size}`;
-      this.bindOnce(sizeInput, 'input', () => {
-        this.settings.text.size = parseInt(sizeInput.value, 10);
+      const updateSize = (value: number) => {
+        if (!Number.isFinite(value)) {return;}
+        this.settings.text.size = Math.max(8, Math.min(72, Math.round(value)));
+        sizeInput.value = String(this.settings.text.size);
         this.syncActiveAnnotationTool('text');
+      };
+      sizeInput.value = String(this.settings.text.size);
+      this.bindOnce(sizeInput, 'input', () => {
+        if (sizeInput.value) {updateSize(sizeInput.valueAsNumber);}
       });
+      this.bindOnce(sizeInput, 'change', () => { sizeInput.value = String(this.settings.text.size); });
+      this.bindOnce(container.querySelector('#text-size-decrease'), 'click', () => updateSize(this.settings.text.size - 1));
+      this.bindOnce(container.querySelector('#text-size-increase'), 'click', () => updateSize(this.settings.text.size + 1));
     }
 
     const colorButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.draw-color-button'));
@@ -515,6 +483,7 @@ class DrawToolsController {
         const style = btn.dataset['textStyle'] as TextBooleanSettingKey | undefined;
         if (style && booleanStyles.includes(style)) {
           btn.classList.toggle('active', Boolean(this.settings.text[style]));
+          btn.setAttribute('aria-pressed', String(Boolean(this.settings.text[style])));
         }
       });
 
@@ -524,6 +493,7 @@ class DrawToolsController {
           if (!style || !booleanStyles.includes(style)) {return;}
           toggleStyle(style);
           btn.classList.toggle('active', Boolean(this.settings.text[style]));
+          btn.setAttribute('aria-pressed', String(Boolean(this.settings.text[style])));
         });
       });
     }
@@ -532,22 +502,40 @@ class DrawToolsController {
   private populateMarkerOptions() {
     const container = this.optionsContainers.marker;
     if (!container) {return;}
-    const sizeInput = container.querySelector<HTMLInputElement>('#marker-size-input');
-    if (sizeInput) {
-      sizeInput.value = `${this.settings.marker.size}`;
-      this.bindOnce(sizeInput, 'input', () => {
-        this.settings.marker.size = parseInt(sizeInput.value, 10);
-        this.syncActiveAnnotationTool('marker');
+    const bindSlider = (key: 'size' | 'transparency', min: number, max: number) => {
+      const slider = container.querySelector<HTMLInputElement>(`#marker-${key}-input`);
+      const number = container.querySelector<HTMLInputElement>(`#marker-${key}-number`);
+      const refresh = () => {
+        const value = this.settings.marker[key] ?? 0;
+        [slider, number].forEach(input => { if (input) {input.value = String(value);} });
+        if (key === 'transparency') {slider?.setAttribute('aria-valuetext', `${value}% transparent`);}
+      };
+      refresh();
+      [slider, number].forEach(input => {
+        if (!input) {return;}
+        this.bindOnce(input, 'input', () => {
+          if (!input.value || !Number.isFinite(input.valueAsNumber)) {return;}
+          this.settings.marker[key] = Math.max(min, Math.min(max, Math.round(input.valueAsNumber)));
+          refresh();
+          this.syncActiveAnnotationTool('marker');
+        });
+        this.bindOnce(input, 'change', refresh);
       });
-    }
+    };
+    bindSlider('size', 2, 30);
+    bindSlider('transparency', 0, 95);
 
     const colorButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.draw-color-button'));
     if (colorButtons.length) {
       // Set initial selection
       const setActiveColor = (color: string) => {
+        const trigger = container.querySelector<HTMLButtonElement>('#marker-color-trigger');
+        if (trigger) {trigger.style.color = color;}
         colorButtons.forEach(btn => {
           const btnColor = btn.dataset['color'] || '';
-          btn.classList.toggle('active', btnColor.toLowerCase() === color.toLowerCase());
+          const selected = btnColor.toLowerCase() === color.toLowerCase();
+          btn.classList.toggle('active', selected);
+          btn.setAttribute('aria-pressed', String(selected));
         });
       };
       setActiveColor(this.settings.marker.color);
@@ -557,6 +545,7 @@ class DrawToolsController {
           const color = button.dataset['color'];
           if (!color) {return;}
           this.settings.marker.color = color;
+          this.markerHasSelectedColour = true;
           setActiveColor(color);
           this.syncActiveAnnotationTool('marker');
         });
@@ -564,39 +553,7 @@ class DrawToolsController {
     }
   }
 
-  private populateHighlighterOptions() {
-    const container = this.optionsContainers.highlighter;
-    if (!container) {return;}
-    const sizeInput = container.querySelector<HTMLInputElement>('#highlighter-size-input');
-    if (sizeInput) {
-      sizeInput.value = `${this.settings.highlighter.size}`;
-      this.bindOnce(sizeInput, 'input', () => {
-        this.settings.highlighter.size = parseInt(sizeInput.value, 10);
-        this.syncActiveAnnotationTool('highlighter');
-      });
-    }
 
-    const colorButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.draw-color-button'));
-    if (colorButtons.length) {
-      const setActiveColor = (color: string) => {
-        colorButtons.forEach(btn => {
-          const btnColor = btn.dataset['color'] || '';
-          btn.classList.toggle('active', btnColor.toLowerCase() === color.toLowerCase());
-        });
-      };
-      setActiveColor(this.settings.highlighter.color);
-
-      colorButtons.forEach(button => {
-        this.bindOnce(button, 'click', () => {
-          const color = button.dataset['color'];
-          if (!color) {return;}
-          this.settings.highlighter.color = color;
-          setActiveColor(color);
-          this.syncActiveAnnotationTool('highlighter');
-        });
-      });
-    }
-  }
 }
 
 const drawToolsController = new DrawToolsController();

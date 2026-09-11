@@ -29,6 +29,7 @@
 
 .control-subsection h4 {
     margin: 0 0 0 0;
+    text-align: center;
     color: var(--c-text-muted);
     font-family: var(--typography-label-font-family);
     font-size: var(--typography-label-font-size);
@@ -138,8 +139,133 @@
 .rhythm-general-panel .rhythm-tempo-container {
     order: initial;
     padding-top: 0;
-    border-left: 1px solid var(--c-border);
-    padding-left: var(--space-2);
+    border-left: 0;
+}
+
+/* Present the Rhythm tools as one surface, matching the combined Pitch panel. */
+#rhythm-panel.rhythm-combined-content.active {
+    align-items: stretch;
+    background-color: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+#rhythm-panel.rhythm-combined-content > .rhythm-general-panel {
+    grid-template-columns: max-content auto;
+    gap: 0;
+    box-sizing: border-box;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-controls-content-box {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-025);
+    width: max-content;
+    min-width: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-structure-container,
+#rhythm-panel.rhythm-combined-content .modulation-container {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+    width: 100%;
+    align-items: stretch;
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-structure-container {
+    flex: 2 1 0;
+}
+
+#rhythm-panel.rhythm-combined-content .modulation-container {
+    position: relative;
+    flex: 3 1 0;
+    margin-top: var(--space-025);
+    padding-top: var(--space-025);
+}
+
+#rhythm-panel.rhythm-combined-content .modulation-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: var(--space-025);
+    left: var(--space-025);
+    height: 1px;
+    background-color: var(--c-border-strong);
+    pointer-events: none;
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-structure-container .toggle-button-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-015);
+    width: 100%;
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-structure-container .sidebar-toggle-button,
+#rhythm-panel.rhythm-combined-content .modulation-controls .toolkit-button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: var(--space-025);
+}
+
+#rhythm-panel.rhythm-combined-content .modulation-controls {
+    align-items: stretch;
+    width: 100%;
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-tempo-container,
+#rhythm-panel.rhythm-combined-content > .rhythm-stamp-tabs-container {
+    position: relative;
+    margin-left: var(--space-025);
+    padding-left: var(--space-025);
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-tempo-container::before,
+#rhythm-panel.rhythm-combined-content > .rhythm-stamp-tabs-container::before {
+    content: '';
+    position: absolute;
+    top: var(--space-025);
+    bottom: var(--space-025);
+    left: 0;
+    width: 1px;
+    background-color: var(--c-border-strong);
+    pointer-events: none;
+}
+
+#rhythm-panel.rhythm-combined-content > .rhythm-stamp-tabs-container {
+    margin-left: 0;
+    padding-left: 0;
+}
+
+#rhythm-panel.rhythm-combined-content > .rhythm-stamp-tabs-container::before {
+    display: none;
+}
+
+#rhythm-panel.rhythm-combined-content .tempo-content-box,
+#rhythm-panel.rhythm-combined-content .sixteenth-stamps-toolbar-container,
+#rhythm-panel.rhythm-combined-content .triplet-stamps-toolbar-container,
+#rhythm-panel.rhythm-combined-content .drum-beats-toolbar {
+    border: 0;
+    border-radius: 0 !important;
+    box-shadow: none;
+    background: transparent;
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-stamp-tab-panel.active {
+    gap: 0;
 }
 
 .drum-beats-toolbar {
@@ -244,6 +370,33 @@
     --rhythm-tab-border-width: 1px;
     position: relative;
     z-index: 1;
+    /* Let the app background show through around the tabs' rounded corners. */
+    background-color: transparent;
+}
+
+/* Use the unused portion of the tab rail as the Rhythm panel's top-right cutout. */
+#rhythm-panel.rhythm-combined-content .rhythm-tab-stamps::after {
+    content: '';
+    align-self: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
+    pointer-events: none;
+}
+
+/* The cutout must remain visible when the toolbar becomes horizontally scrollable. */
+body.mobile-pocket-console #rhythm-panel.rhythm-combined-content .rhythm-tab-stamps::after {
+    flex-basis: var(--preset-tab-rail-height);
+    min-width: var(--preset-tab-rail-height);
+}
+
+#rhythm-panel.rhythm-combined-content .rhythm-stamp-tab-content {
+    box-sizing: border-box;
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-left: 0;
+    border-radius: var(--border-radius-md);
+    border-top-left-radius: 0;
+    box-shadow: var(--box-shadow-sm);
 }
 
 .rhythm-stamp-tab-content {
@@ -302,24 +455,13 @@
 .sixteenth-stamps-row,
 .sixteenth-three-stamps-row {
     display: grid;
-    gap: var(--space-1);
+    row-gap: var(--space-1);
+    column-gap: var(--space-100);
     justify-items: center;
     align-content: stretch;
     align-items: stretch;
     padding: 0 var(--space-2);
     box-sizing: border-box;
-}
-
-.sixteenth-stamps-row-1 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.sixteenth-stamps-row-2 {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.sixteenth-stamps-row-3 {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .sixteenth-stamps-row .sixteenth-stamp-button,
@@ -334,15 +476,6 @@
 
 .sixteenth-stamps-row .sixteenth-stamp-button {
     aspect-ratio: 1 / 1;
-}
-
-.sixteenth-three-stamps-row-1,
-.sixteenth-three-stamps-row-2 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.sixteenth-three-stamps-row-3 {
-    grid-template-columns: minmax(0, 1fr);
 }
 
 .sixteenth-three-stamps-row .sixteenth-stamp-button {

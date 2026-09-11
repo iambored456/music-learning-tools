@@ -221,8 +221,13 @@ export class PitchGridTonicizationToolInteractor {
       preMacrobeatIndex: tonicPoint.preMacrobeatIndex,
       columnIndex: tonicPoint.drawColumn as CanvasSpaceColumn
     }));
-    store.addTonicSignGroup(newTonicGroup);
+
+    // Remove the temporary expanded grid geometry before committing. The store
+    // emits rhythmStructureChanged synchronously, which performs the real layout
+    // reflow; clearing the preview afterwards would restore stale pre-insertion
+    // widths over that new layout (most visibly leaving the right button cell behind).
     this.resetHoverState();
+    store.addTonicSignGroup(newTonicGroup);
 
     return true;
   }

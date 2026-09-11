@@ -103,16 +103,16 @@
 }
 
 /* Color selectors - support both old (.note-pair wrapper) and new (direct data-color) structures */
-.note-pair[data-color="#4a90e2"] .note { --note-color: #4a90e2; }
-.note-pair[data-color="#2d2d2d"] .note { --note-color: #2d2d2d; }
-.note-pair[data-color="#d66573"] .note { --note-color: #d66573; }
-.note-pair[data-color="#68a03f"] .note { --note-color: #68a03f; }
+.note-pair[data-color="#44bcef"] .note { --note-color: #44bcef; }
+.note-pair[data-color="#d293e0"] .note { --note-color: #d293e0; }
+.note-pair[data-color="#ee9561"] .note { --note-color: #ee9561; }
+.note-pair[data-color="#81c273"] .note { --note-color: #81c273; }
 
 /* Direct data-color on notes (new flat 5x5 grid structure) */
-.note[data-color="#4a90e2"] { --note-color: #4a90e2; }
-.note[data-color="#2d2d2d"] { --note-color: #2d2d2d; }
-.note[data-color="#d66573"] { --note-color: #d66573; }
-.note[data-color="#68a03f"] { --note-color: #68a03f; }
+.note[data-color="#44bcef"] { --note-color: #44bcef; }
+.note[data-color="#d293e0"] { --note-color: #d293e0; }
+.note[data-color="#ee9561"] { --note-color: #ee9561; }
+.note[data-color="#81c273"] { --note-color: #81c273; }
 /* Styles for the eraser icon image */
 .eraser-icon {
   width: 100%;

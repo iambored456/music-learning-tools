@@ -94,10 +94,10 @@ let audioInitPromise: Promise<void> | null = null;
 let userInteractionReceived = false;
 
 const STARTUP_PRESET_BY_COLOR: Record<string, string> = {
-  '#4a90e2': 'sine',
-  '#2d2d2d': 'triangle',
-  '#d66573': 'square',
-  '#68a03f': 'sawtooth'
+  '#44bcef': 'sine',
+  '#d293e0': 'triangle',
+  '#ee9561': 'square',
+  '#81c273': 'sawtooth'
 };
 
 function applyStartupVoicePresets(): void {
@@ -314,8 +314,14 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:configure-audio-ctx START');
     loadingManager.setStatus('Configuring audio context...');
     await loadingManager.nextFrame();
-    configureAudioContext({ latencyHint: 'playback', lookAhead: 0.1 });
-    logger.info('Main', 'AudioContext configured with latencyHint: playback');
+    configureAudioContext({ latencyHint: 'playback', lookAhead: 0.25 });
+    // Tone increases updateInterval when lookAhead changes. Keep the existing
+    // 50 ms scheduling cadence so the larger window provides more headroom.
+    const audioContext = Tone.getContext();
+    if (audioContext instanceof Tone.Context) {
+      audioContext.updateInterval = 0.05;
+    }
+    logger.info('Main', 'AudioContext configured with playback latency, 250 ms lookahead, and 50 ms updates');
     loadingManager.completeTask('configure-audio-ctx');
     initDebug('phase:configure-audio-ctx DONE');
 
@@ -558,7 +564,7 @@ async function startStudentNotation(): Promise<void> {
     initDebug('phase:initial-render START');
     loadingManager.setStatus('Rendering workspace...');
     store.setSelectedTool('note');
-    store.setSelectedNote('circle', '#4a90e2');
+    store.setSelectedNote('circle', '#44bcef');
     renderAll();
     PitchGridController.renderMacrobeatTools();
     loadingManager.completeTask('initial-render');

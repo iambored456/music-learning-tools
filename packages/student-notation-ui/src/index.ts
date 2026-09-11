@@ -8,7 +8,6 @@ export type StudentNotationInstance = {
 
 const publicAssets = import.meta.glob('../public/**/*', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const publicPrefix = '../public/';
-const THEME_STORAGE_KEY = 'app.themeMode';
 const TYPOGRAPHY_SPECIMEN_QUERY_PARAM = 'typographySpecimen';
 
 function resolvePublicAsset(path: string): string {
@@ -69,17 +68,6 @@ function ensureMountContainerLayout(container: HTMLElement): void {
   container.style.minHeight = '0';
 }
 
-function applyStoredThemeModeClass(): void {
-  if (typeof document === 'undefined' || typeof window === 'undefined') {return;}
-  let isDarkMode = false;
-  try {
-    isDarkMode = window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
-  } catch {
-    // Ignore localStorage access issues
-  }
-  document.body.classList.toggle('dark-mode', isDarkMode);
-}
-
 function shouldMountTypographySpecimen(): boolean {
   return import.meta.env.DEV
     && typeof window !== 'undefined'
@@ -117,7 +105,6 @@ function mountDevelopmentTypographySpecimen(container: HTMLElement): StudentNota
 }
 
 export function mountStudentNotation(container: HTMLElement): StudentNotationInstance {
-  applyStoredThemeModeClass();
   ensureMountContainerLayout(container);
 
   if (shouldMountTypographySpecimen()) {

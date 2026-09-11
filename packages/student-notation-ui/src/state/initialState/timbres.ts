@@ -70,10 +70,10 @@ export const createDefaultTremoloState = (): TremoloState => ({
 });
 
 export const defaultColorPalette: ColorPalette = {
-  '#4a90e2': { primary: '#4a90e2', light: '#63a9fd' },
-  '#68a03f': { primary: '#68a03f', light: '#80b958' },
-  '#d66573': { primary: '#d66573', light: '#f27e8b' },
-  '#2d2d2d': { primary: '#2d2d2d', light: '#424242' }
+  '#44bcef': { primary: '#44bcef', light: '#5fd3ff' },
+  '#d293e0': { primary: '#d293e0', light: '#e9a9f7' },
+  '#ee9561': { primary: '#ee9561', light: '#ffab77' },
+  '#81c273': { primary: '#81c273', light: '#97d889' }
 };
 
 function createTimbreForPreset(name: string, presetName: 'sine' | 'triangle' | 'square' | 'sawtooth'): TimbreData {
@@ -123,10 +123,10 @@ function createTimbreForPreset(name: string, presetName: 'sine' | 'triangle' | '
 export function getInitialTimbresState(): TimbresState {
   return {
     timbres: {
-      '#4a90e2': createTimbreForPreset('Blue', 'sine'),
-      '#2d2d2d': createTimbreForPreset('Black', 'triangle'),
-      '#d66573': createTimbreForPreset('Red', 'square'),
-      '#68a03f': createTimbreForPreset('Green', 'sawtooth')
+      '#44bcef': createTimbreForPreset('Blue', 'sine'),
+      '#d293e0': createTimbreForPreset('Purple', 'triangle'),
+      '#ee9561': createTimbreForPreset('Orange', 'square'),
+      '#81c273': createTimbreForPreset('Green', 'sawtooth')
     },
     colorPalette: defaultColorPalette
   };

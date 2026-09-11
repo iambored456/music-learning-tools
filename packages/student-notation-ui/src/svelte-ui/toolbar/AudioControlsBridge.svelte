@@ -243,7 +243,7 @@
         }
       });
       if (presetContainer) {
-        presetContainer.style.setProperty('--c-accent', '#4A90E2');
+        presetContainer.style.setProperty('--c-accent', '#44BCEF');
         presetContainer.style.setProperty('--c-accent-hover', '#357ABD');
       }
     }

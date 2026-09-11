@@ -115,6 +115,23 @@ describe('engine-backed note actions', () => {
     expect(store.state.placedNotes).toHaveLength(0);
   });
 
+  it('can defer drum history so a multi-cell gesture records once', () => {
+    const initialHistoryIndex = store.state.historyIndex;
+    for (const column of [2, 3, 4]) {
+      store.toggleDrumNote({
+        drumTrack: 'H',
+        startColumnIndex: createCanvasSpaceColumn(column),
+        color: '#4a90e2',
+        shape: 'circle'
+      }, false);
+    }
+
+    expect(store.state.placedNotes).toHaveLength(3);
+    expect(store.state.historyIndex).toBe(initialHistoryIndex);
+    store.recordState();
+    expect(store.state.historyIndex).toBe(initialHistoryIndex + 1);
+  });
+
   it('updates both row and globalRow when dragging a note', () => {
     const note = createMockNote({ row: 10, globalRow: 10 });
 
@@ -187,6 +204,86 @@ describe('engine-backed note actions', () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
     store.off('notesChanged', listener);
+  });
+
+  it('rebases arrows, text, and drawn paths when tonic columns are added and removed', () => {
+    store.dispose();
+    store = createStore({
+      noteActionCallbacks: {
+        getMacrobeatInfo: state => ({
+          startColumn: Object.keys(state.tonicSignGroups).length > 0 ? 6 : 4,
+          endColumn: Object.keys(state.tonicSignGroups).length > 0 ? 7 : 5
+        })
+      }
+    });
+
+    store.state.annotations = [
+      {
+        type: 'arrow',
+        startCol: 2,
+        startRow: 1,
+        endCol: 5,
+        endRow: 2,
+        settings: {
+          lineStyle: 'solid',
+          strokeWeight: 2,
+          startArrowhead: 'none',
+          endArrowhead: 'filled',
+          arrowheadSize: 8
+        }
+      },
+      {
+        type: 'text',
+        col: 3,
+        row: 1,
+        widthCols: 3,
+        heightRows: 2,
+        text: 'Across boundary',
+        settings: {
+          color: '#000000',
+          size: 16,
+          bold: false,
+          italic: false,
+          underline: false,
+          background: false,
+          superscript: false,
+          subscript: false
+        }
+      },
+      {
+        type: 'marker',
+        path: [
+          { col: 2, row: 1 },
+          { col: 4, row: 2 },
+          { col: 6, row: 3 }
+        ],
+        settings: { color: '#000000', size: 4 }
+      }
+    ];
+    const annotationsChanged = vi.fn();
+    store.on('annotationsChanged', annotationsChanged);
+
+    store.addTonicSignGroup([{
+      row: 10,
+      tonicNumber: 1,
+      preMacrobeatIndex: 0,
+      columnIndex: createCanvasSpaceColumn(4)
+    }]);
+
+    expect(store.state.annotations[0]).toMatchObject({ startCol: 2, endCol: 7 });
+    expect(store.state.annotations[1]).toMatchObject({ col: 3, widthCols: 5 });
+    expect(store.state.annotations[2]).toMatchObject({
+      path: [{ col: 2 }, { col: 6 }, { col: 8 }]
+    });
+    expect(annotationsChanged).toHaveBeenCalledTimes(1);
+
+    expect(store.eraseTonicSignAt(createCanvasSpaceColumn(4))).toBe(true);
+    expect(store.state.annotations[0]).toMatchObject({ startCol: 2, endCol: 5 });
+    expect(store.state.annotations[1]).toMatchObject({ col: 3, widthCols: 3 });
+    expect(store.state.annotations[2]).toMatchObject({
+      path: [{ col: 2 }, { col: 4 }, { col: 6 }]
+    });
+    expect(annotationsChanged).toHaveBeenCalledTimes(2);
   });
 
   it('uses globalRow for pitch-area hit testing when available', () => {

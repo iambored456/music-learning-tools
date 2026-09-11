@@ -16,15 +16,8 @@ interface SynthEngineWithAnalyser {
   removeWaveformAnalyzer?: (color: string) => void;
 }
 
-interface VibratoAnimation { amplitude: number; phase: number }
-interface VibratoEffect {
-  animations: Map<string, VibratoAnimation>;
-  shouldBeRunning: () => boolean;
-}
-
 interface AnimationEffectsManagerLike {
   getTremoloAmplitudeMultiplier: (color: string) => number;
-  vibratoCanvasEffect?: VibratoEffect;
 }
 
 const getSynthEngine = (): SynthEngineWithAnalyser | null =>
@@ -66,7 +59,7 @@ class DynamicWaveformVisualizer {
 
     this.canvas = canvas;
     this.ctx = ctx;
-    this.currentColor = store.state.selectedNote?.color || '#4a90e2';
+    this.currentColor = store.state.selectedNote?.color || '#44bcef';
     this.setupEventListeners();
     this.isInitialized = true;
     logger.info('DynamicWaveformVisualizer', 'Initialized with canvas context', null, 'waveform');
@@ -352,14 +345,6 @@ class DynamicWaveformVisualizer {
       amplitude *= multiplier;
     }
 
-    let vibratoStretch = 0;
-    const vibratoEffect = animationManager?.vibratoCanvasEffect;
-    const vibratoAnimation = vibratoEffect?.animations.get(color);
-    if (vibratoEffect && vibratoAnimation && vibratoEffect.shouldBeRunning()) {
-      const sineValue = Math.sin(vibratoAnimation.phase);
-      vibratoStretch = sineValue * vibratoAnimation.amplitude * 0.4;
-    }
-
     let maxAmp = 0;
     for (let i = 0; i < waveform.length; i++) {
       const sampleValue = waveform[i] ?? 0;
@@ -372,14 +357,13 @@ class DynamicWaveformVisualizer {
     ctx.beginPath();
 
     const baseSpread = waveform.length / width;
-    const stretchedSpread = baseSpread * (1 + vibratoStretch);
+    // Captured audio already contains vibrato; keep a fixed time scale so its
+    // changing cycle spacing is displayed without a second pitch modulation.
     const triggerOffsetSamples = this.getTriggeredSampleOffset(waveform);
     const phaseOffsetSamples = (this.waveformPhaseByColor.get(color) ?? 0) * waveform.length;
 
     for (let x = 0; x < width; x++) {
-      const shiftAmount = vibratoStretch * width * 0.3;
-      const shiftedX = x + shiftAmount;
-      const sampleIndex = triggerOffsetSamples + shiftedX * stretchedSpread + phaseOffsetSamples;
+      const sampleIndex = triggerOffsetSamples + x * baseSpread + phaseOffsetSamples;
       const sample = this.sampleWaveformAt(waveform, sampleIndex) * normalizationFactor;
       const y = centerY - (sample * amplitude);
 
@@ -392,8 +376,8 @@ class DynamicWaveformVisualizer {
 
     ctx.stroke();
 
-    logger.debug('DynamicWaveformVisualizer', `Drew single live waveform for ${color} with tremolo and vibrato stretch`,
-      { amplitudeRatio: amplitude / baseAmplitude, vibratoStretch }, 'waveform');
+    logger.debug('DynamicWaveformVisualizer', `Drew single live waveform for ${color}`,
+      { amplitudeRatio: amplitude / baseAmplitude }, 'waveform');
   }
 
   private drawLayeredLiveWaveform(
@@ -413,14 +397,6 @@ class DynamicWaveformVisualizer {
       amplitude *= animationManager.getTremoloAmplitudeMultiplier(color);
     }
 
-    let vibratoStretch = 0;
-    const vibratoEffect = animationManager?.vibratoCanvasEffect;
-    const vibratoAnimation = vibratoEffect?.animations.get(color);
-    if (vibratoEffect && vibratoAnimation && vibratoEffect.shouldBeRunning()) {
-      const sineValue = Math.sin(vibratoAnimation.phase);
-      vibratoStretch = sineValue * vibratoAnimation.amplitude * 0.4;
-    }
-
     let maxAmp = 0;
     for (let i = 0; i < waveform.length; i++) {
       const sampleValue = waveform[i] ?? 0;
@@ -434,14 +410,11 @@ class DynamicWaveformVisualizer {
     ctx.beginPath();
 
     const baseSpread = waveform.length / width;
-    const stretchedSpread = baseSpread * (1 + vibratoStretch);
     const triggerOffsetSamples = this.getTriggeredSampleOffset(waveform);
     const phaseOffsetSamples = (this.waveformPhaseByColor.get(color) ?? 0) * waveform.length;
 
     for (let x = 0; x < width; x++) {
-      const shiftAmount = vibratoStretch * width * 0.3;
-      const shiftedX = x + shiftAmount;
-      const sampleIndex = triggerOffsetSamples + shiftedX * stretchedSpread + phaseOffsetSamples;
+      const sampleIndex = triggerOffsetSamples + x * baseSpread + phaseOffsetSamples;
       const sample = this.sampleWaveformAt(waveform, sampleIndex) * normalizationFactor;
       const y = centerY - (sample * amplitude * 0.7);
 

@@ -425,11 +425,15 @@ export class FilteredVoice extends MonophonicBase {
     const elapsed = time - this._attackStartTime;
     if (elapsed < 0) return 0;
     if (attack <= 0 || elapsed >= attack) {
+      // Match the actual exponential decay scheduled in _triggerEnvelopeAttack.
+      // A linear estimate can raise the gain on release, sounding like a new attack.
+      const sustainLevel = Math.max(sustain * velocity, MIN_NONZERO_GAIN);
       if (decay <= 0 || elapsed >= attack + decay) {
-        return sustain * velocity;
+        return sustainLevel;
       }
       const decayProgress = (elapsed - attack) / decay;
-      return velocity - (velocity - sustain * velocity) * decayProgress;
+      // Native exponential ramps hold at their starting value when it is zero.
+      return velocity > 0 ? velocity * (sustainLevel / velocity) ** decayProgress : 0;
     }
     return (elapsed / attack) * velocity;
   }

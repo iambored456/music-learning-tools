@@ -199,6 +199,6 @@ export function renderSixteenthThreeStampPreview(
 
   ctx.save();
   ctx.globalAlpha = 0.6;
-  defaultSixteenthThreeStampRenderer.renderToCanvas(ctx, stamp, stampX, stampY, stampWidth, stampHeight, options.previewColor || '#4a90e2');
+  defaultSixteenthThreeStampRenderer.renderToCanvas(ctx, stamp, stampX, stampY, stampWidth, stampHeight, options.previewColor || '#44bcef');
   ctx.restore();
 }

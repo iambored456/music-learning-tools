@@ -199,10 +199,10 @@
   const homeIconHref = new URL('../../simple-notation-ui/src/assets/home-icon.svg', import.meta.url).href;
   const volumeIconHref = new URL('../../simple-notation-ui/src/assets/volume.svg', import.meta.url).href;
   const studentNotationSettingsIconHref = new URL('../../student-notation-ui/public/assets/icons/settings.svg', import.meta.url).href;
-  const studentNotationNewPageIconHref = new URL('../../student-notation-ui/public/assets/icons/newPage.svg', import.meta.url).href;
-  const studentNotationOpenIconHref = new URL('../../student-notation-ui/public/assets/icons/open.svg', import.meta.url).href;
-  const studentNotationSaveAsIconHref = new URL('../../student-notation-ui/public/assets/icons/saveAs.svg', import.meta.url).href;
-  const studentNotationPrintIconHref = new URL('../../student-notation-ui/public/assets/icons/print.svg', import.meta.url).href;
+  const studentNotationNewPageIconHref = new URL('../../student-notation-ui/public/assets/sidebar/newPage.svg', import.meta.url).href;
+  const studentNotationOpenIconHref = new URL('../../student-notation-ui/public/assets/sidebar/open.svg', import.meta.url).href;
+  const studentNotationSaveAsIconHref = new URL('../../student-notation-ui/public/assets/sidebar/saveAs.svg', import.meta.url).href;
+  const studentNotationPrintIconHref = new URL('../../student-notation-ui/public/assets/sidebar/print.svg', import.meta.url).href;
   const studentNotationLassoIconHref = new URL('../../student-notation-ui/public/assets/icons/lasso-tool.svg', import.meta.url).href;
   const studentNotationEraserIconHref = new URL('../../student-notation-ui/public/assets/icons/eraser.svg', import.meta.url).href;
   const studentNotationZoomInIconHref = new URL('../../student-notation-ui/public/assets/icons/zoomIn.svg', import.meta.url).href;

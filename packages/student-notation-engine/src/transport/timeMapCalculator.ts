@@ -332,7 +332,14 @@ export function createTimeMapCalculator(config: TimeMapCalculatorConfig): TimeMa
     },
 
     updateLoopBoundsFromTimeline(state: TimeMapState): void {
-      const loopStart = this.findNonAnacrusisStart(state);
+      const selectedIndex = state.playbackStartMacrobeatIndex;
+      const info = typeof selectedIndex === 'number' && selectedIndex >= 0
+        ? getMacrobeatInfo(selectedIndex)
+        : null;
+      const regularStart = info ? timeMap[info.startColumn] : undefined;
+      const loopStart = info && typeof regularStart === 'number'
+        ? this.applyModulationToTime(regularStart, info.startColumn, state)
+        : this.findNonAnacrusisStart(state);
       const loopEnd = cachedMusicalEndTime;
       this.setLoopBounds(loopStart, loopEnd, state.tempo);
     }

@@ -62,7 +62,7 @@
     height: 100%;
     min-height: 0;
     max-height: 100%;
-    width: clamp(70px, 8dvw, 90px);
+    width: calc(var(--clef-wheel-label-width, 3.5rem) + (2 * var(--space-035)));
     min-width: 0;
     outline: none;
     cursor: grab;
@@ -120,6 +120,7 @@
     transform-origin: center;
     transition: color 0.18s ease-out, transform 0.18s ease-out, opacity 0.18s ease-out;
     opacity: 0.3;
+    white-space: nowrap;
 }
 
 .clef-wheel-option[data-distance="0"] {
@@ -281,25 +282,29 @@
 
 .clef-preset-buttons {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: max-content;
     grid-template-rows: repeat(5, minmax(0, 1fr));
     gap: var(--space-015);
+    min-width: max-content;
     height: 100%;
     min-height: 0;
     align-content: stretch;
     align-items: stretch;
 }
 
-.clef-preset-button {
-    min-width: 0;
+#toolbar .clef-preset-buttons .clef-preset-button {
+    min-width: max-content;
     min-height: 0;
-    padding: var(--space-015) var(--space-025);
+    padding: 0 var(--space-025);
     font-family: var(--typography-dense-control-font-family);
-    font-size: var(--typography-dense-control-font-size);
+    /* Each preset receives about one fifth of the 20dvh toolbar. Keep the
+       label comfortably inside that row across the toolbar's min/max sizes. */
+    font-size: clamp(var(--font-size-100), 1.344dvh, 1.024rem);
     font-weight: var(--typography-dense-control-font-weight);
-    line-height: var(--typography-dense-control-line-height);
+    line-height: var(--line-height-solid);
     letter-spacing: var(--typography-dense-control-letter-spacing);
     white-space: nowrap;
+    overflow: hidden;
     width: 100%;
     height: 100%;
     align-self: stretch;
@@ -310,35 +315,35 @@
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.clef-preset-button:not(.active) {
+#toolbar .clef-preset-buttons .clef-preset-button:not(.active) {
     background: var(--c-surface);
     color: var(--c-text);
     border-color: var(--c-border);
     box-shadow: var(--box-shadow-sm);
 }
 
-.clef-preset-button.active {
+#toolbar .clef-preset-buttons .clef-preset-button.active {
     background: linear-gradient(180deg, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.9) 0%, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.75) 100%);
     border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 1);
     color: var(--c-surface);
     box-shadow: var(--box-shadow-md);
 }
 
-.clef-preset-button.active:hover,
-.clef-preset-button.active:focus-visible {
+#toolbar .clef-preset-buttons .clef-preset-button.active:hover,
+#toolbar .clef-preset-buttons .clef-preset-button.active:focus-visible {
     background: linear-gradient(180deg, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 1) 0%, rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.85) 100%);
     border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 1);
     color: var(--c-surface);
 }
 
-.clef-preset-button:hover,
-.clef-preset-button:focus-visible {
+#toolbar .clef-preset-buttons .clef-preset-button:hover,
+#toolbar .clef-preset-buttons .clef-preset-button:focus-visible {
     background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.18);
     border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.5);
     box-shadow: var(--box-shadow-md);
 }
 
-.clef-preset-button:active {
+#toolbar .clef-preset-buttons .clef-preset-button:active {
     background: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.32);
     border-color: rgba(var(--c-accent-neutral-rgb, 255, 193, 7), 0.65);
     color: var(--c-text);

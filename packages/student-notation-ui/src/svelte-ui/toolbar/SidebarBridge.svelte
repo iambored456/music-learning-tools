@@ -8,16 +8,7 @@
   import { initLocalDrumSampleChoices } from '@components/canvas/drumGrid/drumGridInteractor.ts';
   import store from '@state/initStore.ts';
   import LayoutService from '@services/layoutService.ts';
-  import GridManager from '@components/canvas/PitchGrid/gridManager.ts';
-  import {
-    isRedCLinesEnabled,
-    setRedCLinesEnabled,
-  } from '@services/gridStyleSettings.ts';
   import { preloadDrumSamples } from '@services/transport/drumManager.ts';
-  import {
-    subscribeToAdsrPlayheadsEnabled,
-    toggleAdsrPlayheadsEnabled
-  } from '@services/adsrPlayheadSettings.ts';
   import { notificationSystem } from '../ui/NotificationModal.svelte';
   import {
     convertToSnapshot,
@@ -34,27 +25,10 @@
   let volumeIconBtn: HTMLElement | null = null;
   let volumePopup: HTMLElement | null = null;
   let verticalVolumeSlider: HTMLInputElement | null = null;
-  let themeToggle: HTMLElement | null = null;
-  let themeLightInput: HTMLInputElement | null = null;
-  let themeDarkInput: HTMLInputElement | null = null;
-  let redCLinesToggleBtn: HTMLButtonElement | null = null;
 
   // Anacrusis toggle
   let anacrusisOnBtn: HTMLElement | null = null;
   let anacrusisOffBtn: HTMLElement | null = null;
-
-  // Long note style toggle
-  let longNoteStyle1Btn: HTMLElement | null = null;
-  let longNoteStyle2Btn: HTMLElement | null = null;
-
-  // Playhead mode toggle
-  let playheadCursorBtn: HTMLElement | null = null;
-  let playheadMicrobeatBtn: HTMLElement | null = null;
-  let playheadMacrobeatBtn: HTMLElement | null = null;
-
-  // ADSR playhead performance toggle
-  let adsrPlayheadsToggleBtn: HTMLButtonElement | null = null;
-  let unsubscribeAdsrPlayheadSetting: (() => void) | null = null;
 
   // Grid visibility toggles
   let drumGridToggleBtn: HTMLElement | null = null;
@@ -65,6 +39,7 @@
   let leftLegendCanvas: HTMLElement | null = null;
   let rightLegendToggleBtn: HTMLElement | null = null;
   let rightLegendCanvas: HTMLElement | null = null;
+  let pitchGridContainer: HTMLElement | null = null;
 
   // Handoff button
   let takeToSingingTrainerBtn: HTMLElement | null = null;
@@ -76,8 +51,6 @@
   let isRightLegendVisible = true;
 
   const VOLUME_STORAGE_KEY = 'app.volumeSliderValue';
-  const THEME_STORAGE_KEY = 'app.themeMode';
-  type ThemeMode = 'light' | 'dark';
 
   // Volume helper functions
   function clampVolume(value: number): number {
@@ -107,33 +80,6 @@
     }
   }
 
-  function getStoredThemeMode(): ThemeMode {
-    try {
-      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved === 'dark') {return 'dark';}
-      if (saved === 'light') {return 'light';}
-    } catch {
-      // Ignore localStorage access issues
-    }
-    return 'light';
-  }
-
-  function storeThemeMode(mode: ThemeMode): void {
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
-    } catch {
-      // Ignore localStorage write issues
-    }
-  }
-
-  function applyThemeMode(mode: ThemeMode): void {
-    const isDark = mode === 'dark';
-    document.body.classList.toggle('dark-mode', isDark);
-    if (themeLightInput) {themeLightInput.checked = !isDark;}
-    if (themeDarkInput) {themeDarkInput.checked = isDark;}
-    storeThemeMode(mode);
-  }
-
   // Event handlers
   function toggleSidebar() {
     document.body.classList.toggle('sidebar-open');
@@ -149,43 +95,9 @@
   function handleVolumeChange(this: HTMLInputElement) {
     const value = parseInt(this.value, 10);
     const dB = (value === 0) ? -Infinity : (value / 100) * 37.5 - 50;
+    volumeIconBtn?.querySelector('img')?.classList.toggle('volume-icon-muted', value === 0);
     store.emit('volumeChanged', dB);
     storeVolume(value);
-  }
-
-  function handleThemeLightChange() {
-    if (themeLightInput?.checked) {
-      applyThemeMode('light');
-    }
-  }
-
-  function handleThemeDarkChange() {
-    if (themeDarkInput?.checked) {
-      applyThemeMode('dark');
-    }
-  }
-
-  function handleThemeToggleClick(event: Event) {
-    const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === 'LABEL' || target.tagName === 'INPUT')) {
-      return;
-    }
-
-    const nextMode: ThemeMode = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
-    applyThemeMode(nextMode);
-  }
-
-  function syncRedCLinesToggle(enabled: boolean): void {
-    if (!redCLinesToggleBtn) {return;}
-    redCLinesToggleBtn.classList.toggle('active', enabled);
-    redCLinesToggleBtn.setAttribute('aria-pressed', String(enabled));
-  }
-
-  function handleRedCLinesToggle(): void {
-    const enabled = !isRedCLinesEnabled();
-    setRedCLinesEnabled(enabled);
-    syncRedCLinesToggle(enabled);
-    GridManager.renderPitchGrid();
   }
 
   function handleDocumentClickForVolume(e: Event) {
@@ -206,40 +118,27 @@
     anacrusisOffBtn?.classList.toggle('active', !isEnabled);
   }
 
-  // Long note style handlers
-  function handleLongNoteStyle1() { store.setLongNoteStyle('style1'); }
-  function handleLongNoteStyle2() { store.setLongNoteStyle('style2'); }
-
-  function handleLongNoteStyleChanged(style: unknown) {
-    const currentStyle = style as 'style1' | 'style2';
-    longNoteStyle1Btn?.classList.toggle('active', currentStyle === 'style1');
-    longNoteStyle2Btn?.classList.toggle('active', currentStyle === 'style2');
-  }
-
-  // Playhead mode handlers
-  function handlePlayheadCursor() { store.setPlayheadMode('cursor'); }
-  function handlePlayheadMicrobeat() { store.setPlayheadMode('microbeat'); }
-  function handlePlayheadMacrobeat() { store.setPlayheadMode('macrobeat'); }
-
-  function handlePlayheadModeChanged(mode: unknown) {
-    const currentMode = (mode === 'macrobeat') ? 'macrobeat' : (mode === 'microbeat') ? 'microbeat' : 'cursor';
-    playheadCursorBtn?.classList.toggle('active', currentMode === 'cursor');
-    playheadMicrobeatBtn?.classList.toggle('active', currentMode === 'microbeat');
-    playheadMacrobeatBtn?.classList.toggle('active', currentMode === 'macrobeat');
-  }
-
-  function syncAdsrPlayheadsToggle(enabled: boolean): void {
-    if (!adsrPlayheadsToggleBtn) {return;}
-    adsrPlayheadsToggleBtn.classList.toggle('active', enabled);
-    adsrPlayheadsToggleBtn.setAttribute('aria-pressed', String(enabled));
-    adsrPlayheadsToggleBtn.textContent = `ADSR Playheads: ${enabled ? 'On' : 'Off'}`;
-  }
-
-  function handleAdsrPlayheadsToggle(): void {
-    toggleAdsrPlayheadsEnabled();
-  }
-
   // Grid visibility handlers
+  function syncVisibilityButton(
+    button: HTMLElement | null,
+    isVisible: boolean,
+    hideLabel: string,
+    showLabel: string
+  ): void {
+    if (!button) return;
+    const label = button.querySelector<HTMLElement>('.sidebar-button-text') ?? button;
+    label.textContent = isVisible ? hideLabel : showLabel;
+    button.classList.toggle('active', !isVisible);
+    button.setAttribute('aria-pressed', String(!isVisible));
+  }
+
+  function syncLegendTransparency(): void {
+    pitchGridContainer?.classList.toggle(
+      'has-hidden-legend',
+      !isLeftLegendVisible || !isRightLegendVisible
+    );
+  }
+
   function handleDrumGridToggle() {
     isDrumGridVisible = !isDrumGridVisible;
     if (drumGridWrapper) {
@@ -249,10 +148,7 @@
       void preloadDrumSamples();
       void initLocalDrumSampleChoices();
     }
-    const textElement = drumGridToggleBtn?.querySelector('.sidebar-button-text');
-    if (textElement) {
-      textElement.textContent = isDrumGridVisible ? 'Hide Drum Grid' : 'Show Drum Grid';
-    }
+    syncVisibilityButton(drumGridToggleBtn, isDrumGridVisible, 'Hide Drum Grid', 'Show Drum Grid');
     setTimeout(() => LayoutService.recalculateLayout(), 10);
   }
 
@@ -261,10 +157,7 @@
     if (buttonGridWrapper) {
       buttonGridWrapper.style.display = isButtonGridVisible ? 'flex' : 'none';
     }
-    const textElement = buttonGridToggleBtn?.querySelector('.sidebar-button-text');
-    if (textElement) {
-      textElement.textContent = isButtonGridVisible ? 'Hide Button Grid' : 'Show Button Grid';
-    }
+    syncVisibilityButton(buttonGridToggleBtn, isButtonGridVisible, 'Hide Button Grid', 'Show Button Grid');
     setTimeout(() => LayoutService.recalculateLayout(), 10);
   }
 
@@ -273,9 +166,8 @@
     if (leftLegendCanvas) {
       leftLegendCanvas.style.display = isLeftLegendVisible ? 'block' : 'none';
     }
-    if (leftLegendToggleBtn) {
-      leftLegendToggleBtn.textContent = isLeftLegendVisible ? 'Hide Left Legend' : 'Show Left Legend';
-    }
+    syncVisibilityButton(leftLegendToggleBtn, isLeftLegendVisible, 'Hide Left Legend', 'Show Left Legend');
+    syncLegendTransparency();
     setTimeout(() => LayoutService.recalculateLayout(), 10);
   }
 
@@ -284,9 +176,8 @@
     if (rightLegendCanvas) {
       rightLegendCanvas.style.display = isRightLegendVisible ? 'block' : 'none';
     }
-    if (rightLegendToggleBtn) {
-      rightLegendToggleBtn.textContent = isRightLegendVisible ? 'Hide Right Legend' : 'Show Right Legend';
-    }
+    syncVisibilityButton(rightLegendToggleBtn, isRightLegendVisible, 'Hide Right Legend', 'Show Right Legend');
+    syncLegendTransparency();
     setTimeout(() => LayoutService.recalculateLayout(), 10);
   }
 
@@ -373,24 +264,10 @@
     volumeIconBtn = document.getElementById('volume-icon-button');
     volumePopup = document.getElementById('volume-popup');
     verticalVolumeSlider = document.getElementById('vertical-volume-slider') as HTMLInputElement | null;
-    themeToggle = document.getElementById('theme-toggle');
-    themeLightInput = document.getElementById('theme-light') as HTMLInputElement | null;
-    themeDarkInput = document.getElementById('theme-dark') as HTMLInputElement | null;
-    redCLinesToggleBtn = document.getElementById('red-c-lines-toggle') as HTMLButtonElement | null;
 
     // Anacrusis toggle
     anacrusisOnBtn = document.getElementById('anacrusis-on-btn');
     anacrusisOffBtn = document.getElementById('anacrusis-off-btn');
-
-    // Long note style toggle
-    longNoteStyle1Btn = document.getElementById('long-note-style1-btn');
-    longNoteStyle2Btn = document.getElementById('long-note-style2-btn');
-
-    // Playhead mode toggle
-    playheadCursorBtn = document.getElementById('playhead-mode-cursor-btn');
-    playheadMicrobeatBtn = document.getElementById('playhead-mode-microbeat-btn');
-    playheadMacrobeatBtn = document.getElementById('playhead-mode-macrobeat-btn');
-    adsrPlayheadsToggleBtn = document.getElementById('adsr-playheads-toggle') as HTMLButtonElement | null;
 
     // Grid visibility toggles
     drumGridToggleBtn = document.getElementById('hide-drumgrid-toggle');
@@ -401,6 +278,7 @@
     leftLegendCanvas = document.getElementById('legend-left-canvas');
     rightLegendToggleBtn = document.getElementById('hide-rightlegend-toggle');
     rightLegendCanvas = document.getElementById('legend-right-canvas');
+    pitchGridContainer = document.getElementById('pitch-grid-container');
 
     // Handoff button
     takeToSingingTrainerBtn = document.getElementById('take-to-singing-trainer-button');
@@ -421,15 +299,6 @@
       verticalVolumeSlider.dispatchEvent(new Event('input'));
     }
 
-    applyThemeMode(getStoredThemeMode());
-    themeLightInput?.addEventListener('change', handleThemeLightChange);
-    themeDarkInput?.addEventListener('change', handleThemeDarkChange);
-    themeToggle?.addEventListener('click', handleThemeToggleClick);
-    if (redCLinesToggleBtn) {
-      syncRedCLinesToggle(isRedCLinesEnabled());
-      redCLinesToggleBtn.addEventListener('click', handleRedCLinesToggle);
-    }
-
     // Anacrusis event listeners
     if (anacrusisOnBtn && anacrusisOffBtn) {
       anacrusisOnBtn.addEventListener('click', handleAnacrusisOn);
@@ -438,35 +307,6 @@
       // Set initial state
       anacrusisOnBtn.classList.toggle('active', store.state.hasAnacrusis);
       anacrusisOffBtn.classList.toggle('active', !store.state.hasAnacrusis);
-    }
-
-    // Long note style event listeners
-    if (longNoteStyle1Btn && longNoteStyle2Btn) {
-      longNoteStyle1Btn.addEventListener('click', handleLongNoteStyle1);
-      longNoteStyle2Btn.addEventListener('click', handleLongNoteStyle2);
-      store.on('longNoteStyleChanged', handleLongNoteStyleChanged);
-      // Set initial state
-      const currentStyle = store.state.longNoteStyle || 'style1';
-      longNoteStyle1Btn.classList.toggle('active', currentStyle === 'style1');
-      longNoteStyle2Btn.classList.toggle('active', currentStyle === 'style2');
-    }
-
-    // Playhead mode event listeners
-    if (playheadCursorBtn && playheadMicrobeatBtn && playheadMacrobeatBtn) {
-      playheadCursorBtn.addEventListener('click', handlePlayheadCursor);
-      playheadMicrobeatBtn.addEventListener('click', handlePlayheadMicrobeat);
-      playheadMacrobeatBtn.addEventListener('click', handlePlayheadMacrobeat);
-      store.on('playheadModeChanged', handlePlayheadModeChanged);
-      // Set initial state
-      const currentMode = store.state.playheadMode || 'cursor';
-      playheadCursorBtn.classList.toggle('active', currentMode === 'cursor');
-      playheadMicrobeatBtn.classList.toggle('active', currentMode === 'microbeat');
-      playheadMacrobeatBtn.classList.toggle('active', currentMode === 'macrobeat');
-    }
-
-    if (adsrPlayheadsToggleBtn) {
-      adsrPlayheadsToggleBtn.addEventListener('click', handleAdsrPlayheadsToggle);
-      unsubscribeAdsrPlayheadSetting = subscribeToAdsrPlayheadsEnabled(syncAdsrPlayheadsToggle);
     }
 
     // Grid visibility event listeners
@@ -482,6 +322,12 @@
     if (rightLegendToggleBtn && rightLegendCanvas) {
       rightLegendToggleBtn.addEventListener('click', handleRightLegendToggle);
     }
+
+    syncVisibilityButton(drumGridToggleBtn, isDrumGridVisible, 'Hide Drum Grid', 'Show Drum Grid');
+    syncVisibilityButton(buttonGridToggleBtn, isButtonGridVisible, 'Hide Button Grid', 'Show Button Grid');
+    syncVisibilityButton(leftLegendToggleBtn, isLeftLegendVisible, 'Hide Left Legend', 'Show Left Legend');
+    syncVisibilityButton(rightLegendToggleBtn, isRightLegendVisible, 'Hide Right Legend', 'Show Right Legend');
+    syncLegendTransparency();
 
     // Handoff button event listener
     if (takeToSingingTrainerBtn) {
@@ -499,23 +345,9 @@
     volumeIconBtn?.removeEventListener('click', handleVolumeIconClick);
     verticalVolumeSlider?.removeEventListener('input', handleVolumeChange);
     document.removeEventListener('click', handleDocumentClickForVolume);
-    themeLightInput?.removeEventListener('change', handleThemeLightChange);
-    themeDarkInput?.removeEventListener('change', handleThemeDarkChange);
-    themeToggle?.removeEventListener('click', handleThemeToggleClick);
-    redCLinesToggleBtn?.removeEventListener('click', handleRedCLinesToggle);
 
     anacrusisOnBtn?.removeEventListener('click', handleAnacrusisOn);
     anacrusisOffBtn?.removeEventListener('click', handleAnacrusisOff);
-
-    longNoteStyle1Btn?.removeEventListener('click', handleLongNoteStyle1);
-    longNoteStyle2Btn?.removeEventListener('click', handleLongNoteStyle2);
-
-    playheadCursorBtn?.removeEventListener('click', handlePlayheadCursor);
-    playheadMicrobeatBtn?.removeEventListener('click', handlePlayheadMicrobeat);
-    playheadMacrobeatBtn?.removeEventListener('click', handlePlayheadMacrobeat);
-    adsrPlayheadsToggleBtn?.removeEventListener('click', handleAdsrPlayheadsToggle);
-    unsubscribeAdsrPlayheadSetting?.();
-    unsubscribeAdsrPlayheadSetting = null;
 
     drumGridToggleBtn?.removeEventListener('click', handleDrumGridToggle);
     buttonGridToggleBtn?.removeEventListener('click', handleButtonGridToggle);

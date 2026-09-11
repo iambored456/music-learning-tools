@@ -2,8 +2,8 @@
 import store from '@state/initStore.ts';
 import { drawHorizontalLines, drawVerticalLines } from './gridLines.ts';
 import { drawLegendsToSeparateCanvases } from './legend.ts';
-import { drawSingleColumnOvalNote, drawTwoColumnOvalNote, drawTonicShape } from './notes.ts';
-import { getRowY, getVisibleRowRange } from './rendererUtils.ts';
+import { drawIndividualSixteenthNote, drawSingleColumnOvalNote, drawTwoColumnOvalNote, drawTonicShape } from './notes.ts';
+import { getColumnX, getRowY, getVisibleRowRange } from './rendererUtils.ts';
 import { renderSixteenthStamps } from './sixteenthStampRenderer.ts';
 import { renderSixteenthThreeStamps } from './sixteenthThreeStampRenderer.ts';
 import { renderTripletStamps } from './tripletStampRenderer.ts';
@@ -14,6 +14,8 @@ import { assertRowIntegrity } from '@utils/rowCoordinates.ts';
 import { fullRowData as masterRowData } from '@state/pitchData.ts';
 import CanvasContextService from '@services/canvasContextService.ts';
 import type { AppState, PlacedNote, TonicSign } from '@mlt/types';
+import { getMacrobeatInfo } from '@state/selectors.ts';
+import { drawPulsingColumnHighlight } from '@utils/pulsingPlayhead.ts';
 
 const isDev = import.meta.env.DEV;
 
@@ -165,6 +167,14 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
   drawHorizontalLines(ctx, fullOptions, renderStartRow, renderEndRow);
   drawVerticalLines(ctx, fullOptions); // Vertical lines are not virtualized
 
+  const selectedMacrobeat = fullOptions.playbackStartMacrobeatIndex;
+  if (typeof selectedMacrobeat === 'number' && selectedMacrobeat >= 0 && selectedMacrobeat < fullOptions.macrobeatGroupings.length) {
+    const { startColumn, endColumn } = getMacrobeatInfo(fullOptions, selectedMacrobeat);
+    const x = getColumnX(startColumn, fullOptions);
+    const width = getColumnX(endColumn + 1, fullOptions) - x;
+    drawPulsingColumnHighlight(ctx, x, 0, width, canvasHeight, 0);
+  }
+
   // 4. Filter notes and signs to only those that are visible before drawing
   // Use globalRow for visibility since it is stable across pitch-range changes.
   const visibleNotes = options.placedNotes.filter(note => {
@@ -202,12 +212,13 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
 
     // The note drawing functions use getRowY which expects a global row index.
     // Use globalRow (not row) since row may be viewport-relative after pitch range changes.
-    if (note.shape === 'oval') {
+    if (note.shape === 'diamond') {
+      drawIndividualSixteenthNote(ctx, fullOptions, note, note.globalRow ?? note.row);
+    } else if (note.shape === 'oval') {
       drawSingleColumnOvalNote(ctx, fullOptions, note, note.globalRow!);
     } else if (note.shape === 'circle') {
       drawTwoColumnOvalNote(ctx, fullOptions, note, note.globalRow!);
     }
-    // Other note shapes not yet implemented
   });
 
   // Draw tonic signs

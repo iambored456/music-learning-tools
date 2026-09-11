@@ -2,7 +2,6 @@ import store from '@state/initStore.ts';
 import type { CanvasSpaceColumn, PlacedNote } from '@mlt/types';
 import type { PitchGridNoteToolInteractor } from './tools/PitchGridNoteToolInteractor.ts';
 import type { PitchGridChordToolInteractor } from './tools/PitchGridChordToolInteractor.ts';
-import type { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolInteractor.ts';
 import type { PitchGridSixteenthStampToolInteractor } from './tools/PitchGridSixteenthStampToolInteractor.ts';
 import type { PitchGridTripletStampToolInteractor } from './tools/PitchGridTripletStampToolInteractor.ts';
 import type { PitchGridSixteenthThreeStampToolInteractor } from './tools/PitchGridSixteenthThreeStampToolInteractor.ts';
@@ -30,7 +29,6 @@ export class PitchGridInteractionCoordinator {
     private readonly deps: {
       noteToolInteractor: PitchGridNoteToolInteractor;
       chordToolInteractor: PitchGridChordToolInteractor;
-      eraserToolInteractor: PitchGridEraserToolInteractor;
       stampToolInteractor: PitchGridSixteenthStampToolInteractor;
       tripletToolInteractor: PitchGridTripletStampToolInteractor;
       sixteenthThreeStampToolInteractor: PitchGridSixteenthThreeStampToolInteractor;
@@ -82,17 +80,6 @@ export class PitchGridInteractionCoordinator {
     if (toolType === 'tonicization') {
       this.deps.tonicizationToolInteractor.handleMouseDown();
       return { handled: true, state };
-    }
-
-    if (toolType === 'eraser') {
-      const result = this.deps.eraserToolInteractor.handleMouseDown(colIndex, rowIndex);
-      return {
-        handled: result.handled,
-        state: {
-          ...state,
-          isEraserDragActive: result.handled ? result.shouldStartDrag : state.isEraserDragActive
-        }
-      };
     }
 
     if (toolType === 'sixteenthStamp') {
@@ -324,6 +311,16 @@ export class PitchGridInteractionCoordinator {
       return false;
     }
 
+    // Interval selections can leave the chord tool active without matching an
+    // exact chord preset. In that state, suppress the hover preview entirely.
+    const selectedChordButton = document.querySelector<HTMLElement>(
+      '#chords-preset-grid .harmony-preset-button.selected'
+    );
+    const chordName = selectedChordButton?.title.trim().replace(/\s+triad$/i, '').toLowerCase();
+    if (!chordName) {
+      return true;
+    }
+
     const rootPitch = this.deps.getPitchForRow(params.rowIndex);
     if (!rootPitch) {
       return true;
@@ -360,13 +357,12 @@ export class PitchGridInteractionCoordinator {
     });
 
     params.pitchHoverCtx.globalAlpha = 1.0;
-    const chordName = document.querySelector<HTMLElement>('#chords-panel .harmony-preset-button.selected')?.title
-      ?? 'Chord';
     const rootName = rootPitch.replace(/-?\d+$/, '');
     const label = `${rootName} ${chordName}`;
     const ctx = params.pitchHoverCtx;
     ctx.save();
     ctx.font = buildCanvasFont('caption');
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const paddingX = 6;
     const labelHeight = 20;

@@ -55,4 +55,25 @@ describe('assemblySizing', () => {
     expect(sizing.assemblyHeight).toBe(841.5);
     expect(sizing.bottomRemainderHeight).toBe(2.5);
   });
+
+  it('gives the pitch viewport the height freed by hidden auxiliary grids', () => {
+    const allGrids = resolveNotationAssemblySizing({ availableHeight: 800, rowCount: 20 });
+    const noDrums = resolveNotationAssemblySizing({
+      availableHeight: 800,
+      rowCount: 20,
+      includeDrumGrid: false
+    });
+    const pitchOnly = resolveNotationAssemblySizing({
+      availableHeight: 800,
+      rowCount: 20,
+      includeButtonGrid: false,
+      includeDrumGrid: false
+    });
+
+    expect(noDrums.pitchViewportHeight).toBeGreaterThan(allGrids.pitchViewportHeight);
+    expect(pitchOnly.pitchViewportHeight).toBeGreaterThan(noDrums.pitchViewportHeight);
+    expect(pitchOnly.cellHeight).toBe(76);
+    expect(pitchOnly.pitchViewportHeight).toBe(798);
+    expect(pitchOnly.assemblyHeight).toBe(798);
+  });
 });

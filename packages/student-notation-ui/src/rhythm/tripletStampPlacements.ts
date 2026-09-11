@@ -1,6 +1,7 @@
 // js/rhythm/tripletStampPlacements.ts
 import { getTripletStampById, GROUP_WIDTH_CELLS } from './tripletStamps.ts';
 import store from '@state/initStore.ts';
+import { canPlaceStampAlongsideIndividuals } from './individualSixteenthPlacement.ts';
 import logger from '@utils/logger.ts';
 import { type TonicSign } from '@utils/tonicColumnUtils.ts';
 import { getPlacedTonicSigns } from '@state/selectors.ts';
@@ -12,12 +13,14 @@ logger.moduleLoaded('TripletStampPlacements', 'triplets');
 /**
  * Places a triplet group at the specified grid position
  */
-export function placeTripletStampGroup(tripletStampId: number, startTimeIndex: number, row: number, color = '#4a90e2'): TripletStampPlacement | null {
+export function placeTripletStampGroup(tripletStampId: number, startTimeIndex: number, row: number, color = '#44bcef'): TripletStampPlacement | null {
   const stamp = getTripletStampById(tripletStampId);
   if (!stamp) {
     logger.warn('TripletStampPlacements', `Invalid triplet stamp ID: ${tripletStampId}`, { tripletStampId }, 'triplets');
     return null;
   }
+
+  if (!canPlaceStampAlongsideIndividuals(store.state, 'tripletStamp', tripletStampId, startTimeIndex, row, color)) return null;
 
   const span = GROUP_WIDTH_CELLS[stamp.span] ?? 1;
 

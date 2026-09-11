@@ -50,6 +50,7 @@ initPlaybackStateSync();
 // Action functions
 export const playbackActions = {
   play(): void {
+    if (TransportService.isBuffering) return;
     if (playbackState.isPlaying && playbackState.isPaused) {
       store.setPlaybackState(true, false);
       TransportService.resume();

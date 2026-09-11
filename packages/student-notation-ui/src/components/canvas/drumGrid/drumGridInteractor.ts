@@ -2,16 +2,14 @@
 import * as Tone from 'tone';
 import store from '@state/initStore.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
-import { drawDrumShape, type VolumeIconState } from './drumGridRenderer.ts';
+import { drawDrumShape } from './drumGridRenderer.ts';
 import { getColumnX as getModulatedColumnX } from '@components/canvas/PitchGrid/renderers/rendererUtils.ts';
 import { isPlayableColumn } from '@services/columnMapService.ts';
 import DrumPlayheadRenderer from './drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import { getDrumRowHeightFromCellHeight, getDrumShapeBoxHeightFromCellWidth } from '@utils/drumGridSizing.ts';
-import {
-  getDrumVolumeNode,
-  invokeInitAudioHandler
-} from '@services/runtimeGlobals.ts';
+import { getDrumGridCellsBetween, type DrumGridCell } from './drumGridDrag.ts';
+import { invokeInitAudioHandler } from '@services/runtimeGlobals.ts';
 import {
   getDrumSampleSet,
   listDrumMachines,
@@ -20,15 +18,18 @@ import {
 } from '@mlt/audio-samples';
 import {
   getCurrentDrumLayerSamples,
+  getDrumLayerVolume,
   getDrumPlayers,
   initDrumPlayers,
   preloadDrumSamples,
+  setDrumLayerVolume,
   setDrumLayerSamples,
   triggerDrum
 } from '@services/transport/drumManager.ts';
 import hiHatIconUrl from '../../../../public/assets/drums/hi-hat.svg?url';
 import snareIconUrl from '../../../../public/assets/drums/snare.svg?url';
 import bassDrumIconUrl from '../../../../public/assets/drums/bass-drum.svg?url';
+import type { CanvasSpaceColumn } from '@mlt/types';
 
 /**
  * COORDINATE SYSTEM NOTE:
@@ -59,37 +60,15 @@ const DRUM_SAMPLE_ASSIGNMENT_HINT: Record<DrumTrack, string> = {
   M: 'Mid (M)',
   L: 'Low (L)'
 };
+const DRUM_SAMPLE_PICKER_TRACK_ORDER: DrumTrack[] = ['L', 'M', 'H'];
 
-type DrumSamplePickerCategory = 'low' | 'mid' | 'high' | 'sfx';
+type DrumSamplePickerCategory = 'low' | 'mid' | 'high';
 
 const DRUM_SAMPLE_PICKER_CATEGORY_ORDER: DrumSamplePickerCategory[] = [
   'low',
   'mid',
-  'high',
-  'sfx'
+  'high'
 ];
-
-const DRUM_SAMPLE_PICKER_CATEGORY_CONFIG: Record<
-  DrumSamplePickerCategory,
-  { label: string; description: string }
-> = {
-  low: {
-    label: 'Low',
-    description: 'Kick and low-end percussion voices'
-  },
-  mid: {
-    label: 'Mid',
-    description: 'Snare and body percussion voices'
-  },
-  high: {
-    label: 'High',
-    description: 'Hi-hats and bright percussion voices'
-  },
-  sfx: {
-    label: 'Sound Effects',
-    description: 'Claps, vocals, and special effects'
-  }
-};
 
 const DRUM_TRACK_TO_SAMPLE_CATEGORY: Record<DrumTrack, DrumSamplePickerCategory> = {
   H: 'high',
@@ -112,46 +91,39 @@ type DrumSampleChoice = {
 let drumHoverCtx: CanvasRenderingContext2D | null = null;
 let isRightClickActive = false;
 let rightClickActionTaken = false;
-let drumVolume = 1.0;
-let volumeSlider: HTMLInputElement | null = null;
-const volumeIconState: VolumeIconState = 'normal';
-let lastDrumPlaybackTime = 0;
-const DRUM_PLAYBACK_THROTTLE_MS = 500;
-let drumVolumeControlInitCount = 0;
-let drumVolumeButtonClickCount = 0;
-let drumVolumeDocumentClickCount = 0;
-let drumVolumeSliderInputCount = 0;
+let isDrumPaintActive = false;
+let drumPaintActionTaken = false;
+let lastDrumPaintCell: DrumGridCell | null = null;
+const drumPaintVisitedCells = new Set<string>();
+const DRUM_TRACK_VOLUME_TRAVEL = 120;
+const DRUM_TRACK_VOLUME_HOLD_DELAY = 200;
+const DRUM_TRACK_VOLUME_DRAG_THRESHOLD = 4;
+const drumTrackLastNonZeroVolumes: Record<DrumTrack, number> = { H: 1, M: 1, L: 1 };
+let activeDrumTrackVolumeGesture: {
+  track: DrumTrack;
+  button: HTMLButtonElement;
+  pointerId: number;
+  startLevel: number;
+  startX: number;
+  startY: number;
+  moved: boolean;
+  sliderVisible: boolean;
+} | null = null;
+let drumTrackVolumePopup: HTMLDivElement | null = null;
+let drumTrackVolumeHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let drumTrackVolumeListenersInitialized = false;
 let activeDrumModalTrack: DrumTrack = 'M';
-let activeDrumSampleCategory: DrumSamplePickerCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY.M;
 let pendingDrumLayerSamples: Record<DrumTrack, string> | null = null;
 let activeSamplePreviewAudio: HTMLAudioElement | null = null;
 let localDrumSampleChoicesPromise: Promise<void> | null = null;
 let localDrumSampleChoicesLoaded = false;
-
-function logDrumVolumeDebug(_message: string, _payload?: Record<string, unknown>): void {}
-
-function describeEventTarget(target: EventTarget | null): Record<string, unknown> {
-  if (!(target instanceof Element)) {
-    return { isElement: false };
-  }
-
-  return {
-    isElement: true,
-    tagName: target.tagName,
-    id: target.id || null,
-    className: target.getAttribute('class'),
-    ariaLabel: target.getAttribute('aria-label'),
-    insideVolumeButton: Boolean(target.closest('.drum-volume-button')),
-    insideVolumeSliderWrap: Boolean(target.closest('.drum-volume-slider-wrap'))
-  };
-}
 
 function resolveSamplePickerCategory(
   suggestedLayer: DrumTrack,
   voiceCategory?: DrumVoiceCategory
 ): DrumSamplePickerCategory {
   if (voiceCategory === 'sfx' || voiceCategory === 'vocal' || voiceCategory === 'clap') {
-    return 'sfx';
+    return 'high';
   }
   if (suggestedLayer === 'L') {return 'low';}
   if (suggestedLayer === 'M') {return 'mid';}
@@ -298,20 +270,26 @@ export async function initLocalDrumSampleChoices(): Promise<void> {
     try {
       const mod = await import('@mlt/audio-samples/local-samples');
       const localChoices: DrumSampleChoice[] = mod.LOCAL_DRUM_SAMPLE_ENTRIES.map(
-        (entry: LocalDrumSampleEntry) => ({
-          id: entry.id,
-          machineId: entry.machineId,
-          machineLabel: entry.machineLabel,
-          label: entry.label,
-          suggestedLayer: entry.suggestedLayer as DrumTrack,
-          url: entry.url,
-          voiceCategory: entry.voiceMetadata?.category,
-          voiceDescription: entry.voiceMetadata?.description,
-          pickerCategory: resolveSamplePickerCategory(
-            entry.suggestedLayer as DrumTrack,
-            entry.voiceMetadata?.category
-          )
-        })
+        (entry: LocalDrumSampleEntry) => {
+          const isRolandTr909BtSound = entry.machineId === 'roland-tr-909'
+            && /^Roland TR-909 BT/i.test(entry.label);
+          return {
+            id: entry.id,
+            machineId: entry.machineId,
+            machineLabel: entry.machineLabel,
+            label: entry.label,
+            suggestedLayer: entry.suggestedLayer as DrumTrack,
+            url: entry.url,
+            voiceCategory: entry.voiceMetadata?.category,
+            voiceDescription: entry.voiceMetadata?.description,
+            pickerCategory: isRolandTr909BtSound
+              ? 'low'
+              : resolveSamplePickerCategory(
+                entry.suggestedLayer as DrumTrack,
+                entry.voiceMetadata?.category
+              )
+          };
+        }
       );
       const allChoices = [...remoteSampleChoices, ...localChoices].sort(compareDrumSampleChoices);
       for (const choice of allChoices) {
@@ -444,6 +422,38 @@ const getScrollLeft = (): number => {
   return container?.scrollLeft ?? 0;
 };
 
+function getDrumColumnCount(): number {
+  return (store.state.musicalColumnWidths && store.state.musicalColumnWidths.length > 0)
+    ? store.state.musicalColumnWidths.length
+    : store.state.columnWidths.length;
+}
+
+function cycleDrumCellOnce(column: number, row: number): boolean {
+  const drumTrack = DRUM_TRACKS[row as 0 | 1 | 2];
+  if (!drumTrack || column < 0 || column >= getDrumColumnCount()) return false;
+  if (!isPlayableColumn(column, store.state)) return false;
+
+  const visitKey = `${drumTrack}:${column}`;
+  if (drumPaintVisitedCells.has(visitKey)) return false;
+  drumPaintVisitedCells.add(visitKey);
+
+  const changed = store.toggleDrumNote({
+    isDrum: true,
+    drumTrack,
+    startColumnIndex: column as CanvasSpaceColumn,
+    endColumnIndex: column as CanvasSpaceColumn,
+    color: '#000000',
+    shape: 'circle'
+  }, false);
+
+  if (changed) {
+    drumPaintActionTaken = true;
+    DrumPlayheadRenderer.triggerNotePop(column, drumTrack);
+    triggerDrumHit(drumTrack);
+  }
+  return changed;
+}
+
 function handleMouseMove(event: MouseEvent): void {
   const target = event.currentTarget as HTMLElement | null;
   if (!target) {return;}
@@ -461,9 +471,7 @@ function handleMouseMove(event: MouseEvent): void {
 
   // CANVAS-SPACE FIX: Use canvas-space boundary checks (0 = first musical beat)
   // Canvas-space columns already exclude legends; use musicalColumnWidths if populated
-  const maxColumn = (store.state.musicalColumnWidths && store.state.musicalColumnWidths.length > 0)
-    ? store.state.musicalColumnWidths.length
-    : store.state.columnWidths.length;
+  const maxColumn = getDrumColumnCount();
   if (
     !drumHoverCtx ||
     colIndex < 0 ||
@@ -479,12 +487,23 @@ function handleMouseMove(event: MouseEvent): void {
   const drumTrack = DRUM_TRACKS[rowIndex as 0 | 1 | 2];
   if (!drumTrack) {return;}
 
-  if (isRightClickActive) {
+  if (isDrumPaintActive) {
+    const currentCell = { column: colIndex, row: rowIndex };
+    const previousCell = lastDrumPaintCell ?? currentCell;
+    getDrumGridCellsBetween(previousCell, currentCell).forEach(cell => {
+      cycleDrumCellOnce(cell.column, cell.row);
+    });
+    lastDrumPaintCell = currentCell;
+    drawHoverHighlight(colIndex, rowIndex, 'rgba(74, 144, 226, 0.2)');
+    drawGhostNote(colIndex, rowIndex);
+  } else if (isRightClickActive) {
     if ((store as any).eraseDrumNoteAt?.(colIndex, drumTrack, false)) {
       rightClickActionTaken = true;
     }
     drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
-  } else {
+  } else if (store.state.selectedTool === 'eraser') {
+    drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+  } else if (store.state.selectedTool === 'note') {
     drawHoverHighlight(colIndex, rowIndex, 'rgba(74, 144, 226, 0.2)');
     drawGhostNote(colIndex, rowIndex);
   }
@@ -492,6 +511,7 @@ function handleMouseMove(event: MouseEvent): void {
 
 function handleMouseLeave(): void {
   clearHover();
+  if (isDrumPaintActive) lastDrumPaintCell = null;
   // Volume icon state is handled by the legend button element, not the canvas
 }
 
@@ -510,9 +530,7 @@ function handleMouseDown(event: MouseEvent): void {
 
   const colIndex = GridCoordsService.getColumnIndex(x + getScrollLeft());
   // CANVAS-SPACE FIX: Use canvas-space boundary checks (0 = first musical beat)
-  const maxColumn = (store.state.musicalColumnWidths && store.state.musicalColumnWidths.length > 0)
-    ? store.state.musicalColumnWidths.length
-    : store.state.columnWidths.length;
+  const maxColumn = getDrumColumnCount();
   if (colIndex < 0 || colIndex >= maxColumn) {return;}
 
   // Check if column is playable (not a tonic column)
@@ -524,7 +542,7 @@ function handleMouseDown(event: MouseEvent): void {
   const drumTrack = DRUM_TRACKS[drumRow as 0 | 1 | 2];
   if (!drumTrack) {return;}
 
-  if (event.button === 2) {
+  if (event.button === 2 || (event.button === 0 && store.state.selectedTool === 'eraser')) {
     isRightClickActive = true;
     rightClickActionTaken = false;
     document.getElementById(ERASER_BUTTON_ID)?.classList.add('erasing-active');
@@ -537,24 +555,24 @@ function handleMouseDown(event: MouseEvent): void {
     return;
   }
 
-  if (event.button === 0) {
-    const color = (store.state.selectedTool as { color?: string } | undefined)?.color ?? '#000000';
-    const drumHit = {
-      isDrum: true,
-      drumTrack,
-      startColumnIndex: colIndex,
-      endColumnIndex: colIndex,
-      color,
-      shape: drumTrack === 'H' ? 'triangle' : drumTrack === 'M' ? 'square' : 'pentagon'
-    };
-    (store as any).toggleDrumNote?.(drumHit);
-
-    DrumPlayheadRenderer.triggerNotePop(colIndex, drumTrack);
-    triggerDrumHit(drumTrack);
+  if (event.button === 0 && store.state.selectedTool === 'note') {
+    isDrumPaintActive = true;
+    drumPaintActionTaken = false;
+    drumPaintVisitedCells.clear();
+    lastDrumPaintCell = { column: colIndex, row: drumRow };
+    cycleDrumCellOnce(colIndex, drumRow);
   }
 }
 
 function handleGlobalMouseUp(): void {
+  if (isDrumPaintActive) {
+    if (drumPaintActionTaken) store.recordState();
+    isDrumPaintActive = false;
+    drumPaintActionTaken = false;
+    lastDrumPaintCell = null;
+    drumPaintVisitedCells.clear();
+  }
+
   if (isRightClickActive) {
     if (rightClickActionTaken) {
       store.recordState?.();
@@ -625,16 +643,6 @@ function setDrumLayerSampleModalStatus(modal: HTMLElement, message = ''): void {
   }
 }
 
-function updateModalCategoryTabs(modal: HTMLElement): void {
-  const tabs = modal.querySelectorAll<HTMLButtonElement>('button[data-role="category-tab"]');
-  tabs.forEach((tab) => {
-    const category = tab.dataset.category as DrumSamplePickerCategory | undefined;
-    const isActive = category === activeDrumSampleCategory;
-    tab.classList.toggle('is-active', isActive);
-    tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  });
-}
-
 function updateModalTrackAssignments(modal: HTMLElement): void {
   if (!pendingDrumLayerSamples) {return;}
 
@@ -644,15 +652,8 @@ function updateModalTrackAssignments(modal: HTMLElement): void {
     );
     if (!assignmentEl) {continue;}
 
-    const assignedUrl = pendingDrumLayerSamples[track];
-    const assignedChoice = drumSampleChoiceByUrl.get(assignedUrl);
-    if (!assignedChoice) {
-      assignmentEl.textContent = 'Current custom sample';
-      continue;
-    }
-
-    const machine = getMachineLabel(assignedChoice.machineId, assignedChoice.machineLabel);
-    assignmentEl.textContent = `${assignedChoice.label} - ${machine}`;
+    const { sampleLabel, machineLabel } = getDrumTrackSampleLabel(track, pendingDrumLayerSamples);
+    assignmentEl.textContent = machineLabel ? `${sampleLabel} - ${machineLabel}` : sampleLabel;
   }
 }
 
@@ -668,108 +669,112 @@ function updateModalAssignButtons(modal: HTMLElement): void {
 
     const isActive = selectedSamples[track] === sampleUrl;
     button.classList.toggle('is-active', isActive);
+    button.closest('.drum-layer-sample-modal__sample-card')?.classList.toggle('is-active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
 }
 
-function getSampleCountForCategory(category: DrumSamplePickerCategory): number {
-  const groups = drumSampleChoicesByCategory.get(category);
-  if (!groups) {return 0;}
-  let count = 0;
-  groups.forEach((group) => {
-    count += group.length;
-  });
-  return count;
+function createTrackAssignmentCard(track: DrumTrack): HTMLElement {
+  const assignmentCard = document.createElement('div');
+  assignmentCard.className = 'drum-layer-sample-modal__assignment-card';
+  assignmentCard.dataset.track = track;
+
+  const assignmentHeader = document.createElement('div');
+  assignmentHeader.className = 'drum-layer-sample-modal__assignment-header';
+
+  const assignmentTrack = document.createElement('h4');
+  assignmentTrack.className = 'drum-layer-sample-modal__assignment-track';
+  assignmentTrack.textContent = DRUM_SAMPLE_ASSIGNMENT_HINT[track];
+
+  const previewTrackButton = document.createElement('button');
+  previewTrackButton.type = 'button';
+  previewTrackButton.className = 'drum-layer-sample-modal__track-preview-button';
+  previewTrackButton.dataset.role = 'preview-track';
+  previewTrackButton.dataset.track = track;
+  previewTrackButton.textContent = 'Play';
+
+  assignmentHeader.appendChild(assignmentTrack);
+  assignmentHeader.appendChild(previewTrackButton);
+
+  const assignmentValue = document.createElement('p');
+  assignmentValue.className = 'drum-layer-sample-modal__assignment-value';
+  assignmentValue.dataset.role = 'track-assignment';
+  assignmentValue.dataset.track = track;
+
+  assignmentCard.appendChild(assignmentHeader);
+  assignmentCard.appendChild(assignmentValue);
+  return assignmentCard;
 }
 
-function renderSampleChoicesForCategory(modal: HTMLElement): void {
-  const titleEl = modal.querySelector<HTMLElement>('[data-role="category-title"]');
-  const hintEl = modal.querySelector<HTMLElement>('[data-role="category-hint"]');
-  const sampleList = modal.querySelector<HTMLElement>('[data-role="sample-list"]');
-  if (!titleEl || !hintEl || !sampleList) {return;}
+function renderSampleChoices(modal: HTMLElement): void {
+  const sampleColumns = modal.querySelector<HTMLElement>('[data-role="sample-columns"]');
+  if (!sampleColumns) {return;}
 
-  const categoryConfig = DRUM_SAMPLE_PICKER_CATEGORY_CONFIG[activeDrumSampleCategory];
-  const groups = drumSampleChoicesByCategory.get(activeDrumSampleCategory)
-    ?? new Map<string, DrumSampleChoice[]>();
-  const sampleCount = getSampleCountForCategory(activeDrumSampleCategory);
+  sampleColumns.innerHTML = '';
 
-  titleEl.textContent = `${categoryConfig.label} Voices`;
-  hintEl.textContent = `${categoryConfig.description} (${sampleCount} samples)`;
+  DRUM_SAMPLE_PICKER_TRACK_ORDER.forEach((track) => {
+    const category = DRUM_TRACK_TO_SAMPLE_CATEGORY[track];
+    const groups = drumSampleChoicesByCategory.get(category)
+      ?? new Map<string, DrumSampleChoice[]>();
+    const column = document.createElement('section');
+    column.className = 'drum-layer-sample-modal__sample-column';
+    column.dataset.track = track;
+    column.appendChild(createTrackAssignmentCard(track));
 
-  sampleList.innerHTML = '';
+    const sampleList = document.createElement('div');
+    sampleList.className = 'drum-layer-sample-modal__sample-list';
 
-  if (!groups.size) {
-    const emptyState = document.createElement('p');
-    emptyState.className = 'drum-layer-sample-modal__empty';
-    emptyState.textContent = 'No samples in this category.';
-    sampleList.appendChild(emptyState);
-    return;
-  }
+    if (!groups.size) {
+      const emptyState = document.createElement('p');
+      emptyState.className = 'drum-layer-sample-modal__empty';
+      emptyState.textContent = 'No samples in this range.';
+      sampleList.appendChild(emptyState);
+    }
 
-  groups.forEach((choices, machineLabel) => {
-    const machineGroup = document.createElement('section');
-    machineGroup.className = 'drum-layer-sample-modal__machine-group';
+    groups.forEach((choices, machineLabel) => {
+      const machineGroup = document.createElement('section');
+      machineGroup.className = 'drum-layer-sample-modal__machine-group';
+      machineGroup.setAttribute('aria-label', machineLabel);
 
-    const machineTitle = document.createElement('h4');
-    machineTitle.className = 'drum-layer-sample-modal__machine-title';
-    machineTitle.textContent = machineLabel;
-    machineGroup.appendChild(machineTitle);
+      const cards = document.createElement('div');
+      cards.className = 'drum-layer-sample-modal__cards';
 
-    const cards = document.createElement('div');
-    cards.className = 'drum-layer-sample-modal__cards';
+      choices.forEach((choice) => {
+        const card = document.createElement('article');
+        card.className = 'drum-layer-sample-modal__sample-card';
 
-    choices.forEach((choice) => {
-      const card = document.createElement('article');
-      card.className = 'drum-layer-sample-modal__sample-card';
+        const selectButton = document.createElement('button');
+        selectButton.type = 'button';
+        selectButton.className = 'drum-layer-sample-modal__sample-name';
+        selectButton.dataset.role = 'assign-sample';
+        selectButton.dataset.track = track;
+        selectButton.dataset.url = choice.url;
+        selectButton.setAttribute('aria-pressed', 'false');
+        selectButton.title = `Choose ${choice.label} for ${DRUM_SAMPLE_ASSIGNMENT_HINT[track]}`;
+        selectButton.textContent = choice.label;
 
-      const name = document.createElement('h5');
-      name.className = 'drum-layer-sample-modal__sample-name';
-      name.textContent = choice.label;
-      card.appendChild(name);
+        const previewButton = document.createElement('button');
+        previewButton.type = 'button';
+        previewButton.className = 'drum-layer-sample-modal__preview-button';
+        previewButton.dataset.role = 'preview-sample';
+        previewButton.dataset.url = choice.url;
+        previewButton.setAttribute('aria-label', `Play ${choice.label}`);
+        previewButton.textContent = 'Play';
 
-      const details = document.createElement('p');
-      details.className = 'drum-layer-sample-modal__sample-details';
-      const voiceDescription = choice.voiceDescription
-        ? ` - ${choice.voiceDescription}`
-        : '';
-      details.textContent = `Suggested: ${DRUM_SAMPLE_ASSIGNMENT_HINT[choice.suggestedLayer]}${voiceDescription}`;
-      card.appendChild(details);
-
-      const controls = document.createElement('div');
-      controls.className = 'drum-layer-sample-modal__sample-controls';
-
-      const previewButton = document.createElement('button');
-      previewButton.type = 'button';
-      previewButton.className = 'drum-layer-sample-modal__preview-button';
-      previewButton.dataset.role = 'preview-sample';
-      previewButton.dataset.url = choice.url;
-      previewButton.textContent = 'Play';
-      controls.appendChild(previewButton);
-
-      const assignButtons = document.createElement('div');
-      assignButtons.className = 'drum-layer-sample-modal__assign-buttons';
-
-      DRUM_TRACKS.forEach((track) => {
-        const assignButton = document.createElement('button');
-        assignButton.type = 'button';
-        assignButton.className = 'drum-layer-sample-modal__assign-button';
-        assignButton.dataset.role = 'assign-sample';
-        assignButton.dataset.track = track;
-        assignButton.dataset.url = choice.url;
-        assignButton.textContent = track;
-        assignButton.title = `Assign to ${DRUM_SAMPLE_ASSIGNMENT_HINT[track]}`;
-        assignButtons.appendChild(assignButton);
+        card.appendChild(selectButton);
+        card.appendChild(previewButton);
+        cards.appendChild(card);
       });
 
-      controls.appendChild(assignButtons);
-      card.appendChild(controls);
-      cards.appendChild(card);
+      machineGroup.appendChild(cards);
+      sampleList.appendChild(machineGroup);
     });
 
-    machineGroup.appendChild(cards);
-    sampleList.appendChild(machineGroup);
+    column.appendChild(sampleList);
+    sampleColumns.appendChild(column);
   });
 
+  updateModalTrackAssignments(modal);
   updateModalAssignButtons(modal);
 }
 
@@ -796,7 +801,7 @@ function ensureDrumLayerSampleModal(): HTMLElement {
   const title = document.createElement('h3');
   title.id = 'drum-layer-sample-title';
   title.className = 'drum-layer-sample-modal__title';
-  title.textContent = 'Drum Layer Samples';
+  title.textContent = 'Choose Drum Sounds';
 
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
@@ -810,97 +815,9 @@ function ensureDrumLayerSampleModal(): HTMLElement {
   header.appendChild(title);
   header.appendChild(closeButton);
 
-  const subtitle = document.createElement('p');
-  subtitle.className = 'drum-layer-sample-modal__subtitle';
-  subtitle.textContent = 'Browse grouped voices, preview sounds, and assign samples to H/M/L layers.';
-
-  const layout = document.createElement('div');
-  layout.className = 'drum-layer-sample-modal__layout';
-
-  const categorySidebar = document.createElement('aside');
-  categorySidebar.className = 'drum-layer-sample-modal__categories';
-  categorySidebar.setAttribute('aria-label', 'Sample categories');
-
-  DRUM_SAMPLE_PICKER_CATEGORY_ORDER.forEach((category) => {
-    const categoryButton = document.createElement('button');
-    categoryButton.type = 'button';
-    categoryButton.className = 'drum-layer-sample-modal__category-button';
-    categoryButton.dataset.role = 'category-tab';
-    categoryButton.dataset.category = category;
-    categoryButton.setAttribute('aria-pressed', 'false');
-
-    const categoryLabel = document.createElement('span');
-    categoryLabel.textContent = DRUM_SAMPLE_PICKER_CATEGORY_CONFIG[category].label;
-
-    const categoryCount = document.createElement('span');
-    categoryCount.className = 'drum-layer-sample-modal__category-count';
-    categoryCount.textContent = String(getSampleCountForCategory(category));
-
-    categoryButton.appendChild(categoryLabel);
-    categoryButton.appendChild(categoryCount);
-    categorySidebar.appendChild(categoryButton);
-  });
-
-  const content = document.createElement('section');
-  content.className = 'drum-layer-sample-modal__content';
-
-  const assignments = document.createElement('div');
-  assignments.className = 'drum-layer-sample-modal__assignments';
-
-  DRUM_TRACKS.forEach((track) => {
-    const assignmentCard = document.createElement('div');
-    assignmentCard.className = 'drum-layer-sample-modal__assignment-card';
-
-    const assignmentHeader = document.createElement('div');
-    assignmentHeader.className = 'drum-layer-sample-modal__assignment-header';
-
-    const assignmentTrack = document.createElement('h4');
-    assignmentTrack.className = 'drum-layer-sample-modal__assignment-track';
-    assignmentTrack.textContent = DRUM_TRACK_LABELS[track];
-
-    const previewTrackButton = document.createElement('button');
-    previewTrackButton.type = 'button';
-    previewTrackButton.className = 'drum-layer-sample-modal__track-preview-button';
-    previewTrackButton.dataset.role = 'preview-track';
-    previewTrackButton.dataset.track = track;
-    previewTrackButton.textContent = 'Test';
-
-    assignmentHeader.appendChild(assignmentTrack);
-    assignmentHeader.appendChild(previewTrackButton);
-
-    const assignmentValue = document.createElement('p');
-    assignmentValue.className = 'drum-layer-sample-modal__assignment-value';
-    assignmentValue.dataset.role = 'track-assignment';
-    assignmentValue.dataset.track = track;
-    assignmentCard.appendChild(assignmentHeader);
-    assignmentCard.appendChild(assignmentValue);
-    assignments.appendChild(assignmentCard);
-  });
-
-  const browserHeader = document.createElement('div');
-  browserHeader.className = 'drum-layer-sample-modal__browser-header';
-
-  const browserTitle = document.createElement('h4');
-  browserTitle.className = 'drum-layer-sample-modal__browser-title';
-  browserTitle.dataset.role = 'category-title';
-
-  const browserHint = document.createElement('p');
-  browserHint.className = 'drum-layer-sample-modal__browser-hint';
-  browserHint.dataset.role = 'category-hint';
-
-  browserHeader.appendChild(browserTitle);
-  browserHeader.appendChild(browserHint);
-
-  const sampleList = document.createElement('div');
-  sampleList.className = 'drum-layer-sample-modal__sample-list';
-  sampleList.dataset.role = 'sample-list';
-
-  content.appendChild(assignments);
-  content.appendChild(browserHeader);
-  content.appendChild(sampleList);
-
-  layout.appendChild(categorySidebar);
-  layout.appendChild(content);
+  const sampleColumns = document.createElement('div');
+  sampleColumns.className = 'drum-layer-sample-modal__sample-columns';
+  sampleColumns.dataset.role = 'sample-columns';
 
   const status = document.createElement('p');
   status.className = 'drum-layer-sample-modal__status';
@@ -952,64 +869,49 @@ function ensureDrumLayerSampleModal(): HTMLElement {
   actions.appendChild(applyButton);
 
   dialog.appendChild(header);
-  dialog.appendChild(subtitle);
-  dialog.appendChild(layout);
+  dialog.appendChild(sampleColumns);
   dialog.appendChild(status);
   dialog.appendChild(actions);
   modal.appendChild(dialog);
 
-  categorySidebar.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement | null;
-    const button = target?.closest<HTMLButtonElement>('button[data-role="category-tab"]');
-    if (!button) {return;}
-    const category = button.dataset.category as DrumSamplePickerCategory | undefined;
-    if (!category || category === activeDrumSampleCategory) {return;}
-
-    activeDrumSampleCategory = category;
-    updateModalCategoryTabs(modal);
-    renderSampleChoicesForCategory(modal);
-    setDrumLayerSampleModalStatus(
-      modal,
-      `Viewing ${DRUM_SAMPLE_PICKER_CATEGORY_CONFIG[category].label} voices.`
-    );
-  });
-
-  assignments.addEventListener('click', (event) => {
+  sampleColumns.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     const button = target?.closest<HTMLButtonElement>('button[data-role="preview-track"]');
     const track = button?.dataset.track as DrumTrack | undefined;
-    if (!track) {return;}
-    triggerDrumHit(track, 0.05);
-  });
+    if (track) {
+      triggerDrumHit(track, 0.05);
+      return;
+    }
 
-  sampleList.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement | null;
-    const button = target?.closest<HTMLButtonElement>('button[data-role]');
-    if (!button) {return;}
+    const sampleButton = target?.closest<HTMLButtonElement>('button[data-role]');
+    if (!sampleButton) {return;}
 
-    const sampleUrl = button.dataset.url;
+    const sampleUrl = sampleButton.dataset.url;
     if (!sampleUrl) {return;}
     const choice = drumSampleChoiceByUrl.get(sampleUrl);
     if (!choice) {return;}
 
-    if (button.dataset.role === 'preview-sample') {
+    if (sampleButton.dataset.role === 'preview-sample') {
       playDrumSamplePreview(choice);
       setDrumLayerSampleModalStatus(modal, `Previewing ${choice.label}.`);
       return;
     }
 
-    if (button.dataset.role !== 'assign-sample' || !pendingDrumLayerSamples) {
+    if (sampleButton.dataset.role !== 'assign-sample' || !pendingDrumLayerSamples) {
       return;
     }
 
-    const track = button.dataset.track as DrumTrack | undefined;
-    if (!track) {return;}
+    const sampleTrack = sampleButton.dataset.track as DrumTrack | undefined;
+    if (!sampleTrack) {return;}
 
-    pendingDrumLayerSamples[track] = sampleUrl;
+    pendingDrumLayerSamples[sampleTrack] = sampleUrl;
     updateModalTrackAssignments(modal);
     updateModalAssignButtons(modal);
     playDrumSamplePreview(choice);
-    setDrumLayerSampleModalStatus(modal, `${DRUM_TRACK_LABELS[track]} set to ${choice.label}.`);
+    setDrumLayerSampleModalStatus(
+      modal,
+      `${DRUM_SAMPLE_ASSIGNMENT_HINT[sampleTrack]} set to ${choice.label}.`
+    );
   });
 
   modal.addEventListener('click', (event) => {
@@ -1032,70 +934,215 @@ async function openDrumLayerSampleModal(trackToFocus: DrumTrack): Promise<void> 
   void preloadDrumSamples();
   await initLocalDrumSampleChoices();
   activeDrumModalTrack = trackToFocus;
-  activeDrumSampleCategory = DRUM_TRACK_TO_SAMPLE_CATEGORY[trackToFocus];
   pendingDrumLayerSamples = getCurrentDrumLayerSamples();
 
   const modal = ensureDrumLayerSampleModal();
-  updateModalCategoryTabs(modal);
-  updateModalTrackAssignments(modal);
-  renderSampleChoicesForCategory(modal);
+  renderSampleChoices(modal);
   setDrumLayerSampleModalStatus(modal, '');
 
   modal.removeAttribute('hidden');
   document.body.classList.add('drum-layer-modal-open');
 
-  const activeCategoryButton = modal.querySelector<HTMLButtonElement>(
-    `button[data-role="category-tab"][data-category="${activeDrumSampleCategory}"]`
+  const activeTrackButton = modal.querySelector<HTMLButtonElement>(
+    `button[data-role="preview-track"][data-track="${trackToFocus}"]`
   );
-  activeCategoryButton?.focus();
+  activeTrackButton?.focus();
 }
 
-function createVolumeSlider(): void {
-  drumVolumeControlInitCount += 1;
-  const initCall = drumVolumeControlInitCount;
+function syncDrumTrackVolumeButton(track: DrumTrack): void {
+  const button = document.querySelector<HTMLButtonElement>(`.drum-track-volume-button[data-track="${track}"]`);
+  if (!button) return;
+  const level = getDrumLayerVolume(track);
+  const percent = Math.round(level * 100);
+  button.setAttribute('aria-valuenow', String(percent));
+  button.setAttribute('aria-valuetext', `${percent} percent`);
+  button.title = `${DRUM_TRACK_LABELS[track]} volume: ${percent}% — hold and drag horizontally`;
+  button.querySelector('img')?.classList.toggle('volume-icon-muted', level === 0);
+}
+
+function setDrumTrackVolumeAndSync(track: DrumTrack, level: number): void {
+  const next = Math.max(0, Math.min(1, Math.round(level * 100) / 100));
+  setDrumLayerVolume(track, next);
+  if (next > 0) drumTrackLastNonZeroVolumes[track] = next;
+  syncDrumTrackVolumeButton(track);
+
+  if (activeDrumTrackVolumeGesture?.track === track && drumTrackVolumePopup) {
+    const percent = Math.round(next * 100);
+    const label = drumTrackVolumePopup.querySelector<HTMLElement>('.level-label');
+    const fill = drumTrackVolumePopup.querySelector<HTMLElement>('.fill');
+    const thumb = drumTrackVolumePopup.querySelector<HTMLElement>('.thumb');
+    if (label) label.textContent = `${percent}%`;
+    if (fill) fill.style.width = `${percent}%`;
+    if (thumb) thumb.style.left = `${percent}%`;
+  }
+}
+
+function ensureDrumTrackVolumePopup(): HTMLDivElement {
+  if (drumTrackVolumePopup?.isConnected) return drumTrackVolumePopup;
+  const popup = document.createElement('div');
+  popup.className = 'drum-track-volume-popup';
+  popup.popover = 'manual';
+  popup.setAttribute('aria-hidden', 'true');
+  popup.innerHTML = `
+    <span class="level-label">100%</span>
+    <div class="track"><div class="fill"></div><div class="thumb"></div></div>
+  `;
+  document.body.appendChild(popup);
+  drumTrackVolumePopup = popup;
+  return popup;
+}
+
+function showDrumTrackVolumePopup(): void {
+  if (!activeDrumTrackVolumeGesture || activeDrumTrackVolumeGesture.sliderVisible) return;
+  activeDrumTrackVolumeGesture.sliderVisible = true;
+  ensureDrumTrackVolumePopup().showPopover();
+}
+
+function finishDrumTrackVolumeGesture(cancel = false): void {
+  const gesture = activeDrumTrackVolumeGesture;
+  if (!gesture) return;
+  if (drumTrackVolumeHoldTimer !== null) {
+    clearTimeout(drumTrackVolumeHoldTimer);
+    drumTrackVolumeHoldTimer = null;
+  }
+
+  if (cancel) {
+    setDrumTrackVolumeAndSync(gesture.track, gesture.startLevel);
+  } else if (!gesture.moved && !gesture.sliderVisible) {
+    const current = getDrumLayerVolume(gesture.track);
+    const restored = drumTrackLastNonZeroVolumes[gesture.track] || 1;
+    setDrumTrackVolumeAndSync(gesture.track, current > 0 ? 0 : restored);
+  }
+
+  activeDrumTrackVolumeGesture = null;
+  if (gesture.sliderVisible) drumTrackVolumePopup?.hidePopover();
+  if (gesture.button.hasPointerCapture(gesture.pointerId)) {
+    gesture.button.releasePointerCapture(gesture.pointerId);
+  }
+}
+
+function handleDrumTrackVolumePointerMove(event: PointerEvent): void {
+  const gesture = activeDrumTrackVolumeGesture;
+  if (!gesture || gesture.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  if (!gesture.moved) {
+    gesture.moved = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >= DRUM_TRACK_VOLUME_DRAG_THRESHOLD;
+    if (!gesture.moved) return;
+    showDrumTrackVolumePopup();
+  }
+  setDrumTrackVolumeAndSync(
+    gesture.track,
+    gesture.startLevel + (event.clientX - gesture.startX) / DRUM_TRACK_VOLUME_TRAVEL
+  );
+}
+
+function handleDrumTrackVolumePointerEnd(event: PointerEvent): void {
+  if (activeDrumTrackVolumeGesture?.pointerId !== event.pointerId) return;
+  finishDrumTrackVolumeGesture(event.type === 'pointercancel');
+}
+
+function startDrumTrackVolumeGesture(event: PointerEvent, track: DrumTrack): void {
+  if (event.button !== 0 || activeDrumTrackVolumeGesture) return;
+  event.preventDefault();
+  const button = event.currentTarget as HTMLButtonElement;
+  const startLevel = getDrumLayerVolume(track);
+  button.focus({ preventScroll: true });
+  button.setPointerCapture(event.pointerId);
+  activeDrumTrackVolumeGesture = {
+    track,
+    button,
+    pointerId: event.pointerId,
+    startLevel,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+    sliderVisible: false
+  };
+
+  const popup = ensureDrumTrackVolumePopup();
+  popup.style.left = `${Math.max(4, Math.min(
+    window.innerWidth - DRUM_TRACK_VOLUME_TRAVEL - 44,
+    event.clientX - startLevel * DRUM_TRACK_VOLUME_TRAVEL - 20
+  ))}px`;
+  popup.style.top = `${Math.max(4, Math.min(window.innerHeight - 51, event.clientY - 22))}px`;
+  popup.style.color = 'var(--c-text)';
+  setDrumTrackVolumeAndSync(track, startLevel);
+  drumTrackVolumeHoldTimer = setTimeout(showDrumTrackVolumePopup, DRUM_TRACK_VOLUME_HOLD_DELAY);
+}
+
+function handleDrumTrackVolumeKeyDown(event: KeyboardEvent, track: DrumTrack): void {
+  if (event.key === 'Escape' && activeDrumTrackVolumeGesture?.track === track) {
+    event.preventDefault();
+    finishDrumTrackVolumeGesture(true);
+    return;
+  }
+  const current = getDrumLayerVolume(track);
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    setDrumTrackVolumeAndSync(track, current > 0 ? 0 : drumTrackLastNonZeroVolumes[track]);
+    return;
+  }
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const step = event.key.startsWith('Page') ? 0.1 : 0.01;
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1
+    : current + (['ArrowUp', 'ArrowRight', 'PageUp'].includes(event.key) ? step : -step);
+  setDrumTrackVolumeAndSync(track, next);
+}
+
+function createDrumTrackVolumeButton(track: DrumTrack, volumeIconSrc: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.className = 'drum-track-volume-button';
+  button.type = 'button';
+  button.dataset.track = track;
+  button.setAttribute('role', 'slider');
+  button.setAttribute('aria-label', `${DRUM_TRACK_LABELS[track]} volume`);
+  button.setAttribute('aria-valuemin', '0');
+  button.setAttribute('aria-valuemax', '100');
+  button.setAttribute('aria-orientation', 'horizontal');
+  button.style.gridColumn = '5';
+
+  const icon = document.createElement('img');
+  icon.src = volumeIconSrc;
+  icon.alt = '';
+  icon.setAttribute('aria-hidden', 'true');
+  button.appendChild(icon);
+  button.addEventListener('pointerdown', event => startDrumTrackVolumeGesture(event, track));
+  button.addEventListener('lostpointercapture', event => {
+    if (activeDrumTrackVolumeGesture?.pointerId === event.pointerId) finishDrumTrackVolumeGesture();
+  });
+  button.addEventListener('keydown', event => handleDrumTrackVolumeKeyDown(event, track));
+  return button;
+}
+
+function initDrumTrackVolumeListeners(): void {
+  if (drumTrackVolumeListenersInitialized) return;
+  drumTrackVolumeListenersInitialized = true;
+  window.addEventListener('pointermove', handleDrumTrackVolumePointerMove);
+  window.addEventListener('pointerup', handleDrumTrackVolumePointerEnd);
+  window.addEventListener('pointercancel', handleDrumTrackVolumePointerEnd);
+  window.addEventListener('blur', () => finishDrumTrackVolumeGesture(true));
+}
+
+function createDrumTrackControls(): void {
   const drumWrapper = document.getElementById(DRUM_GRID_WRAPPER_ID);
   const leftCell = drumWrapper?.querySelector('.drum-grid-left-cell') as HTMLElement | null;
 
-  logDrumVolumeDebug('createVolumeSlider called', {
-    initCall,
-    hasDrumWrapper: Boolean(drumWrapper),
-    hasLeftCell: Boolean(leftCell)
-  });
-
   if (!drumWrapper || !leftCell) {
-    logDrumVolumeDebug('createVolumeSlider exited early - required elements missing', { initCall });
     return;
   }
 
-  // Build left-cell content (volume button + per-row sample buttons) if missing
+  // Build per-row sample and volume controls if missing.
   let leftContent = leftCell.querySelector('.drum-left-content') as HTMLElement | null;
   if (!leftContent) {
     leftContent = document.createElement('div');
     leftContent.className = 'drum-left-content';
     const leftContentEl = leftContent;
 
-    // Column 1: Volume button spanning all 3 rows
-    const volumeButton = document.createElement('button');
-    volumeButton.className = 'drum-volume-button';
-    volumeButton.type = 'button';
-    volumeButton.setAttribute('aria-label', 'Drum volume');
-    const volumeIconSpan = document.createElement('span');
-    volumeIconSpan.className = 'drum-volume-icon';
-    volumeIconSpan.setAttribute('aria-hidden', 'true');
-
     // Reuse the already-resolved main volume icon URL to avoid relative-path breakage.
     const mainVolumeImg = document.querySelector<HTMLImageElement>('#volume-icon-button img');
     const volumeIconSrc = mainVolumeImg?.currentSrc || mainVolumeImg?.src || 'assets/icons/volume.svg';
-
-    const volumeIconImg = document.createElement('img');
-    volumeIconImg.src = volumeIconSrc;
-    volumeIconImg.alt = '';
-
-    volumeIconSpan.appendChild(volumeIconImg);
-    volumeButton.appendChild(volumeIconSpan);
-    volumeButton.style.gridRow = '1 / span 3';
-    volumeButton.style.gridColumn = '1';
-    leftContentEl.appendChild(volumeButton);
 
     // Column 3: Centered row buttons; columns 2 and 4 share the remaining space.
     DRUM_TRACKS.forEach((track, index) => {
@@ -1120,200 +1167,24 @@ function createVolumeSlider(): void {
       });
 
       leftContentEl.appendChild(trackButton);
+
+      const trackVolumeButton = createDrumTrackVolumeButton(track, volumeIconSrc);
+      trackVolumeButton.style.gridRow = `${index + 1}`;
+      leftContentEl.appendChild(trackVolumeButton);
     });
 
     leftCell.appendChild(leftContentEl);
+    DRUM_TRACKS.forEach(syncDrumTrackVolumeButton);
     updateDrumTrackSettingButtons();
-    logDrumVolumeDebug('created drum-left-content with volume and track buttons', { initCall });
   }
 
-  // Volume button <-> inline slider swap
-  const volumeButton = leftCell.querySelector('.drum-volume-button') as HTMLElement | null;
   updateDrumTrackSettingButtons();
-  logDrumVolumeDebug('resolved drum volume button', {
-    initCall,
-    hasVolumeButton: Boolean(volumeButton)
-  });
-
-  let sliderWrap: HTMLElement | null = null;
-
-  const showSlider = () => {
-    logDrumVolumeDebug('showSlider requested', {
-      initCall,
-      hasVolumeButton: Boolean(volumeButton),
-      sliderAlreadyPresent: Boolean(sliderWrap),
-      currentDrumVolume: drumVolume
-    });
-    if (!volumeButton) {return;}
-
-    sliderWrap = document.createElement('div');
-    sliderWrap.className = 'drum-volume-slider-wrap';
-    sliderWrap.style.gridRow = '1 / span 3';
-    sliderWrap.style.gridColumn = '1';
-
-    volumeSlider = document.createElement('input');
-    volumeSlider.type = 'range';
-    volumeSlider.min = '0';
-    volumeSlider.max = '100';
-    volumeSlider.value = String(Math.round(drumVolume * 100));
-    volumeSlider.className = 'drum-volume-slider-inline';
-
-    volumeSlider.addEventListener('input', (event) => {
-      const target = event.currentTarget as HTMLInputElement;
-      const previousDrumVolume = drumVolume;
-      drumVolume = Number(target.value) / 100;
-
-      const drumVolumeNode = getDrumVolumeNode();
-      const volumeDb = drumVolume === 0 ? -60 : 20 * Math.log10(drumVolume);
-      drumVolumeSliderInputCount += 1;
-      if (drumVolumeNode?.volume) {
-        drumVolumeNode.volume.value = volumeDb;
-
-        const now = Date.now();
-        if (now - lastDrumPlaybackTime >= DRUM_PLAYBACK_THROTTLE_MS) {
-          triggerDrumHit('M', 0.1);
-          lastDrumPlaybackTime = now;
-        }
-      }
-
-      logDrumVolumeDebug('slider input', {
-        initCall,
-        inputCount: drumVolumeSliderInputCount,
-        sliderValue: target.value,
-        previousDrumVolume,
-        nextDrumVolume: drumVolume,
-        volumeDb,
-        hasDrumVolumeNode: Boolean(drumVolumeNode?.volume),
-        appliedDrumVolumeDb: drumVolumeNode?.volume?.value ?? null
-      });
-    });
-
-    sliderWrap.appendChild(volumeSlider);
-    volumeButton.replaceWith(sliderWrap);
-    logDrumVolumeDebug('replaced volume button with inline slider', {
-      initCall,
-      sliderValue: volumeSlider.value
-    });
-
-    // Size the slider track to match the wrapper's actual height.
-    // Retry for a few frames because layout can settle after the click task.
-    const applySliderWidthFromHeight = (attempt: number) => {
-      if (!sliderWrap || !volumeSlider) {
-        return;
-      }
-
-      const wrapperOffsetHeight = sliderWrap.offsetHeight;
-      const wrapperOffsetWidth = sliderWrap.offsetWidth;
-      const leftCellOffsetHeight = leftCell.offsetHeight;
-      const fallbackHeight = Math.max(wrapperOffsetHeight, leftCellOffsetHeight);
-
-      if (fallbackHeight > 0) {
-        volumeSlider.style.width = `${fallbackHeight}px`;
-        if (wrapperOffsetWidth > 0) {
-          volumeSlider.style.height = `${wrapperOffsetWidth}px`;
-        }
-        logDrumVolumeDebug('applied slider width from measured height', {
-          initCall,
-          attempt,
-          wrapperOffsetHeight,
-          wrapperOffsetWidth,
-          leftCellOffsetHeight,
-          sliderWidth: volumeSlider.style.width,
-          sliderHeight: volumeSlider.style.height
-        });
-        return;
-      }
-
-      if (attempt < 3) {
-        logDrumVolumeDebug('slider width measurement was zero, retrying', {
-          initCall,
-          attempt,
-          wrapperOffsetHeight,
-          wrapperOffsetWidth,
-          leftCellOffsetHeight
-        });
-        requestAnimationFrame(() => applySliderWidthFromHeight(attempt + 1));
-        return;
-      }
-
-      logDrumVolumeDebug('slider width measurement remained zero after retries', {
-        initCall,
-        attempt,
-        wrapperOffsetHeight,
-        wrapperOffsetWidth,
-        leftCellOffsetHeight
-      });
-    };
-
-    requestAnimationFrame(() => applySliderWidthFromHeight(1));
-  };
-
-  const hideSlider = () => {
-    if (!sliderWrap || !volumeButton) {
-      logDrumVolumeDebug('hideSlider skipped', {
-        initCall,
-        hasSliderWrap: Boolean(sliderWrap),
-        hasVolumeButton: Boolean(volumeButton)
-      });
-      return;
-    }
-    sliderWrap.replaceWith(volumeButton);
-    volumeSlider = null;
-    sliderWrap = null;
-    logDrumVolumeDebug('restored volume button and cleared slider', { initCall });
-  };
-
-  if (volumeButton) {
-    volumeButton.addEventListener('click', (event) => {
-      drumVolumeButtonClickCount += 1;
-      logDrumVolumeDebug('volume icon button clicked', {
-        initCall,
-        clickCount: drumVolumeButtonClickCount,
-        sliderVisibleBeforeClick: Boolean(sliderWrap),
-        currentTarget: describeEventTarget(event.currentTarget),
-        target: describeEventTarget(event.target)
-      });
-      event.stopPropagation();
-      showSlider();
-    });
-    logDrumVolumeDebug('bound click listener to drum volume button', { initCall });
-  }
-
-  document.addEventListener('click', (event) => {
-    drumVolumeDocumentClickCount += 1;
-    const target = event.target as HTMLElement | null;
-    if (sliderWrap) {
-      logDrumVolumeDebug('document click while slider is visible', {
-        initCall,
-        documentClickCount: drumVolumeDocumentClickCount,
-        target: describeEventTarget(event.target),
-        clickedInsideSliderWrap: Boolean(target?.closest('.drum-volume-slider-wrap'))
-      });
-    }
-    // Collapse slider back to button on outside click
-    if (sliderWrap && !target?.closest('.drum-volume-slider-wrap')) {
-      hideSlider();
-    }
-  });
-  logDrumVolumeDebug('bound document click listener for slider dismissal', { initCall });
-}
-
-function getDrumVolume(): number {
-  return drumVolume;
-}
-
-export function getVolumeIconState(): VolumeIconState {
-  return volumeIconState;
+  initDrumTrackVolumeListeners();
 }
 
 export function initDrumGridInteraction(): void {
   const drumCanvas = document.getElementById(DRUM_CANVAS_ID) as HTMLCanvasElement | null;
   const hoverCanvas = document.getElementById(DRUM_HOVER_CANVAS_ID) as HTMLCanvasElement | null;
-
-  logDrumVolumeDebug('initDrumGridInteraction invoked', {
-    hasDrumCanvas: Boolean(drumCanvas),
-    hasHoverCanvas: Boolean(hoverCanvas)
-  });
 
   if (!drumCanvas || !hoverCanvas) {
     return;
@@ -1321,12 +1192,15 @@ export function initDrumGridInteraction(): void {
 
   drumHoverCtx = hoverCanvas.getContext('2d');
 
+  store.off('toolChanging', handleGlobalMouseUp);
+  store.on('toolChanging', handleGlobalMouseUp);
   drumCanvas.addEventListener('mousedown', handleMouseDown);
   drumCanvas.addEventListener('mousemove', handleMouseMove);
   drumCanvas.addEventListener('mouseleave', handleMouseLeave);
   drumCanvas.addEventListener('contextmenu', event => event.preventDefault());
 
   window.addEventListener('mouseup', handleGlobalMouseUp);
+  window.addEventListener('blur', handleGlobalMouseUp);
 
-  createVolumeSlider();
+  createDrumTrackControls();
 }

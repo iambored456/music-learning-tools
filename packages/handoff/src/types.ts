@@ -27,6 +27,8 @@ export interface SnapshotNote {
   startMicrobeatCol: number;
   /** End position in microbeat columns (inclusive - occupies start through end) */
   endMicrobeatCol: number;
+  /** Explicit duration for notes shorter than a microbeat. */
+  durationMicrobeats?: number;
   /** MIDI pitch number (e.g., 60 = C4) */
   midiPitch: number;
   /** Original pitch name for display (e.g., "C4", "Bb3") */

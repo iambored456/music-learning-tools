@@ -50,7 +50,7 @@
 .rhythm-stamp-tab-button[data-rhythm-stamp-tab="sixteenth"] {
     display: inline-flex;
     align-items: center;
-    gap: 0;
+    gap: var(--space-025);
 }
 
 .rhythm-stamp-tab-label {
@@ -99,10 +99,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex: 1 1 0;
+    flex: 0 0 auto;
     min-height: 0;
-    min-width: 0.95rem;
+    min-width: 0;
+    width: auto;
     height: 100%;
+    aspect-ratio: 1 / 1;
     padding: 0;
     border: 1px solid transparent;
     border-radius: 2px;
@@ -140,7 +142,7 @@
     min-width: 0;
     min-height: 0;
     background-color: var(--c-surface);
-    border: 1px solid var(--c-border);
+    border: 2px solid var(--c-border-strong);
     border-radius: var(--border-radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -160,9 +162,9 @@
 .sixteenth-stamp-button.active {
     background-color: var(--c-accent-light, #63a9fd) !important;
     color: var(--c-text, #212529) !important;
-    border-color: var(--c-accent, #4A90E2) !important;
+    border-color: var(--c-accent, #44BCEF) !important;
     font-weight: var(--typography-notation-label-font-weight) !important;
-    box-shadow: 0 0 0 1px var(--c-accent, #4A90E2) !important;
+    box-shadow: 0 0 0 1px var(--c-accent, #44BCEF) !important;
     transform: scale(0.98) !important;
     opacity: 1 !important;
 }
@@ -213,9 +215,9 @@
 .triplet-stamp-button.active {
     background-color: var(--c-accent-light, #63a9fd) !important;
     color: var(--c-text, #212529) !important;
-    border-color: var(--c-accent, #4A90E2) !important;
+    border-color: var(--c-accent, #44BCEF) !important;
     font-weight: var(--typography-notation-label-font-weight) !important;
-    box-shadow: 0 0 0 1px var(--c-accent, #4A90E2) !important;
+    box-shadow: 0 0 0 1px var(--c-accent, #44BCEF) !important;
     transform: scale(0.98) !important;
     opacity: 1 !important;
 }

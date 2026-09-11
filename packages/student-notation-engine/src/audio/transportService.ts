@@ -12,6 +12,7 @@
  */
 
 import * as Tone from 'tone';
+import { getNoteEndColumn } from '@mlt/types';
 import { createTimeMapCalculator, type TimeMapCalculatorInstance } from '../transport/timeMapCalculator.js';
 import { createDrumManager } from '../transport/drumManager.js';
 import type { DrumManagerInstance } from '../transport/types.js';
@@ -147,6 +148,8 @@ export function createTransportService(config: TransportConfig): TransportServic
   let lastAppliedTempoMultiplier = 1.0;
   let rescheduleTimerId: ReturnType<typeof setTimeout> | null = null;
   let startSequenceToken = 0;
+  let isBuffering = false;
+  let bufferingTimer: ReturnType<typeof setTimeout> | null = null;
   let audioContextTransitionQueue: Promise<void> = Promise.resolve();
   let audioContextFreezeRequested = false;
   let requiresFreshAudioReset = false;
@@ -184,10 +187,46 @@ export function createTransportService(config: TransportConfig): TransportServic
 
   function invalidatePendingStartSequence(): void {
     startSequenceToken += 1;
+    setBuffering(false);
+  }
+
+  function setBuffering(value: boolean): void {
+    if (bufferingTimer !== null) {
+      clearTimeout(bufferingTimer);
+      bufferingTimer = null;
+    }
+    if (isBuffering === value) return;
+    isBuffering = value;
+    eventCallbacks.emit('playbackBufferingChanged', value);
+  }
+
+  function finishBufferingAt(startTime: number, runToken: number): void {
+    if (runToken !== startSequenceToken) return;
+    // Use the audio clock without lookahead. Draw callbacks can expire when a
+    // busy frame or background tab prevents them from running on time.
+    const remainingMs = (startTime - Tone.immediate()) * 1000;
+    if (remainingMs > 0) {
+      bufferingTimer = setTimeout(() => finishBufferingAt(startTime, runToken), remainingMs);
+    } else {
+      setBuffering(false);
+    }
   }
 
   function hasDrumNotes(state: TransportState): boolean {
     return state.placedNotes.some(note => note.isDrum === true || note.drumTrack != null);
+  }
+
+  function resolvePlaybackStart(state: TransportState): number {
+    const selectedIndex = state.playbackStartMacrobeatIndex;
+    if (typeof selectedIndex === 'number' && selectedIndex >= 0 &&
+        (state.macrobeatCount === undefined || selectedIndex < state.macrobeatCount)) {
+      const info = stateCallbacks.getMacrobeatInfo?.(selectedIndex);
+      const regularStart = info ? timeMapCalculator?.getTimeMap()[info.startColumn] : undefined;
+      if (info && typeof regularStart === 'number' && Number.isFinite(regularStart)) {
+        return timeMapCalculator?.applyModulationToTime(regularStart, info.startColumn, state) ?? regularStart;
+      }
+    }
+    return timeMapCalculator?.findNonAnacrusisStart(state) ?? 0;
   }
 
   function nowMs(): number {
@@ -327,10 +366,10 @@ export function createTransportService(config: TransportConfig): TransportServic
     // Schedule placed notes
     state.placedNotes.forEach((note, noteIndex) => {
       const canvasStartIndex = note.startColumnIndex;
-      const canvasEndIndex = note.endColumnIndex;
-      const regularStartTime = timeMap[canvasStartIndex];
+      const canvasEndIndex = getNoteEndColumn(note);
+      const regularStartTime = getCellStartTime(timeMap, canvasStartIndex);
 
-      if (regularStartTime === undefined) {
+      if (regularStartTime === null) {
         log.warn('TransportService', `[NOTE SCHEDULE] Note ${noteIndex}: timeMap[${canvasStartIndex}] undefined, skipping`);
         return;
       }
@@ -338,13 +377,13 @@ export function createTransportService(config: TransportConfig): TransportServic
       const scheduleTime = timeMapCalculator!.applyModulationToTime(regularStartTime, canvasStartIndex, state);
 
       // Calculate duration
-      const regularEndTime = timeMap[canvasEndIndex + 1];
-      if (regularEndTime === undefined) {
-        log.warn('TransportService', `Skipping note with invalid endColumnIndex: ${note.endColumnIndex + 1}`);
+      const regularEndTime = getCellStartTime(timeMap, canvasEndIndex);
+      if (regularEndTime === null) {
+        log.warn('TransportService', `Skipping note with invalid end boundary: ${canvasEndIndex}`);
         return;
       }
 
-      const modulatedEndTime = timeMapCalculator!.applyModulationToTime(regularEndTime, canvasEndIndex + 1, state);
+      const modulatedEndTime = timeMapCalculator!.applyModulationToTime(regularEndTime, canvasEndIndex, state);
       const tailDuration = modulatedEndTime - scheduleTime;
 
       if (note.isDrum) {
@@ -443,22 +482,22 @@ export function createTransportService(config: TransportConfig): TransportServic
     }
 
     // Schedule attack
-    Tone.Transport.schedule(time => {
+    const attack = (time: number) => {
       if (stateCallbacks.getState().isPaused) return;
       synthEngine.triggerAttack(pitch, toolColor, time);
 
       Tone.Draw.schedule(() => {
-        visualCallbacks?.triggerAdsrVisual?.(noteId, 'attack', pitchColor, timbre.adsr);
+        visualCallbacks?.triggerAdsrVisual?.(noteId, 'attack', pitchColor, timbre.adsr, toolColor);
         eventCallbacks.emit('noteAttack', { noteId, color: toolColor });
       }, time);
-    }, scheduleTime);
-
+    };
+    Tone.Transport.schedule(attack, scheduleTime);
     // Schedule release
     Tone.Transport.schedule(time => {
       synthEngine.triggerRelease(pitch, toolColor, time);
 
       Tone.Draw.schedule(() => {
-        visualCallbacks?.triggerAdsrVisual?.(noteId, 'release', pitchColor, timbre.adsr);
+        visualCallbacks?.triggerAdsrVisual?.(noteId, 'release', pitchColor, timbre.adsr, toolColor);
         eventCallbacks.emit('noteRelease', { noteId, color: toolColor });
       }, time);
     }, releaseTime);
@@ -811,6 +850,7 @@ export function createTransportService(config: TransportConfig): TransportServic
   }
 
   const instance: TransportServiceInstance = {
+    get isBuffering() { return isBuffering; },
     init(): void {
       const state = stateCallbacks.getState();
 
@@ -956,8 +996,10 @@ export function createTransportService(config: TransportConfig): TransportServic
     },
 
     start(): void {
+      if (isBuffering) return;
       log.info('TransportService', 'Starting playback');
       const runToken = ++startSequenceToken;
+      setBuffering(true);
 
       void (async () => {
         try {
@@ -969,6 +1011,8 @@ export function createTransportService(config: TransportConfig): TransportServic
           logStartupTiming('audio-init', nowMs() - audioInitStartMs, {
             contextState: Tone.context.state
           });
+          await visualCallbacks?.preparePlayback?.();
+          if (runToken !== startSequenceToken) return;
 
           if (requiresFreshAudioReset) {
             const resetStartMs = nowMs();
@@ -999,7 +1043,7 @@ export function createTransportService(config: TransportConfig): TransportServic
           const state = stateCallbacks.getState();
           timeMapCalculator?.calculate(state);
           const musicalDuration = timeMapCalculator?.getMusicalEndTime() ?? 0;
-          const loopStart = timeMapCalculator?.findNonAnacrusisStart(state) ?? 0;
+          const loopStart = resolvePlaybackStart(state);
 
           timeMapCalculator?.setLoopBounds(loopStart, musicalDuration, state.tempo);
           Tone.Transport.bpm.value = state.tempo;
@@ -1017,7 +1061,8 @@ export function createTransportService(config: TransportConfig): TransportServic
             startTime: Number(startTime.toFixed(4)),
             transportSeconds: Number(Tone.Transport.seconds.toFixed(4))
           });
-          Tone.Transport.start(startTime, 0);
+          Tone.Transport.start(startTime, loopStart);
+          finishBufferingAt(startTime, runToken);
 
           // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
           if (playbackMode === 'standard') {
@@ -1039,6 +1084,7 @@ export function createTransportService(config: TransportConfig): TransportServic
         } catch (error) {
           if (runToken !== startSequenceToken) {return;}
           log.warn('TransportService', 'Failed to start playback', error);
+          setBuffering(false);
           requiresFreshAudioReset = true;
           eventCallbacks.setPlaybackState?.(false, false);
           eventCallbacks.emit('playbackStopped');
@@ -1047,8 +1093,10 @@ export function createTransportService(config: TransportConfig): TransportServic
     },
 
     resume(): void {
+      if (isBuffering) return;
       log.info('TransportService', 'Resuming playback');
       const runToken = ++startSequenceToken;
+      setBuffering(true);
 
       void (async () => {
         try {
@@ -1062,6 +1110,7 @@ export function createTransportService(config: TransportConfig): TransportServic
 
           const toneNow = Tone.now();
           Tone.Transport.start();
+          finishBufferingAt(toneNow, runToken);
 
           // In standard mode, animate playhead here. In highway mode, the highway service handles visuals
           if (playbackMode === 'standard') {
@@ -1073,6 +1122,7 @@ export function createTransportService(config: TransportConfig): TransportServic
         } catch (error) {
           if (runToken !== startSequenceToken) {return;}
           log.warn('TransportService', 'Failed to resume playback', error);
+          setBuffering(false);
           requiresFreshAudioReset = true;
           eventCallbacks.setPlaybackState?.(false, false);
           eventCallbacks.emit('playbackStopped');

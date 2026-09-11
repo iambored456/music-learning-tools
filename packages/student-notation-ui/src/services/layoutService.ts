@@ -47,7 +47,7 @@ import {
   rangeFromCenterAndSpan,
   resolveZoomAnimationDuration
 } from './layout/pitchRangeState.ts';
-import { resolveNotationAssemblySizing } from './layout/assemblySizing.ts';
+import { resolveScrollableNotationAssemblySizing } from './layout/scrollableAssemblySizing.ts';
 
 
 
@@ -658,15 +658,38 @@ function recalcAndApplyLayout() {
   const gridsWrapper = document.getElementById('grids-wrapper');
   const horizontalScrollbarBlockSize = getHorizontalScrollbarBlockSize(gridsWrapper);
   const liveContainerHeight = getPitchGridContainerHeight();
-  const assemblyAvailableHeight = gridsWrapper?.clientHeight
+  const fallbackAvailableHeight = gridsWrapper?.clientHeight
     || pitchGridWrapper.parentElement?.clientHeight
     || pitchGridWrapper.clientHeight
     || (windowHeight * 0.7);
   const rowCount = Math.max(1, getSpan(normalizedRange));
-  const assemblySizing = resolveNotationAssemblySizing({
-    availableHeight: assemblyAvailableHeight,
-    rowCount
+  const assemblySizing = resolveScrollableNotationAssemblySizing({
+    container: gridsWrapper,
+    fallbackAvailableHeight,
+    rowCount,
+    includeButtonGrid: buttonGridWrapper?.style.display !== 'none',
+    includeDrumGrid: drumGridWrapper?.style.display !== 'none',
+    getContentWidth: ({ cellWidth, cellHeight }) => {
+      const columnWidths = getCanvasColumnWidths(store.state);
+      let musicalWidth = columnWidths.reduce((sum, width) => sum + width, 0) * cellWidth;
+      if (store.state.tempoModulationMarkers?.length) {
+        try {
+          musicalWidth = getTotalPixelWidth({
+            cellWidth,
+            columnWidths,
+            tempoModulationMarkers: store.state.tempoModulationMarkers,
+            baseMicrobeatPx: cellWidth,
+            state: store.state
+          });
+        } catch {
+          // Match getModulatedCanvasWidth's unmodulated fallback.
+        }
+      }
+      return Math.round(musicalWidth)
+        + 2 * Math.round(getLegendTotalWidthPx(cellWidth, cellHeight));
+    }
   });
+  const assemblyAvailableHeight = assemblySizing.availableHeight;
   currentZoomLevel = assemblySizing.zoomLevel;
 
   const newCellHeight = assemblySizing.cellHeight;

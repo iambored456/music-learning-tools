@@ -8,10 +8,10 @@
   border-color: var(--note-color) !important;
   box-shadow: 0 0 8px var(--note-color);
 }
-.note-pair[data-color="#4a90e2"].selected { --note-color: #4a90e2; }
-.note-pair[data-color="#2d2d2d"].selected { --note-color: #2d2d2d; }
-.note-pair[data-color="#d66573"].selected { --note-color: #d66573; }
-.note-pair[data-color="#68a03f"].selected { --note-color: #68a03f; }
+.note-pair[data-color="#44bcef"].selected { --note-color: #44bcef; }
+.note-pair[data-color="#d293e0"].selected { --note-color: #d293e0; }
+.note-pair[data-color="#ee9561"].selected { --note-color: #ee9561; }
+.note-pair[data-color="#81c273"].selected { --note-color: #81c273; }
 
 
 /*******************************************************************************
@@ -111,6 +111,12 @@
 #volume-icon-button.active:hover {
     background-color: var(--c-gridline) !important;
     color: var(--c-text) !important;
+}
+
+/* The speaker body occupies the left 55% of volume.svg; clipping the right side
+   removes both sound waves while preserving the same icon alignment and colour. */
+.volume-icon-muted {
+    clip-path: inset(0 45% 0 0);
 }
 
 /* --- Clear Button Override --- */

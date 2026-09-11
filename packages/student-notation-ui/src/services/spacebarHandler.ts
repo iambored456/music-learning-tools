@@ -128,7 +128,7 @@ export function initSpacebarHandler(): void {
       if (!timbre) {return;}
       const adsr = timbre.adsr;
 
-      triggerAdsrPlayhead('spacebar', 'attack', pitchColor, adsr);
+      triggerAdsrPlayhead('spacebar', 'attack', pitchColor, adsr, toolColor);
       store.emit('spacebarPlayback', {
         note: noteToPlay,
         color: toolColor,
@@ -173,7 +173,7 @@ export function initSpacebarHandler(): void {
       }
       const adsr = triggerTimbre.adsr;
 
-      triggerAdsrPlayhead('spacebar', 'release', pitchColor, adsr);
+      triggerAdsrPlayhead('spacebar', 'release', pitchColor, adsr, triggerColor);
       store.emit('spacebarPlayback', {
         note: rootNote,
         color: triggerColor,

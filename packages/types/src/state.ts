@@ -86,6 +86,8 @@ export interface AppState {
 
   // UI & View State
   selectedTool: string;
+  /** Remembered drawing subtype; active only while selectedTool is 'draw'. */
+  selectedDrawTool?: 'arrow' | 'text' | 'marker' | 'highlighter' | 'lasso';
   previousTool: string;
   selectedToolTonicNumber: number;
   selectedNote: {
@@ -120,6 +122,8 @@ export interface AppState {
   isPlaying: boolean;
   isPaused: boolean;
   isLooping: boolean;
+  /** Transient Select-tool playback start. Null uses the normal score start. */
+  playbackStartMacrobeatIndex: number | null;
   tempo: number;
   playheadMode: PlayheadMode;
 
@@ -164,9 +168,12 @@ export interface Store {
   loadNotes(notes: Partial<PlacedNote>[]): void;
   eraseInPitchArea(col: CanvasSpaceColumn, row: number, width?: number, record?: boolean): boolean;
   eraseDrumNoteAt(colIndex: CanvasSpaceColumn, drumTrack: number | string, record?: boolean): boolean;
-  toggleDrumNote(drumHit: Partial<PlacedNote> & { drumTrack: number | string; startColumnIndex: CanvasSpaceColumn }): void;
+  toggleDrumNote(
+    drumHit: Partial<PlacedNote> & { drumTrack: number | string; startColumnIndex: CanvasSpaceColumn },
+    record?: boolean
+  ): boolean;
   eraseTonicSignAt(columnIndex: CanvasSpaceColumn, record?: boolean): boolean;
-  addTonicSignGroup(tonicSignGroup: Array<Pick<TonicSign, 'preMacrobeatIndex' | 'columnIndex' | 'row' | 'tonicNumber' | 'globalRow' | 'uuid'>>): void;
+  addTonicSignGroup(tonicSignGroup: Array<Pick<TonicSign, 'preMacrobeatIndex' | 'columnIndex' | 'row' | 'tonicNumber' | 'globalRow' | 'uuid'>>, record?: boolean): void;
 
   // History actions
   recordState(): void;
@@ -177,6 +184,7 @@ export interface Store {
   // Playback actions
   setPlaybackState(isPlaying: boolean, isPaused: boolean): void;
   setLooping(enabled: boolean): void;
+  setPlaybackStartMacrobeat(index: number | null): void;
   setPlayheadMode(mode: PlayheadMode): void;
 
   // Timbre/ADSR actions
@@ -238,7 +246,8 @@ export interface Store {
   getTripletStampShapeRow(placement: TripletStampPlacement, shapeKey: string): number;
 
   // View actions
-  setSelectedTool(tool: string, tonicNumber?: string | number): void;
+  setSelectedTool(tool: string, tonicNumber?: string | number, drawTool?: AppState['selectedDrawTool']): void;
+  setAnnotations(annotations: AppState['annotations'], record?: boolean): void;
   setSelectedNote(shape: 'circle' | 'oval' | 'diamond', color: string): void;
   setTempo(tempo: number): void;
   applyPreset(color: string, preset: unknown): void;

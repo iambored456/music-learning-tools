@@ -24,6 +24,11 @@ export interface NotationAssemblySizing {
   fitsAvailableHeight: boolean;
 }
 
+export interface NotationAssemblyVisibility {
+  includeButtonGrid?: boolean;
+  includeDrumGrid?: boolean;
+}
+
 export function getPitchViewportHeightForCellHeight(cellHeight: number, rowCount: number): number {
   const normalizedRowCount = Math.max(1, Math.round(rowCount));
   return (normalizedRowCount + 1) * (Math.max(1, Math.round(cellHeight)) / 2);
@@ -41,7 +46,8 @@ export function getButtonGridHeightForCellHeight(cellHeight: number): number {
 export function getNotationAssemblySizingForCellHeight(
   cellHeight: number,
   rowCount: number,
-  availableHeight: number
+  availableHeight: number,
+  visibility: NotationAssemblyVisibility = {}
 ): NotationAssemblySizing {
   const normalizedAvailableHeight = Number.isFinite(availableHeight)
     ? Math.max(0, availableHeight)
@@ -53,7 +59,9 @@ export function getNotationAssemblySizingForCellHeight(
   const pitchViewportHeight = getPitchViewportHeightForCellHeight(normalizedCellHeight, normalizedRowCount);
   const drumRowHeight = getDrumRowHeightFromCellHeight(normalizedCellHeight);
   const drumCanvasHeight = DRUM_ROW_COUNT * drumRowHeight;
-  const assemblyHeight = buttonGridHeight + pitchViewportHeight + drumCanvasHeight;
+  const assemblyHeight = pitchViewportHeight
+    + (visibility.includeButtonGrid === false ? 0 : buttonGridHeight)
+    + (visibility.includeDrumGrid === false ? 0 : drumCanvasHeight);
   const bottomRemainderHeight = normalizedAvailableHeight - assemblyHeight;
 
   return {
@@ -75,6 +83,8 @@ export function getNotationAssemblySizingForCellHeight(
 export function resolveNotationAssemblySizing(params: {
   availableHeight: number;
   rowCount: number;
+  includeButtonGrid?: boolean;
+  includeDrumGrid?: boolean;
 }): NotationAssemblySizing {
   const availableHeight = Number.isFinite(params.availableHeight)
     ? Math.max(0, params.availableHeight)
@@ -87,7 +97,7 @@ export function resolveNotationAssemblySizing(params: {
 
   while (low <= high) {
     const candidate = Math.floor((low + high) / 2);
-    const sizing = getNotationAssemblySizingForCellHeight(candidate, rowCount, availableHeight);
+    const sizing = getNotationAssemblySizingForCellHeight(candidate, rowCount, availableHeight, params);
 
     if (sizing.fitsAvailableHeight) {
       best = candidate;
@@ -97,5 +107,5 @@ export function resolveNotationAssemblySizing(params: {
     }
   }
 
-  return getNotationAssemblySizingForCellHeight(best, rowCount, availableHeight);
+  return getNotationAssemblySizingForCellHeight(best, rowCount, availableHeight, params);
 }

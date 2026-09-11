@@ -21,37 +21,37 @@
 
   // Event handlers
   function handle23Click() {
-    if (selectedRatio === MODULATION_RATIOS.COMPRESSION_2_3) {
+    if (store.state.selectedTool === 'modulation' && selectedRatio === MODULATION_RATIOS.COMPRESSION_2_3) {
       // Deactivate
       selectedRatio = null;
       modulation23Btn?.classList.remove('active');
-      store.setSelectedTool('note');
+      store.setSelectedTool('select');
       logger.info('ModulationBridge', '2:3 modulation tool deactivated', null, 'ui');
     } else {
       // Activate 2:3
       selectedRatio = MODULATION_RATIOS.COMPRESSION_2_3;
       modulation23Btn?.classList.add('active');
       modulation32Btn?.classList.remove('active');
-      store.setSelectedTool('modulation');
       store.state.selectedModulationRatio = selectedRatio;
+      store.setSelectedTool('modulation');
       logger.info('ModulationBridge', '2:3 modulation tool activated', null, 'ui');
     }
   }
 
   function handle32Click() {
-    if (selectedRatio === MODULATION_RATIOS.EXPANSION_3_2) {
+    if (store.state.selectedTool === 'modulation' && selectedRatio === MODULATION_RATIOS.EXPANSION_3_2) {
       // Deactivate
       selectedRatio = null;
       modulation32Btn?.classList.remove('active');
-      store.setSelectedTool('note');
+      store.setSelectedTool('select');
       logger.info('ModulationBridge', '3:2 modulation tool deactivated', null, 'ui');
     } else {
       // Activate 3:2
       selectedRatio = MODULATION_RATIOS.EXPANSION_3_2;
       modulation32Btn?.classList.add('active');
       modulation23Btn?.classList.remove('active');
-      store.setSelectedTool('modulation');
       store.state.selectedModulationRatio = selectedRatio;
+      store.setSelectedTool('modulation');
       logger.info('ModulationBridge', '3:2 modulation tool activated', null, 'ui');
     }
   }
@@ -91,11 +91,11 @@
   function handleToolChanged(data: unknown) {
     const toolData = data as ToolChangeEvent | string;
     const newTool = typeof toolData === 'string' ? toolData : (toolData.newTool || toolData);
-    if (newTool !== 'modulation') {
-      selectedRatio = null;
-      modulation23Btn?.classList.remove('active');
-      modulation32Btn?.classList.remove('active');
-    }
+    selectedRatio = store.state.selectedModulationRatio ?? null;
+    modulation23Btn?.classList.toggle('active', newTool === 'modulation' && selectedRatio === MODULATION_RATIOS.COMPRESSION_2_3);
+    modulation32Btn?.classList.toggle('active', newTool === 'modulation' && selectedRatio === MODULATION_RATIOS.EXPANSION_3_2);
+    modulation23Btn?.setAttribute('aria-pressed', String(newTool === 'modulation' && selectedRatio === MODULATION_RATIOS.COMPRESSION_2_3));
+    modulation32Btn?.setAttribute('aria-pressed', String(newTool === 'modulation' && selectedRatio === MODULATION_RATIOS.EXPANSION_3_2));
   }
 
   function handleMarkersChanged() {

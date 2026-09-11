@@ -23,5 +23,5 @@
     </style>
   </defs>
   <circle class="ring" cx="12" cy="12" r="9" />
-  <text class="digit" x="12" y="12.2">7</text>
+  <text class="digit" x="12" y="13.2">7</text>
 </svg>

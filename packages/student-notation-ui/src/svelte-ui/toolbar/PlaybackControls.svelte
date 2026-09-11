@@ -9,10 +9,12 @@
   import { clearAllSixteenthStamps } from '@/rhythm/sixteenthStampPlacements.ts';
   import { clearAllTripletStamps } from '@/rhythm/tripletStampPlacements.ts';
   import { getIconPath } from '@utils/assetPaths.ts';
+  import { hourglassIcon } from './playbackIcons';
 
   // Reactive state using Svelte 5 runes
   let isPlaying = $state(store.state.isPlaying);
   let isPaused = $state(store.state.isPaused);
+  let isBuffering = $state(TransportService.isBuffering);
   let isLooping = $state(store.state.isLooping);
   let canUndo = $state(store.state.historyIndex > 0);
   let canRedo = $state(store.state.historyIndex < store.state.history.length - 1);
@@ -30,6 +32,10 @@
       isLooping = data;
     };
 
+    const handleBufferingChanged = (value?: boolean) => {
+      isBuffering = value ?? false;
+    };
+
     const handleHistoryChanged = () => {
       canUndo = store.state.historyIndex > 0;
       canRedo = store.state.historyIndex < store.state.history.length - 1;
@@ -38,13 +44,17 @@
     store.on('playbackStateChanged', handlePlaybackState);
     store.on('loopingChanged', handleLoopingChanged);
     store.on('historyChanged', handleHistoryChanged);
+    store.on('playbackBufferingChanged', handleBufferingChanged);
 
     // Initial update
     handleHistoryChanged();
 
     // Cleanup on unmount
     return () => {
-      // Note: store.off would need to be implemented for proper cleanup
+      store.off('playbackStateChanged', handlePlaybackState);
+      store.off('loopingChanged', handleLoopingChanged);
+      store.off('historyChanged', handleHistoryChanged);
+      store.off('playbackBufferingChanged', handleBufferingChanged);
     };
   });
 
@@ -55,6 +65,7 @@
 
   // Event handlers
   function handlePlay() {
+    if (TransportService.isBuffering) return;
     if (isPlaying && isPaused) {
       store.setPlaybackState(true, false);
       TransportService.resume();
@@ -95,9 +106,14 @@
   <button
     class="toolbar-button"
     onclick={handlePlay}
-    title={showPauseIcon ? 'Pause' : 'Play'}
+    title={isBuffering ? 'Buffering playback' : showPauseIcon ? 'Pause' : 'Play'}
+    aria-label={isBuffering ? 'Buffering playback' : showPauseIcon ? 'Pause' : 'Play'}
+    aria-busy={isBuffering}
+    disabled={isBuffering}
   >
-    {#if showPauseIcon}
+    {#if isBuffering}
+      {@html hourglassIcon}
+    {:else if showPauseIcon}
       <img src={pauseIcon} alt="Pause" />
     {:else}
       <img src={playIcon} alt="Play" />

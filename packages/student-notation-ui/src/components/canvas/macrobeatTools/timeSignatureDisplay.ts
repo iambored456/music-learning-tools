@@ -33,6 +33,10 @@ export function renderTimeSignatureDisplay(): void {
     if (segment.isAnacrusis) {
       labelElem.classList.add('anacrusis-label');
     }
+    const measureNumber = document.createElement('span');
+    measureNumber.className = 'time-signature-label__measure-number';
+    measureNumber.textContent = `[${segment.measureNumber}]`;
+    labelElem.appendChild(measureNumber);
     const labelText = document.createElement('span');
     labelText.className = 'time-signature-label__text';
     labelText.textContent = segment.label;

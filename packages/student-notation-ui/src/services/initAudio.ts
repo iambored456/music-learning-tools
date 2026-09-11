@@ -19,6 +19,7 @@ logger.moduleLoaded('EngineAudio', 'general');
 
 // Engine instance
 let engineInstance: SynthEngineInstance | null = null;
+let cleanupChannelVolumeSubscriptions: (() => void) | null = null;
 
 function isPlaybackFrozen(): boolean {
   return store.state.isPlaying && store.state.isPaused;
@@ -79,6 +80,19 @@ const SynthEngine = {
     engineInstance.init();
 
     // Set up store event subscriptions
+    cleanupChannelVolumeSubscriptions?.();
+    const syncChannelVolumes = () => {
+      for (const [color, timbre] of Object.entries(store.state.timbres)) {
+        engineInstance?.setChannelVolume(color, timbre.channelVolume ?? 1);
+      }
+    };
+    store.on('channelVolumeChanged', syncChannelVolumes);
+    store.on('historyChanged', syncChannelVolumes);
+    cleanupChannelVolumeSubscriptions = () => {
+      store.off('channelVolumeChanged', syncChannelVolumes);
+      store.off('historyChanged', syncChannelVolumes);
+    };
+
     store.on('timbreChanged', (color?: string) => {
       if (!color) {return;}
       this.updateSynthForColor(color);
@@ -262,6 +276,8 @@ const SynthEngine = {
   },
 
   dispose() {
+    cleanupChannelVolumeSubscriptions?.();
+    cleanupChannelVolumeSubscriptions = null;
     if (!engineInstance) return;
     engineInstance.dispose();
     engineInstance = null;

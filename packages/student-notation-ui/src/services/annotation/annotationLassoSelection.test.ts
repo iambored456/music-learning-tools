@@ -7,7 +7,14 @@ vi.mock('@components/canvas/PitchGrid/renderers/rendererUtils.ts', () => ({
 }));
 
 vi.mock('@services/columnMapService.ts', () => ({
-  timeToCanvas: (timeIndex: number) => timeIndex >= 6 ? timeIndex + 2 : timeIndex
+  timeToCanvas: (timeIndex: number) => timeIndex >= 6 ? timeIndex + 2 : timeIndex,
+  default: {
+    getColumnMap: () => ({ entries: [{ type: 'tonic', tonicSignUuid: 'tonic-uuid', canvasIndex: 2 }] })
+  }
+}));
+
+vi.mock('@components/canvas/PitchGrid/renderers/modulationRenderer.ts', () => ({
+  getModulationMarkerCanvasX: (marker: { xPosition?: number | null }) => marker.xPosition ?? 0
 }));
 
 vi.mock('@state/initStore.ts', () => ({
@@ -16,7 +23,7 @@ vi.mock('@state/initStore.ts', () => ({
   }
 }));
 
-import { computeLassoSelection } from './annotationLassoSelection.ts';
+import { computeLassoSelection, findSelectableItemAtPoint } from './annotationLassoSelection.ts';
 
 function createSixteenthStamp(overrides: Partial<SixteenthStampPlacement> = {}): SixteenthStampPlacement {
   return {
@@ -297,5 +304,35 @@ describe('computeLassoSelection', () => {
 
     expect(selection.selectedItems).toHaveLength(0);
     expect(selection.convexHull).toBeNull();
+  });
+});
+
+describe('findSelectableItemAtPoint', () => {
+  const renderOptions = {
+    cellWidth: 20,
+    cellHeight: 10,
+    columnWidths: Array.from({ length: 16 }, () => 1),
+    tempoModulationMarkers: [],
+    viewportHeight: 200
+  };
+
+  const baseState = {
+    placedNotes: [],
+    sixteenthStampPlacements: [],
+    sixteenthThreeStampPlacements: [],
+    tripletStampPlacements: [],
+    tonicSignGroups: {},
+    tempoModulationMarkers: [],
+    annotations: []
+  };
+
+  it.each([
+    ['note', { ...baseState, placedNotes: [{ uuid: 'n', row: 10, globalRow: 10, startColumnIndex: 1, endColumnIndex: 1, shape: 'oval', color: '#000' }] }, 30, 100],
+    ['annotation', { ...baseState, annotations: [{ type: 'arrow', startCol: 1, startRow: 5, endCol: 3, endRow: 5, settings: {} }] }, 40, 50],
+    ['modulationMarker', { ...baseState, tempoModulationMarkers: [{ id: 'm', active: true, ratio: 1.5, measureIndex: 1, macrobeatIndex: 0, columnIndex: null, xPosition: 80 }] }, 80, 100],
+    ['tonicSign', { ...baseState, tonicSignGroups: { 'tonic-uuid': [{ uuid: 'tonic-uuid', row: 10, globalRow: 10, columnIndex: 2, tonicNumber: 1, preMacrobeatIndex: -1 }] } }, 60, 100]
+  ])('hits a visible %s', (expectedType, state, x, y) => {
+    const hit = findSelectableItemAtPoint({ canvasX: x, canvasY: y, state: state as any, renderOptions: renderOptions as any });
+    expect(hit?.type).toBe(expectedType);
   });
 });

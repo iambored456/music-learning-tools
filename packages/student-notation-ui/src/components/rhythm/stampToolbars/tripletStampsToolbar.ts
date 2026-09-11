@@ -138,7 +138,9 @@ const TripletStampsToolbar = {
     });
 
     store.on('toolChanged', ({ newTool }: { newTool?: string } = {}) => {
-      if (newTool && newTool !== 'tripletStamp') {
+      if (newTool === 'tripletStamp') {
+        this.setInitialSelection(this.selectedTripletStampId);
+      } else {
         this.clearSelection();
       }
     });

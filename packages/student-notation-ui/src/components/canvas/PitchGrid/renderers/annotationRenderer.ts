@@ -1,3 +1,4 @@
+import { renderArrowAnnotation } from '@services/annotation/annotationArrowRenderer.ts';
 // js/components/Canvas/PitchGrid/renderers/annotationRenderer.ts
 import store from '@state/initStore.ts';
 import annotationService from '../../../../services/annotationService.ts';
@@ -5,7 +6,6 @@ import { buildCanvasFont, getSemanticTypography } from '@services/typographyServ
 import { getColumnX, getRowY } from './rendererUtils.ts';
 import type {
   Annotation,
-  AnnotationArrowheadStyle,
   AnnotationCanvasPoint,
   AnnotationGridPoint,
   AnnotationLineStyle,
@@ -176,7 +176,7 @@ export function renderAnnotations(ctx: CanvasRenderingContext2D, options: Annota
 }
 
 function drawArrow(ctx: CanvasRenderingContext2D, annotation: ArrowAnnotation, isSelected = false, isHovered = false, options: AnnotationOptions): void {
-  const { startCol, startRow, endCol, endRow, settings } = annotation;
+  const { startCol, startRow, endCol, endRow } = annotation;
 
   // Convert grid coordinates to canvas pixels
   const startX = getColumnX(startCol, options);
@@ -184,104 +184,14 @@ function drawArrow(ctx: CanvasRenderingContext2D, annotation: ArrowAnnotation, i
   const endX = getColumnX(endCol, options);
   const endY = getRowY(endRow, options);
 
-  ctx.save();
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = settings.strokeWeight;
-  ctx.setLineDash(getLineDash(settings.lineStyle));
-
-  // Calculate angle and arrowhead size
-  const angle = Math.atan2(endY - startY, endX - startX);
-  const arrowheadSize = settings.arrowheadSize || 12;
-
-  // Calculate adjusted endpoints to stop at arrowhead base
-  let adjustedStartX = startX;
-  let adjustedStartY = startY;
-  let adjustedEndX = endX;
-  let adjustedEndY = endY;
-
-  if (settings.startArrowhead && settings.startArrowhead !== 'none') {
-    adjustedStartX = startX + Math.cos(angle) * arrowheadSize;
-    adjustedStartY = startY + Math.sin(angle) * arrowheadSize;
-  }
-
-  if (settings.endArrowhead && settings.endArrowhead !== 'none') {
-    adjustedEndX = endX - Math.cos(angle) * arrowheadSize;
-    adjustedEndY = endY - Math.sin(angle) * arrowheadSize;
-  }
-
-  // Draw line
-  ctx.beginPath();
-  ctx.moveTo(adjustedStartX, adjustedStartY);
-  ctx.lineTo(adjustedEndX, adjustedEndY);
-  ctx.stroke();
-
-  // Reset line dash for arrowheads
-  ctx.setLineDash([]);
-
-  // Draw arrowheads
-  if (settings.startArrowhead && settings.startArrowhead !== 'none') {
-    drawArrowhead(ctx, startX, startY, angle + Math.PI, settings.startArrowhead, arrowheadSize);
-  }
-
-  if (settings.endArrowhead && settings.endArrowhead !== 'none') {
-    drawArrowhead(ctx, endX, endY, angle, settings.endArrowhead, arrowheadSize);
-  }
-
-  // Draw selection/hover highlight
-  if (isSelected || isHovered) {
-    ctx.strokeStyle = isSelected ? 'rgba(74, 144, 226, 0.6)' : 'rgba(74, 144, 226, 0.3)';
-    ctx.lineWidth = settings.strokeWeight + 4;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(endX, endY);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function drawArrowhead(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  angle: number,
-  type: AnnotationArrowheadStyle,
-  size: number
-): void {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-
-  switch (type) {
-    case 'filled':
-    case 'filled-arrow':
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-size, -size / 2);
-      ctx.lineTo(-size, size / 2);
-      ctx.closePath();
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.fill();
-      break;
-    case 'unfilled':
-    case 'unfilled-arrow':
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-size, -size / 2);
-      ctx.lineTo(-size, size / 2);
-      ctx.closePath();
-      ctx.stroke();
-      break;
-    case 'circle':
-      ctx.beginPath();
-      ctx.arc(0, 0, size / 3, 0, Math.PI * 2);
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.fill();
-      break;
-  }
-
-  ctx.restore();
+  renderArrowAnnotation({
+    ctx,
+    annotation: { ...annotation, startX, startY, endX, endY },
+    isSelected,
+    isHovered,
+    getStrokeWidth: weight => weight,
+    getLineDash
+  });
 }
 
 function drawText(ctx: CanvasRenderingContext2D, annotation: TextAnnotation, isSelected = false, isHovered = false, options: AnnotationOptions): void {
@@ -543,7 +453,7 @@ function drawResizeHandles(ctx: CanvasRenderingContext2D, x: number, y: number, 
 
   ctx.save();
   handles.forEach(handle => {
-    ctx.fillStyle = '#4a90e2';
+    ctx.fillStyle = '#44bcef';
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
@@ -586,9 +496,8 @@ function drawPath(ctx: CanvasRenderingContext2D, annotation: PathAnnotation, opt
 
   ctx.save();
 
-  if (type === 'highlighter') {
-    ctx.globalAlpha = 0.3;
-  }
+  const transparency = settings.transparency ?? (type === 'highlighter' ? 70 : 0);
+  ctx.globalAlpha = 1 - Math.max(0, Math.min(95, transparency)) / 100;
 
   ctx.strokeStyle = settings.color;
   ctx.lineWidth = settings.size;
@@ -633,7 +542,7 @@ function drawLassoPath(ctx: CanvasRenderingContext2D, annotation: LassoAnnotatio
   if (!firstPoint) {return;}
 
   ctx.save();
-  ctx.strokeStyle = '#4a90e2';
+  ctx.strokeStyle = '#44bcef';
   ctx.lineWidth = 2;
   ctx.setLineDash([5, 5]);
   ctx.globalAlpha = 0.7;
@@ -665,7 +574,7 @@ function drawConvexHull(ctx: CanvasRenderingContext2D, hull: AnnotationCanvasPoi
   if (!firstPoint) {return;}
 
   ctx.save();
-  ctx.strokeStyle = '#4a90e2';
+  ctx.strokeStyle = '#44bcef';
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 4]);
   ctx.globalAlpha = 0.8;

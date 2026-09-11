@@ -238,8 +238,8 @@ class EffectsController {
   /**
    * Allow position canvases to pull the latest values for the active color.
    */
-  getEffectState(effectType: string): Record<string, number> {
-    const color = this.currentColor || store.state.selectedNote?.color;
+  getEffectState(effectType: string, requestedColor?: string | null): Record<string, number> {
+    const color = requestedColor || this.currentColor || store.state.selectedNote?.color;
     if (!color) {return {};}
     return effectsCoordinator.getEffectParameters(color, effectType) || {};
   }
@@ -338,7 +338,7 @@ class EffectsController {
     const pitchColor = rowData ? rowData.hex : '#888888';
     const timbre = store.state.timbres[color];
     if (timbre) {
-      triggerAdsrPlayhead(noteId, 'attack', pitchColor, timbre.adsr);
+      triggerAdsrPlayhead(noteId, 'attack', pitchColor, timbre.adsr, color);
     }
 
     store.emit('spacebarPlayback', { note: root, color, isPlaying: true });
@@ -360,7 +360,7 @@ class EffectsController {
     const pitchColor = rowData ? rowData.hex : '#888888';
     const timbre = store.state.timbres[color];
     if (timbre) {
-      triggerAdsrPlayhead(noteId, 'release', pitchColor, timbre.adsr);
+      triggerAdsrPlayhead(noteId, 'release', pitchColor, timbre.adsr, color);
     }
 
     store.emit('spacebarPlayback', { note: root, color, isPlaying: false });

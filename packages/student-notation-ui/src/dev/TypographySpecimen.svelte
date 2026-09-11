@@ -32,8 +32,7 @@
   ];
 
   const themes = [
-    { id: 'light', name: 'Light theme' },
-    { id: 'dark', name: 'Dark theme' },
+    { id: 'light', name: 'Light interface' },
   ] as const;
 
   let specimenRoot: HTMLElement | undefined = $state();
@@ -105,7 +104,7 @@
 
   <div class="theme-grid">
     {#each themes as theme}
-      <section class:theme-panel--dark={theme.id === 'dark'} class="theme-panel">
+      <section class="theme-panel">
         <header class="theme-header">
           <h2>{theme.name}</h2>
           <span>Semantic colour aliases</span>
@@ -248,7 +247,7 @@
 
   .theme-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     max-width: 90rem;
     margin-inline: auto;
@@ -262,7 +261,7 @@
     --c-text-muted: #6c757d;
     --c-border: #dee2e6;
     --c-border-strong: #adb5bd;
-    --c-accent: #4a90e2;
+    --c-accent: #44bcef;
     --c-danger: #dc3545;
     --text-color-primary: var(--c-text);
     --text-color-secondary: var(--c-text-muted);
@@ -276,20 +275,6 @@
     border-radius: 0.75rem;
     box-shadow: var(--box-shadow-sm);
     color-scheme: light;
-  }
-
-  .theme-panel--dark {
-    --c-bg: #101418;
-    --c-surface: #20262d;
-    --c-surface-muted: #2a323b;
-    --c-text: #e9eef4;
-    --c-text-muted: #aab6c2;
-    --c-border: #3a4551;
-    --c-border-strong: #556170;
-    --c-accent: #4a90e2;
-    --c-danger: #ff6b78;
-
-    color-scheme: dark;
   }
 
   .theme-header {

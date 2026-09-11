@@ -55,6 +55,8 @@ class WheelPicker {
 
     this.renderOptions();
     this.setIndex(initialIndex, { silent: true });
+    this.fitWidthToOptions();
+    void document.fonts?.ready.then(() => this.fitWidthToOptions());
     this.attachEvents();
     this.observeSize();
   }
@@ -71,6 +73,31 @@ class WheelPicker {
       optionsEl.appendChild(optionNode);
       return optionNode;
     });
+  }
+
+  private fitWidthToOptions(): void {
+    if (!this.element || this.options.length === 0) {return;}
+
+    const measuringNode = document.createElement('span');
+    measuringNode.className = 'clef-wheel-option';
+    measuringNode.dataset['distance'] = '0';
+    measuringNode.style.position = 'absolute';
+    measuringNode.style.visibility = 'hidden';
+    measuringNode.style.width = 'max-content';
+    measuringNode.style.height = 'auto';
+    measuringNode.style.pointerEvents = 'none';
+    this.element.appendChild(measuringNode);
+
+    let widestLabel = 0;
+    this.options.forEach(option => {
+      measuringNode.textContent = option.label;
+      widestLabel = Math.max(widestLabel, measuringNode.getBoundingClientRect().width);
+    });
+
+    measuringNode.remove();
+    if (widestLabel > 0) {
+      this.element.style.setProperty('--clef-wheel-label-width', `${Math.ceil(widestLabel)}px`);
+    }
   }
 
   private attachEvents() {

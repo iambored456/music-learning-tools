@@ -1,4 +1,13 @@
 <script lang="ts">
+  import {
+    getIntervalHighlightClass,
+    getNextUnifiedPositionStep,
+    getUnifiedPositionStepCount,
+    getUnifiedPositionStepFromPointer,
+    isActiveChordSelection,
+    syncNoteBankSelection,
+    selectNoteBankNote
+  } from './toolSelectionUi.ts';
   /**
    * ToolSelectorBridge - Headless Svelte component
    *
@@ -7,7 +16,6 @@
    */
   import { onMount, onDestroy } from 'svelte';
   import store from '@state/initStore.ts';
-  import SixteenthStampsToolbar from '@components/rhythm/stampToolbars/sixteenthStampsToolbar.ts';
   import domCache from '@services/domCache.ts';
   import { notificationSystem } from '../ui/NotificationModal.svelte';
   import clefRangeController from '@components/clefWheels/clefRangeController.ts';
@@ -18,6 +26,7 @@
     BASIC_CHORD_SHAPES,
     ADVANCED_CHORD_SHAPES,
     CHORD_SHAPES,
+    CHORD_OPTIONAL_INTERVALS,
     INTERVAL_SHAPES,
     normalizeInterval
   } from '@data/chordDefinitions.ts';
@@ -33,14 +42,12 @@
     newNote?: { color?: string; shape?: 'circle' | 'oval' | 'diamond' };
   }
 
-  // Constants
-  const SIXTEENTH_FULL_STAMP_ID = 15;
-
   // State
   let lastDegreeMode: Exclude<DegreeDisplayMode, 'off'> = 'diatonic';
   let previousMode: 'inversion' | 'position' = 'position';
   let cleanupToolSubtabState: (() => void) | null = null;
   let cleanupDrumBeatPreviews: (() => void) | null = null;
+  let cleanupUnifiedPositionToggle: (() => void) | null = null;
 
   // DOM references (will be populated on mount)
   let eraserBtn: HTMLElement | null = null;
@@ -66,6 +73,15 @@
     return Object.keys(store.state.tonicSignGroups).length > 0;
   }
 
+  function requireTonicShape(): boolean {
+    if (hasTonicShapesOnCanvas()) return true;
+    notificationSystem.alert(
+      'Please place a tonal center on the canvas before showing degrees.',
+      'Tonal Center Required'
+    );
+    return false;
+  }
+
   function debugFocusColours(_message: string, _data?: unknown): void {}
 
   function updateScaleModeToggleState(mode: DegreeDisplayMode = store.state.degreeDisplayMode): void {
@@ -80,25 +96,33 @@
 
     const effectiveMode: Exclude<DegreeDisplayMode, 'off'> = mode === 'off' ? lastDegreeMode : mode;
     const isDegreesOff = mode === 'off';
+    const tonicShapesPresent = hasTonicShapesOnCanvas();
+    const visuallyDisabled = isDegreesOff || !tonicShapesPresent;
 
     [scaleButton, modeButton].forEach(button => {
-      button.disabled = isDegreesOff;
-      button.classList.toggle('disabled', isDegreesOff);
+      button.disabled = false;
+      button.classList.toggle('disabled', visuallyDisabled);
+      button.setAttribute('aria-disabled', String(!tonicShapesPresent));
     });
 
     if (degreeModeToggle) {
-      degreeModeToggle.classList.toggle('disabled', isDegreesOff);
+      degreeModeToggle.classList.toggle('disabled', visuallyDisabled);
     }
 
-    scaleButton.classList.toggle('active', effectiveMode === 'diatonic');
-    scaleButton.setAttribute('aria-pressed', effectiveMode === 'diatonic' ? 'true' : 'false');
-    modeButton.classList.toggle('active', effectiveMode === 'modal');
-    modeButton.setAttribute('aria-pressed', effectiveMode === 'modal' ? 'true' : 'false');
+    const scaleActive = tonicShapesPresent && !isDegreesOff && effectiveMode === 'diatonic';
+    const modeActive = tonicShapesPresent && !isDegreesOff && effectiveMode === 'modal';
+    scaleButton.classList.toggle('active', scaleActive);
+    scaleButton.setAttribute('aria-pressed', String(scaleActive));
+    modeButton.classList.toggle('active', modeActive);
+    modeButton.setAttribute('aria-pressed', String(modeActive));
   }
 
   function syncDegreeVisibilityButton(mode: DegreeDisplayMode, visibilityButton: HTMLElement | null): void {
     if (!visibilityButton) return;
-    const isOn = mode !== 'off';
+    const tonicShapesPresent = hasTonicShapesOnCanvas();
+    const isOn = tonicShapesPresent && mode !== 'off';
+    visibilityButton.classList.toggle('disabled', !tonicShapesPresent);
+    visibilityButton.setAttribute('aria-disabled', String(!tonicShapesPresent));
     visibilityButton.classList.toggle('active', isOn);
     visibilityButton.setAttribute('aria-pressed', isOn ? 'true' : 'false');
   }
@@ -128,7 +152,7 @@
       el.classList.remove('selected', 'partial-match');
     });
 
-    if (store.state.activeChordIntervals) {
+    if (store.state.selectedTool === 'chord' && store.state.activeChordIntervals) {
       const currentIntervals = store.state.activeChordIntervals;
       const currentIntervalsString = currentIntervals.toString();
       const normalizedCurrentIntervals = currentIntervals.map(normalizeInterval);
@@ -162,19 +186,24 @@
     if (!intervalsPanel) return;
 
     intervalsPanel.querySelectorAll<HTMLButtonElement>('.harmony-preset-button').forEach(el =>
-      el.classList.remove('selected')
+      el.classList.remove('selected', 'optional-interval')
     );
 
-    if (store.state.activeChordIntervals) {
+    if (store.state.selectedTool === 'chord' && store.state.activeChordIntervals) {
       const activeIntervals = store.state.activeChordIntervals;
-      const normalizedActiveIntervals = activeIntervals.map(normalizeInterval);
+      const selectedChordLabel = chordsPanel
+        ?.querySelector<HTMLButtonElement>('.harmony-preset-button.selected')
+        ?.textContent?.trim() ?? '';
+      const optionalIntervals = CHORD_OPTIONAL_INTERVALS[selectedChordLabel] ?? [];
 
       intervalsPanel.querySelectorAll<HTMLButtonElement>('.harmony-preset-button').forEach(button => {
         const intervalLabel = button.textContent?.trim() ?? '';
         const buttonInterval = INTERVAL_SHAPES[intervalLabel];
         const firstInterval = buttonInterval?.[0];
-        if (firstInterval && normalizedActiveIntervals.includes(firstInterval)) {
-          button.classList.add('selected');
+        if (firstInterval) {
+          const highlightClass = getIntervalHighlightClass(activeIntervals, optionalIntervals, firstInterval);
+          if (!highlightClass) return;
+          button.classList.add(highlightClass);
         }
       });
     }
@@ -202,14 +231,20 @@
 
   const applyHarmonyAccentColors = (container: HTMLElement | null, color: string): void => {
     if (!container) return;
-    const lightColor = lightenColor(color, 50);
+    const palette = store.state.colorPalette[color] || { primary: color, light: color };
+    const primaryColor = palette.primary;
+    const lightColor = palette.light;
     const extraLightColor = lightenColor(lightColor, 60);
-    container.style.setProperty('--c-accent', color);
+    container.style.setProperty('--c-accent', primaryColor);
     container.style.setProperty('--c-accent-light', extraLightColor);
     container.style.setProperty('--harmony-partial-bg', hexToRgba(extraLightColor, 0.25));
-    container.style.setProperty('--harmony-partial-border', hexToRgba(color, 0.4));
+    container.style.setProperty('--harmony-partial-border', hexToRgba(primaryColor, 0.4));
     container.style.setProperty('--harmony-partial-bg-hover', hexToRgba(extraLightColor, 0.4));
-    container.style.setProperty('--harmony-partial-border-hover', hexToRgba(color, 0.6));
+    container.style.setProperty('--harmony-partial-border-hover', hexToRgba(primaryColor, 0.6));
+    container.style.setProperty('--harmony-optional-bg', hexToRgba(extraLightColor, 0.25));
+    container.style.setProperty('--harmony-optional-border', hexToRgba(primaryColor, 0.4));
+    container.style.setProperty('--harmony-optional-bg-hover', hexToRgba(extraLightColor, 0.4));
+    container.style.setProperty('--harmony-optional-border-hover', hexToRgba(primaryColor, 0.6));
   };
 
   // Position toggle helpers
@@ -220,8 +255,7 @@
 
   function getMaxSteps(): number {
     const noteCount = store.state.activeChordIntervals?.length ?? 1;
-    if (noteCount === 2) return 2;
-    return Math.max(1, noteCount);
+    return getUnifiedPositionStepCount(noteCount);
   }
 
   function getCurrentStep(): number {
@@ -288,7 +322,7 @@
       }
       previousMode = newMode;
     } else if (newMode === 'position') {
-      const maxPosition = Math.max(0, noteCount - 1);
+      const maxPosition = getUnifiedPositionStepCount(noteCount) - 1;
       if (store.state.chordPositionState > maxPosition) {
         store.setChordPosition(0);
       }
@@ -303,10 +337,17 @@
 
   function updateTonicModeButtons(activeNumber: string | number | null | undefined = store.state.selectedToolTonicNumber) {
     if (!tonicModeButtons.length) return;
+    if (store.state.selectedTool !== 'tonicization') activeNumber = null;
     const parsedCandidate = typeof activeNumber === 'number' ? activeNumber : parseInt(String(activeNumber ?? ''), 10);
     const parsedActive = Number.isInteger(parsedCandidate) && parsedCandidate >= 1 && parsedCandidate <= 7
       ? parsedCandidate
       : null;
+    const otherModes = document.querySelector<HTMLSelectElement>('#tonic-other-modes');
+    if (otherModes) {
+      const isOtherMode = parsedActive !== null && ![1, 6].includes(parsedActive);
+      otherModes.value = isOtherMode ? String(parsedActive) : '';
+      otherModes.classList.toggle('selected', isOtherMode);
+    }
     tonicModeButtons.forEach(button => {
       const tonicValue = button.dataset['tonic'];
       const buttonNumber = tonicValue ? parseInt(tonicValue, 10) : NaN;
@@ -314,6 +355,20 @@
       button.classList.toggle('selected', isActive);
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+  }
+
+  function selectTonicMode(parsed: number): void {
+    if (![1, 2, 3, 4, 5, 6, 7].includes(parsed)) return;
+    if (store.state.selectedTool === 'tonicization' && store.state.selectedToolTonicNumber === parsed) {
+      store.setSelectedTool('select');
+    } else {
+      store.setSelectedTool('tonicization', parsed);
+    }
+  }
+
+  function handleOtherTonicModeChange(event: Event): void {
+    const select = event.currentTarget as HTMLSelectElement;
+    selectTonicMode(Number(select.value));
   }
 
   function getPreferredDegreeMode(): Exclude<DegreeDisplayMode, 'off'> {
@@ -366,36 +421,47 @@
     if (!focusColoursToggle) {return;}
     const tonicShapesPresent = hasTonicShapesOnCanvas();
     const visiblyEnabled = tonicShapesPresent && focusColoursEnabled;
-    focusColoursToggle.disabled = !tonicShapesPresent;
+    focusColoursToggle.disabled = false;
     focusColoursToggle.classList.toggle('disabled', !tonicShapesPresent);
+    focusColoursToggle.setAttribute('aria-disabled', String(!tonicShapesPresent));
     focusColoursToggle.classList.toggle('active', visiblyEnabled);
     focusColoursToggle.setAttribute('aria-pressed', visiblyEnabled ? 'true' : 'false');
   };
 
   function handleTonicStructureChanged(): void {
-    if (!hasTonicShapesOnCanvas() && store.state.focusColours) {
+    const tonicShapesPresent = hasTonicShapesOnCanvas();
+    if (!tonicShapesPresent && store.state.focusColours) {
       store.toggleFocusColours();
-      return;
     }
+    if (!tonicShapesPresent && store.state.degreeDisplayMode !== 'off') {
+      store.setDegreeDisplayMode('off');
+    }
+    syncDegreeVisibilityButton(store.state.degreeDisplayMode, degreeVisibilityToggle);
+    updateScaleModeToggleState(store.state.degreeDisplayMode);
     syncFocusColoursUiState(store.state.focusColours);
   }
 
   // Store event handlers
   function handleToolChanged({ newTool }: ToolChangedPayload = {}) {
+    syncNoteBankSelection(store.state.selectedTool, store.state.selectedNote);
     eraserBtn?.classList.remove('selected');
+    eraserBtn?.setAttribute('aria-pressed', String(newTool === 'eraser'));
+    for (const [id, active] of [
+      ['select-tool-button', newTool === 'select'],
+      ['marker-shortcut-button', newTool === 'draw' && store.state.selectedDrawTool === 'marker']
+    ] as const) {
+      const button = document.getElementById(id);
+      button?.classList.toggle('selected', active);
+      button?.setAttribute('aria-pressed', String(active));
+    }
+    updateChordButtonSelection();
+    updateIntervalButtonSelection();
     if (harmonyContainer) harmonyContainer.classList.remove('active-tool');
 
     if (newTool === 'eraser') {
       eraserBtn?.classList.add('selected');
     } else if (newTool === 'chord') {
       harmonyContainer?.classList.add('active-tool');
-    } else if (newTool === 'note') {
-      const currentNote = store.state.selectedNote;
-      if (currentNote) {
-        const targetPair = document.querySelector(`.note-pair[data-color='${currentNote.color}']`);
-        targetPair?.classList.add('selected');
-        targetPair?.querySelector(`.note[data-type='${currentNote.shape}']`)?.classList.add('selected');
-      }
     }
 
     updateTonicModeButtons();
@@ -409,18 +475,9 @@
 
   function handleNoteChanged({ newNote }: NoteChangedPayload = {}) {
     if (!newNote?.color || !newNote.shape) return;
-    const { color, shape } = newNote;
+    const { color } = newNote;
 
-    document.querySelectorAll('.note, .note-pair').forEach(el => el.classList.remove('selected'));
-
-    const targetNote = document.querySelector<HTMLElement>(`.note[data-color='${color}'][data-type='${shape}']`);
-    if (targetNote) {
-      targetNote.classList.add('selected');
-    } else {
-      const targetPair = document.querySelector<HTMLElement>(`.note-pair[data-color='${color}']`);
-      targetPair?.classList.add('selected');
-      targetPair?.querySelector<HTMLElement>(`.note[data-type='${shape}']`)?.classList.add('selected');
-    }
+    syncNoteBankSelection(store.state.selectedTool, store.state.selectedNote);
 
     applyHarmonyAccentColors(harmonyContainer, color);
     const tabSidebar = document.querySelector<HTMLElement>('.tab-sidebar');
@@ -538,7 +595,7 @@
       resolvedTag: focusColoursToggle?.tagName ?? null
     });
 
-    harmonyContainer = document.querySelector<HTMLElement>('.pitch-tabs-container');
+    harmonyContainer = document.getElementById('chords-panel');
     unifiedPositionToggle = document.getElementById('unified-position-toggle');
     chordsPanel = document.querySelector<HTMLElement>('#chords-panel .chords-grid');
     intervalsPanel = document.querySelector<HTMLElement>('#chords-panel .intervals-4x4-grid');
@@ -555,22 +612,7 @@
         const color = note.dataset['color'] || note.closest<HTMLElement>('.note-pair')?.dataset['color'];
         if (!noteType || !color) return;
 
-        if (noteType === 'diamond') {
-          store.setSelectedNote('diamond', color);
-          const activeStampButton = document.querySelector<HTMLButtonElement>('.sixteenth-stamp-button.active');
-          const activeStampId = activeStampButton ? parseInt(activeStampButton.dataset['sixteenthStampId'] ?? '', 10) : NaN;
-          const isDifferentStampActive = store.state.selectedTool === 'sixteenthStamp'
-            && activeStampButton && !Number.isNaN(activeStampId) && activeStampId !== SIXTEENTH_FULL_STAMP_ID;
-
-          if (isDifferentStampActive) return;
-
-          openSixteenthStampTab();
-          SixteenthStampsToolbar.selectSixteenthStamp(SIXTEENTH_FULL_STAMP_ID);
-          return;
-        }
-
-        store.setSelectedNote(noteType, color);
-        store.setSelectedTool('note');
+        selectNoteBankNote(store, noteType, color, openSixteenthStampTab);
       });
     });
 
@@ -578,63 +620,33 @@
     if (eraserBtn) {
       eraserBtn.addEventListener('click', () => {
         if (store.state.selectedTool === 'eraser') {
-          store.setSelectedTool(store.state.previousTool || 'note');
+          store.setSelectedTool(store.state.previousTool && store.state.previousTool !== 'eraser' ? store.state.previousTool : 'select');
           return;
         }
         store.setSelectedTool('eraser');
       });
     }
 
-    // Lasso shortcut
-    const lassoShortcutBtn = document.getElementById('lasso-shortcut-button');
-    if (lassoShortcutBtn) {
-      lassoShortcutBtn.addEventListener('click', () => {
-        document.querySelector<HTMLButtonElement>('[data-tab="pitch"]')?.click();
-        document.querySelector<HTMLButtonElement>('[data-pitch-tab="draw"]')?.click();
-        document.querySelector<HTMLButtonElement>('button.draw-tool-button[data-draw-tool="lasso"]')?.click();
-      });
-    }
+    document.getElementById('select-tool-button')?.addEventListener('click', () => store.setSelectedTool('select'));
 
     // Marker shortcut
     const markerShortcutBtn = document.getElementById('marker-shortcut-button');
     if (markerShortcutBtn) {
       markerShortcutBtn.addEventListener('click', () => {
         document.querySelector<HTMLButtonElement>('[data-tab="pitch"]')?.click();
-        document.querySelector<HTMLButtonElement>('[data-pitch-tab="draw"]')?.click();
         document.querySelector<HTMLButtonElement>('button.draw-tool-button[data-draw-tool="marker"]')?.click();
       });
     }
 
-    // Tonic mode buttons
-    if (tonicModeButtons.length) {
-      tonicModeButtons.forEach(button => {
-        button.addEventListener('click', () => {
-          const tonicNumber = button.getAttribute('data-tonic');
-          if (!tonicNumber) return;
-          const parsed = parseInt(tonicNumber, 10);
-          if (Number.isNaN(parsed)) return;
-
-          const isActiveMode = button.classList.contains('selected')
-            && store.state.selectedToolTonicNumber === parsed;
-          if (isActiveMode) {
-            const currentTool = store.state.selectedTool || 'note';
-            const previousTool = store.state.previousTool;
-            const nextTool = currentTool === 'tonicization'
-              ? (previousTool && previousTool !== 'tonicization' ? previousTool : 'note')
-              : currentTool;
-            store.setSelectedTool(nextTool, 0);
-            updateTonicModeButtons(0);
-            button.blur();
-            return;
-          }
-
-          store.setSelectedTool('tonicization', parsed);
-          updateTonicModeButtons(parsed);
-          button.blur();
-        });
+    // Major/Minor buttons and the remaining tonic modes share the selection action.
+    tonicModeButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        selectTonicMode(Number(button.dataset['tonic']));
+        button.blur();
       });
-      updateTonicModeButtons();
-    }
+    });
+    document.querySelector('#tonic-other-modes')?.addEventListener('change', handleOtherTonicModeChange);
+    updateTonicModeButtons();
 
     // Chord panel buttons
     if (chordsPanel) {
@@ -643,16 +655,18 @@
           const label = button.textContent?.trim() ?? '';
           const intervals = CHORD_SHAPES[label];
           if (intervals && intervals.length > 0) {
-            store.setActiveChordIntervals(intervals);
-            store.setSelectedTool('chord');
+            if (isActiveChordSelection(store.state.selectedTool, store.state.activeChordIntervals, intervals)) {
+              store.setSelectedTool('select');
+            } else {
+              store.setActiveChordIntervals(intervals);
+              store.setSelectedTool('chord');
+            }
           }
           button.blur();
         });
 
         button.addEventListener('dblclick', () => {
-          if (button.classList.contains('selected')) {
-            store.setSelectedTool('note');
-          }
+          store.setSelectedTool('select');
           button.blur();
         });
       });
@@ -666,6 +680,12 @@
           const intervalData = INTERVAL_SHAPES[intervalLabel];
 
           if (intervalData && intervalData.length > 0) {
+            if (isActiveChordSelection(store.state.selectedTool, store.state.activeChordIntervals, intervalData)) {
+              store.setSelectedTool('select');
+              button.blur();
+              return;
+            }
+
             const clickedInterval = intervalData[0];
             if (!clickedInterval) return;
 
@@ -710,27 +730,107 @@
     // Unified position toggle
     if (unifiedPositionToggle) {
       const toggleTrack = unifiedPositionToggle.querySelector<HTMLElement>('.toggle-track');
-      toggleTrack?.addEventListener('click', () => {
-        const currentStep = getCurrentStep();
-        const maxSteps = getMaxSteps();
-        setStepValue((currentStep + 1) % maxSteps);
+      const slider = unifiedPositionToggle.querySelector<HTMLElement>('.unified-slider');
+      const listenerCleanups: Array<() => void> = [];
+      let activePointerId: number | null = null;
+      let dragStartY = 0;
+      let didDrag = false;
+      let suppressNextClick = false;
+
+      const listen = (element: HTMLElement, type: string, listener: EventListener): void => {
+        element.addEventListener(type, listener);
+        listenerCleanups.push(() => element.removeEventListener(type, listener));
+      };
+
+      const setStepFromPointer = (event: PointerEvent): void => {
+        if (!toggleTrack) return;
+        const rect = toggleTrack.getBoundingClientRect();
+        setStepValue(getUnifiedPositionStepFromPointer(
+          event.clientY,
+          rect.top,
+          rect.height,
+          getMaxSteps(),
+          getToggleMode()
+        ));
+      };
+
+      const handleTrackClick = (): void => {
+        if (suppressNextClick) {
+          suppressNextClick = false;
+          return;
+        }
+        setStepValue(getNextUnifiedPositionStep(getCurrentStep(), getMaxSteps()));
         unifiedPositionToggle?.blur();
-      });
+      };
+
+      const handleSliderPointerDown = (event: PointerEvent): void => {
+        if (event.button !== 0 || !slider) return;
+        activePointerId = event.pointerId;
+        dragStartY = event.clientY;
+        didDrag = false;
+        slider.setPointerCapture(event.pointerId);
+        unifiedPositionToggle?.classList.add('is-dragging');
+        event.preventDefault();
+      };
+
+      const handleSliderPointerMove = (event: PointerEvent): void => {
+        if (event.pointerId !== activePointerId) return;
+        if (!didDrag && Math.abs(event.clientY - dragStartY) < 3) return;
+        didDrag = true;
+        setStepFromPointer(event);
+      };
+
+      const finishSliderDrag = (event: PointerEvent): void => {
+        if (event.pointerId !== activePointerId || !slider) return;
+        if (didDrag) {
+          setStepFromPointer(event);
+          suppressNextClick = true;
+          window.setTimeout(() => { suppressNextClick = false; }, 0);
+        }
+        if (slider.hasPointerCapture(event.pointerId)) {
+          slider.releasePointerCapture(event.pointerId);
+        }
+        activePointerId = null;
+        unifiedPositionToggle?.classList.remove('is-dragging');
+      };
+
+      const cancelSliderDrag = (event: PointerEvent): void => {
+        if (event.pointerId !== activePointerId) return;
+        activePointerId = null;
+        didDrag = false;
+        suppressNextClick = false;
+        unifiedPositionToggle?.classList.remove('is-dragging');
+      };
+
+      if (toggleTrack) listen(toggleTrack, 'click', handleTrackClick);
+      if (slider) {
+        listen(slider, 'pointerdown', handleSliderPointerDown as EventListener);
+        listen(slider, 'pointermove', handleSliderPointerMove as EventListener);
+        listen(slider, 'pointerup', finishSliderDrag as EventListener);
+        listen(slider, 'pointercancel', cancelSliderDrag as EventListener);
+      }
 
       unifiedPositionToggle.querySelectorAll<HTMLElement>('.left-labels .state-label').forEach(label => {
-        label.addEventListener('click', () => {
+        const handleLabelClick = (): void => {
           if (getToggleMode() !== 'inversion') return;
           setStepValue(parseInt(label.dataset['step'] ?? '0', 10));
-        });
+        };
+        listen(label, 'click', handleLabelClick);
       });
 
       unifiedPositionToggle.querySelectorAll<HTMLElement>('.right-labels .state-label').forEach(label => {
-        label.addEventListener('click', () => {
+        const handleLabelClick = (): void => {
           if (getToggleMode() !== 'position') return;
           const step = parseInt(label.dataset['step'] ?? '0', 10);
           if (step < getMaxSteps()) setStepValue(step);
-        });
+        };
+        listen(label, 'click', handleLabelClick);
       });
+
+      cleanupUnifiedPositionToggle = () => {
+        listenerCleanups.forEach(cleanup => cleanup());
+        unifiedPositionToggle?.classList.remove('is-dragging');
+      };
 
       store.on('chordPositionChanged', updateUnifiedToggleVisual);
       store.on('intervalsInversionChanged', updateUnifiedToggleVisual);
@@ -756,8 +856,8 @@
       degreeVisibilityToggle.addEventListener('click', () => {
         const currentMode = store.state.degreeDisplayMode;
         if (currentMode === 'off') {
-          if (!hasTonicShapesOnCanvas()) {
-            notificationSystem.alert('Please place a tonal center on the canvas before showing degrees.', 'Tonal Center Required');
+          if (!requireTonicShape()) {
+            degreeVisibilityToggle?.blur();
             return;
           }
           store.setDegreeDisplayMode(getPreferredDegreeMode());
@@ -771,7 +871,11 @@
     // Degree mode buttons
     if (degreeModeScaleButton) {
       degreeModeScaleButton.addEventListener('click', () => {
-        if (store.state.degreeDisplayMode !== 'off' && store.state.degreeDisplayMode !== 'diatonic') {
+        if (!requireTonicShape()) {
+          degreeModeScaleButton?.blur();
+          return;
+        }
+        if (store.state.degreeDisplayMode !== 'diatonic') {
           store.setDegreeDisplayMode('diatonic');
         }
         degreeModeScaleButton?.blur();
@@ -780,7 +884,11 @@
 
     if (degreeModeModalButton) {
       degreeModeModalButton.addEventListener('click', () => {
-        if (store.state.degreeDisplayMode !== 'off' && store.state.degreeDisplayMode !== 'modal') {
+        if (!requireTonicShape()) {
+          degreeModeModalButton?.blur();
+          return;
+        }
+        if (store.state.degreeDisplayMode !== 'modal') {
           store.setDegreeDisplayMode('modal');
         }
         degreeModeModalButton?.blur();
@@ -830,13 +938,11 @@
         debugFocusColours('pointerdown received on focus button');
       });
       focusColoursToggle.addEventListener('click', () => {
-        const tonicShapesPresent = hasTonicShapesOnCanvas();
         debugFocusColours('click received on focus button', {
           currentState: store.state.focusColours,
-          tonicShapesPresent
+          tonicShapesPresent: hasTonicShapesOnCanvas()
         });
-        if (!store.state.focusColours && !tonicShapesPresent) {
-          notificationSystem.alert('Please place a tonal center on the canvas before enabling focus colours.', 'Tonal Center Required');
+        if (!requireTonicShape()) {
           syncFocusColoursUiState(false);
           debugFocusColours('Blocked enable: no tonic shapes present');
           focusColoursToggle?.blur();
@@ -864,6 +970,7 @@
     store.on('rhythmStructureChanged', handleTonicStructureChanged);
 
     // Initialize UI states
+    handleToolChanged({ newTool: store.state.selectedTool });
     syncFrequencyUiState(store.state.showFrequencyLabels);
     syncOctaveUiState(store.state.showOctaveLabels);
 
@@ -893,10 +1000,13 @@
   });
 
   onDestroy(() => {
+    document.querySelector('#tonic-other-modes')?.removeEventListener('change', handleOtherTonicModeChange);
     cleanupToolSubtabState?.();
     cleanupToolSubtabState = null;
     cleanupDrumBeatPreviews?.();
     cleanupDrumBeatPreviews = null;
+    cleanupUnifiedPositionToggle?.();
+    cleanupUnifiedPositionToggle = null;
     store.off('chordPositionChanged', updateUnifiedToggleVisual);
     store.off('intervalsInversionChanged', updateUnifiedToggleVisual);
     store.off('toolChanged', handleToolChanged);

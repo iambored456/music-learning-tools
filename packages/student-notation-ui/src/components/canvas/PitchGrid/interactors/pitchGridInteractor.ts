@@ -1,3 +1,4 @@
+import { drawEraserPreview } from './PitchGridEraserPreview.ts';
 /**
  * Pitch Grid Interactor
  *
@@ -12,6 +13,8 @@
  * @see index.ts for barrel exports
  */
 import store from '@state/initStore.ts';
+import { canPlaceIndividualSixteenth, canPlaceStampAlongsideIndividuals } from '@/rhythm/individualSixteenthPlacement.ts';
+import { drawIndividualSixteenthNote } from '../renderers/notes.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
 import rhythmPlaybackService from '@services/rhythmPlaybackService.ts';
 import GridCoordsService from '@services/gridCoordsService.ts';
@@ -36,7 +39,6 @@ import { getModulationDisplayText, getModulationColor } from '@/rhythm/modulatio
 import { buildCanvasFont } from '@services/typographyService.ts';
 import { PitchGridModulationToolInteractor } from './tools/PitchGridModulationToolInteractor.ts';
 import { PitchGridNoteToolInteractor } from './tools/PitchGridNoteToolInteractor.ts';
-import { PitchGridEraserToolInteractor } from './tools/PitchGridEraserToolInteractor.ts';
 import { PitchGridChordToolInteractor } from './tools/PitchGridChordToolInteractor.ts';
 import { PitchGridSixteenthStampToolInteractor } from './tools/PitchGridSixteenthStampToolInteractor.ts';
 import { PitchGridTripletStampToolInteractor } from './tools/PitchGridTripletStampToolInteractor.ts';
@@ -71,7 +73,6 @@ let middlePanStartScrollLeft = 0;
 // --- Modulation Marker State ---
 const modulationToolInteractor = new PitchGridModulationToolInteractor();
 const noteToolInteractor = new PitchGridNoteToolInteractor();
-const eraserToolInteractor = new PitchGridEraserToolInteractor();
 const chordToolInteractor = new PitchGridChordToolInteractor();
 const stampToolInteractor = new PitchGridSixteenthStampToolInteractor();
 const tripletToolInteractor = new PitchGridTripletStampToolInteractor();
@@ -81,7 +82,6 @@ const rightClickEraserInteractor = new PitchGridRightClickEraserInteractor();
 const interactionCoordinator = new PitchGridInteractionCoordinator({
   noteToolInteractor,
   chordToolInteractor,
-  eraserToolInteractor,
   stampToolInteractor,
   tripletToolInteractor,
   sixteenthThreeStampToolInteractor,
@@ -115,7 +115,7 @@ const mobileLongPressNotePlacementInteractor = new PitchGridMobileLongPressNoteP
   { longPressDelayMs: MOBILE_LONG_PRESS_DELAY_MS, ghostAlpha: MOBILE_GHOST_ALPHA }
 );
 
-const DEFAULT_NOTE_COLOR = '#4a90e2';
+const DEFAULT_NOTE_COLOR = '#44bcef';
 
 function hexToRgba(hex: string, alpha = 1): string {
   const normalizedHex = hex.startsWith('#') ? hex.slice(1) : hex;
@@ -146,7 +146,7 @@ function debugNotePlacement(_stage: string, _details: Record<string, unknown> = 
 
 // --- Interaction Helpers ---
 function isAnnotationToolActive(): boolean {
-  return Boolean(annotationService.currentTool);
+  return store.state.selectedTool === 'draw' || store.state.selectedTool === 'select';
 }
 
 function getPitchForRow(rowIndex: number): string | null {
@@ -251,6 +251,8 @@ function drawHoverHighlight(colIndex: number, rowIndex: number, color: string) {
     } else {
       highlightWidth = store.state.cellWidth * 2;
     }
+  } else if (toolType === 'note' && store.state.selectedNote?.shape === 'diamond') {
+    highlightWidth = getColumnX(highlightStartCol + 0.5, fullOptions) - x;
   } else if (toolType === 'note' && store.state.selectedNote?.shape === 'circle') {
     if (store.state.tempoModulationMarkers && store.state.tempoModulationMarkers.length > 0) {
       // For modulated grids, calculate 2-column span using actual positions
@@ -323,10 +325,13 @@ function drawGhostNote(colIndex: number, rowIndex: number, isFaint = false) {
       endColumnIndex: baseEndColumn as CanvasSpaceColumn,
       color,
       shape,
+      ...(shape === 'diamond' ? { durationMicrobeats: 0.5 } : {}),
       isDrum: false
     };
     const fullOptions = { ...store.state, zoomLevel: pitchGridViewportService.getViewportInfo().zoomLevel };
-    if (shape === 'oval') {
+    if (shape === 'diamond') {
+      drawIndividualSixteenthNote(pitchHoverCtx, fullOptions, ghostNote, rowIndex);
+    } else if (shape === 'oval') {
       drawSingleColumnOvalNote(pitchHoverCtx, fullOptions, ghostNote as any, rowIndex);
     } else {
       drawTwoColumnOvalNote(pitchHoverCtx, fullOptions, ghostNote as any, rowIndex);
@@ -391,10 +396,6 @@ function handleMouseDown(e: MouseEvent) {
     return;
   }
 
-  if (isAnnotationToolActive()) {
-    handleMouseLeave();
-    return;
-  }
 
   if (!pitchHoverCtx) {
     return;
@@ -410,10 +411,13 @@ function handleMouseDown(e: MouseEvent) {
   const y = e.clientY - rect.top;
 
   const scrollLeft = document.getElementById('canvas-container')?.scrollLeft ?? 0;
-  const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft);
+  const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft,
+    e.button !== 2 && !rightClickEraserInteractor.getIsActive() && store.state.selectedTool === 'note' &&
+    (activeNote?.shape === 'diamond' || store.state.selectedNote?.shape === 'diamond') ? 2 : 1);
   const rowIndex = GridCoordsService.getPitchRowIndex(y);
 
-  if (e.button === 2) {
+  if (e.button === 2 || (e.button === 0 && store.state.selectedTool === 'eraser')) {
+    handleGlobalMouseUp();
     if (!isEraserPositionWithinPitchGrid(colIndex, rowIndex)) {
       return;
     }
@@ -436,6 +440,11 @@ function handleMouseDown(e: MouseEvent) {
     return;
   }
 
+  if (isAnnotationToolActive() && !rightClickEraserInteractor.getIsActive()) {
+    handleMouseLeave();
+    return;
+  }
+
   // Check boundaries - circle notes need more space than other tools
   if (!isPositionWithinPitchGrid(colIndex, rowIndex)) {
     if (store.state.selectedTool === 'note') {
@@ -453,20 +462,22 @@ function handleMouseDown(e: MouseEvent) {
     }
 
     const existingNotePreviewResult = noteToolInteractor.handleExistingNoteMouseDown(
-      colIndex,
+      GridCoordsService.getColumnIndex(x + scrollLeft, 2),
       rowIndex,
       { activeNote, lastDragRow, activePreviewPitches },
       { getPitchForRow }
     );
     if (existingNotePreviewResult.handled) {
       activeNote = existingNotePreviewResult.state.activeNote;
+      if (activeNote?.shape === 'diamond') isDragging = true;
       lastDragRow = existingNotePreviewResult.state.lastDragRow;
       activePreviewPitches = existingNotePreviewResult.state.activePreviewPitches;
       return; // Don't process as a new note placement
     }
 
     const toolType = store.state.selectedTool;
-    if (toolType === 'note' || toolType === 'chord') {
+    if ((toolType === 'note' || toolType === 'chord') &&
+        !(toolType === 'note' && store.state.selectedNote?.shape === 'diamond')) {
       // Clicking on a stamp while in note/chord mode should drag the stamp shape,
       // not place a new note on top of it.
       const dragSixteenth = stampToolInteractor.tryStartShapeDrag({ actualX: x + scrollLeft, canvasY: y });
@@ -520,7 +531,7 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     return;
   }
 
-  if (isAnnotationToolActive()) {
+  if (isAnnotationToolActive() && !rightClickEraserInteractor.getIsActive()) {
     handleMouseLeave();
     return;
   }
@@ -539,7 +550,9 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
   const y = e.clientY - rect.top;
 
   const scrollLeft = document.getElementById('canvas-container')?.scrollLeft ?? 0;
-  const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft);
+  const colIndex = GridCoordsService.getColumnIndex(x + scrollLeft,
+    e.button !== 2 && !rightClickEraserInteractor.getIsActive() && store.state.selectedTool === 'note' &&
+    (activeNote?.shape === 'diamond' || store.state.selectedNote?.shape === 'diamond') ? 2 : 1);
   const rowIndex = GridCoordsService.getPitchRowIndex(y);
 
   if (!pitchHoverCtx) {return;}
@@ -551,7 +564,7 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
   const timeCol = canvasToTime(colIndex, store.state);
   const threeStampSnapTarget = getSixteenthThreeSnapTargetForX(actualX);
 
-  if (rightClickEraserInteractor.getIsModulationOnly() && rightClickEraserInteractor.handleMouseMove({
+  if (rightClickEraserInteractor.getIsActive() && rightClickEraserInteractor.handleMouseMove({
     event: e,
     colIndex: colIndex as CanvasSpaceColumn,
     rowIndex,
@@ -561,6 +574,13 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     eraseModulationAtPoint: (markerX, markerY) => modulationToolInteractor.eraseAtPoint(markerX, markerY)
   })) {
     drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
+    return;
+  }
+
+  if (toolType === 'eraser') {
+    if (isEraserPositionWithinPitchGrid(colIndex, rowIndex)) {
+      drawEraserPreview(pitchHoverCtx, colIndex, rowIndex, annotationService.getEraserTargetNames(x, y), Boolean(modulationToolInteractor.getHoveredMarker(actualX, y)));
+    }
     return;
   }
 
@@ -617,9 +637,11 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     : (timeCol === null ? null : rhythmPlaybackService.getSixteenthThreeStampAtPosition?.(timeCol, rowIndex));
   const hitTriplet = timeCol === null ? null : rhythmPlaybackService.getTripletStampAtPosition(timeCol, rowIndex);
   const isStampHover = Boolean(hitSixteenth || hitThreeSixteenth || hitTriplet);
-  const suppressNoteHover = isStampHover && (toolType === 'note' || toolType === 'chord');
+  const suppressNoteHover = isStampHover && (toolType === 'note' || toolType === 'chord') &&
+    !(toolType === 'note' && store.state.selectedNote?.shape === 'diamond');
 
   const shouldShowGrabCursor = isStampHover &&
+    !(toolType === 'note' && store.state.selectedNote?.shape === 'diamond') &&
     toolType !== 'eraser' &&
     !stampToolInteractor.isDraggingShape() &&
     !tripletToolInteractor.isDraggingShape() &&
@@ -673,26 +695,6 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     return;
   }
 
-  if (rightClickEraserInteractor.handleMouseMove({
-    event: e,
-    colIndex: colIndex as CanvasSpaceColumn,
-    rowIndex,
-    actualX,
-    canvasY: y,
-    annotationService,
-    eraseModulationAtPoint: (markerX, markerY) => modulationToolInteractor.eraseAtPoint(markerX, markerY)
-  })) {
-    if (rightClickEraserInteractor.shouldShowEraserHighlight()) {
-      drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
-    }
-    return;
-  }
-
-  if (eraserToolInteractor.handleMouseMove(colIndex, rowIndex, isEraserDragActive)) {
-    drawHoverHighlight(colIndex, rowIndex, 'rgba(220, 53, 69, 0.3)');
-    return;
-  }
-
   if (pitchHoverCtx && tonicizationToolInteractor.handleMouseMove({
     colIndex,
     rowIndex,
@@ -721,6 +723,9 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
       // Notes: check start column, and for circles also check end column
       canPlace = isNotePlayableAtColumn(colIndex, store.state) &&
         (!isCircle || isNotePlayableAtColumn(colIndex + 1, store.state));
+      if (store.state.selectedTool === 'note' && store.state.selectedNote?.shape === 'diamond') {
+        canPlace = canPlaceIndividualSixteenth(store.state, colIndex, rowIndex, store.state.selectedNote.color);
+      }
     } else if (store.state.selectedTool === 'sixteenthStamp') {
       // Sixteenth stamps span 2 microbeats - check both columns.
       const alignedCol = getTimeAlignedCanvasColumn(colIndex);
@@ -780,6 +785,20 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
           }
         }
       }
+    }
+
+    if (canPlace && store.state.selectedTool === 'sixteenthStamp') {
+      const stamp = SixteenthStampsToolbar.getSelectedSixteenthStamp();
+      const time = canvasToTime(getTimeAlignedCanvasColumn(colIndex) ?? colIndex, store.state);
+      canPlace = !!stamp && time !== null && canPlaceStampAlongsideIndividuals(store.state, 'sixteenthStamp', stamp.id, time, rowIndex, getNoteColor());
+    } else if (canPlace && store.state.selectedTool === 'sixteenthThreeStamp') {
+      const stamp = SixteenthThreeStampsToolbar.getSelectedSixteenthThreeStamp();
+      canPlace = !!stamp && !!threeStampPlacementSnapTarget && canPlaceStampAlongsideIndividuals(store.state, 'sixteenthThreeStamp', stamp.id,
+        threeStampPlacementSnapTarget.startTimeIndex, rowIndex, getNoteColor());
+    } else if (canPlace && store.state.selectedTool === 'tripletStamp') {
+      const stamp = TripletStampsToolbar.getSelectedTripletStamp();
+      canPlace = !!stamp && tripletStartTimeIndex !== null && canPlaceStampAlongsideIndividuals(store.state, 'tripletStamp', stamp.id,
+        tripletStartTimeIndex, rowIndex, getNoteColor());
     }
 
     const highlightColor = store.state.selectedTool === 'eraser'
@@ -929,6 +948,7 @@ function finishMiddlePan(): void {
 }
 
 function handleGlobalMouseUp() {
+  rightClickEraserInteractor.handleGlobalMouseUp();
   if (middlePanActive) {
     finishMiddlePan();
     return;
@@ -957,7 +977,7 @@ function handleGlobalMouseUp() {
         const adsr = store.state.timbres[previewColor]?.adsr;
         if (adsr) {
           const pitchColor = store.state.fullRowData[note.row]?.hex || '#888888';
-          triggerAdsrPlayhead(note.uuid, 'release', pitchColor, adsr);
+          triggerAdsrPlayhead(note.uuid, 'release', pitchColor, adsr, previewColor);
         }
       } else if (previewColor) { // It was a chord preview.
         const rootPitch = activePreviewPitches[0];
@@ -967,7 +987,7 @@ function handleGlobalMouseUp() {
             const adsr = store.state.timbres[previewColor]?.adsr;
             if (adsr) {
               const pitchColor = rootRow.hex;
-              triggerAdsrPlayhead('chord_preview', 'release', pitchColor, adsr);
+              triggerAdsrPlayhead('chord_preview', 'release', pitchColor, adsr, previewColor);
             }
           }
         }
@@ -1014,7 +1034,6 @@ function handleGlobalMouseUp() {
     isEraserDragActive = false;
   }
 
-  rightClickEraserInteractor.handleGlobalMouseUp();
   handleMouseLeave();
 }
 
@@ -1178,6 +1197,8 @@ export function initPitchGridInteraction() {
   }
   mobileLongPressNotePlacementInteractor.setPitchCanvasElement(pitchCanvas);
 
+  store.off('toolChanging', handleGlobalMouseUp);
+  store.on('toolChanging', handleGlobalMouseUp);
   pitchCanvas.addEventListener('mousedown', handleMouseDown);
   pitchCanvas.addEventListener('mousemove', handleMouseMove);
   pitchCanvas.addEventListener('wheel', handleMouseWheel, { passive: true });
@@ -1190,6 +1211,7 @@ export function initPitchGridInteraction() {
   pitchCanvas.addEventListener('touchend', e => mobileLongPressNotePlacementInteractor.handleTouchEnd(e), { passive: false });
   pitchCanvas.addEventListener('touchcancel', () => mobileLongPressNotePlacementInteractor.handleTouchCancel(), { passive: false });
   window.addEventListener('mouseup', handleGlobalMouseUp);
+  window.addEventListener('blur', handleGlobalMouseUp);
   window.addEventListener('mousemove', handleMiddlePanMove, { passive: false });
 
 }

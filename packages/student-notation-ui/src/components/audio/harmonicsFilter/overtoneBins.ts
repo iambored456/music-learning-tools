@@ -743,7 +743,7 @@ export function initOvertoneBins() {
   };
 
   // Initialize with current color
-  currentColor = store.state.selectedNote?.color || '#4a90e2';
+  currentColor = store.state.selectedNote?.color || '#44bcef';
 
   updateForNewColor(currentColor);
 

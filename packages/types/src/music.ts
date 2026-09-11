@@ -3,6 +3,7 @@
  */
 
 import type { CanvasSpaceColumn } from './coordinates.js';
+import type { Annotation } from './annotations.js';
 
 // ============================================================================
 // Pitch & Row Types
@@ -57,6 +58,8 @@ export interface PlacedNote {
   /** Canvas-space column index (0 = first musical beat) */
   endColumnIndex: CanvasSpaceColumn;
   shape: NoteShape;
+  /** Explicit duration for sub-column notes; older notes use inclusive endColumnIndex. */
+  durationMicrobeats?: number;
   color: string;
   isDrum?: boolean;
   drumTrack?: number | string | null;
@@ -64,6 +67,13 @@ export interface PlacedNote {
   drumSubdivision?: 'single' | 'double' | 'secondOnly';
   enharmonicPreference?: boolean;
   tonicNumber?: number | null;
+}
+
+/** Exclusive canvas boundary, preserving the legacy inclusive-end representation. */
+export function getNoteEndColumn(note: { startColumnIndex: number; endColumnIndex: number; durationMicrobeats?: number }): number {
+  return note.durationMicrobeats !== undefined
+    ? note.startColumnIndex + note.durationMicrobeats
+    : note.endColumnIndex + 1;
 }
 
 export type AnimatableNote = Pick<PlacedNote, 'color'> & Partial<Pick<PlacedNote, 'uuid'>>;
@@ -232,6 +242,8 @@ export interface TimbreState {
   phases: Float32Array;
   activePresetName: string | null;
   gain: number;
+  /** Channel level from 0 (silent) to 1, independent of preset gain. */
+  channelVolume?: number;
   filter: FilterSettings;
   vibrato: VibratoSettings;
   tremelo: TremoloSettings; // Note: historical spelling preserved
@@ -254,7 +266,10 @@ export type LassoSelectedItem =
   | { type: 'note'; id: string; data: PlacedNote; index?: number }
   | { type: 'sixteenthStamp'; id: string; data: SixteenthStampPlacement; index?: number }
   | { type: 'tripletStamp'; id: string; data: TripletStampPlacement; index?: number }
-  | { type: 'sixteenthThreeStamp'; id: string; data: SixteenthThreeStampPlacement; index?: number };
+  | { type: 'sixteenthThreeStamp'; id: string; data: SixteenthThreeStampPlacement; index?: number }
+  | { type: 'tonicSign'; id: string; data: TonicSign; groupId: string; index?: number }
+  | { type: 'modulationMarker'; id: string; data: ModulationMarker; index?: number }
+  | { type: 'annotation'; id: string; data: Annotation; index?: number };
 
 export interface LassoSelection {
   selectedItems: LassoSelectedItem[];

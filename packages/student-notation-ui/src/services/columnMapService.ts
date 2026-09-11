@@ -375,7 +375,9 @@ export function canvasToVisual(canvasIndex: number, state: AppState): number {
 
 export function canvasToTime(canvasIndex: number, state: AppState): number | null {
   const map = columnMapService.getColumnMap(state);
-  return map.canvasToTime.get(canvasIndex) ?? null;
+  const base = Math.floor(canvasIndex);
+  const time = map.canvasToTime.get(base);
+  return time == null ? null : time + canvasIndex - base;
 }
 
 export function timeToCanvas(timeIndex: number, state: AppState): number {
@@ -389,8 +391,8 @@ export function timeToCanvas(timeIndex: number, state: AppState): number {
     return timeIndex;
   }
 
-  // Support fractional time-space positions (e.g. 1.5 microbeats) by interpolating
-  // between neighboring integer time columns.
+  // A fraction stays inside its playable column. Interpolating toward the next
+  // time column would incorrectly stretch it across intervening tonic columns.
   const lowerTime = Math.floor(timeIndex);
   const upperTime = Math.ceil(timeIndex);
   if (lowerTime === upperTime) {
@@ -399,11 +401,6 @@ export function timeToCanvas(timeIndex: number, state: AppState): number {
 
   const lowerCanvas = map.timeToCanvas.get(lowerTime);
   const upperCanvas = map.timeToCanvas.get(upperTime);
-  if (lowerCanvas !== undefined && upperCanvas !== undefined) {
-    const ratio = (timeIndex - lowerTime) / (upperTime - lowerTime);
-    return lowerCanvas + (upperCanvas - lowerCanvas) * ratio;
-  }
-
   if (lowerCanvas !== undefined) {
     return lowerCanvas + (timeIndex - lowerTime);
   }

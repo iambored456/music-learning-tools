@@ -28,7 +28,7 @@ export function isTonicColumn(columnIndex: number, placedTonicSigns: TonicSign[]
  */
 export function isWithinTonicSpan(columnIndex: number, placedTonicSigns: TonicSign[]): boolean {
   return placedTonicSigns.some(ts =>
-    columnIndex === ts.columnIndex || columnIndex === ts.columnIndex + 1
+    columnIndex >= ts.columnIndex && columnIndex < ts.columnIndex + 2
   );
 }
 

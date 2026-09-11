@@ -249,9 +249,9 @@ abstract class BaseAnimationEffect<
   }
 
   protected onDialInteractionStart(color: string): void {
-    if (!this.shouldAnimateColor(color)) {
-      return;
-    }
+    // Pointer down can precede the slider's first nonzero parameter update.
+    // Remember the interaction while the effect is off; the manager and
+    // getActiveColors() still gate animation on the current effect parameters.
     this.hasDialInteraction = true;
     this.activeNoteAnimations.set('dial-preview', color);
     logger.debug(`${this.effectName}AnimationEffect`, `Dial interaction started for ${color}`, null, 'animation');

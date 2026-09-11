@@ -110,8 +110,6 @@ function getAnacrusisEndColumnFromState(state: AppState): number | null {
 type PitchRendererOptions = Parameters<typeof getModulatedColumnX>[1];
 type ModulationRendererOptions = Parameters<typeof renderModulationMarkers>[1];
 
-export type VolumeIconState = 'normal' | 'hover' | 'active';
-
 interface DrumNote extends PlacedNote {
   isDrum?: boolean;
   drumTrack?: string | number | null;
@@ -128,7 +126,6 @@ export interface DrumGridRenderOptions extends PitchRendererOptions {
   macrobeatBoundaryStyles: MacrobeatBoundaryStyle[];
   tempoModulationMarkers?: ModulationMarker[];
   baseMicrobeatPx: number;
-  volumeIconState?: VolumeIconState;
 }
 
 function getColumnX(index: number, options: DrumGridRenderOptions): number {
