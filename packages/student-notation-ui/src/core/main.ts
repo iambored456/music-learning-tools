@@ -596,16 +596,6 @@ async function startStudentNotation(): Promise<void> {
     initDebug('all phases complete — removing loading screen');
     await loadingManager.completeLoading();
     initDebug('loading screen removed — app ready');
-    // Kick off local drum sample loading AFTER the loading screen is gone.
-    // Calling this earlier (at module-eval time) triggers a Vite dev-server full-reload.
-
-    // Log viewport info after initialization (currently disabled)
-    // setTimeout(() => {
-    //   if (pitchGridViewportService.getViewportInfo) {
-    //     // TODO: Log viewport info
-    //   }
-    // }, 1000);
-
   } catch (error) {
     logger.error('Main', 'Initialization failed', error, 'initialization');
     logger.error('Main', 'Component readiness snapshot at failure', { ...componentReadiness }, 'initialization');

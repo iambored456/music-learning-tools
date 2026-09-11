@@ -612,11 +612,6 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     drawModulationPreview
   });
 
-  // Debug log when dragging (currently disabled)
-  // if (isDragging) {
-  //   // TODO: Add drag debugging
-  // }
-
   // CANVAS-SPACE FIX: Check boundaries using canvas-space coordinates (0 = first musical beat)
   const isCircleNote = (store.state.selectedTool === 'note' || store.state.selectedTool === 'chord') && store.state.selectedNote?.shape === 'circle';
   const musicalColumnsLength = store.state.columnWidths.length;

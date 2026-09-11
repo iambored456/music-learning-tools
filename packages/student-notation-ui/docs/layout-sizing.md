@@ -78,8 +78,6 @@ These are the main reasons the previous bottom white strip and width jitter impr
 
 ## Diagnostic Logging Status
 
-High-volume layout diagnostics were used during debugging and are now disabled by default via:
-
-- `ENABLE_LAYOUT_DIAGNOSTICS = false` in `src/services/layoutService.ts`
-
-If deep sizing diagnostics are needed again, toggle that flag temporarily.
+The old layout snapshot and viewport logging stubs have been removed. They were
+no-ops; toggling the former `ENABLE_LAYOUT_DIAGNOSTICS` flag did not enable logging.
+The layout trigger tracking, coverage checks, and resize safeguards remain in place.

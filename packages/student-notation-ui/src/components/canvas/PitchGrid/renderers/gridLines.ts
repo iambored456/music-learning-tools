@@ -217,8 +217,6 @@ export function drawVerticalLines(
   // First draw the regular grid lines (with modulation-aware spacing)
   drawRegularVerticalLines(ctx, options);
 
-  // TEMPORARILY DISABLED: Draw ghost lines for modulated segments (now with proper grid-based calculation)
-  // drawGhostLines(ctx, options);
 }
 
 interface VerticalOptions extends GridRenderOptions {

@@ -19,12 +19,6 @@ import { drawPulsingColumnHighlight } from '@utils/pulsingPlayhead.ts';
 
 const isDev = import.meta.env.DEV;
 
-function isViewportDebugEnabled(): boolean {
-  return false;
-}
-
-function logViewportDebug(_message: string, _data: Record<string, unknown>): void {}
-
 type PitchGridRenderOptions = {
   placedNotes: PlacedNote[];
   placedTonicSigns: TonicSign[];
@@ -53,7 +47,7 @@ type PitchGridRenderOptions = {
 export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridRenderOptions): void {
   const fullOptions: AppState & PitchGridRenderOptions = { ...(store.state), ...options };
 
-  // Quick visibility debug
+  // Skip rendering until grid data is available.
   if (!fullOptions.columnWidths?.length || !fullOptions.fullRowData?.length) {
     return;
   }
@@ -98,41 +92,6 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
   const renderEndRow = extraEndRow ?? paddedEndRow;
 
   const canvasHeight = getLogicalCanvasHeight(ctx.canvas);
-  const halfUnit = fullOptions.cellHeight / 2;
-  const visibleBottomEdge = getRowY(endRow, fullOptions) + halfUnit;
-  const renderBottomEdge = getRowY(renderEndRow, fullOptions) + halfUnit;
-  const startRowData = fullOptions.fullRowData?.[startRow];
-  const endRowData = fullOptions.fullRowData?.[endRow];
-  const renderStartRowData = fullOptions.fullRowData?.[renderStartRow];
-  const renderEndRowData = fullOptions.fullRowData?.[renderEndRow];
-  // Compare main canvas height to the row math (helps diagnose legend-only blank bands).
-  if (isViewportDebugEnabled()) {
-    const yEnd = getRowY(endRow, fullOptions);
-    const bottomEdge = yEnd + halfUnit;
-    const totalRows = fullOptions.fullRowData?.length ?? 0;
-    const atTopGamutEdge = startRow <= 0;
-    const atBottomGamutEdge = totalRows > 0 ? endRow >= totalRows - 1 : false;
-    logViewportDebug('pitchCanvasCoverage', {
-      startRow,
-      endRow,
-      paddedStartRow,
-      paddedEndRow,
-      renderStartRow,
-      renderEndRow,
-      atTopGamutEdge,
-      atBottomGamutEdge,
-      canvasHeight,
-      containerHeight: fullOptions.viewportHeight,
-      halfUnit,
-      yEnd,
-      bottomEdge,
-      gapCanvasMinusBottomEdge: canvasHeight - bottomEdge,
-      gapCanvasMinusContainer: canvasHeight - fullOptions.viewportHeight,
-      startRowSummary: startRowData ? { pitch: startRowData.pitch, column: startRowData.column, isBoundary: Boolean((startRowData as any).isBoundary) } : null,
-      endRowSummary: endRowData ? { pitch: endRowData.pitch, column: endRowData.column, isBoundary: Boolean((endRowData as any).isBoundary) } : null
-    });
-  }
-
   // NOTE ABOUT VERTICAL VIRTUALIZATION
   // ---------------------------------
   // Rows are spaced at `halfUnit = cellHeight / 2`, while notes are ~`cellHeight` tall.
