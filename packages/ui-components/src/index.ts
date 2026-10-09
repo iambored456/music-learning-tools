@@ -13,3 +13,4 @@ export * from './pitch-wheels/index.js';
 
 // Re-export shared overlay components
 export * from './overlays/index.js';
+export { default as PianoKeyboard } from './PianoKeyboard.svelte';

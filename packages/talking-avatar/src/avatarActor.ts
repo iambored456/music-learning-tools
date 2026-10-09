@@ -30,6 +30,8 @@ export type AvatarActor = {
   getState(): AvatarVisualState;
   /** Set feedback bad state */
   setFeedbackBad(active: boolean): void;
+  /** Set the resting thinking expression while awaiting an answer. */
+  setThinking(active: boolean): void;
   /** Start pre-speak wave animation */
   startWave(durationMs: number): Promise<void>;
   /** Start talking animation */
@@ -54,6 +56,7 @@ export function createAvatarActor(opts: AvatarActorOptions): AvatarActor {
 
   let state: AvatarVisualState = "hidden";
   let feedbackBad = false;
+  let thinking = false;
   let isSpeaking = false;
 
   // Animation timers
@@ -81,7 +84,7 @@ export function createAvatarActor(opts: AvatarActorOptions): AvatarActor {
   };
 
   const getIdleState = (): AvatarVisualState => {
-    return feedbackBad ? "feedback_bad" : "idle_smile";
+    return feedbackBad ? "feedback_bad" : thinking ? "idle_thinking" : "idle_smile";
   };
 
   const updateViewForState = () => {
@@ -95,6 +98,9 @@ export function createAvatarActor(opts: AvatarActorOptions): AvatarActor {
         break;
       case "pre_speak_wave":
         view.setSvg("smile_wave");
+        break;
+      case "idle_thinking":
+        view.setSvg("thinking_nowave");
         break;
       case "talking":
         // Mouth animation handles this
@@ -272,7 +278,16 @@ export function createAvatarActor(opts: AvatarActorOptions): AvatarActor {
     }
   };
 
+  const setThinking = (active: boolean) => {
+    thinking = active;
+    if (!isSpeaking && state !== "hidden" && state !== "entering" && state !== "pre_speak_wave") {
+      setState(getIdleState());
+      updateViewForState();
+    }
+  };
+
   const startWave = (durationMs: number): Promise<void> => {
+    if (durationMs <= 0) return Promise.resolve();
     return new Promise((resolve) => {
       setState("pre_speak_wave");
       updateViewForState();
@@ -323,6 +338,7 @@ export function createAvatarActor(opts: AvatarActorOptions): AvatarActor {
   return {
     getState: () => state,
     setFeedbackBad,
+    setThinking,
     startWave,
     startTalking,
     stopTalking,

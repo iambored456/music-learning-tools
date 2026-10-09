@@ -119,6 +119,8 @@ export interface LegendHighlightEntry {
   opacity: number;
   /** Highlight color (default: yellow). */
   color?: string;
+  /** Highlight the cell background, or softly glow around the label glyph. */
+  style?: 'overlay' | 'glow';
 }
 
 /**
@@ -381,14 +383,20 @@ export interface PitchGridBaseProps {
   showFrequencyLabels?: boolean;
   /** Whether to show octave labels on legend */
   showOctaveLabels?: boolean;
+  /** 0–1 animation progress for shifting legend pitch letters left and fading octave numbers in. */
+  legendOctaveLabelProgress?: number;
   /** Optional highlight overlay for legend labels */
   legendHighlight?: LegendHighlightConfig;
   /** Optional legend-label overrides keyed by pitch class. */
   legendLabelOverrides?: Map<number, string>;
   /** Optional legend-label overrides keyed by exact MIDI pitch. */
   legendMidiLabelOverrides?: Map<number, string>;
+  /** Hide complete legend cells while a consumer renders their animated replacements. */
+  hiddenLegendMidi?: ReadonlySet<number>;
   /** Whether to render horizontal pitch grid lines */
   showHorizontalGridLines?: boolean;
+  /** Draw two-column beat boundaries in singing-mode lesson grids. */
+  showColumnGrid?: boolean;
   /** Whether horizontal pitch lines should continue beneath the legend canvases. */
   extendHorizontalGridLinesBehindLegend?: boolean;
   /**
@@ -396,6 +404,8 @@ export interface PitchGridBaseProps {
    * 0 preserves legacy C-referenced pattern; other values rotate the full pattern.
   */
   horizontalGridReferencePitchClass?: number | null;
+  /** Use Student Notation's fixed line weights and red C reference. */
+  horizontalGridStyle?: 'default' | 'student-notation';
   /** Optional color for the emphasized solid horizontal reference line. */
   horizontalGridReferenceLineColor?: string;
   /** Optional color for ordinary solid horizontal pitch lines. */

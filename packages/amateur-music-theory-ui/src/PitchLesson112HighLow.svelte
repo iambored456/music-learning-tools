@@ -1,12 +1,42 @@
 <script lang="ts">
+  import { createLessonQuestion } from '@mlt/lesson-kit';
+  const questionNarration = createLessonQuestion(cancelLessonAvatarSpeech, setLessonAvatarThinking);
+  import "@mlt/lesson-kit/styles.css";
+  import { lessonNoteAppearance, lessonPacing, lessonScreenSlide, lessonScreenSlideMs, lessonOutsidePlacement } from '@mlt/lesson-kit';
+  import { lessonGridAppearance, calculateLessonGridLayout, createLessonAudioOutput } from '@mlt/lesson-kit';
   import { fullRowData } from '@mlt/pitch-data';
   import { PitchGrid } from '@mlt/ui-components/canvas';
   import type { PitchGridViewport, SingingModeConfig } from '@mlt/ui-components/canvas';
-  import { onDestroy, onMount } from 'svelte';
+  import { getContext, onDestroy, onMount, tick } from 'svelte';
+  import { lessonInspectorKey, type LessonCue, type LessonInspector } from './lessonInspector.svelte';
   import LessonAvatarDock from './LessonAvatarDock.svelte';
-  import { cancelLessonAvatarSpeech, speakWithLessonAvatar } from './lessonAvatar';
+  import { setLessonAvatarThinking, cancelLessonAvatarSpeech, speakWithLessonAvatar } from './lessonAvatar';
   import type { LessonSection } from './lessons';
+  import { lesson11PitchRange, lowIntroToneNotes, highIntroToneNotes, comparisonPairs, type ComparisonPair } from './lesson11PitchData';
   import lessonScoreFile from './lesson-assets/SN-score-April21.json';
+  import { Lesson11Motion } from './lesson11Motion.svelte';
+  import { comparisonFinishActions, comparisonFinishCheckpoint } from './lesson11MotionPlan';
+
+  const audioOutput = createLessonAudioOutput();
+  const motion = new Lesson11Motion();
+  const inspector = getContext<LessonInspector | undefined>(lessonInspectorKey);
+  let unregisterInspector: (() => void) | undefined;
+  let activeInspectorCue: string | null = null;
+
+  function cue(id: string, title: string, actions: Array<[string, string, string]>): LessonCue {
+    return { id, title, prompt: '', visual: '', audio: '', gesture: '', input: '', completion: '', timing: {},
+      actions: actions.map(([actionId, actionTitle, detail]) => ({ id: actionId, title: actionTitle, detail })) };
+  }
+
+  function mark(cueId: string, actionId: string): void {
+    if (activeInspectorCue !== cueId) {
+      if (activeInspectorCue) inspector?.status('completed');
+      activeInspectorCue = cueId;
+      inspector?.enter(cueId);
+    }
+    inspector?.action(actionId);
+    inspector?.status('running');
+  }
 
   export let section: LessonSection;
   export let isPlaying = true;
@@ -90,11 +120,14 @@
     heightPx: number;
     tailLeftPx: number;
     tailWidthPx: number;
+    frequency?: number;
+    isCapsule: boolean;
   };
 
   type ScoreStampRenderItem = {
     id: string;
     kind: 'diamond' | 'oval';
+    frequency?: number;
     top: string;
     centerX: number;
     widthPx: number;
@@ -134,16 +167,6 @@
 
   type NoteDragOrigin = 'avatar' | 'grid';
 
-  type ComparisonMode = 'higher' | 'lower';
-
-  type ComparisonPair = {
-    id: string;
-    mode: ComparisonMode;
-    toneNotes: readonly [string, string];
-    question: string;
-    underlinedWord: 'higher' | 'lower';
-  };
-
   type SettledComparisonNote = {
     id: string;
     toneNote: string;
@@ -163,12 +186,9 @@
   const pitchRows = fullRowData;
   const rowCount = pitchRows.length;
   const pitchGridFallbackColumnSize = 18;
-  const pitchGridLegendWidthUnits = 6;
   const pitchGridMinHitTargetSize = 32;
   const pitchGridMaxHitTargetSize = 48;
   const pitchGridSingingConfig: SingingModeConfig = { pitchHistory: [] };
-  const resetRowIndex = Math.floor(rowCount / 2);
-  const resetY = ((resetRowIndex + 1) / (rowCount + 1)) * 100;
   const lessonScore = (lessonScoreFile as StudentNotationScoreFile).data;
   const sixteenthStamps: SixteenthStampDefinition[] = [
     { id: 1, diamonds: [0], ovals: [] },
@@ -189,10 +209,10 @@
   ];
   const sixteenthStampById = new Map(sixteenthStamps.map((stamp) => [stamp.id, stamp]));
   const rowIndexByTone = new Map(pitchRows.map((row, index) => [row.toneNote, index]));
-  const introScoreViewportStartRow = rowIndexByTone.get('A5') ?? 0;
-  const introScoreViewportEndRow = rowIndexByTone.get('A3') ?? rowCount - 1;
-  const comparisonViewportStartRow = rowIndexByTone.get('D6') ?? 0;
-  const comparisonViewportEndRow = rowIndexByTone.get('G3') ?? rowCount - 1;
+  const introScoreViewportStartRow = rowIndexByTone.get(lesson11PitchRange.high) ?? 0;
+  const introScoreViewportEndRow = rowIndexByTone.get(lesson11PitchRange.low) ?? rowCount - 1;
+  const resetRowIndex = Math.floor((introScoreViewportStartRow + introScoreViewportEndRow) / 2);
+  const resetY = 50;
   const introScoreViewportRowCount = Math.max(
     1,
     introScoreViewportEndRow - introScoreViewportStartRow + 1
@@ -212,61 +232,7 @@
   const scoreBoundaryStylesByColumn = getScoreBoundaryStylesByColumn(lessonScore);
   const scorePlaybackEvents = buildScorePlaybackEvents(lessonScore);
   const scorePlaybackEventsBySlot = groupScoreEventsBySlot(scorePlaybackEvents);
-  const lowIntroToneNotes = ['C3', 'A2', 'F2'];
-  const highIntroToneNotes = ['C6', 'E6', 'G6'];
   const dragPreviewThrottleMs = 40;
-  const higherComparisonQuestion = 'Which note has the higher pitch?';
-  const comparisonPairs: ComparisonPair[] = [
-    {
-      id: 'comparison-1',
-      mode: 'higher',
-      toneNotes: ['B5', 'E4'],
-      question: higherComparisonQuestion,
-      underlinedWord: 'higher',
-    },
-    {
-      id: 'comparison-2',
-      mode: 'lower',
-      toneNotes: ['E5', 'C6'],
-      question: 'Which note has the lower pitch?',
-      underlinedWord: 'lower',
-    },
-    {
-      id: 'comparison-3',
-      mode: 'higher',
-      toneNotes: ['B3', 'E5'],
-      question: 'Which is higher?',
-      underlinedWord: 'higher',
-    },
-    {
-      id: 'comparison-4',
-      mode: 'lower',
-      toneNotes: ['A4', 'A3'],
-      question: 'Which is lower?',
-      underlinedWord: 'lower',
-    },
-    {
-      id: 'comparison-5',
-      mode: 'higher',
-      toneNotes: ['C6', 'A3'],
-      question: 'Which is higher?',
-      underlinedWord: 'higher',
-    },
-    {
-      id: 'comparison-6',
-      mode: 'lower',
-      toneNotes: ['F4', 'D5'],
-      question: 'Which is lower?',
-      underlinedWord: 'lower',
-    },
-    {
-      id: 'comparison-7',
-      mode: 'higher',
-      toneNotes: ['A3', 'D6'],
-      question: 'Which is higher?',
-      underlinedWord: 'higher',
-    },
-  ];
 
   function clampRowIndex(rowIndex: number): number {
     return Math.max(0, Math.min(rowCount - 1, Math.round(rowIndex)));
@@ -406,19 +372,48 @@
     },
   ];
 
+  const cuePlan: LessonCue[] = isMusicalScorePhase
+    ? [cue('musical-score', isMusicalOutro ? 'Closing musical example' : 'Opening musical example', [
+        ['play', 'Play the score with the red cursor', 'Sound the score from left to right. Grammy greets during the opening or says goodbye during the closing.'],
+      ])]
+    : startsWithComparison
+      ? [
+          ...comparisonPairs.map((pair, index) => cue(pair.id,
+            `Compare pitches ${index + 1}: ${pair.mode}`, [
+              ['question', pair.question, `Slide the pair in beneath Grammy, speak the prompt, sound ${pair.toneNotes.join(' and ')} in a loop, and wait for a choice.`],
+              ['retry', 'If incorrect: “Try again.”', 'Speak the retry prompt and repeat the same question.'],
+              ['correct', 'If correct: settle and sound the notes', 'Animate the notes onto the grid, play the pair, then advance.'],
+            ])),
+          cue('finish', 'Complete pitch comparison', comparisonFinishActions),
+        ]
+      : [
+          cue('introduce-height', 'Introduce high and low', [
+            ['opening', '“This space shows pitch from low to high.”', 'Grammy explains the vertical pitch field.'],
+            ['low-notes', '“Lower notes belong lower down.”', `Slide ${lowIntroToneNotes.join(', ')} into the lower region and play them.`],
+            ['high-notes', '“Higher sounds belong higher up.”', `Slide ${highIntroToneNotes.join(', ')} into the upper region, retaining the low notes, and play them.`],
+            ['slide-out', 'Slide all six notes off to the right', 'Move both demonstration groups together past the screen edge before placement.'],
+          ]),
+          ...tasks.map((task) => cue(task.id, task.title, [
+            ['prompt', task.prompt, 'Slide the question note in, retaining prior placed notes, then Grammy gives the placement prompt.'],
+            ['place', `Drag the note to the ${task.target} half`, 'Unlock dragging and wait for the note to reach the correct half of the pitch field.'],
+            ['retry', 'If incorrect: retry the same note', 'Speak “Try again” and restore the current task.'],
+            ['correct', task.reinforcement, 'Show success, speak the reinforcement, and advance to the next task.'],
+            ...(task.id === 'high-place' ? [['slide-out', 'Slide both placed notes off to the right', 'Retain the low and high placements and move them together past the screen edge.'] as [string, string, string]] : []),
+          ])),
+        ];
+
   let fieldEl: HTMLDivElement | null = null;
+  let avatarAnchorEl: HTMLDivElement | null = null;
   let noteEl: HTMLButtonElement | null = null;
   let pitchGridFrameWidth = 0;
   let pitchGridFrameHeight = 0;
   let pitchGridViewportWidth = 0;
   let pitchGridViewportHeight = 0;
-  let pitchGridLayoutColumnSize = pitchGridFallbackColumnSize;
   let pitchGridCellWidth = pitchGridFallbackColumnSize;
   let pitchGridCellHeight = pitchGridFallbackColumnSize * 2;
   let pitchGridOverlayNoteSize = pitchGridFallbackColumnSize * 2;
   let pitchGridHitTargetSize = pitchGridMinHitTargetSize;
-  let pitchGridLegendWidth = pitchGridFallbackColumnSize * pitchGridLegendWidthUnits;
-  let pitchGridShellWidth = pitchGridFallbackColumnSize * (scoreTotalColumns + pitchGridLegendWidthUnits);
+  let pitchGridShellWidth = pitchGridFallbackColumnSize * scoreTotalColumns;
   let pitchGridShellHeight = pitchGridFallbackColumnSize * (rowCount + 1);
   let pitchGridViewport: PitchGridViewport = {
     startRow: 0,
@@ -479,7 +474,7 @@
         ? 'Listen to the closing musical example.'
         : 'Listen first. The red cursor will play the score across the pitch grid.'
       : startsWithComparison
-        ? higherComparisonQuestion
+        ? comparisonPairs[0].question
         : 'This space shows pitch from low to high.';
   let complete = false;
   let previousIsPlaying = isPlaying;
@@ -505,60 +500,35 @@
   let visiblePitchGridStartRow = 0;
   let visiblePitchGridEndRow = rowCount - 1;
   let visiblePitchGridRowCount = rowCount;
-  let pitchGridVerticalColumnSize = pitchGridFallbackColumnSize;
   let pitchGridLayoutColumnCount = scoreTotalColumns;
   let pitchGridContentWidth = 0;
 
-  $: visiblePitchGridStartRow =
-    isMusicalScorePhase
-      ? introScoreViewportStartRow
-      : startsWithComparison
-        ? comparisonViewportStartRow
-        : 0;
-  $: visiblePitchGridEndRow =
-    isMusicalScorePhase
-      ? introScoreViewportEndRow
-      : startsWithComparison
-        ? comparisonViewportEndRow
-        : rowCount - 1;
+  $: visiblePitchGridStartRow = introScoreViewportStartRow;
+  $: visiblePitchGridEndRow = introScoreViewportEndRow;
   $: visiblePitchGridRowCount = Math.max(1, visiblePitchGridEndRow - visiblePitchGridStartRow + 1);
   $: pitchGridLayoutColumnCount =
     !isMusicalScorePhase && pitchGridFrameWidth > 0 && pitchGridFrameWidth <= 760
       ? 22
       : scoreTotalColumns;
-  $: pitchGridLayoutColumnSize = pitchGridFrameWidth > 0 && pitchGridFrameHeight > 0
-    ? Math.max(
-        1,
-        Math.min(
-          pitchGridFrameHeight / (introScoreViewportRowCount + 1),
-          pitchGridFrameWidth / (pitchGridLayoutColumnCount + pitchGridLegendWidthUnits)
-        )
-      )
-    : pitchGridFallbackColumnSize;
-  $: pitchGridVerticalColumnSize = pitchGridFrameHeight > 0
-    ? Math.max(
-        1,
-        Math.min(
-          pitchGridLayoutColumnSize,
-          pitchGridFrameHeight / (visiblePitchGridRowCount + 1)
-        )
-      )
-    : pitchGridLayoutColumnSize;
-  $: pitchGridShellWidth =
-    pitchGridLayoutColumnSize * (pitchGridLayoutColumnCount + pitchGridLegendWidthUnits);
-  $: pitchGridShellHeight = pitchGridVerticalColumnSize * (visiblePitchGridRowCount + 1);
-  $: pitchGridCellHeight = pitchGridViewportHeight > 0
-    ? (pitchGridViewportHeight * 2) / (visiblePitchGridRowCount + 1)
-    : pitchGridVerticalColumnSize * 2;
-  $: pitchGridCellWidth = pitchGridLayoutColumnSize;
-  $: pitchGridOverlayNoteSize =
-    pitchGridCellHeight * (isMusicalScorePhase || startsWithComparison ? 1 : 2);
+  // Every segment uses one scale for time columns and half-cell pitch rows.
+  // Measure the available frame, then let the fitted shell keep its own size.
+  $: gridLayout = calculateLessonGridLayout({
+    width: pitchGridFrameWidth,
+    height: pitchGridFrameHeight,
+    columns: pitchGridLayoutColumnCount,
+    rows: visiblePitchGridRowCount,
+    fallbackCellSize: pitchGridFallbackColumnSize,
+  });
+  $: pitchGridShellWidth = gridLayout.width;
+  $: pitchGridShellHeight = gridLayout.height;
+  $: pitchGridCellHeight = gridLayout.cellHeight;
+  $: pitchGridCellWidth = gridLayout.cellWidth;
+  $: pitchGridOverlayNoteSize = gridLayout.noteDiameter;
   $: pitchGridHitTargetSize = Math.max(
     pitchGridMinHitTargetSize,
     Math.min(pitchGridMaxHitTargetSize, pitchGridOverlayNoteSize * 2.2)
   );
-  $: pitchGridLegendWidth = pitchGridCellWidth * pitchGridLegendWidthUnits;
-  $: pitchGridContentWidth = Math.max(0, pitchGridViewportWidth - pitchGridLegendWidth);
+  $: pitchGridContentWidth = Math.max(0, pitchGridViewportWidth);
   $: pitchGridViewport = {
     startRow: visiblePitchGridStartRow,
     endRow: visiblePitchGridEndRow,
@@ -574,7 +544,7 @@
       ? comparisonPairs[comparisonIndex]
       : null;
   $: currentComparisonQuestion =
-    currentComparisonPair?.question ?? higherComparisonQuestion;
+    currentComparisonPair?.question ?? comparisonPairs[0].question;
   $: comparisonUnderlinedWords =
     currentComparisonPair && narrationText === currentComparisonQuestion
       ? [currentComparisonPair.underlinedWord]
@@ -595,8 +565,8 @@
     (!currentTaskUsesAvatarNoteSource || notePlacedOnGrid);
   $: noteIsSounding = dragging && draggingOverPitchGrid && dragPreviewVoice !== null;
   $: closingNotes = [
-    { id: 'closing-low', top: `${rowCenter(getRowIndexForTone('A3'))}%`, left: '39%' },
-    { id: 'closing-high', top: `${rowCenter(getRowIndexForTone('A5'))}%`, left: '66%' },
+    { id: 'closing-low', top: `${rowCenter(getRowIndexForTone('A3'))}%`, left: '39%', frequency: getFrequencyForToneNote('A3') ?? undefined },
+    { id: 'closing-high', top: `${rowCenter(getRowIndexForTone('A5'))}%`, left: '66%', frequency: getFrequencyForToneNote('A5') ?? undefined },
   ];
   $: scoreColumnWidthPx = scoreTotalColumns > 0 && pitchGridContentWidth > 0
     ? Math.min(pitchGridCellWidth, pitchGridContentWidth / scoreTotalColumns)
@@ -636,7 +606,8 @@
 
   function getRowIndexForPercent(percentY: number): number {
     const relativeRowIndex = (percentY / 100) * (visiblePitchGridRowCount + 1) - 1;
-    return clampRowIndex(visiblePitchGridStartRow + relativeRowIndex);
+    return Math.max(visiblePitchGridStartRow, Math.min(visiblePitchGridEndRow,
+      Math.round(visiblePitchGridStartRow + relativeRowIndex)));
   }
 
   function taskUsesAvatarNoteSource(_task: PracticeTask | null): boolean {
@@ -666,7 +637,7 @@
       .map((note) => {
         const row = getScoreNoteRow(note);
         const baseLeft = note.startColumnIndex * columnWidthPx;
-        const baseWidth = note.shape === 'oval' ? columnWidthPx : columnWidthPx * 2;
+        const baseWidth = note.shape === 'diamond' ? columnWidthPx * 0.5 : note.shape === 'oval' ? columnWidthPx : columnWidthPx * 2;
         const baseEndColumn = note.shape === 'circle'
           ? note.startColumnIndex + 1
           : note.startColumnIndex;
@@ -680,16 +651,19 @@
           ? Math.max(0, (tailEndColumn - tailStartColumn) * columnWidthPx)
           : 0;
 
+        const isCapsule = note.shape === 'circle' && hasTail;
         return {
           id: note.uuid,
+          isCapsule,
           top: `${rowCenter(row)}%`,
           color: note.color,
           shape: note.shape,
-          leftPx: baseLeft,
-          widthPx: Math.max(5, baseWidth),
+          leftPx: isCapsule ? baseLeft + columnWidthPx - shapeHeightPx / 2 : baseLeft,
+          widthPx: Math.max(5, isCapsule ? (note.endColumnIndex - note.startColumnIndex - 1) * columnWidthPx + shapeHeightPx : baseWidth),
+          frequency: pitchRows[row]?.frequency,
           heightPx: shapeHeightPx,
           tailLeftPx,
-          tailWidthPx,
+          tailWidthPx: note.shape === 'circle' ? 0 : tailWidthPx,
         };
       });
   }
@@ -718,6 +692,7 @@
           widthPx: Math.max(5, stampWidthPx * 0.25),
           heightPx: shapeHeightPx,
           color: placement.color,
+          frequency: pitchRows[row]?.frequency,
         });
       }
 
@@ -732,6 +707,7 @@
           widthPx: Math.max(7, stampWidthPx * 0.48),
           heightPx: shapeHeightPx,
           color: placement.color,
+          frequency: pitchRows[row]?.frequency,
         });
       }
 
@@ -741,6 +717,8 @@
 
   function beginSequence(cancelSpeech = true): number {
     sequenceToken += 1;
+    motion.cancel();
+    questionNarration.submit();
     resolveActionSkipWaiters();
     sourceNoteActive = false;
     stopTone();
@@ -827,8 +805,8 @@
     activeScoreItemIds = new Set();
   }
 
-  function setIntroExampleNotes(toneNotes: string[]): void {
-    introExampleNotes = toneNotes.map((toneNote, index) => {
+  function setIntroExampleNotes(toneNotes: string[], retain = false): void {
+    const notes = toneNotes.map((toneNote, index) => {
       const rowIndex = getRowIndexForTone(toneNote);
       const leftPercent = 30 + index * 18;
       return {
@@ -840,6 +818,37 @@
         isActive: activeIntroExampleTone === toneNote,
       };
     });
+    introExampleNotes = retain ? [...introExampleNotes, ...notes] : notes;
+  }
+
+  async function slideIntroNotesOut(token: number): Promise<void> {
+    motion.introEntering = [];
+    motion.introExiting = true;
+    narrationText = '';
+    await tick();
+    if (!isCurrentSequence(token)) return;
+    await waitMs(lessonScreenSlideMs);
+    if (!isCurrentSequence(token)) return;
+    clearIntroExampleNotes();
+    motion.introExiting = false;
+  }
+
+  async function moveComparisonAvatar(centered: boolean, token: number, instant = false): Promise<void> {
+    if (!avatarAnchorEl || !fieldEl) return;
+    // Subtract the current individual translation to recover the resting
+    // teacher position when measuring the return or restoring a checkpoint.
+    const avatarBounds = avatarAnchorEl.querySelector('.lesson-avatar-stage')?.getBoundingClientRect()
+      ?? avatarAnchorEl.getBoundingClientRect();
+    const offset = getComputedStyle(avatarAnchorEl).translate.split(' ').map(parseFloat);
+    const gridBounds = fieldEl.getBoundingClientRect();
+    motion.avatarInstant = instant;
+    motion.avatarOffset = centered ? {
+      x: gridBounds.left + gridBounds.width / 2 - (avatarBounds.left + avatarBounds.width / 2 - (offset[0] || 0)),
+      y: gridBounds.top + gridBounds.height / 2 - (avatarBounds.top + avatarBounds.height / 2 - (offset[1] || 0)),
+    } : { x: 0, y: 0 };
+    await tick();
+    if (!isCurrentSequence(token)) return;
+    if (!instant) await waitMs(lessonScreenSlideMs);
   }
 
   function refreshIntroExampleNotes(): void {
@@ -991,6 +1000,7 @@
       voice.oscillator.disconnect();
     } catch {}
     try {
+      audioOutput.forget(voice.gain);
       voice.gain.disconnect();
     } catch {}
     activeVoices.delete(voice);
@@ -1026,7 +1036,7 @@
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const now = context.currentTime;
-    const peak = Math.max(0.012, Math.min(0.075, (volume / 100) * 0.055));
+    const peak = 0.055;
     const voice: ActiveVoice = { oscillator, gain, stopped: false };
 
     oscillator.type = dragPreviewWaveform;
@@ -1034,7 +1044,7 @@
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(peak, now + 0.025);
     oscillator.connect(gain);
-    gain.connect(context.destination);
+    audioOutput.connect(gain, context, volume, { frequency, start: now, attackEnd: now + 0.025, peak });
     oscillator.onended = () => {
       voice.stopped = true;
       disposeVoice(voice);
@@ -1056,6 +1066,7 @@
 
     const now = voice.gain.context.currentTime;
     voice.stopped = true;
+    audioOutput.release(voice.gain, 0.045);
     try {
       voice.gain.gain.cancelScheduledValues(now);
       voice.gain.gain.setValueAtTime(Math.max(0.0001, voice.gain.gain.value), now);
@@ -1120,7 +1131,8 @@
     durationMs: number,
     peakGain: number,
     token: number,
-    waveform: OscillatorType = defaultLessonWaveform
+    waveform: OscillatorType = defaultLessonWaveform,
+    noteIds?: readonly string[]
   ): void {
     if (!isCurrentSequence(token) || !isPlaying) return;
 
@@ -1139,7 +1151,7 @@
     gain.gain.setValueAtTime(peakGain, releaseStart);
     gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
     oscillator.connect(gain);
-    gain.connect(context.destination);
+    audioOutput.connect(gain, context, volume, { frequency, start: now, attackEnd: now + 0.025, releaseStart, end: endTime, peak: peakGain, noteIds });
     oscillator.onended = () => {
       voice.stopped = true;
       disposeVoice(voice);
@@ -1153,8 +1165,8 @@
     if (!isCurrentSequence(token) || !isPlaying) return;
     const context = await ensureAudioContext();
     if (!context || !isCurrentSequence(token) || !isPlaying) return;
-    const peak = Math.max(0.008, Math.min(0.065, (volume / 100) * 0.052));
-    startVoice(context, event.frequency, event.durationMs / scorePlaybackRate, peak, token);
+    const peak = 0.052;
+    startVoice(context, event.frequency, event.durationMs / scorePlaybackRate, peak, token, defaultLessonWaveform, event.visualIds);
   }
 
   async function playTone(
@@ -1171,7 +1183,7 @@
 
     stopTone();
     const waveGain = waveform === 'sawtooth' ? 0.058 : 0.08;
-    const peak = Math.max(0.015, Math.min(0.11, (volume / 100) * waveGain));
+    const peak = waveGain;
     startVoice(context, frequency, durationMs, peak, token, waveform);
 
     if (showRegionPulse) pulseRegion(region, durationMs + 60);
@@ -1315,14 +1327,16 @@
         ) {
           return;
         }
-        await playComparisonTone(pair, optionIndex, 650, token, false);
+        await playComparisonTone(pair, optionIndex, lessonPacing.comparisonNoteMs, token, false);
         if (!isCurrentSequence(token)) return;
-        await waitMs(280);
+        await waitMs(lessonPacing.betweenComparisonNotesMs);
       }
     }
   }
 
-  async function startComparisonQuestion(index: number, announceQuestion: boolean): Promise<void> {
+  async function startComparisonQuestion(
+    index: number, announceQuestion: boolean, startAt: 'question' | 'retry' | 'correct' = 'question',
+  ): Promise<void> {
     const pair = comparisonPairs[index];
     if (!pair) return;
 
@@ -1345,12 +1359,30 @@
     promptStatus = question;
     narrationText = question;
 
+    if (startAt !== 'question') {
+      comparisonAnswerLocked = false;
+      await tick();
+      if (!isCurrentSequence(token)) return;
+      const correct = getComparisonCorrectIndex(pair);
+      await handleComparisonAnswer(startAt === 'correct' ? correct : 1 - correct, true);
+      return;
+    }
+
+    mark(pair.id, 'question');
+
+    motion.comparisonEntering = true;
+    await tick();
+    if (!isCurrentSequence(token)) return;
+    await waitMs(lessonScreenSlideMs);
+    if (!isCurrentSequence(token)) return;
+    motion.comparisonEntering = false;
     await waitMs(160);
     if (!isCurrentSequence(token)) return;
+    comparisonAnswerLocked = false;
     if (announceQuestion) {
-      await say(question, token);
+      await questionNarration.start(() => say(question, token), () => { comparisonAnswerLocked = false; });
       if (!isCurrentSequence(token)) return;
-    }
+    } else questionNarration.wait();
 
     comparisonAnswerLocked = false;
     void runComparisonLoop(pair, token);
@@ -1367,55 +1399,88 @@
     activeSettledComparisonNoteId = null;
   }
 
-  async function finishComparisonSequence(token: number): Promise<void> {
+  async function finishComparisonSequence(token: number, startAt = 'playback'): Promise<void> {
     if (!isCurrentSequence(token)) return;
+    const checkpoint = comparisonFinishCheckpoint(startAt);
+    if (!checkpoint) return;
+    comparisonStarted = true;
+    comparisonIndex = comparisonPairs.length - 1;
     comparisonAnswerLocked = true;
     comparisonQuestionVisible = false;
     activeComparisonOptionIndex = null;
     promptBadge = `${section.code} complete`;
     promptTitle = 'Higher and lower pitches';
-    promptStatus = 'Bravo!';
-    await say('Bravo!', token);
-    if (!isCurrentSequence(token)) return;
-
-    await waitMs(180);
-    if (!isCurrentSequence(token)) return;
-
-    for (const note of settledComparisonNotes) {
-      const frequency = getFrequencyForRow(note.rowIndex);
-      if (!frequency || !isCurrentSequence(token)) continue;
-      activeSettledComparisonNoteId = note.id;
-      await playTone(
-        frequency,
-        135,
-        getComparisonRegion(note.rowIndex),
-        token,
-        'sawtooth',
-        false
-      );
-      if (!isCurrentSequence(token)) return;
-      await waitMs(38);
-    }
-
+    promptStatus = '';
+    narrationText = '';
     activeSettledComparisonNoteId = null;
-    complete = true;
-    await waitMs(1000);
+    if (!checkpoint.notesVisible) settledComparisonNotes = [];
+    motion.gridHidden = checkpoint.gridHidden;
+    await tick();
     if (!isCurrentSequence(token)) return;
+    if (checkpoint.avatarCentered) await moveComparisonAvatar(true, token, true);
+
+    for (const [id] of comparisonFinishActions.slice(checkpoint.index)) {
+      if (!isCurrentSequence(token)) return;
+      mark('finish', id);
+      switch (id) {
+        case 'playback':
+          for (const note of settledComparisonNotes) {
+            const frequency = getFrequencyForRow(note.rowIndex);
+            if (!frequency) continue;
+            activeSettledComparisonNoteId = note.id;
+            await playTone(frequency, 135, getComparisonRegion(note.rowIndex), token, 'sawtooth', false);
+            if (!isCurrentSequence(token)) return;
+            await waitMs(38);
+            if (!isCurrentSequence(token)) return;
+          }
+          activeSettledComparisonNoteId = null;
+          motion.comparisonExiting = true;
+          await tick();
+          if (!isCurrentSequence(token)) return;
+          await waitMs(lessonScreenSlideMs);
+          if (!isCurrentSequence(token)) return;
+          settledComparisonNotes = [];
+          motion.comparisonExiting = false;
+          break;
+        case 'hide-grid':
+          motion.gridHidden = true;
+          await tick();
+          break;
+        case 'center-avatar':
+          await moveComparisonAvatar(true, token);
+          break;
+        case 'bravo':
+          promptStatus = 'Bravo!';
+          await say('Bravo!', token);
+          if (!isCurrentSequence(token)) return;
+          await waitMs(lessonPacing.afterCelebrationMs);
+          break;
+        case 'return-avatar':
+          narrationText = '';
+          await moveComparisonAvatar(false, token);
+          break;
+      }
+    }
+    if (!isCurrentSequence(token)) return;
+    complete = true;
+    inspector?.status('completed');
     onComparisonComplete?.();
   }
 
-  async function handleComparisonAnswer(optionIndex: number): Promise<void> {
+  async function handleComparisonAnswer(optionIndex: number, fromInspector = false): Promise<void> {
     const pair = currentComparisonPair;
     if (
       !pair ||
       comparisonAnswerLocked ||
       !comparisonQuestionVisible ||
-      !isPlaying
+      (!isPlaying && !fromInspector)
     ) {
       return;
     }
 
+    questionNarration.submit();
     if (optionIndex !== getComparisonCorrectIndex(pair)) {
+      mark(pair.id, 'retry');
       const token = beginSequence();
       comparisonAnswerLocked = true;
       activeComparisonOptionIndex = null;
@@ -1425,10 +1490,13 @@
       feedbackState = null;
       narrationText = getComparisonQuestion(pair);
       comparisonAnswerLocked = false;
+      questionNarration.wait();
+      mark(pair.id, 'question');
       void runComparisonLoop(pair, token);
       return;
     }
 
+    mark(pair.id, 'correct');
     const flightNotes = buildComparisonFlightNotes(pair, comparisonIndex);
     const token = beginSequence();
     comparisonAnswerLocked = true;
@@ -1489,10 +1557,12 @@
     }
   }
 
-  function sayDuringScorePrelude(text: string, token: number): void {
+  function sayDuringScorePrelude(text: string, token: number, wave = false): void {
+    if (!isCurrentSequence(token)) return;
     narrationText = text;
-    if (!avatarReady || !isCurrentSequence(token)) return;
+    // Score narration may start while Grammy's mounted avatar is still entering.
     void speakWithLessonAvatar(text, {
+      wave,
       lang: 'en-CA',
       rate: 0.92,
       chunking: 'sentence',
@@ -1503,6 +1573,7 @@
     if (isMusicalScorePhase) {
       const scorePlayed = await playScorePreludeSequence();
       if (scorePlayed) {
+        inspector?.status('completed');
         if (isMusicalOutro) onMusicalOutroComplete?.();
         else onMusicalIntroComplete?.();
       }
@@ -1561,6 +1632,7 @@
 
   async function playScorePreludeSequence(): Promise<boolean> {
     const token = beginSequence();
+    mark('musical-score', 'play');
     scorePreludeRunning = true;
     scorePlaybackVisible = true;
     scoreCursorColumn = 0;
@@ -1587,20 +1659,22 @@
       return true;
     }
 
+    // Mount the avatar before dispatching speech, without waiting for its entrance.
+    await tick();
+    if (!isCurrentSequence(token)) return false;
     await waitMs(260);
     if (!isCurrentSequence(token)) return false;
 
+    startScoreCursorAnimation(token);
     if (isMusicalOutro) {
       sayDuringScorePrelude('See you next time!', token);
     }
-
-    startScoreCursorAnimation(token);
     const greetingSlot = Math.floor(scoreTotalSlots / 2);
     let greetingSpoken = false;
     for (let slot = 0; slot < scoreTotalSlots; slot += 1) {
       if (!isMusicalOutro && !greetingSpoken && slot >= greetingSlot) {
         greetingSpoken = true;
-        sayDuringScorePrelude('Hello', token);
+        sayDuringScorePrelude('Hello', token, true);
       }
 
       const events = scorePlaybackEventsBySlot.get(slot) ?? [];
@@ -1633,7 +1707,7 @@
     return true;
   }
 
-  async function startIntroSequence(): Promise<void> {
+  async function startIntroSequence(startAt: 'opening' | 'low-notes' | 'high-notes' | 'slide-out' = 'opening'): Promise<void> {
     const token = beginSequence();
     scorePlaybackVisible = false;
     scorePreludeRunning = false;
@@ -1658,31 +1732,59 @@
     noteY = resetY;
     activeRegion = null;
     clearIntroExampleNotes();
+    motion.placedNotes = [];
+    motion.placementVisible = false;
 
-    await waitMs(320);
+    if (startAt === 'slide-out') {
+      setIntroExampleNotes(lowIntroToneNotes);
+      setIntroExampleNotes(highIntroToneNotes, true);
+      mark('introduce-height', 'slide-out');
+      await slideIntroNotesOut(token);
+      if (!isCurrentSequence(token)) return;
+      introRunning = false;
+      await startTask(0);
+      return;
+    }
+
+    if (startAt === 'opening') {
+      mark('introduce-height', 'opening');
+      await waitMs(320);
+      if (!isCurrentSequence(token)) return;
+      await say('This space shows pitch from low to high.', token);
+      if (!isCurrentSequence(token)) return;
+      await waitMs(120);
+      if (!isCurrentSequence(token)) return;
+    }
+
+    if (startAt !== 'high-notes') {
+      mark('introduce-height', 'low-notes');
+      setIntroExampleNotes(lowIntroToneNotes);
+      motion.introEntering = lowIntroToneNotes;
+      await tick();
+      if (!isCurrentSequence(token)) return;
+      await waitMs(lessonScreenSlideMs);
+      if (!isCurrentSequence(token)) return;
+      motion.introEntering = [];
+      await say('Lower notes belong lower down.', token);
+      if (!isCurrentSequence(token)) return;
+      promptStatus = 'Lower notes belong lower down.';
+      await playToneNoteSequence(lowIntroToneNotes, 'lower', token);
+      if (!isCurrentSequence(token)) return;
+      await waitMs(160);
+      if (!isCurrentSequence(token)) return;
+    }
+
+    mark('introduce-height', 'high-notes');
+    if (startAt === 'high-notes') setIntroExampleNotes(lowIntroToneNotes);
+    setIntroExampleNotes(highIntroToneNotes, true);
+    motion.introEntering = highIntroToneNotes;
+    await tick();
     if (!isCurrentSequence(token)) return;
-
-    await say('This space shows pitch from low to high.', token);
+    await waitMs(lessonScreenSlideMs);
     if (!isCurrentSequence(token)) return;
-
-    await waitMs(120);
-    if (!isCurrentSequence(token)) return;
-
-    setIntroExampleNotes(lowIntroToneNotes);
-    await say('Lower notes belong lower down.', token);
-    if (!isCurrentSequence(token)) return;
-
-    promptStatus = 'Lower notes belong lower down.';
-    await playToneNoteSequence(lowIntroToneNotes, 'lower', token);
-    if (!isCurrentSequence(token)) return;
-
-    await waitMs(160);
-    if (!isCurrentSequence(token)) return;
-
-    setIntroExampleNotes(highIntroToneNotes);
+    motion.introEntering = [];
     await say('Higher sounds belong higher up.', token);
     if (!isCurrentSequence(token)) return;
-
     promptStatus = 'Higher sounds belong higher up.';
     await playToneNoteSequence(highIntroToneNotes, 'upper', token);
     if (!isCurrentSequence(token)) return;
@@ -1690,12 +1792,34 @@
     await waitMs(240);
     if (!isCurrentSequence(token)) return;
 
-    clearIntroExampleNotes();
+    mark('introduce-height', 'slide-out');
+    await slideIntroNotesOut(token);
+    if (!isCurrentSequence(token)) return;
     introRunning = false;
     await startTask(0);
   }
 
-  async function startTask(index: number): Promise<void> {
+  function examplePlacedNotes(count: number) {
+    return tasks.slice(0, count).map(task => {
+      const rowIndex = getRowIndexForPercent(task.target === 'lower' ? 75 : 25);
+      return { id: task.id, rowIndex, leftPercent: 50, color: pitchRows[rowIndex].hex };
+    });
+  }
+
+  async function slidePlacedNotesOut(token: number): Promise<void> {
+    motion.placementVisible = false;
+    motion.placementEntering = false;
+    motion.placementExiting = true;
+    narrationText = '';
+    await tick();
+    if (!isCurrentSequence(token)) return;
+    await waitMs(lessonScreenSlideMs);
+    if (!isCurrentSequence(token)) return;
+    motion.placedNotes = [];
+    motion.placementExiting = false;
+  }
+
+  async function startTask(index: number, startAt: 'prompt' | 'place' | 'retry' | 'correct' | 'slide-out' = 'prompt'): Promise<void> {
     if (index >= tasks.length) {
       const token = beginSequence();
       interactionEnabled = false;
@@ -1704,12 +1828,17 @@
       feedbackState = null;
       activeRegion = null;
       await waitMs(420);
-      if (isCurrentSequence(token)) onPlacementComplete?.();
+      if (isCurrentSequence(token)) {
+        inspector?.status('completed');
+        onPlacementComplete?.();
+      }
       return;
     }
 
     const task = tasks[index];
     const token = beginSequence();
+    motion.placedNotes = index === 0 ? [] : motion.placedNotes.length ? motion.placedNotes.slice(0, index) : examplePlacedNotes(index);
+    motion.placementVisible = true;
     const usesAvatarNoteSource = taskUsesAvatarNoteSource(task);
     taskIndex = index;
     complete = false;
@@ -1725,6 +1854,37 @@
     narrationText = task.prompt;
     clearIntroExampleNotes();
 
+    if (startAt === 'slide-out') {
+      motion.placedNotes = examplePlacedNotes(tasks.length);
+      mark(task.id, 'slide-out');
+      await slidePlacedNotesOut(token);
+      if (isCurrentSequence(token)) await startTask(tasks.length);
+      return;
+    }
+
+    if (startAt === 'retry' || startAt === 'correct') {
+      if (startAt === 'correct') noteY = task.target === 'lower' ? 75 : 25;
+      await tick();
+      if (!isCurrentSequence(token)) return;
+      if (startAt === 'retry') await handleIncorrectDrop();
+      else await handleSuccessfulDrop();
+      return;
+    }
+    if (startAt === 'place') {
+      mark(task.id, 'place');
+      interactionEnabled = true;
+      questionNarration.wait();
+      return;
+    }
+
+    mark(task.id, 'prompt');
+
+    motion.placementEntering = true;
+    await tick();
+    if (!isCurrentSequence(token)) return;
+    await waitMs(lessonScreenSlideMs);
+    if (!isCurrentSequence(token)) return;
+    motion.placementEntering = false;
     await waitMs(140);
     if (!isCurrentSequence(token)) return;
 
@@ -1748,11 +1908,12 @@
     }
 
     interactionEnabled = true;
-
     if (index < 2 || index === 2 || index === tasks.length - 1) {
-      await say(task.narration, token);
+      await questionNarration.start(() => say(task.narration, token), () => { interactionEnabled = true; });
       if (!isCurrentSequence(token)) return;
-    }
+    } else questionNarration.wait();
+    interactionEnabled = true;
+    mark(task.id, 'place');
   }
 
   async function replayCurrentTask(): Promise<void> {
@@ -1767,6 +1928,8 @@
 
   async function handleSuccessfulDrop(): Promise<void> {
     if (!currentTask) return;
+    questionNarration.submit();
+    mark(currentTask.id, 'correct');
     const token = beginSequence();
     interactionEnabled = false;
     notePlacedOnGrid = true;
@@ -1786,10 +1949,22 @@
     if (!isCurrentSequence(token)) return;
 
     feedbackState = null;
+    const placedRow = getRowIndexForPercent(noteY);
+    motion.placedNotes = [...motion.placedNotes, {
+      id: currentTask.id, rowIndex: placedRow, leftPercent: 50, color: pitchRows[placedRow].hex,
+    }];
+    motion.placementVisible = false;
+    if (taskIndex === tasks.length - 1) {
+      mark(currentTask.id, 'slide-out');
+      await slidePlacedNotesOut(token);
+      if (!isCurrentSequence(token)) return;
+    }
     await startTask(taskIndex + 1);
   }
 
   async function handleIncorrectDrop(): Promise<void> {
+    questionNarration.submit();
+    if (currentTask) mark(currentTask.id, 'retry');
     const token = beginSequence();
     interactionEnabled = false;
     sourceNoteActive = false;
@@ -1862,6 +2037,17 @@
     void updateDragPitchPreview(true);
   }
 
+  async function placeNoteFromOutside(event: PointerEvent): Promise<void> {
+    if (!interactionEnabled || !isPlaying || dragging || !currentTask) return;
+    const point = getFieldPoint(event.clientX, event.clientY);
+    if (!point?.inField) return;
+    noteY = point.snappedY;
+    notePlacedOnGrid = true;
+    activeRegion = getFieldHalfFromY(noteY);
+    if (activeRegion === currentTask.target) await handleSuccessfulDrop();
+    else await handleIncorrectDrop();
+  }
+
   function handleNotePointerMove(event: PointerEvent): void {
     if (!dragging || pointerId !== event.pointerId) return;
     dragClientX = event.clientX;
@@ -1911,13 +2097,49 @@
     avatarReady = true;
   }
 
+  function seekTo(cueId: string, actionId?: string): void {
+    const cueEntry = cuePlan.find((item) => item.id === cueId);
+    const selectedAction = actionId ?? cueEntry?.actions?.[0]?.id;
+    if (!cueEntry || !selectedAction || !cueEntry.actions?.some((item) => item.id === selectedAction)) return;
+    beginSequence();
+    introStarted = true;
+    activeInspectorCue = null;
+    inspector?.resetFrom(cueId);
+    if (isMusicalScorePhase) {
+      void startLessonOpeningSequence();
+      return;
+    }
+    if (startsWithComparison) {
+      const previous = comparisonPairs.findIndex((pair) => pair.id === cueId);
+      const count = previous < 0 ? comparisonPairs.length : previous;
+      settledComparisonNotes = comparisonPairs.slice(0, count)
+        .flatMap((pair, index) => buildSettledComparisonNotes(pair, index));
+      comparisonFlightNotes = [];
+      if (cueId === 'finish') {
+        void finishComparisonSequence(beginSequence(), selectedAction);
+      } else {
+        void startComparisonQuestion(previous, selectedAction === 'question', selectedAction as 'question' | 'retry' | 'correct');
+      }
+      return;
+    }
+    if (cueId === 'introduce-height') {
+      void startIntroSequence(selectedAction as 'opening' | 'low-notes' | 'high-notes' | 'slide-out');
+      return;
+    }
+    const index = tasks.findIndex((task) => task.id === cueId);
+    if (index >= 0) void startTask(index, selectedAction as 'prompt' | 'place' | 'retry' | 'correct' | 'slide-out');
+  }
+
   onMount(() => {
     lastActionSkipSignal = actionSkipSignal;
     actionSkipSignalReady = true;
+    unregisterInspector = inspector?.register(cuePlan, seekTo);
   });
 
   onDestroy(() => {
+    unregisterInspector?.();
     sequenceToken += 1;
+    questionNarration.submit();
     resolveActionSkipWaiters();
     cancelWait(true);
     stopTone();
@@ -1927,13 +2149,16 @@
     cancelLessonAvatarSpeech();
     if (audioContext && audioContext.state !== 'closed') void audioContext.close();
   });
+  $: audioOutput.setVolume(volume);
 </script>
 
 <div
   class="pitch-scene"
   style={`--pitch-overlay-note-size:${pitchGridOverlayNoteSize}px; --pitch-hit-target-size:${pitchGridHitTargetSize}px;`}
 >
-  <div class={`pitch-scene-support ${comparisonQuestionVisible ? 'is-comparison' : ''}`}>
+  <div class={`pitch-scene-support ${startsWithComparison || comparisonQuestionVisible ? 'is-comparison' : ''}`}>
+    <div class="mlt-lesson-avatar-anchor" class:mlt-lesson-avatar-centered={startsWithComparison} bind:this={avatarAnchorEl}
+      use:lessonScreenSlide={{ direction: 'to-offset', offset: motion.avatarOffset, instant: motion.avatarInstant, paused: !isPlaying, replayKey: motion.key }}>
     <LessonAvatarDock
       character="grammy"
       speechText={narrationText}
@@ -1944,11 +2169,11 @@
     {#if avatarSourceNoteVisible}
       <button
         bind:this={noteEl}
-        class={`pitch-note pitch-note--avatar-source ${dragging && dragOrigin === 'avatar' ? 'is-dragging' : ''} ${sourceNoteActive ? 'is-active' : ''} ${noteIsSounding ? 'is-sounding' : ''} ${interactionEnabled ? '' : 'is-muted'}`}
+        class={`mlt-lesson-note-target pitch-note pitch-note--avatar-source ${dragging && dragOrigin === 'avatar' ? 'is-dragging' : ''} ${sourceNoteActive ? 'is-active' : ''} ${noteIsSounding ? 'is-sounding' : ''} ${interactionEnabled ? '' : 'is-muted'}`}
+        use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: sourceNoteActive ? null : pitchRows[getRowIndexForPercent(noteY)]?.frequency }}
         type="button"
-        style={dragging && dragOrigin === 'avatar'
-          ? `--drag-x:${dragClientX}px; --drag-y:${dragClientY}px;`
-          : ''}
+        style:--drag-x={dragging && dragOrigin === 'avatar' ? `${dragClientX}px` : null}
+        style:--drag-y={dragging && dragOrigin === 'avatar' ? `${dragClientY}px` : null}
         aria-label={interactionEnabled
           ? 'Draggable pitch note source'
           : 'Pitch note sounding beside the avatar'}
@@ -1960,37 +2185,42 @@
     {/if}
 
     {#if comparisonQuestionVisible && currentComparisonPair}
+      {#key comparisonIndex}
       <div
         class="comparison-options"
         bind:this={comparisonOptionsEl}
+        use:lessonScreenSlide={{ direction: motion.comparisonEntering ? 'enter-left' : null, paused: !isPlaying, replayKey: motion.key }}
         aria-label={currentComparisonQuestion}
       >
         {#each currentComparisonPair.toneNotes as toneNote, optionIndex}
           {@const optionRow = getRowIndexForTone(toneNote)}
           <button
-            class={`comparison-option ${activeComparisonOptionIndex === optionIndex ? 'is-active' : ''}`}
+            class={`mlt-lesson-note-target comparison-option ${activeComparisonOptionIndex === optionIndex ? 'is-active' : ''}`}
+            use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: pitchRows[optionRow]?.frequency, active: activeComparisonOptionIndex === optionIndex }}
             type="button"
-            style={`color:${pitchRows[optionRow]?.hex ?? '#6a5140'};`}
+            style:color={pitchRows[optionRow]?.hex ?? '#6a5140'}
             aria-label={`Choose note ${optionIndex + 1}`}
             disabled={comparisonAnswerLocked || !isPlaying}
             on:click={() => void handleComparisonAnswer(optionIndex)}
           ></button>
         {/each}
       </div>
+      {/key}
     {/if}
+    </div>
   </div>
 
   <section
-    class={`pitch-workspace app-card ${feedbackState ? `is-${feedbackState}` : ''} ${scorePlaybackVisible ? 'is-score-prelude' : ''}`}
+    class={`pitch-workspace ${feedbackState ? `is-${feedbackState}` : ''} ${scorePlaybackVisible ? 'is-score-prelude' : ''}`}
   >
     <div
-      class="pitch-grid-frame"
-      bind:clientWidth={pitchGridFrameWidth}
-      bind:clientHeight={pitchGridFrameHeight}
-      style={`--legend-width:${pitchGridLegendWidth}px;`}
-    >
+      class="mlt-lesson-grid-frame pitch-grid-frame"
+        bind:clientWidth={pitchGridFrameWidth}
+        bind:clientHeight={pitchGridFrameHeight}
+      >
       <div
         class="pitch-grid-shell"
+        class:is-hidden={motion.gridHidden}
         style={`width:${pitchGridShellWidth}px; height:${pitchGridShellHeight}px;`}
       >
         <div
@@ -1999,6 +2229,7 @@
           bind:clientHeight={pitchGridViewportHeight}
         >
           {#if pitchGridViewportWidth > 0 && pitchGridViewportHeight > 0}
+            <div class="pitch-grid-render">
             <PitchGrid
               mode="singing"
               fullRowData={pitchRows}
@@ -2013,8 +2244,10 @@
               showRightLegend={false}
               singingConfig={pitchGridSingingConfig}
               showHorizontalGridLines={true}
-              horizontalGridReferencePitchClass={0}
+              {...lessonGridAppearance}
+              showColumnGrid={false}
             />
+            </div>
 
             {#if scorePlaybackVisible}
               <div
@@ -2022,7 +2255,7 @@
                 style={`--score-width:${scoreWidthPx}px; --score-cursor-x:${scoreCursorColumn * scoreColumnWidthPx}px;`}
                 aria-hidden="true"
               >
-                {#each scoreColumnGuides as guide}
+                {#each isMusicalOutro ? [] : scoreColumnGuides as guide}
                   <div
                     class={`score-column-guide ${guide.boundaryStyle ? 'is-boundary' : ''} ${guide.boundaryStyle === 'solid' ? 'is-solid' : ''} ${guide.boundaryStyle === 'dashed' ? 'is-dashed' : ''} ${guide.isTerminal ? 'is-terminal' : ''}`}
                     style={`left:${guide.leftPx}px;`}
@@ -2037,39 +2270,66 @@
                     {#if note.tailWidthPx > 0}
                       <span
                         class="score-note-tail"
-                        style={`left:${note.tailLeftPx}px; width:${note.tailWidthPx}px; background:${note.color};`}
+                        style={`left:${note.tailLeftPx}px; width:${note.tailWidthPx}px; background:${note.color}; height:${Math.max(1, scoreColumnWidthPx * 0.2)}px;`}
                       ></span>
                     {/if}
-                    <span
-                      class={`score-note-shape score-note-shape--${note.shape}`}
-                      style={`left:${note.leftPx}px; width:${note.widthPx}px; height:${note.heightPx}px; color:${note.color}; border-color:${note.color}; box-shadow:0 0 0.7px ${note.color}, 0 0 9px color-mix(in srgb, ${note.color} 28%, transparent);`}
-                    ></span>
+                    {#if note.shape === 'diamond'}
+                      <svg
+                        class="mlt-lesson-note-svg score-note-shape"
+                        use:lessonNoteAppearance={{ audioOutput, frequency: note.frequency, noteId: note.id, shape: 'diamond', cellWidth: scoreColumnWidthPx * 0.5 }}
+                        viewBox="0 0 100 100" preserveAspectRatio="none"
+                        style:left={`${note.leftPx}px`}
+                        style:width={`${note.widthPx}px`}
+                        style:height={`${note.heightPx}px`}
+                        style:color={note.color}
+                        aria-hidden="true"
+                      ><polygon points="50,0 100,50 50,100 0,50" /></svg>
+                    {:else}
+                      <span
+                        class={`mlt-lesson-note score-note-shape ${note.isCapsule ? 'mlt-lesson-note--capsule' : ''}`}
+                        use:lessonNoteAppearance={{ audioOutput, frequency: note.frequency, noteId: note.id, shape: note.shape, cellWidth: scoreColumnWidthPx }}
+                        style:left={`${note.leftPx}px`}
+                        style:width={`${note.widthPx}px`}
+                        style:height={`${note.heightPx}px`}
+                        style:color={note.color}
+                      ></span>
+                    {/if}
                   </div>
                 {/each}
 
                 {#each scoreStampRenderItems as stamp}
                   {#if stamp.kind === 'diamond'}
                     <svg
-                      class={`score-stamp-shape score-stamp-shape--diamond ${activeScoreItemIds.has(stamp.id) ? 'is-active' : ''}`}
+                      class={`mlt-lesson-note-svg score-stamp-shape score-stamp-shape--diamond ${activeScoreItemIds.has(stamp.id) ? 'is-active' : ''}`}
+                      use:lessonNoteAppearance={{ cellWidth: stamp.widthPx, audioOutput, frequency: stamp.frequency, noteId: stamp.id, shape: stamp.kind }}
                       viewBox={scoreStampDiamondViewBox}
                       preserveAspectRatio="none"
-                      style={`left:${stamp.centerX}px; top:${stamp.top}; width:${stamp.widthPx}px; height:${stamp.heightPx}px; color:${stamp.color};`}
+                      style:left={`${stamp.centerX}px`}
+                      style:top={stamp.top}
+                      style:width={`${stamp.widthPx}px`}
+                      style:height={`${stamp.heightPx}px`}
+                      style:color={stamp.color}
                       focusable="false"
                     >
                       <path
                         d={scoreStampDiamondPath}
                         fill="currentColor"
-                        fill-opacity="0.12"
+                        fill-opacity="1"
                         stroke="currentColor"
-                        stroke-width="4"
+                        stroke-width="var(--mlt-lesson-note-stroke-width)"
                         stroke-linecap="round"
                         stroke-linejoin="round"
                       />
                     </svg>
                   {:else}
                     <span
-                      class={`score-stamp-shape score-stamp-shape--oval ${activeScoreItemIds.has(stamp.id) ? 'is-active' : ''}`}
-                      style={`left:${stamp.centerX}px; top:${stamp.top}; width:${stamp.widthPx}px; height:${stamp.heightPx}px; border-color:${stamp.color};`}
+                      class={`mlt-lesson-note score-stamp-shape score-stamp-shape--oval ${activeScoreItemIds.has(stamp.id) ? 'is-active' : ''}`}
+                      use:lessonNoteAppearance={{ cellWidth: stamp.widthPx, audioOutput, frequency: stamp.frequency, noteId: stamp.id, shape: stamp.kind }}
+                      style:left={`${stamp.centerX}px`}
+                      style:top={stamp.top}
+                      style:width={`${stamp.widthPx}px`}
+                      style:height={`${stamp.heightPx}px`}
+                      style:color={stamp.color}
                     ></span>
                   {/if}
                 {/each}
@@ -2078,7 +2338,13 @@
               </div>
             {/if}
 
-            <div class="pitch-grid-field-overlay" bind:this={fieldEl}>
+            <div class="pitch-grid-field-overlay" bind:this={fieldEl}
+              use:lessonOutsidePlacement={{
+                enabled: interactionEnabled && isPlaying && !dragging,
+                questionKey: `${sequenceToken}-${taskIndex}`,
+                leftInset: pitchGridCellWidth * 6,
+                onDrop: (event) => { void placeNoteFromOutside(event); },
+              }}>
               <div
                 class={`pitch-field-half pitch-field-half--upper ${flashRegion === 'upper' || activeRegion === 'upper' ? 'is-active' : ''}`}
                 aria-hidden="true"
@@ -2089,41 +2355,65 @@
               ></div>
 
               {#if introExampleNotes.length > 0}
-                <div class="intro-example-note-layer" aria-hidden="true">
-                  {#each introExampleNotes as note}
+                <div class="intro-example-note-layer" aria-hidden="true"
+                  use:lessonScreenSlide={{ direction: motion.introExiting ? 'exit-right' : null, paused: !isPlaying, replayKey: motion.key }}>
+                  {#each introExampleNotes as note (note.id)}
                     <div
-                      class={`intro-example-note ${note.isActive ? 'is-active' : ''}`}
-                      style={`top:${note.top}; left:${note.left}; color:${note.color}; border-color:${note.color};`}
+                      class={`mlt-lesson-note intro-example-note ${note.isActive ? 'is-active' : ''}`}
+                      use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: getFrequencyForToneNote(note.toneNote) ?? undefined, active: note.isActive }}
+                      use:lessonScreenSlide={{ direction: motion.introEntering.includes(note.toneNote) ? 'enter-left' : null, paused: !isPlaying, replayKey: motion.key }}
+                      style:top={note.top}
+                      style:left={note.left}
+                      style:color={note.color}
                     ></div>
                   {/each}
                 </div>
               {/if}
 
               {#if settledComparisonNotes.length > 0}
-                <div class="comparison-settled-layer" aria-hidden="true">
+                <div class="comparison-settled-layer" aria-hidden="true"
+                  use:lessonScreenSlide={{ direction: motion.comparisonExiting ? 'exit-right' : null, paused: !isPlaying, replayKey: motion.key }}>
                   {#each settledComparisonNotes as note (note.id)}
                     <span
-                      class={`comparison-settled-note ${activeSettledComparisonNoteId === note.id ? 'is-active' : ''}`}
-                      style={`top:${rowCenter(note.rowIndex)}%; left:${note.leftPercent}%; color:${note.color};`}
+                      class={`mlt-lesson-note comparison-settled-note ${activeSettledComparisonNoteId === note.id ? 'is-active' : ''}`}
+                      use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: pitchRows[note.rowIndex]?.frequency, active: activeSettledComparisonNoteId === note.id }}
+                      style:top={`${rowCenter(note.rowIndex)}%`}
+                      style:left={`${note.leftPercent}%`}
+                      style:color={note.color}
                     ></span>
                   {/each}
                 </div>
               {/if}
 
+              <div class="placement-note-layer"
+                use:lessonScreenSlide={{ direction: motion.placementExiting ? 'exit-right' : null, paused: !isPlaying, replayKey: motion.key }}>
+              {#each motion.placedNotes as note (note.id)}
+                <span class="mlt-lesson-note placement-settled-note"
+                  use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: pitchRows[note.rowIndex]?.frequency }}
+                  style:top={`${rowCenter(note.rowIndex)}%`} style:left={`${note.leftPercent}%`} style:color={note.color}
+                  aria-hidden="true"></span>
+              {/each}
               {#if complete && !comparisonStarted}
                 {#each closingNotes as closingNote}
                   <div
-                    class="pitch-note pitch-note--settled"
-                    style={`top:${closingNote.top}; left:${closingNote.left};`}
+                    class="mlt-lesson-note-target pitch-note pitch-note--settled"
+                    use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: closingNote.frequency }}
+                    style:top={closingNote.top}
+                    style:left={closingNote.left}
                     aria-hidden="true"
                   ></div>
                 {/each}
-              {:else if gridPitchNoteVisible}
+              {:else if gridPitchNoteVisible && motion.placementVisible}
+                {#key taskIndex}
                 <button
                   bind:this={noteEl}
-                  class={`pitch-note ${dragging ? 'is-dragging' : ''} ${noteIsSounding ? 'is-sounding' : ''} ${interactionEnabled ? '' : 'is-muted'}`}
+                  class={`mlt-lesson-note-target pitch-note ${dragging ? 'is-dragging' : ''} ${noteIsSounding ? 'is-sounding' : ''} ${interactionEnabled ? '' : 'is-muted'}`}
+                  use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: pitchRows[getRowIndexForPercent(noteY)]?.frequency }}
+                  use:lessonScreenSlide={{ direction: motion.placementEntering ? 'enter-left' : null, paused: !isPlaying, replayKey: motion.key }}
                   type="button"
-                  style={`top:${noteY}%; left:50%; color:${currentPitchNoteColor};`}
+                  style:top={`${noteY}%`}
+                  style:left="50%"
+                  style:color={currentPitchNoteColor}
                   aria-label={interactionEnabled
                     ? 'Draggable pitch note'
                     : 'Pitch note waiting for the next prompt'}
@@ -2132,7 +2422,9 @@
                   on:pointerup={handleNotePointerUp}
                   on:pointercancel={handleNotePointerCancel}
                 ></button>
+                {/key}
               {/if}
+              </div>
             </div>
           {/if}
         </div>
@@ -2144,8 +2436,11 @@
     <div class="comparison-flight-layer" aria-hidden="true">
       {#each comparisonFlightNotes as note (note.id)}
         <span
-          class={`comparison-flight-note ${note.landed ? 'is-landed' : ''}`}
-          style={`left:${note.landed ? note.endX : note.startX}px; top:${note.landed ? note.endY : note.startY}px; color:${note.color};`}
+          class={`mlt-lesson-note comparison-flight-note ${note.landed ? 'is-landed' : ''}`}
+          use:lessonNoteAppearance={{ audioOutput, cellWidth: pitchGridCellWidth, frequency: undefined }}
+          style:left={`${note.landed ? note.endX : note.startX}px`}
+          style:top={`${note.landed ? note.endY : note.startY}px`}
+          style:color={note.color}
         ></span>
       {/each}
     </div>
@@ -2153,6 +2448,11 @@
 </div>
 
 <style>
+  :global(html:has(.pitch-scene)) { overflow-x: clip; }
+
+  .pitch-grid-shell.is-hidden { visibility: hidden; }
+  .pitch-grid-render { position: absolute; inset: 0; overflow: hidden; border-radius: 22px; }
+
   .pitch-scene {
     display: grid;
     grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
@@ -2177,10 +2477,10 @@
   .pitch-workspace {
     display: grid;
     gap: 0.9rem;
-    padding: 1rem;
+    padding: 0;
     min-width: 0;
     min-height: 0;
-    width: fit-content;
+    width: 100%;
     max-width: 100%;
     justify-self: start;
     align-self: start;
@@ -2194,24 +2494,20 @@
     justify-self: stretch;
   }
 
-  .pitch-workspace.is-success {
+  .pitch-workspace.is-success .pitch-grid-field {
     border-color: rgba(66, 151, 94, 0.26);
     box-shadow: var(--amt-shadow), 0 0 0 1px rgba(66, 151, 94, 0.12);
   }
 
-  .pitch-workspace.is-error {
+  .pitch-workspace.is-error .pitch-grid-field {
     border-color: rgba(201, 90, 77, 0.24);
     box-shadow: var(--amt-shadow), 0 0 0 1px rgba(201, 90, 77, 0.12);
   }
 
   .pitch-grid-frame {
-    width: fit-content;
+    width: 100%;
     max-width: 100%;
-    height: clamp(34rem, calc(100svh - 10rem), 52rem);
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
-    overflow: hidden;
+    height: calc(clamp(34rem, calc(100svh - 10rem), 52rem) + 2rem);
   }
 
   .pitch-workspace.is-score-prelude .pitch-grid-frame {
@@ -2229,25 +2525,30 @@
     width: 100%;
     height: 100%;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     border-radius: 22px;
-    border: 1px solid rgba(84, 65, 39, 0.14);
+    border: 0;
+    outline: 1px solid rgba(102, 75, 40, 0.18);
+    outline-offset: -1px;
+    box-shadow: var(--amt-shadow);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
     background:
       radial-gradient(580px 260px at 100% 8%, rgba(78, 176, 226, 0.06), transparent 62%),
       radial-gradient(620px 260px at 0% 100%, rgba(202, 187, 102, 0.06), transparent 64%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 241, 231, 0.94));
+      linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(248, 241, 229, 0.86));
   }
+
 
   .pitch-grid-field-overlay {
     position: absolute;
-    inset: 0 0 0 var(--legend-width);
+    inset: 0;
     pointer-events: none;
     z-index: 2;
   }
 
   .score-playback-layer {
     position: absolute;
-    inset: 0 auto 0 var(--legend-width);
+    inset: 0 auto 0 0;
     width: min(var(--score-width), 100%);
     pointer-events: none;
     overflow: hidden;
@@ -2259,27 +2560,25 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: rgba(62, 70, 65, 0.11);
+    background: #adb5bd;
   }
 
   .score-column-guide.is-boundary {
     background: transparent;
-    border-left: 1px dashed rgba(62, 70, 65, 0.34);
+    background: repeating-linear-gradient(to bottom, #adb5bd 0 5px, transparent 5px 10px);
   }
 
   .score-column-guide.is-dashed {
-    border-left-style: dashed;
+    background: repeating-linear-gradient(to bottom, #adb5bd 0 5px, transparent 5px 10px);
   }
 
   .score-column-guide.is-solid {
-    border-left-style: solid;
-    border-left-width: 2px;
-    border-left-color: rgba(34, 44, 39, 0.45);
+    background: #adb5bd;
   }
 
   .score-column-guide.is-terminal {
-    background: transparent;
-    border-left: 2px solid rgba(34, 44, 39, 0.42);
+    width: 2px;
+    background: #adb5bd;
   }
 
   .score-note-item {
@@ -2295,7 +2594,7 @@
     height: 2px;
     border-radius: 999px;
     opacity: 0.95;
-    box-shadow: 0 0 8px rgba(74, 144, 226, 0.22);
+
     transition:
       height 0.08s ease,
       top 0.08s ease,
@@ -2307,81 +2606,20 @@
     top: 0;
     display: block;
     transform: translateY(-50%);
-    border: 2px solid currentColor;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.22);
     transition:
       background-color 0.08s ease,
       box-shadow 0.08s ease,
       transform 0.08s ease;
   }
 
-  .score-note-item.is-active .score-note-tail {
-    top: -2px;
-    height: 4px;
-    filter: saturate(1.35) brightness(1.08);
-  }
-
-  .score-note-item.is-active .score-note-shape {
-    background: color-mix(in srgb, currentColor 24%, rgba(255, 255, 255, 0.9));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.86),
-      0 0 16px currentColor,
-      0 0 28px color-mix(in srgb, currentColor 42%, transparent);
-    transform: translateY(-50%) scale(1.08);
-  }
-
-  .score-note-item.is-active .score-note-shape--diamond {
-    transform: translateY(-50%) rotate(45deg) scale(1.08);
-  }
-
-  .score-note-shape--diamond {
-    border-radius: 0;
-    transform: translateY(-50%) rotate(45deg);
-  }
-
   .score-stamp-shape {
     position: absolute;
     display: block;
     transform: translate(-50%, -50%);
-    filter: drop-shadow(0 0 5px rgba(74, 144, 226, 0.22));
+
     transition:
       filter 0.08s ease,
       transform 0.08s ease;
-  }
-
-  .score-stamp-shape--oval {
-    border: 2px solid currentColor;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-  }
-
-  .score-stamp-shape.is-active {
-    filter:
-      drop-shadow(0 0 2px rgba(255, 255, 255, 0.92))
-      drop-shadow(0 0 9px currentColor)
-      drop-shadow(0 0 18px currentColor);
-    transform: translate(-50%, -50%) scale(1.16);
-  }
-
-  .score-stamp-shape--diamond.is-active {
-    filter:
-      drop-shadow(0 0 1px rgba(255, 255, 255, 0.88))
-      drop-shadow(0 0 4px currentColor)
-      drop-shadow(0 0 8px color-mix(in srgb, currentColor 42%, transparent));
-    transform: translate(-50%, -50%);
-  }
-
-  .score-stamp-shape--diamond.is-active path {
-    fill-opacity: 0.26;
-    stroke-width: 4.5;
-  }
-
-  .score-stamp-shape--oval.is-active {
-    background: color-mix(in srgb, currentColor 24%, rgba(255, 255, 255, 0.9));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.86),
-      0 0 16px currentColor;
   }
 
   .score-playback-cursor {
@@ -2433,38 +2671,19 @@
     width: var(--pitch-overlay-note-size);
     height: var(--pitch-overlay-note-size);
     aspect-ratio: 1 / 1;
-    border-radius: 999px;
-    color: currentColor;
     transform: translate(-50%, -50%);
-  }
-
-  .intro-example-note::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border: 2px solid currentColor;
-    border-radius: inherit;
-    background: rgba(255, 255, 255, 0.36);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.6),
-      0 5px 12px rgba(39, 28, 18, 0.1),
-      0 0 10px color-mix(in srgb, currentColor 20%, transparent);
     transition:
       background-color 0.1s ease,
       box-shadow 0.1s ease,
       transform 0.1s ease;
   }
 
-  .intro-example-note.is-active::before {
-    background: color-mix(in srgb, currentColor 26%, rgba(255, 255, 255, 0.88));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.86),
-      0 0 18px currentColor,
-      0 0 32px color-mix(in srgb, currentColor 48%, transparent);
-    transform: scale(1.1);
-  }
 
   .comparison-options {
+    position: absolute;
+    top: calc(100% + 0.85rem);
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2473,17 +2692,14 @@
   }
 
   .comparison-option {
-    width: 3.25rem;
-    height: 3.25rem;
+    position: relative;
+    width: max(3.25rem, var(--pitch-overlay-note-size));
+    height: max(3.25rem, var(--pitch-overlay-note-size));
+    border: 0;
+    background: transparent;
     flex: 0 0 auto;
     padding: 0;
-    border: 3px solid currentColor;
-    border-radius: 999px;
     appearance: none;
-    background: color-mix(in srgb, currentColor 12%, rgba(255, 255, 255, 0.9));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.8),
-      0 7px 16px rgba(39, 28, 18, 0.13);
     cursor: pointer;
     transition:
       background-color 0.14s ease,
@@ -2491,26 +2707,23 @@
       transform 0.14s ease;
   }
 
-  .comparison-option:hover:not(:disabled),
-  .comparison-option:focus-visible {
-    transform: translateY(-2px) scale(1.04);
+  .comparison-option::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--pitch-overlay-note-size);
+    height: var(--pitch-overlay-note-size);
+    transform: translate(-50%, -50%);
   }
 
-  .comparison-option.is-active {
-    background: color-mix(in srgb, currentColor 30%, rgba(255, 255, 255, 0.88));
-    box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 0.88),
-      0 0 18px currentColor,
-      0 0 34px color-mix(in srgb, currentColor 48%, transparent);
-    transform: scale(1.1);
-  }
 
   .comparison-option:disabled {
     cursor: default;
-    opacity: 0.72;
+    opacity: 1;
   }
 
-  .comparison-settled-layer {
+  .comparison-settled-layer, .placement-note-layer {
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -2518,20 +2731,15 @@
   }
 
   .comparison-settled-note,
+  .placement-settled-note,
   .comparison-flight-note {
-    width: max(1.45rem, var(--pitch-overlay-note-size));
-    height: max(1.45rem, var(--pitch-overlay-note-size));
+    width: var(--pitch-overlay-note-size);
+    height: var(--pitch-overlay-note-size);
     display: block;
-    border: 2px solid currentColor;
-    border-radius: 999px;
-    background: color-mix(in srgb, currentColor 12%, rgba(255, 255, 255, 0.9));
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.76),
-      0 4px 10px rgba(39, 28, 18, 0.12);
     transform: translate(-50%, -50%);
   }
 
-  .comparison-settled-note {
+  .comparison-settled-note, .placement-settled-note {
     position: absolute;
     transition:
       background-color 0.1s ease,
@@ -2539,14 +2747,6 @@
       transform 0.1s ease;
   }
 
-  .comparison-settled-note.is-active {
-    background: color-mix(in srgb, currentColor 30%, rgba(255, 255, 255, 0.88));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.88),
-      0 0 15px currentColor,
-      0 0 28px color-mix(in srgb, currentColor 48%, transparent);
-    transform: translate(-50%, -50%) scale(1.14);
-  }
 
   .comparison-flight-layer {
     position: fixed;
@@ -2589,11 +2789,9 @@
     left: 50%;
     width: var(--pitch-overlay-note-size);
     height: var(--pitch-overlay-note-size);
-    border-radius: 999px;
-    border: 2px solid currentColor;
-    background: transparent;
+
+
     transform: translate(-50%, -50%);
-    box-shadow: 0 7px 16px rgba(39, 28, 18, 0.13), inset 0 0 0 1px rgba(255, 255, 255, 0.45);
     transition:
       background-color 0.16s ease,
       box-shadow 0.18s ease,
@@ -2604,31 +2802,6 @@
   .pitch-note.is-dragging {
     transition: none;
     cursor: grabbing;
-  }
-
-  .pitch-note.is-active::before {
-    background: color-mix(in srgb, currentColor 26%, rgba(255, 255, 255, 0.9));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.86),
-      0 0 18px currentColor,
-      0 0 32px color-mix(in srgb, currentColor 48%, transparent);
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-
-  .pitch-note.is-dragging::before {
-    box-shadow:
-      0 10px 22px rgba(39, 28, 18, 0.22),
-      0 0 0 8px color-mix(in srgb, currentColor 10%, transparent);
-    transform: translate(-50%, -50%) scale(1.03);
-  }
-
-  .pitch-note.is-dragging.is-sounding::before {
-    background: color-mix(in srgb, currentColor 24%, rgba(255, 255, 255, 0.88));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.82),
-      0 0 18px currentColor,
-      0 0 30px color-mix(in srgb, currentColor 46%, transparent);
-    transform: translate(-50%, -50%) scale(1.08);
   }
 
   .pitch-note--avatar-source {
@@ -2648,23 +2821,12 @@
   }
 
   .pitch-note.is-muted {
-    opacity: 0.9;
     cursor: default;
   }
 
   .pitch-note--settled {
     cursor: default;
     pointer-events: none;
-  }
-
-  .pitch-note--settled::before {
-    border-color: #2f8d83;
-    background: radial-gradient(
-      circle at 35% 35%,
-      rgba(255, 255, 255, 0.98),
-      rgba(243, 252, 249, 0.95) 62%,
-      rgba(212, 236, 231, 0.92)
-    );
   }
 
   @media (max-width: 980px) {
@@ -2700,12 +2862,12 @@
     .pitch-workspace {
       width: 100%;
       justify-self: stretch;
-      padding: 0.65rem;
+      padding: 0;
     }
 
     .pitch-grid-frame {
       width: 100%;
-      height: clamp(22rem, 66svh, 34rem);
+      height: calc(clamp(22rem, 66svh, 34rem) + 1.3rem);
     }
 
     .pitch-grid-shell {

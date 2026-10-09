@@ -1,8 +1,13 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, setContext } from 'svelte';
+  import LessonWorkspace from './LessonWorkspace.svelte';
+  import LessonPauseOverlay from './LessonPauseOverlay.svelte';
+  import { createLessonInspector, lessonInspectorKey } from './lessonInspector.svelte';
   import LessonProgress from './LessonProgress.svelte';
   import PitchLesson11Scene from './PitchLesson11Scene.svelte';
   import PitchLesson12Scene from './PitchLesson12Scene.svelte';
+  import PitchLesson13Scene from './PitchLesson13Scene.svelte';
+  import PitchLesson14Scene from './PitchLesson14Scene.svelte';
   import {
     cancelLessonAvatarSpeech,
     disposeLessonAvatar,
@@ -11,8 +16,12 @@
     setLessonAvatarVolume,
   } from './lessonAvatar';
   import { getLessonDefinition } from './lessons';
+  import { lessonProgress } from './lessonProgress';
+  import { lessonVolume } from './lessonVolume';
 
   export let lessonCode: string;
+  const inspector = createLessonInspector();
+  setContext(lessonInspectorKey, inspector);
 
   const portalHref = '#/portal';
   const homeIconHref = new URL('../../grand-frequency-staff-ui/src/assets/home-icon.svg', import.meta.url).href;
@@ -20,7 +29,7 @@
   const playIconHref = new URL('../../student-notation-ui/public/assets/icons/play.svg', import.meta.url).href;
   const pauseIconHref = new URL('../../student-notation-ui/public/assets/icons/pause.svg', import.meta.url).href;
   let volumeOpen = false;
-  let volume = 72;
+  let volume = lessonVolume.read();
   let isPlaying = true;
   let currentStep = 1;
   let lastLessonCode = '';
@@ -33,7 +42,8 @@
   $: totalSteps = lesson?.sections.length ?? 0;
   $: currentSection = lesson ? lesson.sections[currentStep - 1] : null;
   $: isShellOnlyCanvas = lesson?.canvasLayout === 'shell-only';
-  $: hasCustomScene = lesson?.code === '1.1' || lesson?.code === '1.2';
+  $: isIntervalLesson = ['1.3', '3.1', '3.2', '3.3'].includes(lessonCode);
+  $: hasCustomScene = lesson?.code === '1.1' || lesson?.code === '1.2' || isIntervalLesson || lesson?.code === '1.4';
   $: if (lesson && lesson.code !== lastLessonCode) {
     lastLessonCode = lesson.code;
     currentStep = lesson.code === '1.1' ? 0 : 1;
@@ -45,6 +55,20 @@
     lessonOutroComplete = false;
   }
   $: setLessonAvatarVolume(volume);
+  $: lessonVolume.set(volume);
+  $: inspector.setSection(currentSection?.code ?? `${lessonCode}.0`, currentSection?.label ?? 'Musical introduction');
+  $: inspector.setPaused(!isPlaying);
+  $: inspectorSections = lesson?.code === '1.1'
+    ? [{ id: 'musical-introduction', code: '1.1.0', label: 'Musical introduction', description: '' }, ...lesson.sections]
+    : lesson?.sections ?? [];
+
+  function restartSection(): void {
+    inspector.record('playback', 'Restart section requested');
+    cancelLessonAvatarSpeech();
+    segmentResetSignal += 1;
+    finalSectionComplete = false;
+    lessonOutroComplete = false;
+  }
 
   function togglePlayback(): void {
     isPlaying = !isPlaying;
@@ -60,8 +84,11 @@
     const minimumStep = lesson.code === '1.1' ? 0 : 1;
     const nextStep = Math.max(minimumStep, Math.min(step, lesson.sections.length));
     if (nextStep === currentStep) return;
+    cancelLessonAvatarSpeech();
     currentStep = nextStep;
     actionSkipSignal = 0;
+    finalSectionComplete = false;
+    lessonOutroComplete = false;
   }
 
   function goToPreviousStep(): void {
@@ -91,6 +118,8 @@
   }
 
   function completeLessonOutro(): void {
+    if (!lesson) return;
+    lessonProgress.complete(lesson.code);
     finalSectionComplete = true;
     lessonOutroComplete = true;
   }
@@ -176,7 +205,7 @@
               type="button"
               aria-label="Previous lesson segment"
               title="Previous lesson segment"
-              disabled={currentStep <= 0}
+              disabled={currentStep <= (lesson.code === '1.1' ? 0 : 1)}
               onclick={handlePreviousControl}
             >
               <span class="canvas-arrow-icon canvas-arrow-icon--left" aria-hidden="true"></span>
@@ -198,6 +227,9 @@
     {/if}
   </header>
 
+  <LessonWorkspace sections={inspectorSections} {currentStep} {isPlaying}
+    onSelectSection={selectStep} onRestart={restartSection} onTogglePlayback={togglePlayback}>
+  {#key isIntervalLesson || lessonCode === '1.4' ? lessonCode : `${lessonCode}-${segmentResetSignal}`}
   {#if lesson?.code === '1.1'}
     <PitchLesson11Scene
       {lesson}
@@ -217,6 +249,26 @@
       {currentStep}
       {isPlaying}
       {volume}
+      onSectionComplete={completeCurrentSection}
+      onLessonComplete={completeLessonOutro}
+    />
+  {:else if lesson && isIntervalLesson}
+    <PitchLesson13Scene
+      {lesson}
+      {currentStep}
+      {isPlaying}
+      {volume}
+      resetSignal={segmentResetSignal}
+      onSectionComplete={completeCurrentSection}
+      onLessonComplete={completeLessonOutro}
+    />
+  {:else if lesson?.code === '1.4'}
+    <PitchLesson14Scene
+      {lesson}
+      {currentStep}
+      {isPlaying}
+      {volume}
+      resetSignal={segmentResetSignal}
       onSectionComplete={completeCurrentSection}
       onLessonComplete={completeLessonOutro}
     />
@@ -247,12 +299,6 @@
           </p>
         </div>
 
-        {#if !isPlaying}
-          <div class="canvas-paused-overlay">
-            <strong>Lesson paused</strong>
-            <span>Future scene components should suspend timers, speech, and animation here.</span>
-          </div>
-        {/if}
       </div>
 
       <div class="canvas-stage-footer">
@@ -288,6 +334,12 @@
         </a>
       </div>
     </section>
+  {/if}
+  {/key}
+  </LessonWorkspace>
+
+  {#if lesson && !isPlaying && !lessonOutroComplete}
+    <LessonPauseOverlay onResume={togglePlayback} />
   {/if}
 
   {#if lessonOutroComplete}
@@ -586,28 +638,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--amt-muted);
-  }
-
-  .canvas-paused-overlay {
-    position: absolute;
-    inset: auto 1rem 1rem auto;
-    max-width: 20rem;
-    display: grid;
-    gap: 0.2rem;
-    padding: 0.8rem 0.9rem;
-    border-radius: 14px;
-    border: 1px solid rgba(201, 90, 77, 0.26);
-    background: rgba(255, 248, 246, 0.94);
-    box-shadow: 0 16px 32px rgba(39, 28, 18, 0.1);
-  }
-
-  .canvas-paused-overlay strong {
-    color: #9a3f36;
-  }
-
-  .canvas-paused-overlay span {
-    color: #5f5550;
-    line-height: 1.45;
   }
 
   .canvas-stage-footer {

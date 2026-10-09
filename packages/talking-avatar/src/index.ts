@@ -30,7 +30,7 @@ export type {
 } from "./types.ts";
 
 // Re-export default assets
-export { defaultAvatarAssets } from "./defaultAssets.ts";
+export { defaultAvatarAssets, armsDownAvatarAssets } from "./defaultAssets.ts";
 
 // Re-export utilities for advanced usage
 export { stripHtml, splitIntoSentenceChunks } from "./chunking.ts";
@@ -120,6 +120,10 @@ export function createTalkingAvatarController(
 
     setFeedbackBad(active: boolean): void {
       actor.setFeedbackBad(active);
+    },
+
+    setThinking(active: boolean): void {
+      actor.setThinking(active);
     },
 
     async speak(textOrHtml: string, speakOpts?: SpeakOptions): Promise<void> {

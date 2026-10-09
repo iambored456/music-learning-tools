@@ -1,0 +1,101 @@
+/* The measured frame owns available space; its fitted grid keeps its own size. */
+.mlt-lesson-grid-frame {
+  display: flex;
+  align-items: var(--mlt-lesson-grid-align, center);
+  justify-content: var(--mlt-lesson-grid-justify, flex-start);
+  overflow: visible;
+}
+
+.mlt-lesson-grid-frame > * {
+  flex-shrink: 0;
+}
+
+/* Keep final canvas/legend geometry fixed and reveal hidden rows from below. */
+.mlt-lesson-grid-reveal {
+  clip-path: inset(var(--mlt-lesson-grid-reveal-top, 0px) 0 0 0 round 22px);
+  transition: clip-path var(--mlt-lesson-grid-reveal-duration, 1200ms) ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mlt-lesson-grid-reveal { transition: none; }
+}
+
+/* Student Notation proportions; the action supplies measured stroke and fill. */
+.mlt-lesson-note,
+.mlt-lesson-note-target::before {
+  box-sizing: border-box;
+  border: var(--mlt-lesson-note-stroke-width) solid currentColor;
+  border-radius: 50%;
+  background: radial-gradient(ellipse closest-side,
+    transparent 0%,
+    transparent max(0%, calc((0.95 - var(--mlt-lesson-fill-level)) * 100%)),
+    color-mix(in srgb, currentColor 12.16%, transparent) calc((1 - var(--mlt-lesson-fill-level)) * 100%),
+    color-mix(in srgb, currentColor 74.9%, transparent) 100%);
+  box-shadow: 0 0 1.5px currentColor;
+}
+
+.mlt-lesson-note[data-mlt-sounding="false"]:not([data-mlt-highlighted="true"]),
+.mlt-lesson-note-target[data-mlt-sounding="false"]:not([data-mlt-highlighted="true"])::before {
+  background: transparent;
+}
+
+.mlt-lesson-note--capsule { border-radius: 999px; }
+
+/* Teaching feedback is explicit and shared; playback keeps the base geometry. */
+.mlt-lesson-note--preview { opacity: 0.5; }
+.mlt-lesson-note--incorrect {
+  border-color: var(--mlt-lesson-incorrect-color, #d0a92f);
+  box-shadow: 0 0 1.5px var(--mlt-lesson-incorrect-color, #d0a92f);
+}
+
+.mlt-lesson-note-label {
+  color: var(--text-notation, #212529);
+  font-family: var(--typography-notation-label-font-family, 'Atkinson Hyperlegible Next', system-ui, sans-serif);
+  font-weight: var(--typography-notation-label-font-weight, 700);
+  font-size: var(--mlt-lesson-note-label-size);
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.mlt-lesson-note-label--question {
+  text-shadow: 0 0 4px #ffd45b, 0 0 10px #ffc234;
+}
+
+.mlt-lesson-note-svg {
+  overflow: visible;
+  filter: drop-shadow(0 0 1.5px currentColor);
+}
+
+.mlt-lesson-note-svg :is(path, polygon) {
+  stroke: currentColor;
+  stroke-width: var(--mlt-lesson-note-stroke-width);
+}
+
+button.mlt-lesson-note:focus-visible,
+button.mlt-lesson-note-target:focus-visible,
+button.mlt-lesson-note:hover:not(:disabled),
+button.mlt-lesson-note-target:hover:not(:disabled) {
+  outline: 3px solid var(--mlt-lesson-focus-color, #3d79aa);
+  outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mlt-lesson-note,
+  .mlt-lesson-note-target::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+/* Keep a teacher's resting position consistent across consecutive scenes;
+   bubbles and notes sit outside the anchor's flow. Narrow layouts retain
+   their teacher row above the grid. Screen slides preserve this transform. */
+.mlt-lesson-avatar-anchor { position: relative; width: min(18rem, 100%); z-index: 5; }
+@media (min-width: 981px) {
+  .mlt-lesson-avatar-centered {
+    position: fixed;
+    top: 50dvh;
+    transform: translateY(-50%);
+    width: 18rem;
+  }
+}

@@ -88,9 +88,12 @@
     showRightLegend?: boolean;
     legendHighlight?: LegendHighlightConfig;
     rowHighlight?: PitchRowHighlightConfig;
+    showColumnGrid?: boolean;
     showHorizontalGridLines?: boolean;
     extendHorizontalGridLinesBehindLegend?: boolean;
     horizontalGridReferencePitchClass?: number | null;
+    /** Use Student Notation's fixed line weights and red C reference. */
+    horizontalGridStyle?: 'default' | 'student-notation';
     horizontalGridReferenceLineColor?: string;
     horizontalGridDefaultLineColor?: string;
     horizontalGridDefaultLineWidth?: number;
@@ -101,6 +104,8 @@
     focusColorsEnabled?: boolean;
     legendLabelOverrides?: Map<number, string>;
     legendMidiLabelOverrides?: Map<number, string>;
+    legendOctaveLabelProgress?: number;
+    hiddenLegendMidi?: ReadonlySet<number>;
     targetNoteStyle?: TargetNoteStyle;
 
     // Notation/Playback mode props
@@ -147,6 +152,8 @@
     rowHighlight,
     showHorizontalGridLines = true,
     extendHorizontalGridLinesBehindLegend = false,
+    horizontalGridStyle = 'default',
+    showColumnGrid = false,
     horizontalGridReferencePitchClass = null,
     horizontalGridReferenceLineColor = '#adb5bd',
     horizontalGridDefaultLineColor = '#ced4da',
@@ -158,6 +165,8 @@
     focusColorsEnabled = false,
     legendLabelOverrides,
     legendMidiLabelOverrides,
+    legendOctaveLabelProgress = 1,
+    hiddenLegendMidi,
     targetNoteStyle = 'stadium',
     placedNotes = [],
     getScaleDegreeLabel,
@@ -266,6 +275,7 @@
         viewportHeight: viewport.containerHeight,
         viewportWidth: gridWidth,
         colorMode,
+        horizontalGridStyle,
         horizontalGridReferencePitchClass,
         horizontalGridReferenceLineColor,
         horizontalGridDefaultLineColor,
@@ -492,6 +502,19 @@
 
   function renderSingingMode(renderCtx: CanvasRenderingContext2D, coords: CoordinateUtils): void {
     if (!singingConfig) return;
+
+    if (showColumnGrid) {
+      const count = Math.max(1, Math.round(gridWidth / cellWidth));
+      const widths = Array.from({ length: count }, () => 1);
+      const boundaries = Array.from({ length: Math.floor(count / 2) }, (_, i) => (i + 1) * 2);
+      const gridCoords = createColumnCoordinates({ cellWidth, cellHeight, columnWidths: widths, viewport });
+      drawVerticalLines(renderCtx, {
+        columnWidths: widths, cellWidth, viewportHeight: viewport.containerHeight,
+        macrobeatGroupings: [], placedTonicSigns: [],
+        macrobeatBoundaryStyles: boundaries.map(column => column % 8 === 0 ? 'solid' : 'dashed'),
+      }, gridCoords, boundaries);
+    }
+
 
     const userPitchConfig: UserPitchRenderConfig = {
       cellHeight,
@@ -746,7 +769,10 @@
       highlight: legendHighlight,
       labelOverrides: legendLabelOverrides,
       midiLabelOverrides: legendMidiLabelOverrides,
+      octaveLabelProgress: legendOctaveLabelProgress,
+      hiddenMidi: hiddenLegendMidi,
       extendHorizontalGridLinesBehindLegend,
+      horizontalGridStyle,
       horizontalGridReferencePitchClass,
       horizontalGridReferenceLineColor,
       horizontalGridDefaultLineColor,
@@ -875,6 +901,8 @@
     void rowHighlight;
     void showHorizontalGridLines;
     void extendHorizontalGridLinesBehindLegend;
+    void horizontalGridStyle;
+    void showColumnGrid;
     void horizontalGridReferencePitchClass;
     void horizontalGridReferenceLineColor;
     void horizontalGridDefaultLineColor;
@@ -883,9 +911,12 @@
     void judgmentLineColor;
     void judgmentLineWidth;
     void showLegendLabels;
+    void legendHighlight;
     void showAccidentalLabels;
     void legendLabelOverrides;
     void legendMidiLabelOverrides;
+    void legendOctaveLabelProgress;
+    void hiddenLegendMidi;
 
     if (ctx && isNotationMode) {
       render();

@@ -2,37 +2,39 @@
  * Get available speech synthesis voices asynchronously.
  * Waits for voiceschanged event if voices aren't immediately available.
  */
-export function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
+export function getVoicesAsync(options: {
+  isReady?: (voices: SpeechSynthesisVoice[]) => boolean;
+  timeoutMs?: number;
+} = {}): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
-    const voices = window.speechSynthesis.getVoices();
-
-    if (voices.length > 0) {
+    const synth = window.speechSynthesis;
+    const isReady = options.isReady ?? ((voices) => voices.length > 0);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+    const finish = (voices: SpeechSynthesisVoice[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(deadline);
+      synth.removeEventListener("voiceschanged", check);
       resolve(voices);
-      return;
-    }
-
-    // Voices not loaded yet, wait for the event
-    const handleVoicesChanged = () => {
-      window.speechSynthesis.removeEventListener(
-        "voiceschanged",
-        handleVoicesChanged
-      );
-      resolve(window.speechSynthesis.getVoices());
     };
-
-    window.speechSynthesis.addEventListener(
-      "voiceschanged",
-      handleVoicesChanged
-    );
-
-    // Fallback timeout in case voiceschanged never fires
-    setTimeout(() => {
-      window.speechSynthesis.removeEventListener(
-        "voiceschanged",
-        handleVoicesChanged
-      );
-      resolve(window.speechSynthesis.getVoices());
-    }, 1000);
+    const check = () => {
+      const voices = synth.getVoices();
+      // Some browsers emit an empty/partial list before their other voices load.
+      if (voices.length && isReady(voices)) finish(voices);
+    };
+    check();
+    if (settled) return;
+    synth.addEventListener("voiceschanged", check);
+    const poll = () => {
+      check();
+      if (!settled) timer = setTimeout(poll, 50);
+    };
+    timer = setTimeout(poll, 50);
+    deadline = setTimeout(() => finish(synth.getVoices()), options.timeoutMs ?? 1000);
+    check();
   });
 }
 

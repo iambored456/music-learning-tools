@@ -21,6 +21,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "@mlt/lesson-kit": "workspace:*",
     "@mlt/pitch-data": "workspace:*",
     "@mlt/ui-components": "workspace:*",
     "@mlt/talking-avatar": "workspace:*"

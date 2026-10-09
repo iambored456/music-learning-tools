@@ -25,7 +25,7 @@ export type NarratorCallbacks = {
 export type Narrator = {
   /** Speak text, returns promise that resolves when done */
   speak(textOrHtml: string, opts?: SpeakOptions): Promise<void>;
-  /** Set default speech volume for current and future utterances */
+  /** Update speech volume, requeueing active speech from its latest boundary. */
   setVolume(volume: number): void;
   /** Cancel current speech */
   cancel(): void;
@@ -57,8 +57,14 @@ export function createNarrator(opts: NarratorOptions): Narrator {
   let currentVoiceURI: string | undefined;
   let currentVolume = DEFAULT_SPEAK_OPTIONS.volume;
   let speaking = false;
-  let cancelled = false;
+  let requestId = 0;
   let currentUtterance: SpeechSynthesisUtterance | null = null;
+  let cancelCurrentChunk: (() => void) | null = null;
+  let refreshCurrentChunk: (() => void) | null = null;
+  let dispatchCurrentChunk: (() => void) | null = null;
+  let paused = false;
+
+  const isCurrentRequest = (id: number) => id === requestId;
 
   const log = debug
     ? (...args: unknown[]) => console.log("[Narrator]", ...args)
@@ -77,70 +83,122 @@ export function createNarrator(opts: NarratorOptions): Narrator {
   const speakChunk = (
     text: string,
     voice: SpeechSynthesisVoice | undefined,
+    id: number,
     opts: Required<
       Pick<SpeakOptions, "lang" | "rate" | "pitch" | "volume">
     >
   ): Promise<void> => {
     return new Promise((resolve, reject) => {
-      if (cancelled) {
+      if (!isCurrentRequest(id)) {
         resolve();
         return;
       }
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      currentUtterance = utterance;
+      let utterance: SpeechSynthesisUtterance;
+      let settled = false;
+      let dispatched = false;
+      let offset = 0;
+      let resumeOffset = 0;
+      let dispatchTimer: ReturnType<typeof setTimeout> | undefined;
 
-      if (voice) {
-        utterance.voice = voice;
-      }
-      utterance.lang = opts.lang;
-      utterance.rate = opts.rate;
-      utterance.pitch = opts.pitch;
-      utterance.volume = opts.volume;
+      const detach = (item: SpeechSynthesisUtterance) => {
+        item.onstart = null;
+        item.onend = null;
+        item.onerror = null;
+        item.onboundary = null;
+      };
+      const settle = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (dispatchTimer !== undefined) clearTimeout(dispatchTimer);
+        detach(utterance);
+        if (currentUtterance === utterance) currentUtterance = null;
+        if (cancelCurrentChunk === cancelChunk) cancelCurrentChunk = null;
+        if (refreshCurrentChunk === refreshChunk) refreshCurrentChunk = null;
+        if (dispatchCurrentChunk === scheduleDispatch) dispatchCurrentChunk = null;
+        if (error) reject(error);
+        else resolve();
+      };
+      const cancelChunk = () => settle();
+      cancelCurrentChunk = cancelChunk;
 
-      utterance.onstart = () => {
-        log("Chunk started:", text.substring(0, 30) + "...");
+      const scheduleDispatch = () => {
+        if (settled || dispatched || paused || dispatchTimer !== undefined) return;
+        // Small delay before speaking (browser workaround). Slider updates
+        // during this delay change the pending object without restarting it.
+        dispatchTimer = setTimeout(() => {
+          dispatchTimer = undefined;
+          if (!isCurrentRequest(id) || settled) { settle(); return; }
+          if (paused) return;
+          try {
+            dispatched = true;
+            window.speechSynthesis.speak(utterance);
+          } catch (error) {
+            settle(error instanceof Error ? error : new Error(String(error)));
+          }
+        }, 50);
       };
 
-      utterance.onend = () => {
-        log("Chunk ended");
-        currentUtterance = null;
-        resolve();
+      const createSegment = () => {
+        const segmentOffset = offset;
+        const segment = new SpeechSynthesisUtterance(text.slice(segmentOffset));
+        utterance = segment;
+        currentUtterance = segment;
+        dispatched = false;
+        if (voice) segment.voice = voice;
+        segment.lang = opts.lang;
+        segment.rate = opts.rate;
+        segment.pitch = opts.pitch;
+        segment.volume = currentVolume;
+        const active = () => isCurrentRequest(id) && !settled && utterance === segment;
+
+        segment.onstart = () => {
+          if (active()) log("Chunk started:", segment.text.substring(0, 30) + "...");
+        };
+        segment.onend = () => {
+          if (!active()) return;
+          log("Chunk ended");
+          settle();
+        };
+        segment.onerror = (event) => {
+          if (!active()) return;
+          log("Chunk error:", event.error);
+          if (event.error === "interrupted" || event.error === "canceled") settle();
+          else settle(new Error(`Speech error: ${event.error}`));
+        };
+        segment.onboundary = (event) => {
+          if (!active()) return;
+          if (event.name === "word" || event.name === "sentence") {
+            if (Number.isInteger(event.charIndex) && event.charIndex >= 0 && event.charIndex < segment.text.length) {
+              resumeOffset = Math.max(resumeOffset, segmentOffset + event.charIndex);
+            }
+            callbacks.onSpeechPulse();
+          }
+        };
+        scheduleDispatch();
       };
 
-      utterance.onerror = (event) => {
-        log("Chunk error:", event.error);
-        currentUtterance = null;
-        // Don't reject on 'interrupted' or 'cancelled' errors
-        if (event.error === "interrupted" || event.error === "canceled") {
-          resolve();
-        } else {
-          reject(new Error(`Speech error: ${event.error}`));
-        }
+      const refreshChunk = () => {
+        if (!isCurrentRequest(id) || settled) return;
+        if (!dispatched) { utterance.volume = currentVolume; return; }
+        // Native speech engines may snapshot volume at speak(). Requeue the
+        // remaining text without resolving the lesson's narration promise.
+        // A voice without boundary events restarts this sentence-sized chunk.
+        detach(utterance);
+        window.speechSynthesis.cancel();
+        offset = resumeOffset;
+        createSegment();
       };
-
-      // Boundary events for speech progress
-      utterance.onboundary = (event) => {
-        if (event.name === "word" || event.name === "sentence") {
-          callbacks.onSpeechPulse();
-        }
-      };
-
-      // Small delay before speaking (browser workaround)
-      setTimeout(() => {
-        if (!cancelled) {
-          window.speechSynthesis.speak(utterance);
-        } else {
-          resolve();
-        }
-      }, 50);
+      refreshCurrentChunk = refreshChunk;
+      dispatchCurrentChunk = scheduleDispatch;
+      createSegment();
     });
   };
 
   const speak = async (textOrHtml: string, opts?: SpeakOptions): Promise<void> => {
     // Cancel any existing speech
     cancel();
-    cancelled = false;
+    const id = requestId;
 
     // Merge options with defaults
     const mergedOpts = {
@@ -149,7 +207,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
       lang: opts?.lang || DEFAULT_SPEAK_OPTIONS.lang,
       rate: opts?.rate ?? DEFAULT_SPEAK_OPTIONS.rate,
       pitch: opts?.pitch ?? DEFAULT_SPEAK_OPTIONS.pitch,
-      volume: opts?.volume ?? DEFAULT_SPEAK_OPTIONS.volume,
+      volume: opts?.volume ?? currentVolume,
       chunking: opts?.chunking ?? DEFAULT_SPEAK_OPTIONS.chunking,
       preSpeakWaveMs: opts?.preSpeakWaveMs ?? DEFAULT_SPEAK_OPTIONS.preSpeakWaveMs,
     };
@@ -163,6 +221,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
 
     // Get voice
     const voices = await getVoicesAsync();
+    if (!isCurrentRequest(id)) return;
     let voice: SpeechSynthesisVoice | undefined;
 
     if (mergedOpts.voiceURI || currentVoiceURI) {
@@ -177,7 +236,7 @@ export function createNarrator(opts: NarratorOptions): Narrator {
     // Pre-speak wave animation
     await callbacks.onPreSpeakWave(mergedOpts.preSpeakWaveMs);
 
-    if (cancelled) return;
+    if (!isCurrentRequest(id)) return;
 
     // Split into chunks if configured
     const chunks =
@@ -192,8 +251,8 @@ export function createNarrator(opts: NarratorOptions): Narrator {
 
     try {
       for (const chunk of chunks) {
-        if (cancelled) break;
-        await speakChunk(chunk, voice, {
+        if (!isCurrentRequest(id)) break;
+        await speakChunk(chunk, voice, id, {
           lang: mergedOpts.lang,
           rate: mergedOpts.rate,
           pitch: mergedOpts.pitch,
@@ -201,23 +260,27 @@ export function createNarrator(opts: NarratorOptions): Narrator {
         });
       }
     } finally {
-      setSpeaking(false);
+      if (isCurrentRequest(id)) setSpeaking(false);
     }
   };
 
   const cancel = () => {
-    cancelled = true;
+    requestId += 1;
+    cancelCurrentChunk?.();
     window.speechSynthesis.cancel();
     currentUtterance = null;
     setSpeaking(false);
   };
 
   const pause = () => {
+    paused = true;
     window.speechSynthesis.pause();
   };
 
   const resume = () => {
+    paused = false;
     window.speechSynthesis.resume();
+    dispatchCurrentChunk?.();
   };
 
   const listVoices = (): Promise<SpeechSynthesisVoice[]> => {
@@ -232,10 +295,9 @@ export function createNarrator(opts: NarratorOptions): Narrator {
     const normalizedVolume = Number.isFinite(volume)
       ? Math.max(0, Math.min(1, volume))
       : DEFAULT_SPEAK_OPTIONS.volume;
+    if (currentVolume === normalizedVolume) return;
     currentVolume = normalizedVolume;
-    if (currentUtterance) {
-      currentUtterance.volume = normalizedVolume;
-    }
+    refreshCurrentChunk?.();
   };
 
   const isSpeaking = (): boolean => speaking;

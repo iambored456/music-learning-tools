@@ -17,10 +17,17 @@
 
   let finalOutroActive = false;
   let lastStep = currentStep;
+  let avatarAlreadyPositioned = false;
 
   $: if (currentStep !== lastStep) {
     lastStep = currentStep;
     if (currentStep !== 4) finalOutroActive = false;
+    if (currentStep !== 4) avatarAlreadyPositioned = false;
+  }
+
+  function finishComparison(): void {
+    avatarAlreadyPositioned = true;
+    onSectionComplete?.();
   }
 
   function startFinalOutro(): void {
@@ -74,7 +81,7 @@
         {isPlaying}
         {volume}
         {actionSkipSignal}
-        onComparisonComplete={onSectionComplete}
+        onComparisonComplete={finishComparison}
       />
     {:else if currentStep === 4}
       {#if finalOutroActive}
@@ -91,6 +98,7 @@
           section={currentSection}
           {isPlaying}
           {volume}
+          {avatarAlreadyPositioned}
           onComplete={startFinalOutro}
         />
       {/if}

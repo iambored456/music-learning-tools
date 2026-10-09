@@ -1,9 +1,10 @@
 /**
- * Paths to all 8 avatar SVG assets
+ * Paths to the avatar SVG assets
  */
 export type AvatarAssetSet = {
   nosmile_nowave: string;
   smile_nowave: string;
+  thinking_nowave: string;
   smile_wave: string;
   talk_mouthclosed: string;
   talk_mouthopen1: string;
@@ -19,6 +20,7 @@ export type AvatarVisualState =
   | "hidden"
   | "entering"
   | "idle_smile"
+  | "idle_thinking"
   | "pre_speak_wave"
   | "talking"
   | "feedback_bad";
@@ -55,7 +57,7 @@ export type SpeakOptions = {
  * Options for creating a TalkingAvatarController
  */
 export type TalkingAvatarOptions = {
-  /** Paths to all 8 avatar SVGs */
+  /** Paths to the avatar SVGs */
   assets: AvatarAssetSet;
   /** DOM element to mount the avatar into */
   mount: HTMLElement;
@@ -77,6 +79,8 @@ export type TalkingAvatarController = {
   enter(): Promise<void>;
   /** Set bad feedback state (shows nosmile_nowave when not speaking) */
   setFeedbackBad(active: boolean): void;
+  /** Use the thinking face at rest; speech and feedback keep priority. */
+  setThinking(active: boolean): void;
   /** Speak text with optional configuration */
   speak(textOrHtml: string, opts?: SpeakOptions): Promise<void>;
   /** Cancel current speech and return to idle */
@@ -89,7 +93,7 @@ export type TalkingAvatarController = {
   listVoices(): Promise<SpeechSynthesisVoice[]>;
   /** Set preferred voice by URI */
   setVoiceURI(uri: string | undefined): void;
-  /** Set default speech volume for current and future utterances */
+  /** Set speech volume; active speech resumes from its latest boundary. */
   setVolume(volume: number): void;
   /** Clean up resources and remove from DOM */
   dispose(): void;

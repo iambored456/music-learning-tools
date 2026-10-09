@@ -25,6 +25,8 @@ export interface HorizontalLinesConfig {
    * Non-zero rotates the full pattern relative to tonic.
   */
   horizontalGridReferencePitchClass?: number | null;
+  /** Use Student Notation's fixed line weights and red C reference. */
+  horizontalGridStyle?: 'default' | 'student-notation';
   /** Optional color for the emphasized solid reference line. */
   horizontalGridReferenceLineColor?: string;
   /** Optional color for the ordinary solid pitch lines. */
@@ -272,6 +274,7 @@ export function drawHorizontalLines(
     viewportHeight,
     viewportWidth,
     cellHeight,
+    horizontalGridStyle = 'default',
     horizontalGridReferencePitchClass,
     horizontalGridReferenceLineColor = '#adb5bd',
     horizontalGridDefaultLineColor = '#ced4da',
@@ -301,7 +304,7 @@ export function drawHorizontalLines(
 
     const intervalFromReference = (pitchClass - referencePitchClass + 12) % 12;
     if (SKIPPED_INTERVALS_FROM_REFERENCE.has(intervalFromReference)) continue;
-    if (FILLED_INTERVAL_BORDER_INTERVALS.has(intervalFromReference)) continue;
+    if (horizontalGridStyle !== 'student-notation' && FILLED_INTERVAL_BORDER_INTERVALS.has(intervalFromReference)) continue;
 
     const style = getLineStyleFromInterval(
       intervalFromReference,
@@ -312,9 +315,19 @@ export function drawHorizontalLines(
       horizontalGridDashedLineWidth
     );
 
+    if (horizontalGridStyle === 'student-notation') {
+      style.lineWidth = intervalFromReference === 0 ? 3.33 : 1;
+      style.dash = intervalFromReference === 4 ? [5, 5] : [];
+      style.color = intervalFromReference === 0 ? 'rgba(255, 0, 0, 0.9)'
+        : intervalFromReference === 7 ? '#dee2e6'
+        : intervalFromReference === 4 ? '#adb5bd' : '#ced4da';
+    }
+
     if (style.fillRow) {
       // Use the same tuned edges as the legend, including for transposed G bands.
-      const { top, bottom } = getPitchRowBounds(rowIndex, fullRowData, coords, cellHeight);
+      const { top, bottom } = horizontalGridStyle === 'student-notation'
+        ? { top: y - cellHeight / 2, bottom: y + cellHeight / 2 }
+        : getPitchRowBounds(rowIndex, fullRowData, coords, cellHeight);
       if (bottom < 0 || top > viewportHeight) continue;
       ctx.save();
       ctx.fillStyle = style.color;

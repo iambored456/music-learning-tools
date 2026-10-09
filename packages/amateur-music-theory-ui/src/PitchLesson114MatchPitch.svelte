@@ -1,15 +1,47 @@
 <script lang="ts">
+  import { createLessonQuestion } from '@mlt/lesson-kit';
+  const questionNarration = createLessonQuestion(cancelLessonAvatarSpeech, setLessonAvatarThinking);
+  import "@mlt/lesson-kit/styles.css";
+  import { lessonGridAppearance, calculateLessonGridLayout, lessonNoteAppearance } from '@mlt/lesson-kit';
+  import { createLessonAudioOutput } from '@mlt/lesson-kit';
   import { fullRowData } from '@mlt/pitch-data';
   import { PitchGrid } from '@mlt/ui-components/canvas';
   import type { PitchGridViewport, SingingModeConfig } from '@mlt/ui-components/canvas';
-  import { onDestroy } from 'svelte';
+  import { getContext, onDestroy, tick } from 'svelte';
+  import { lessonInspectorKey, type LessonCue, type LessonInspector } from './lessonInspector.svelte';
   import LessonAvatarDock from './LessonAvatarDock.svelte';
-  import { cancelLessonAvatarSpeech, speakWithLessonAvatar } from './lessonAvatar';
+  import { setLessonAvatarThinking, cancelLessonAvatarSpeech, speakWithLessonAvatar } from './lessonAvatar';
   import type { LessonSection } from './lessons';
+
+  const audioOutput = createLessonAudioOutput();
+  const inspector = getContext<LessonInspector | undefined>(lessonInspectorKey);
+  let unregisterInspector: (() => void) | undefined;
+  let activeInspectorCue: string | null = null;
+  let demoSeekTarget: string | null = null;
+
+  function cue(id: string, title: string, actions: Array<[string, string, string]>): LessonCue {
+    return { id, title, prompt: '', visual: '', audio: '', gesture: '', input: '', completion: '', timing: {},
+      actions: actions.map(([actionId, actionTitle, detail]) => ({ id: actionId, title: actionTitle, detail })) };
+  }
+
+  function mark(cueId: string, actionId: string): void {
+    if (demoSeekTarget) {
+      if (`${cueId}/${actionId}` !== demoSeekTarget) return;
+      demoSeekTarget = null;
+    }
+    if (activeInspectorCue !== cueId) {
+      if (activeInspectorCue) inspector?.status('completed');
+      activeInspectorCue = cueId;
+      inspector?.enter(cueId);
+    }
+    inspector?.action(actionId);
+    inspector?.status('running');
+  }
 
   export let section: LessonSection;
   export let isPlaying = true;
   export let volume = 72;
+  export let avatarAlreadyPositioned = false;
   export let onComplete: (() => void) | undefined = undefined;
 
   type ActiveVoice = {
@@ -43,33 +75,34 @@
 
   const pitchRows = fullRowData;
   const rowIndexByTone = new Map(pitchRows.map((row, index) => [row.toneNote, index]));
-  const viewportStartRow = rowIndexByTone.get('C6') ?? 0;
-  const viewportEndRow = rowIndexByTone.get('G1') ?? pitchRows.length - 1;
+  const viewportStartRow = rowIndexByTone.get('B5') ?? 0;
+  const viewportEndRow = rowIndexByTone.get('A2') ?? pitchRows.length - 1;
   const viewportRowCount = Math.max(1, viewportEndRow - viewportStartRow + 1);
   const gridColumnCount = 34;
-  const legendWidthUnits = 6;
   const fallbackCellSize = 16;
   const singingConfig: SingingModeConfig = { pitchHistory: [] };
-  const introductoryNotes = ['C2', 'D3', 'F4', 'A5'] as const;
+  const introductoryNotes = ['A2', 'D3', 'F4', 'A5'] as const;
+  const firstChoiceNotes = ['A2', 'D3', 'F4', 'A5'] as const;
   const introductorySourceNote = 'F4';
-  const introductoryPrompt = 'Click the matching note.';
+  const introductoryCycle = { gridNotes: firstChoiceNotes, sourceNote: introductorySourceNote };
+  const introductoryPrompt = 'Click the matching note on the grid.';
   const samePitchStatement = '...have the same pitch.';
   const questions: MatchQuestion[] = [
     {
       id: 'match-1',
-      gridNotes: ['F2', 'E5'],
+      gridNotes: ['F3', 'E5'],
       sourceNote: 'E5',
       prompt: 'Click the matching note again.',
     },
     {
       id: 'match-2',
-      gridNotes: ['D2', 'B4'],
-      sourceNote: 'D2',
+      gridNotes: ['D3', 'B4'],
+      sourceNote: 'D3',
       prompt: 'Click the matching note again.',
     },
     {
       id: 'match-3',
-      gridNotes: ['G2', 'B2', 'D3'],
+      gridNotes: ['A2', 'B2', 'D3'],
       sourceNote: 'D3',
       prompt: 'Click the matching note again.',
     },
@@ -93,16 +126,39 @@
     },
   ];
 
+  const cuePlan: LessonCue[] = [
+    cue('demonstrate-match', 'Hear and see a matching pitch', [
+      ['listen', '“Listen carefully.”', 'Grammy introduces the example.'],
+      ['grid', 'Sound the grid from bottom to top', 'Highlight and play A2, D3, F4, and A5 in ascending order.'],
+      ['source', '“This note...” and sound the source', 'Grammy points out and plays the source F4.'],
+      ['matching-grid-note', '“...and this note...” and sound F4 on the grid', 'Play the corresponding grid note.'],
+      ['same-pitch', 'Explain that the two notes have the same pitch', 'Underline “pitch”, move the source beside its match, and alternate both sounds.'],
+      ['matches', '“These notes match.”', 'Hold the matching pair, then return the example note beneath Grammy before the first learner choice.'],
+    ]),
+    cue('first-choice', 'Find the demonstrated match', [
+      ['prompt', introductoryPrompt, 'Unlock the grid, speak the prompt, then preview and cycle the source and grid notes just like the later questions.'],
+      ['retry', 'If incorrect: “Try again.”', 'Move the source beside the selected note, compare the pair, then retry.'],
+      ['correct', 'If correct: play the matching pair', 'Show the correct match, sound it, and advance to the next question.'],
+    ]),
+    ...questions.map((question, index) => cue(question.id, `Match pitch ${index + 1}`, [
+      ['prompt', question.prompt, `Preview ${question.sourceNote}, cycle the grid sounds, and wait for a selection.`],
+      ['retry', 'If incorrect: “Try again.”', 'Animate the selected pair, sound the mismatch, then retry this question.'],
+      ['correct', 'If correct: settle the matching pair', 'Animate the source beside its matching grid note, play the pair, and advance.'],
+    ])),
+    cue('finish', 'Complete Match the Pitch', [
+      ['bravo', '“Bravo!”', 'Speak the completion prompt and advance to the lesson outro.'],
+    ]),
+  ];
+
   let frameWidth = 0;
   let frameHeight = 0;
   let viewportWidth = 0;
   let viewportHeight = 0;
   let layoutGridColumnCount = gridColumnCount;
   let cellSize = fallbackCellSize;
-  let shellWidth = fallbackCellSize * (gridColumnCount + legendWidthUnits);
+  let shellWidth = fallbackCellSize * gridColumnCount;
   let shellHeight = fallbackCellSize * (viewportRowCount + 1);
   let cellHeight = fallbackCellSize * 2;
-  let legendWidth = fallbackCellSize * legendWidthUnits;
   let overlayNoteSize = fallbackCellSize * 2;
   let pitchGridViewport: PitchGridViewport = {
     startRow: viewportStartRow,
@@ -140,8 +196,8 @@
   $: currentQuestion =
     questionIndex >= 0 && questionIndex < questions.length ? questions[questionIndex] : null;
   $: visibleGridNotes =
-    phase === 'demonstration' || phase === 'first-choice'
-      ? introductoryNotes
+    phase === 'demonstration' ? introductoryNotes
+      : phase === 'first-choice' ? firstChoiceNotes
       : currentQuestion?.gridNotes ?? [];
   $: visibleSourceNote =
     phase === 'demonstration' || phase === 'first-choice'
@@ -149,22 +205,16 @@
       : currentQuestion?.sourceNote ?? null;
   $: underlinedWords = narrationText === samePitchStatement ? ['pitch'] : [];
   $: layoutGridColumnCount = frameWidth > 0 && frameWidth <= 760 ? 22 : gridColumnCount;
-  $: cellSize =
-    frameWidth > 0 && frameHeight > 0
-      ? Math.max(
-          1,
-          Math.min(
-            frameHeight / (viewportRowCount + 1),
-            frameWidth / (layoutGridColumnCount + legendWidthUnits),
-          ),
-        )
-      : fallbackCellSize;
-  $: shellWidth = cellSize * (layoutGridColumnCount + legendWidthUnits);
-  $: shellHeight = cellSize * (viewportRowCount + 1);
-  $: cellHeight =
-    viewportHeight > 0 ? (viewportHeight * 2) / (viewportRowCount + 1) : cellSize * 2;
-  $: legendWidth = cellSize * legendWidthUnits;
-  $: overlayNoteSize = cellHeight;
+  $: gridLayout = calculateLessonGridLayout({
+    width: frameWidth, height: frameHeight,
+    columns: layoutGridColumnCount, rows: viewportRowCount,
+    fallbackCellSize,
+  });
+  $: cellSize = gridLayout.cellWidth;
+  $: shellWidth = gridLayout.width;
+  $: shellHeight = gridLayout.height;
+  $: cellHeight = gridLayout.cellHeight;
+  $: overlayNoteSize = gridLayout.noteDiameter;
   $: pitchGridViewport = {
     startRow: viewportStartRow,
     endRow: viewportEndRow,
@@ -181,16 +231,15 @@
   $: if (isPlaying !== previousIsPlaying) {
     previousIsPlaying = isPlaying;
     if (isPlaying) {
+      if (audioContext?.state === 'suspended') void audioContext.resume().catch(() => {});
       resumeWait();
-      if (!waitResolve && !answerLocked && phase === 'question' && currentQuestion) {
-        void runQuestionCycle(currentQuestion, sequenceToken);
+      if (!waitResolve && !answerLocked && (phase === 'first-choice' || phase === 'question')) {
+        const cycle = phase === 'first-choice' ? introductoryCycle : currentQuestion;
+        if (cycle) void runQuestionCycle(cycle, sequenceToken);
       }
     } else {
       pauseWait();
-      cancelLessonAvatarSpeech();
-      stopAllVoices();
-      activeGridNoteIndex = null;
-      sourceNoteActive = false;
+      if (audioContext?.state === 'running') void audioContext.suspend().catch(() => {});
     }
   }
 
@@ -223,6 +272,7 @@
 
   function beginSequence(): number {
     sequenceToken += 1;
+    questionNarration.submit();
     cancelLessonAvatarSpeech();
     cancelWait(true);
     stopAllVoices();
@@ -233,6 +283,7 @@
   }
 
   function waitMs(durationMs: number): Promise<void> {
+    if (demoSeekTarget) return Promise.resolve();
     cancelWait(false);
     waitRemainingMs = durationMs;
     waitPaused = false;
@@ -298,6 +349,7 @@
       voice.oscillator.disconnect();
     } catch {}
     try {
+      audioOutput.forget(voice.gain);
       voice.gain.disconnect();
     } catch {}
     activeVoices.delete(voice);
@@ -332,7 +384,7 @@
     const durationSeconds = Math.max(0.08, durationMs / 1000);
     const releaseStart = now + Math.max(0.04, durationSeconds - 0.055);
     const endTime = now + durationSeconds;
-    const peak = Math.max(0.01, Math.min(0.065, (volume / 100) * 0.045));
+    const peak = 0.045;
     const voice: ActiveVoice = { oscillator, gain, stopped: false };
 
     oscillator.type = 'sawtooth';
@@ -342,7 +394,7 @@
     gain.gain.setValueAtTime(peak, releaseStart);
     gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
     oscillator.connect(gain);
-    gain.connect(context.destination);
+    audioOutput.connect(gain, context, volume, { frequency, start: now, attackEnd: now + 0.025, releaseStart, end: endTime, peak });
     oscillator.onended = () => {
       voice.stopped = true;
       disposeVoice(voice);
@@ -357,6 +409,7 @@
     token: number,
     options: { source?: boolean; gridIndex?: number; durationMs?: number } = {},
   ): Promise<void> {
+    if (demoSeekTarget) return;
     if (!isCurrentSequence(token) || !isPlaying) return;
     const row = pitchRows[getRowIndex(toneNote)];
     if (!row) return;
@@ -414,6 +467,7 @@
     sourceNote: string,
     token: number,
   ): Promise<void> {
+    questionNarration.submit();
     const correctIndex = getCorrectIndex(gridNotes, sourceNote);
     if (correctIndex < 0) return;
     await playSequence(
@@ -431,6 +485,7 @@
 
   async function say(text: string, token: number): Promise<void> {
     narrationText = text;
+    if (demoSeekTarget) return;
     if (!avatarReady || !isCurrentSequence(token)) return;
     await speakWithLessonAvatar(text, {
       lang: 'en-CA',
@@ -451,6 +506,12 @@
     targetIndex: number,
     token: number,
   ): Promise<void> {
+    if (demoSeekTarget) {
+      sourceLanded = true;
+      landedBesideGridIndex = targetIndex;
+      sourceFlightNote = null;
+      return;
+    }
     const targetToneNote = gridNotes[targetIndex];
     const sourceRect = (sourceLanded ? landedSourceNoteEl : sourceNoteEl)?.getBoundingClientRect();
     const fieldRect = pitchGridFieldEl?.getBoundingClientRect();
@@ -461,8 +522,8 @@
       return;
     }
 
-    const contentLeft = fieldRect.left + legendWidth;
-    const contentWidth = Math.max(0, fieldRect.width - legendWidth);
+    const contentLeft = fieldRect.left;
+    const contentWidth = Math.max(0, fieldRect.width);
     sourceFlightNote = {
       startX: sourceRect.left + sourceRect.width / 2,
       startY: sourceRect.top + sourceRect.height / 2,
@@ -498,6 +559,31 @@
     );
   }
 
+  async function returnSourceToGrammy(token: number): Promise<void> {
+    const start = landedSourceNoteEl?.getBoundingClientRect();
+    const destination = sourceNoteEl?.getBoundingClientRect();
+    const sourceRow = visibleSourceNote ? pitchRows[getRowIndex(visibleSourceNote)] : null;
+    if (!demoSeekTarget && sourceLanded && start && destination && sourceRow) {
+      sourceFlightNote = {
+        startX: start.left + start.width / 2,
+        startY: start.top + start.height / 2,
+        endX: destination.left + destination.width / 2,
+        endY: destination.top + destination.height / 2,
+        color: sourceRow.hex,
+        landed: false,
+      };
+      await waitForAnimationFrame();
+      await waitForAnimationFrame();
+      if (!isCurrentSequence(token) || !sourceFlightNote) return;
+      sourceFlightNote = { ...sourceFlightNote, landed: true };
+      await waitMs(620);
+      if (!isCurrentSequence(token)) return;
+    }
+    sourceLanded = false;
+    landedBesideGridIndex = null;
+    sourceFlightNote = null;
+  }
+
   async function runIntroductoryDemonstration(): Promise<void> {
     const token = beginSequence();
     phase = 'demonstration';
@@ -507,18 +593,22 @@
     landedBesideGridIndex = null;
     feedbackState = null;
 
+    mark('demonstrate-match', 'listen');
     await waitMs(260);
     if (!isCurrentSequence(token)) return;
     await say('Listen carefully.', token);
     if (!isCurrentSequence(token)) return;
+    mark('demonstrate-match', 'grid');
     await playGridBottomToTop(introductoryNotes, token);
     if (!isCurrentSequence(token)) return;
 
+    mark('demonstrate-match', 'source');
     await say('This note...', token);
     if (!isCurrentSequence(token)) return;
     await playNote(introductorySourceNote, token, { source: true, durationMs: 500 });
     if (!isCurrentSequence(token)) return;
 
+    mark('demonstrate-match', 'matching-grid-note');
     await say('...and this note...', token);
     if (!isCurrentSequence(token)) return;
     await playNote(introductorySourceNote, token, {
@@ -527,6 +617,7 @@
     });
     if (!isCurrentSequence(token)) return;
 
+    mark('demonstrate-match', 'same-pitch');
     await say(samePitchStatement, token);
     if (!isCurrentSequence(token)) return;
     await moveSourceBesideMatch(introductoryNotes, introductorySourceNote, token);
@@ -534,20 +625,31 @@
     await playMatchingPair(introductoryNotes, introductorySourceNote, token);
     if (!isCurrentSequence(token)) return;
 
+    mark('demonstrate-match', 'matches');
     await say('These notes match.', token);
     if (!isCurrentSequence(token)) return;
     await waitMs(180);
     if (!isCurrentSequence(token)) return;
 
+    await returnSourceToGrammy(token);
+    if (!isCurrentSequence(token)) return;
     phase = 'first-choice';
     answerLocked = false;
-    await say(introductoryPrompt, token);
+    mark('first-choice', 'prompt');
+    await questionNarration.start(() => say(introductoryPrompt, token), () => { answerLocked = false; });
     if (!isCurrentSequence(token)) return;
-    await playGridBottomToTop(introductoryNotes, token);
+    await playSourcePreview(introductorySourceNote, token);
     if (!isCurrentSequence(token)) return;
+    if (demoSeekTarget === 'first-choice/retry' || demoSeekTarget === 'first-choice/correct') {
+      const wrong = getCorrectIndex(firstChoiceNotes, introductorySourceNote) === 0 ? 1 : 0;
+      await handleGridNoteClick(demoSeekTarget.endsWith('/correct')
+        ? getCorrectIndex(firstChoiceNotes, introductorySourceNote) : wrong, true);
+      return;
+    }
+    void runQuestionCycle(introductoryCycle, token);
   }
 
-  async function startQuestion(index: number): Promise<void> {
+  async function startQuestion(index: number, startAt: 'prompt' | 'retry' | 'correct' = 'prompt'): Promise<void> {
     const question = questions[index];
     if (!question) return;
     const token = beginSequence();
@@ -558,17 +660,28 @@
     landedBesideGridIndex = null;
     feedbackState = null;
 
+    if (startAt !== 'prompt') {
+      answerLocked = false;
+      await tick();
+      if (!isCurrentSequence(token)) return;
+      const correct = getCorrectIndex(question.gridNotes, question.sourceNote);
+      const wrong = correct === 0 ? 1 : 0;
+      await handleGridNoteClick(startAt === 'correct' ? correct : wrong, true);
+      return;
+    }
+
+    mark(question.id, 'prompt');
     await waitMs(260);
     if (!isCurrentSequence(token)) return;
     answerLocked = false;
-    await say(question.prompt, token);
+    await questionNarration.start(() => say(question.prompt, token), () => { answerLocked = false; });
     if (!isCurrentSequence(token)) return;
     await playSourcePreview(question.sourceNote, token);
     if (!isCurrentSequence(token)) return;
     void runQuestionCycle(question, token);
   }
 
-  async function runQuestionCycle(question: MatchQuestion, token: number): Promise<void> {
+  async function runQuestionCycle(question: { sourceNote: string; gridNotes: readonly string[] }, token: number): Promise<void> {
     const cycle = [
       { toneNote: question.sourceNote, source: true },
       ...question.gridNotes.map((toneNote, gridIndex) => ({ toneNote, gridIndex })),
@@ -577,7 +690,7 @@
     while (
       isCurrentSequence(token) &&
       isPlaying &&
-      phase === 'question' &&
+      (phase === 'first-choice' || phase === 'question') &&
       !answerLocked
     ) {
       await playSequence(cycle, token, 430, 210);
@@ -607,16 +720,18 @@
     );
   }
 
-  async function handleGridNoteClick(index: number): Promise<void> {
-    if (answerLocked || !isPlaying) return;
+  async function handleGridNoteClick(index: number, fromInspector = false): Promise<void> {
+    if (answerLocked || (!isPlaying && !fromInspector)) return;
     const gridNotes =
-      phase === 'first-choice' ? introductoryNotes : currentQuestion?.gridNotes;
+      phase === 'first-choice' ? firstChoiceNotes : currentQuestion?.gridNotes;
     const sourceNote =
       phase === 'first-choice' ? introductorySourceNote : currentQuestion?.sourceNote;
     if (!gridNotes || !sourceNote) return;
+    questionNarration.submit();
     const correctIndex = getCorrectIndex(gridNotes, sourceNote);
 
     if (index !== correctIndex) {
+      mark(phase === 'first-choice' ? 'first-choice' : currentQuestion?.id ?? '', 'retry');
       const answerPhase = phase;
       const answeredQuestion = currentQuestion;
       const token = beginSequence();
@@ -633,7 +748,7 @@
       if (!isCurrentSequence(token)) return;
 
       if (answerPhase === 'first-choice') {
-        await moveSourceBesideMatch(gridNotes, sourceNote, token);
+        await returnSourceToGrammy(token);
         if (!isCurrentSequence(token)) return;
       } else {
         sourceLanded = false;
@@ -644,12 +759,17 @@
       narrationText =
         answerPhase === 'first-choice' ? introductoryPrompt : answeredQuestion?.prompt ?? '';
       answerLocked = false;
-      if (answerPhase === 'question' && answeredQuestion) {
+      mark(answerPhase === 'first-choice' ? 'first-choice' : answeredQuestion?.id ?? '', 'prompt');
+      questionNarration.wait();
+      if (answerPhase === 'first-choice') {
+        void runQuestionCycle(introductoryCycle, token);
+      } else if (answerPhase === 'question' && answeredQuestion) {
         void runQuestionCycle(answeredQuestion, token);
       }
       return;
     }
 
+    mark(phase === 'first-choice' ? 'first-choice' : currentQuestion?.id ?? '', 'correct');
     const token = beginSequence();
     answerLocked = true;
     feedbackState = 'success';
@@ -691,27 +811,60 @@
     if (!isCurrentSequence(token)) return;
 
     if (answeredQuestionIndex >= questions.length - 1) {
-      phase = 'complete';
-      await say('Bravo!', token);
-      if (!isCurrentSequence(token)) return;
-      onComplete?.();
+      await finishLesson(token);
       return;
     }
 
     await startQuestion(answeredQuestionIndex + 1);
   }
 
+  async function finishLesson(token: number): Promise<void> {
+    phase = 'complete';
+    mark('finish', 'bravo');
+    await say('Bravo!', token);
+    if (!isCurrentSequence(token)) return;
+    inspector?.status('completed');
+    onComplete?.();
+  }
+
+  function seekTo(cueId: string, actionId?: string): void {
+    const cueEntry = cuePlan.find((item) => item.id === cueId);
+    const selectedAction = actionId ?? cueEntry?.actions?.[0]?.id;
+    if (!cueEntry || !selectedAction || !cueEntry.actions?.some((item) => item.id === selectedAction)) return;
+    beginSequence();
+    sequenceStarted = true;
+    activeInspectorCue = null;
+    demoSeekTarget = null;
+    inspector?.resetFrom(cueId);
+    if (cueId === 'demonstrate-match' || cueId === 'first-choice') {
+      demoSeekTarget = `${cueId}/${selectedAction}`;
+      void runIntroductoryDemonstration();
+      return;
+    }
+    if (cueId === 'finish') {
+      void finishLesson(beginSequence());
+      return;
+    }
+    const index = questions.findIndex((question) => question.id === cueId);
+    if (index >= 0) void startQuestion(index, selectedAction as 'prompt' | 'retry' | 'correct');
+  }
+
   function handleAvatarReady(): void {
     avatarReady = true;
+    unregisterInspector?.();
+    unregisterInspector = inspector?.register(cuePlan, seekTo);
   }
 
   onDestroy(() => {
+    unregisterInspector?.();
     sequenceToken += 1;
+    questionNarration.submit();
     cancelWait(true);
     stopAllVoices();
     cancelLessonAvatarSpeech();
     if (audioContext && audioContext.state !== 'closed') void audioContext.close();
   });
+  $: audioOutput.setVolume(volume);
 </script>
 
 <div
@@ -719,36 +872,38 @@
   style={`--match-note-size:${overlayNoteSize}px;`}
 >
   <div class="match-support">
+    <div class="mlt-lesson-avatar-anchor mlt-lesson-avatar-centered">
     <LessonAvatarDock
       character="grammy"
       speechText={narrationText}
+      animateEntrance={!avatarAlreadyPositioned}
       {underlinedWords}
       on:ready={handleAvatarReady}
     />
 
-    {#if visibleSourceNote && !sourceLanded && !sourceFlightNote && phase !== 'complete'}
+    {#if visibleSourceNote && phase !== 'complete'}
       {@const sourceRow = pitchRows[getRowIndex(visibleSourceNote)]}
-      <div class="source-note-wrap" aria-label="Note to match">
+      <div class="source-note-wrap" class:is-hidden={sourceLanded || !!sourceFlightNote} aria-hidden={sourceLanded || !!sourceFlightNote} aria-label="Note to match">
         <span
           bind:this={sourceNoteEl}
-          class={`match-note match-note--source ${sourceNoteActive ? 'is-active' : ''}`}
-          style={`color:${sourceRow?.hex ?? '#6a5140'};`}
+          class={`mlt-lesson-note match-note match-note--source ${sourceNoteActive ? 'is-active' : ''}`}
+          use:lessonNoteAppearance={{ cellWidth: cellSize, audioOutput, frequency: sourceRow?.frequency, active: sourceNoteActive }}
+          style:color={sourceRow?.hex ?? '#6a5140'}
         ></span>
       </div>
     {/if}
-
+    </div>
   </div>
 
   <section
-    class={`match-workspace app-card ${feedbackState ? `is-${feedbackState}` : ''}`}
+    class={`match-workspace ${feedbackState ? `is-${feedbackState}` : ''}`}
     aria-label={section.label}
   >
     <div
-      class="pitch-grid-frame"
-      bind:clientWidth={frameWidth}
-      bind:clientHeight={frameHeight}
-      style={`--legend-width:${legendWidth}px;`}
-    >
+      class="mlt-lesson-grid-frame pitch-grid-frame"
+        bind:clientWidth={frameWidth}
+        bind:clientHeight={frameHeight}
+      >
       <div class="pitch-grid-shell" style={`width:${shellWidth}px; height:${shellHeight}px;`}>
         <div
           class="pitch-grid-field"
@@ -771,16 +926,20 @@
               showRightLegend={false}
               singingConfig={singingConfig}
               showHorizontalGridLines={true}
-              horizontalGridReferencePitchClass={0}
+              {...lessonGridAppearance}
+              showColumnGrid={false}
             />
 
             <div class="match-note-layer">
               {#each visibleGridNotes as toneNote, index (`${toneNote}-${index}`)}
                 {@const row = pitchRows[getRowIndex(toneNote)]}
                 <button
-                  class={`match-note match-note--grid ${activeGridNoteIndex === index ? 'is-active' : ''}`}
+                  class={`mlt-lesson-note match-note match-note--grid ${activeGridNoteIndex === index ? 'is-active' : ''}`}
+                  use:lessonNoteAppearance={{ cellWidth: cellSize, audioOutput, frequency: row?.frequency, active: activeGridNoteIndex === index }}
                   type="button"
-                  style={`top:${rowCenter(toneNote)}%; left:${getGridNoteLeft(index, visibleGridNotes.length)}%; color:${row?.hex ?? '#6a5140'};`}
+                  style:top={`${rowCenter(toneNote)}%`}
+                  style:left={`${getGridNoteLeft(index, visibleGridNotes.length)}%`}
+                  style:color={row?.hex ?? '#6a5140'}
                   aria-label={`Choose pitch ${toneNote}`}
                   disabled={answerLocked || !isPlaying || phase === 'demonstration' || phase === 'complete'}
                   on:click={() => void handleGridNoteClick(index)}
@@ -792,8 +951,11 @@
                 {@const sourceRow = pitchRows[getRowIndex(visibleSourceNote)]}
                 <span
                   bind:this={landedSourceNoteEl}
-                  class={`match-note match-note--landed-source ${sourceNoteActive ? 'is-active' : ''}`}
-                  style={`top:${rowCenter(landingToneNote)}%; left:${getLandedSourceLeft(landedBesideGridIndex, visibleGridNotes.length)}%; color:${sourceRow?.hex ?? '#6a5140'};`}
+                  class={`mlt-lesson-note match-note match-note--landed-source ${sourceNoteActive ? 'is-active' : ''}`}
+                  use:lessonNoteAppearance={{ cellWidth: cellSize, audioOutput, frequency: sourceRow?.frequency, active: sourceNoteActive }}
+                  style:top={`${rowCenter(landingToneNote)}%`}
+                  style:left={`${getLandedSourceLeft(landedBesideGridIndex, visibleGridNotes.length)}%`}
+                  style:color={sourceRow?.hex ?? '#6a5140'}
                   aria-hidden="true"
                 ></span>
               {/if}
@@ -807,8 +969,15 @@
 
 {#if sourceFlightNote}
   <span
-    class={`match-note match-note--flight ${sourceFlightNote.landed ? 'is-landed' : ''}`}
-    style={`--match-note-size:${overlayNoteSize}px; left:${sourceFlightNote.landed ? sourceFlightNote.endX : sourceFlightNote.startX}px; top:${sourceFlightNote.landed ? sourceFlightNote.endY : sourceFlightNote.startY}px; color:${sourceFlightNote.color};`}
+    class={`mlt-lesson-note match-note match-note--flight ${sourceFlightNote.landed ? 'is-landed' : ''}`}
+    use:lessonNoteAppearance={{ cellWidth: cellSize, audioOutput, frequency: undefined }}
+    class:is-paused={!isPlaying}
+    style:--match-note-size={`${overlayNoteSize}px`}
+    style:--flight-start-x={`${sourceFlightNote.startX}px`}
+    style:--flight-start-y={`${sourceFlightNote.startY}px`}
+    style:--flight-end-x={`${sourceFlightNote.endX}px`}
+    style:--flight-end-y={`${sourceFlightNote.endY}px`}
+    style:color={sourceFlightNote.color}
     aria-hidden="true"
   ></span>
 {/if}
@@ -832,6 +1001,10 @@
   }
 
   .source-note-wrap {
+    position: absolute;
+    top: calc(100% + 0.85rem);
+    left: 50%;
+    transform: translateX(-50%);
     min-height: 4rem;
     display: grid;
     place-items: center;
@@ -840,32 +1013,30 @@
   .match-workspace {
     min-width: 0;
     min-height: 0;
-    width: fit-content;
+    width: 100%;
     max-width: 100%;
     justify-self: start;
     align-self: start;
-    padding: 1rem;
+    padding: 0;
     transition:
       border-color 0.16s ease,
       box-shadow 0.16s ease;
   }
 
-  .match-workspace.is-success {
+
+  .match-workspace.is-success .pitch-grid-field {
     border-color: rgba(66, 151, 94, 0.28);
     box-shadow: var(--amt-shadow), 0 0 0 1px rgba(66, 151, 94, 0.14);
   }
 
-  .match-workspace.is-error {
+  .match-workspace.is-error .pitch-grid-field {
     border-color: rgba(201, 90, 77, 0.26);
     box-shadow: var(--amt-shadow), 0 0 0 1px rgba(201, 90, 77, 0.14);
   }
 
   .pitch-grid-frame {
-    width: min(100%, 60rem);
-    height: clamp(36rem, calc(100svh - 10rem), 54rem);
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
+    width: 100%;
+    height: calc(clamp(36rem, calc(100svh - 10rem), 54rem) + 2rem);
     overflow: visible;
   }
 
@@ -882,16 +1053,20 @@
     min-height: 0;
     overflow: visible;
     border-radius: 22px;
-    border: 1px solid rgba(84, 65, 39, 0.14);
+    border: 0;
+    outline: 1px solid rgba(102, 75, 40, 0.18);
+    outline-offset: -1px;
+    box-shadow: var(--amt-shadow);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
     background:
       radial-gradient(580px 260px at 100% 8%, rgba(78, 176, 226, 0.06), transparent 62%),
       radial-gradient(620px 260px at 0% 100%, rgba(202, 187, 102, 0.06), transparent 64%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 241, 231, 0.94));
+      linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(248, 241, 229, 0.86));
   }
 
   .match-note-layer {
     position: absolute;
-    inset: 0 0 0 var(--legend-width);
+    inset: 0;
     pointer-events: none;
     z-index: 3;
   }
@@ -900,33 +1075,22 @@
     width: var(--match-note-size);
     height: var(--match-note-size);
     display: block;
-    border: 2px solid currentColor;
-    border-radius: 999px;
-    background: transparent;
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.72),
-      0 5px 12px rgba(39, 28, 18, 0.12);
+
+
     transition:
       background-color 0.12s ease,
       box-shadow 0.12s ease,
       transform 0.12s ease;
   }
 
-  .match-note.is-active {
-    background: color-mix(in srgb, currentColor 30%, rgba(255, 255, 255, 0.9));
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.88),
-      0 0 18px currentColor,
-      0 0 32px color-mix(in srgb, currentColor 48%, transparent);
+  .source-note-wrap.is-hidden {
+    visibility: hidden;
   }
 
   .match-note--source {
     position: relative;
   }
 
-  .match-note--source.is-active {
-    transform: scale(1.12);
-  }
 
   .match-note--grid {
     position: absolute;
@@ -937,14 +1101,7 @@
     cursor: pointer;
   }
 
-  .match-note--grid:hover:not(:disabled),
-  .match-note--grid:focus-visible {
-    transform: translate(-50%, -50%) scale(1.08);
-  }
 
-  .match-note--grid.is-active {
-    transform: translate(-50%, -50%) scale(1.12);
-  }
 
   .match-note--grid:disabled {
     cursor: default;
@@ -956,18 +1113,25 @@
     transform: translate(-50%, -50%);
   }
 
-  .match-note--landed-source.is-active {
-    transform: translate(-50%, -50%) scale(1.12);
-  }
 
   .match-note--flight {
     position: fixed;
     z-index: 60;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    transition:
-      left 0.6s cubic-bezier(0.2, 0.72, 0.2, 1),
-      top 0.6s cubic-bezier(0.2, 0.72, 0.2, 1);
+    left: var(--flight-start-x);
+    top: var(--flight-start-y);
+  }
+
+  .match-note--flight.is-landed {
+    animation: note-flight 0.6s cubic-bezier(0.2, 0.72, 0.2, 1) forwards;
+  }
+
+  .match-note--flight.is-paused { animation-play-state: paused; }
+
+  @keyframes note-flight {
+    from { left: var(--flight-start-x); top: var(--flight-start-y); }
+    to { left: var(--flight-end-x); top: var(--flight-end-y); }
   }
 
   @media (max-width: 980px) {
@@ -993,12 +1157,12 @@
     .match-workspace {
       width: 100%;
       justify-self: stretch;
-      padding: 0.65rem;
+      padding: 0;
     }
 
     .pitch-grid-frame {
       width: 100%;
-      height: clamp(22rem, 66svh, 34rem);
+      height: calc(clamp(22rem, 66svh, 34rem) + 1.3rem);
     }
 
     .match-note--grid::after {
@@ -1013,6 +1177,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .match-note--flight.is-landed { animation-duration: 1ms; }
     .match-note,
     .match-note--flight {
       transition: none;

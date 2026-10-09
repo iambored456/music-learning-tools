@@ -29,6 +29,8 @@ export interface LegendRenderConfig {
   showFrequencyLabels: boolean;
   /** Whether to show octave numbers in labels */
   showOctaveLabels: boolean;
+  /** 0–1 reveal: slide pitch letters left while octave suffixes fade in. Explicit label overrides stay unchanged. */
+  octaveLabelProgress?: number;
   /** Whether the legend should display any text labels */
   showLegendLabels: boolean;
   /** Whether accidental rows should display pitch-name text */
@@ -45,10 +47,14 @@ export interface LegendRenderConfig {
   labelOverrides?: Map<number, string>;
   /** Optional label overrides by exact MIDI pitch. These take priority over pitch-class overrides. */
   midiLabelOverrides?: Map<number, string>;
+  /** Whole cells owned by an animated replacement rather than this canvas. */
+  hiddenMidi?: ReadonlySet<number>;
   /** Whether horizontal pitch lines should be rendered beneath the legend cells. */
   extendHorizontalGridLinesBehindLegend?: boolean;
   /** Pitch-class reference used to style the horizontal pitch lines. */
   horizontalGridReferencePitchClass?: number | null;
+  /** Use Student Notation's fixed line weights and red C reference. */
+  horizontalGridStyle?: 'default' | 'student-notation';
   /** Color used for the emphasized solid reference line. */
   horizontalGridReferenceLineColor?: string;
   /** Color used for ordinary solid horizontal lines. */
@@ -93,7 +99,7 @@ function snapToDevicePixel(value: number, pixelRatio: number): number {
 /**
  * Calculate font size based on cell dimensions and label length.
  */
-function getLegendFontSize(
+export function getLegendFontSize(
   cellWidth: number,
   cellHeight: number,
   labelLength: number,
@@ -103,6 +109,11 @@ function getLegendFontSize(
   const sizeMultiplier = labelLength <= 3 ? 1 : 0.7;
   const resolutionBoost = pixelRatio <= 1 ? 1.08 : 1;
   return snapToDevicePixel(baseFontSize * sizeMultiplier * resolutionBoost, pixelRatio);
+}
+
+/** Keep animated DOM legend labels outlined like the canvas text. */
+export function getLegendTextStrokeWidth(pixelRatio: number): number {
+  return Math.max(1.2, 2.5 / pixelRatio);
 }
 
 /**
@@ -267,6 +278,7 @@ export function drawLegend(
     for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
       const row = fullRowData[rowIndex];
       if (!row || row.isBoundary) continue;
+      if (typeof row.midi === 'number' && config.hiddenMidi?.has(row.midi)) continue;
 
       // Only render rows that match this column
       if (row.column !== colLabel) continue;
@@ -316,27 +328,19 @@ export function drawLegend(
       ctx.fillStyle = shouldHideAccidental ? 'rgba(255,255,255,0)' : bgColor;
       ctx.fillRect(cumulativeX, cellTop, colWidth, renderedCellHeight);
 
-      // Optional highlight overlay
-      if (highlightEntries.length > 0) {
-        for (const highlight of highlightEntries) {
-          if (highlight.opacity <= 0) continue;
-
-          let shouldHighlight = false;
-          if (typeof highlight.midi === 'number') {
-            shouldHighlight = typeof row.midi === 'number' && row.midi === Math.round(highlight.midi);
-          } else if (typeof highlight.pitchClass === 'number') {
-            const rowPitchClass = getPitchClassFromRow(row);
-            shouldHighlight = rowPitchClass === highlight.pitchClass;
-          }
-
-          if (shouldHighlight) {
-            ctx.save();
-            ctx.globalAlpha = Math.min(Math.max(highlight.opacity, 0), 1);
-            ctx.fillStyle = highlight.color ?? '#ffff00';
-            ctx.fillRect(cumulativeX, cellTop, colWidth, renderedCellHeight);
-            ctx.restore();
-          }
-        }
+      const rowHighlights = highlightEntries.filter(highlight => highlight.opacity > 0 && (
+        typeof highlight.midi === 'number'
+          ? row.midi === Math.round(highlight.midi)
+          : typeof highlight.pitchClass === 'number' && getPitchClassFromRow(row) === highlight.pitchClass
+      ));
+      // Optional cell overlay; label glows are drawn behind the text below.
+      for (const highlight of rowHighlights) {
+        if (highlight.style === 'glow') continue;
+        ctx.save();
+        ctx.globalAlpha = Math.min(highlight.opacity, 1);
+        ctx.fillStyle = highlight.color ?? '#ffff00';
+        ctx.fillRect(cumulativeX, cellTop, colWidth, renderedCellHeight);
+        ctx.restore();
       }
 
       if (label === null) continue;
@@ -351,15 +355,49 @@ export function drawLegend(
       const textX = snap(cumulativeX + colWidth / 2);
       const textY = snap(y);
 
+      const progress = Number.isFinite(config.octaveLabelProgress)
+        ? Math.max(0, Math.min(1, config.octaveLabelProgress!)) : 1;
+      const hasOverride = config.labelOverrides?.has(getPitchClassFromRow(row))
+        || (typeof row.midi === 'number' && config.midiLabelOverrides?.has(row.midi));
+      const parts = progress < 1 && config.showOctaveLabels && !config.showFrequencyLabels && !hasOverride
+        ? /^([A-G](?:♭|♯|b|#)?)(-?\d+)$/.exec(label) : null;
+      const fullWidth = parts ? ctx.measureText(label).width : 0;
+      const letterWidth = parts ? ctx.measureText(parts[1]).width : 0;
+      const octaveWidth = parts ? ctx.measureText(parts[2]).width : 0;
+      const drawText = (method: 'fillText' | 'strokeText'): void => {
+        if (!parts) {
+          ctx[method](label, textX, textY);
+          return;
+        }
+        ctx[method](parts[1], textX - progress * (fullWidth - letterWidth) / 2, textY);
+        ctx.save();
+        ctx.globalAlpha *= progress;
+        ctx[method](parts[2], textX + (fullWidth - octaveWidth) / 2, textY);
+        ctx.restore();
+      };
+
+      if (!shouldHideLabel && !shouldHideAccidental && textAlpha === 'FF') {
+        for (const highlight of rowHighlights) {
+          if (highlight.style !== 'glow') continue;
+          ctx.save();
+          ctx.globalAlpha = Math.min(highlight.opacity, 1);
+          ctx.shadowColor = highlight.color ?? '#ffff00';
+          ctx.shadowBlur = cellWidth * 0.6;
+          ctx.fillStyle = ctx.shadowColor;
+          drawText('fillText');
+          ctx.restore();
+        }
+      }
+
       // Text stroke (outline)
       ctx.strokeStyle = `#212529${textAlpha}`;
-      ctx.lineWidth = Math.max(1.2, 2.5 / pixelRatio);
+      ctx.lineWidth = getLegendTextStrokeWidth(pixelRatio);
       ctx.lineJoin = 'round';
-      ctx.strokeText(label, textX, textY);
+      drawText('strokeText');
 
       // Text fill
       ctx.fillStyle = `#ffffff${textAlpha}`;
-      ctx.fillText(label, textX, textY);
+      drawText('fillText');
     }
 
     cumulativeX += colWidth;
@@ -425,6 +463,7 @@ export function drawLegendsToSeparateCanvases(
         viewportHeight: height,
         viewportWidth: width,
         colorMode: config.colorMode,
+        horizontalGridStyle: config.horizontalGridStyle,
         horizontalGridReferencePitchClass: config.horizontalGridReferencePitchClass,
         horizontalGridReferenceLineColor: config.horizontalGridReferenceLineColor,
         horizontalGridDefaultLineColor: config.horizontalGridDefaultLineColor,

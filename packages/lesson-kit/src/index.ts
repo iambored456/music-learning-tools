@@ -1,0 +1,12 @@
+export { createLessonClock, type ClockScheduler } from './clock';
+export { createLessonAudioOutput } from './audio';
+export { snapLessonPlacement } from './placement';
+export { lessonOutsidePlacement, type LessonOutsidePlacementOptions } from './outsidePlacement';
+export { calculateLessonGridLayout, lessonGridAppearance } from './gridLayout';
+export { lessonNoteAppearance, calculateLessonNoteAppearance, calculateLessonNoteLabelSize } from './noteAppearance';
+export { lessonPacing } from './pacing';
+export { completeLessonExercise } from './completion';
+export { createLessonQuestion } from './question';
+export { createLessonPianoVoice } from './piano';
+export { lessonScreenSlide, lessonScreenSlideMs, type LessonScreenSlideOptions } from './screenSlide';
+export { lessonGridMask, type LessonGridMaskOptions } from './gridMask';

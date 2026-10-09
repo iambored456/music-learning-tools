@@ -236,6 +236,9 @@ importers:
 
   packages/amateur-music-theory-ui:
     dependencies:
+      '@mlt/lesson-kit':
+        specifier: workspace:*
+        version: link:../lesson-kit
       '@mlt/pitch-data':
         specifier: workspace:*
         version: link:../pitch-data
@@ -348,6 +351,12 @@ importers:
     devDependencies:
       typescript:
         specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/lesson-kit:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
 
   packages/lesson-templates:

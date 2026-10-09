@@ -22,10 +22,14 @@
 
   const currentSection = $derived(lesson.sections[currentStep - 1] ?? lesson.sections[0]);
   const isFinalSection = $derived(currentStep === lesson.sections.length);
+  const sectionKey = $derived(
+    ['letter-names', 'letter-cycle', 'octaves', 'octave-numbers', 'accidentals', 'naming-practice'].includes(currentSection.id)
+      ? 'pitch-name-sequence' : `${currentStep}-${currentSection.code}`,
+  );
 </script>
 
 {#if currentSection}
-  {#key `${currentStep}-${currentSection.code}`}
+  {#key sectionKey}
     <PitchLesson12Section
       section={currentSection}
       {isPlaying}
