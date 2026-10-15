@@ -1,1 +1,0 @@
-import{o,g as a,U as u,V as i}from"./disclose-version-DDjIB3I4.js";function c(t){var r=u(0);return function(){return arguments.length===1?(o(r,a(r)+1),arguments[0]):(a(r),t())}}function f(t,r){var e=t.$$events?.[r.type],s=i(e)?e.slice():e==null?[]:[e];for(var n of s)n.call(this,r)}export{f as b,c as r};

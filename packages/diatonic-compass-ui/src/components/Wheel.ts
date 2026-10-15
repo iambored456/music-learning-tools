@@ -1,5 +1,6 @@
 // (file path: src/components/Wheel.ts)
 
+import { traceWheelSegment } from '@mlt/compass-core';
 import { snapRing, snapChromaticAndSettleMode, snapDegreeToDiatonic } from '../core/animation.ts';
 import { setRingAngle, rotateCoupledRings } from '../core/actions.ts';
 import { SEMITONES, ANGLE_STEP, FONT_FACTOR_OUTER, FONT_FACTOR_MIDDLE, FONT_FACTOR_INNER, FIXED_INTERVAL_COLOUR, PIANO_KEY_COLOUR } from '../core/constants.ts';
@@ -173,11 +174,7 @@ export default class Wheel {
     }
 
     const segPath = (r0: number, r1: number, angle: number) => {
-        const a0 = angle - ANGLE_STEP / 2, a1 = angle + ANGLE_STEP / 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r1, a0, a1);
-        ctx.arc(cx, cy, r0, a1, a0, true);
-        ctx.closePath();
+        traceWheelSegment(ctx, cx, cy, r0, r1, angle);
     };
     
     const drawOuterRing = () => {

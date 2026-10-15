@@ -49,6 +49,15 @@ export const appCards: AppCard[] = [
     accent: '#27b6a1',
   },
   {
+    id: 'audiationer-trainer',
+    name: 'Audiationer Trainer',
+    description: 'Hear musical relationships through degrees, melodies, and chords.',
+    href: withBase('audiationer-trainer/'),
+    preview: withBase('previews/audiationer-trainer.svg'),
+    tags: ['Ear training'],
+    accent: '#27b6a1',
+  },
+  {
     id: 'visual-metronome',
     name: 'Visual Metronome',
     description: 'Several visuals depicting tempo and subdivisions.',

@@ -37,6 +37,28 @@ importers:
         specifier: ^6.1.1
         version: 6.4.1(@types/node@22.19.3)(tsx@4.21.0)
 
+  apps/audiationer-trainer:
+    dependencies:
+      '@mlt/audiationer-trainer-ui':
+        specifier: workspace:*
+        version: link:../../packages/audiationer-trainer-ui
+      svelte:
+        specifier: ^5.43.8
+        version: 5.46.1
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.1
+        version: 6.2.1(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(tsx@4.21.0))
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.10.4
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.2.4
+        version: 7.3.0(@types/node@24.10.4)(tsx@4.21.0)
+
   apps/boomwhacker-video-builder:
     dependencies:
       '@mlt/boomwhacker-video-builder-ui':
@@ -99,6 +121,9 @@ importers:
       '@mlt/amateur-music-theory-ui':
         specifier: workspace:*
         version: link:../../packages/amateur-music-theory-ui
+      '@mlt/audiationer-trainer-ui':
+        specifier: workspace:*
+        version: link:../../packages/audiationer-trainer-ui
       '@mlt/boomwhacker-video-builder-ui':
         specifier: workspace:*
         version: link:../../packages/boomwhacker-video-builder-ui
@@ -259,6 +284,47 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/audiationer-trainer-core:
+    dependencies:
+      '@mlt/compass-core':
+        specifier: workspace:*
+        version: link:../compass-core
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.10.4
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
+  packages/audiationer-trainer-ui:
+    dependencies:
+      '@mlt/audiationer-trainer-core':
+        specifier: workspace:*
+        version: link:../audiationer-trainer-core
+      '@mlt/compass-core':
+        specifier: workspace:*
+        version: link:../compass-core
+      '@mlt/font-atkinson':
+        specifier: workspace:*
+        version: link:../font-atkinson
+    devDependencies:
+      svelte:
+        specifier: ^5.43.8
+        version: 5.46.1
+      svelte-check:
+        specifier: ^4.3.4
+        version: 4.3.5(picomatch@4.0.3)(svelte@5.46.1)(typescript@5.9.3)
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.2.4
+        version: 7.3.0(@types/node@24.10.4)(tsx@4.21.0)
+
   packages/audio-samples:
     devDependencies:
       typescript:
@@ -306,8 +372,17 @@ importers:
         specifier: ^6.1.1
         version: 6.4.1(@types/node@24.10.4)(tsx@4.21.0)
 
+  packages/compass-core:
+    devDependencies:
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
   packages/diatonic-compass-ui:
     dependencies:
+      '@mlt/compass-core':
+        specifier: workspace:*
+        version: link:../compass-core
       '@mlt/talking-avatar':
         specifier: workspace:*
         version: link:../talking-avatar

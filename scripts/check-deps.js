@@ -57,6 +57,7 @@ const SIMPLE_APP_NAMES = [
   'student-notation',
   'simple-notation',
   'diatonic-compass',
+  'audiationer-trainer',
   'visual-metronome',
   'hub',
 ];
