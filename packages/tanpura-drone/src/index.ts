@@ -20,6 +20,7 @@ export {
 } from './tanpuraPresets';
 
 export { TANPURA_SAMPLE_URL } from './tanpuraSample';
+export { TanpuraDrone } from './TanpuraDrone';
 
 export {
   TANPURA_TUNING_LIMITS,

@@ -1,5 +1,6 @@
 import { CHORD_QUALITIES, SCALE_MODES, scaleDegrees, type ScaleMode } from './music.ts';
 import type { WheelOrder } from '@mlt/compass-core';
+import { SOUND_PRESETS, type SoundPreset } from './sound.ts';
 
 export const GAME_MODES = [
   { id: 'freeplay', name: 'Free Play', description: 'Explore the wheel and hear each degree in context.' },
@@ -7,12 +8,95 @@ export const GAME_MODES = [
   { id: 'melody', name: 'Melody', description: 'Listen to a short melody, then enter its degrees in order.' },
   { id: 'chords', name: 'Chord Progressions', description: 'Identify the scale degree of a diatonic triad.' },
   { id: 'quality', name: 'Chord Quality', description: 'Identify the quality of the chord you hear.' },
-  { id: 'pocket', name: 'Pocket Mode', description: 'Listen hands-free; the answer is spoken after each note.' },
+  { id: 'pocket', name: 'Pocket Mode', description: 'Practise any exercise hands-free with spoken answers.' },
   { id: 'cycle', name: 'Cycle', description: 'Hear the selected degrees in ascending order.' },
 ] as const;
 export type GameMode = typeof GAME_MODES[number]['id'];
+export const WHEEL_VIEWS = [
+  { id: 'fifths', name: 'Fifths', wheelStyle: 'compass', order: 'fifths' },
+  { id: 'chromatic', name: 'Chromatic', wheelStyle: 'compass', order: 'chromatic' },
+  { id: 'minimal', name: 'Minimal', wheelStyle: 'minimal', order: 'fifths' },
+  { id: 'minimal-chromatic', name: 'Minimal Chromatic', wheelStyle: 'minimal', order: 'chromatic' },
+] as const;
+export function wheelView(settings: Pick<Settings, 'wheelStyle' | 'order'>) {
+  return WHEEL_VIEWS.find(view => view.wheelStyle === settings.wheelStyle && view.order === settings.order)!.id;
+}
+export function setWheelView(settings: Pick<Settings, 'wheelStyle' | 'order'>, id: string) {
+  const view = WHEEL_VIEWS.find(view => view.id === id);
+  if (view) { settings.wheelStyle = view.wheelStyle; settings.order = view.order; }
+}
+export const POCKET_EXERCISES = [
+  { id: 'degrees', name: 'Degrees' }, { id: 'melody', name: 'Melody' },
+  { id: 'chords', name: 'Chord Progressions' }, { id: 'quality', name: 'Chord Quality' },
+] as const;
+export type PocketExercise = typeof POCKET_EXERCISES[number]['id'];
+export const REVIEW_SKIP_OPTIONS = [
+  { id: 'none', name: 'No skip' },
+  { id: 'correct', name: 'Skip correct' },
+  { id: 'all', name: 'Skip all' },
+] as const;
+export const AUTO_CONTINUE_DELAYS = [0.5, 1, 2, 5] as const;
+export interface DegreeSettings {
+  soundPreset: SoundPreset;
+  /** Legacy saved preference; Settings.reviewSkip is shared by all scored modes. */
+  reviewSkip: typeof REVIEW_SKIP_OPTIONS[number]['id'];
+  droneVolume: number;
+  melodyVolume: number;
+  showTimeLeft: boolean;
+}
+export function normalizeDegreeSettings(input: unknown): DegreeSettings {
+  const d = (input && typeof input === 'object' ? input : {}) as Partial<DegreeSettings>;
+  const volume = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value)) : fallback;
+  return {
+    soundPreset: SOUND_PRESETS.some(s => s.id === d.soundPreset) ? d.soundPreset! : 'synth',
+    reviewSkip: REVIEW_SKIP_OPTIONS.some(option => option.id === d.reviewSkip) ? d.reviewSkip! : 'correct',
+    droneVolume: volume(d.droneVolume, 0.8),
+    melodyVolume: volume(d.melodyVolume, 0.9),
+    showTimeLeft: typeof d.showTimeLeft === 'boolean' ? d.showTimeLeft : false,
+  };
+}
+export const QUESTIONS_PER_KEY = [5, 10, 15, 20, 30] as const;
+export const POCKET_QUESTIONS_PER_KEY = QUESTIONS_PER_KEY;
+export interface PocketSettings {
+  exercise: PocketExercise;
+  soundPreset: SoundPreset;
+  tempo: number;
+  melodyLength: number;
+  repeats: number;
+  waitSeconds: number;
+  replays: number;
+  answerVolume: number;
+  droneVolume: number;
+  melodyVolume: number;
+  questionsPerKey: number;
+  notesWithAnswer: boolean;
+  speakAnswer: boolean;
+}
+export function normalizePocketSettings(input: unknown): PocketSettings {
+  const p = (input && typeof input === 'object' ? input : {}) as Partial<PocketSettings>;
+  const number = (v: unknown, min: number, max: number, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
+  return {
+    exercise: POCKET_EXERCISES.some(e => e.id === p.exercise) ? p.exercise! : 'degrees',
+    soundPreset: SOUND_PRESETS.some(s => s.id === p.soundPreset) ? p.soundPreset! : 'synth',
+    tempo: Math.round(number(p.tempo, 30, 180, 40)),
+    melodyLength: Math.round(number(p.melodyLength, 1, 5, 1)),
+    repeats: Math.round(number(p.repeats, 1, 5, 1)),
+    waitSeconds: number(p.waitSeconds, 0, 15, 1),
+    replays: Math.round(number(p.replays, 0, 4, 1)),
+    answerVolume: number(p.answerVolume, 0, 1, 0.8),
+    droneVolume: number(p.droneVolume, 0, 1, 0.8),
+    melodyVolume: number(p.melodyVolume, 0, 1, 0.9),
+    questionsPerKey: POCKET_QUESTIONS_PER_KEY.some(n => n === p.questionsPerKey) ? p.questionsPerKey! : 5,
+    notesWithAnswer: typeof p.notesWithAnswer === 'boolean' ? p.notesWithAnswer : false,
+    speakAnswer: typeof p.speakAnswer === 'boolean' ? p.speakAnswer : true,
+  };
+}
 export interface Settings {
   mode: GameMode;
+  pocket: PocketSettings;
+  degreeOptions: DegreeSettings;
   tonic: number;
   octave: number;
   scale: ScaleMode;
@@ -21,8 +105,12 @@ export interface Settings {
   melodyLength: number;
   noteGap: number;
   rounds: number;
+  reviewSkip: typeof REVIEW_SKIP_OPTIONS[number]['id'];
   answerSeconds: number;
+  autoContinueCorrect: boolean;
+  autoContinueSeconds: number;
   randomTonic: boolean;
+  questionsPerKey: number;
   randomOctave: boolean;
   cadence: boolean;
   resolve: boolean;
@@ -33,9 +121,10 @@ export interface Settings {
   wheelStyle: 'compass' | 'minimal';
 }
 export const DEFAULT_SETTINGS: Settings = {
-  mode: 'freeplay', tonic: 0, octave: 4, scale: '1', degrees: [0, 2, 4, 5, 7, 9, 11],
-  qualities: [0, 1], melodyLength: 3, noteGap: 0.8, rounds: 20, answerSeconds: 0,
-  randomTonic: false, randomOctave: false, cadence: true, resolve: true,
+  mode: 'freeplay', pocket: normalizePocketSettings({}), degreeOptions: normalizeDegreeSettings({}), tonic: 0, octave: 4, scale: '1', degrees: [0, 2, 4, 5, 7, 9, 11],
+  qualities: [0, 1], melodyLength: 3, noteGap: 0.8, rounds: 10, reviewSkip: 'correct', answerSeconds: 0,
+  autoContinueCorrect: false, autoContinueSeconds: 2,
+  randomTonic: true, questionsPerKey: 5, randomOctave: false, cadence: true, resolve: true,
   drone: true, droneVolume: 0.15, volume: 0.65, order: 'fifths', wheelStyle: 'compass',
 };
 
@@ -44,18 +133,25 @@ export function normalizeSettings(input: unknown): Settings {
   const result: Settings = { ...DEFAULT_SETTINGS, degrees: [...DEFAULT_SETTINGS.degrees], qualities: [...DEFAULT_SETTINGS.qualities] };
   const range = (v: unknown, min: number, max: number, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
-  for (const name of ['randomTonic', 'randomOctave', 'cadence', 'resolve', 'drone'] as const) {
+  for (const name of ['randomTonic', 'randomOctave', 'cadence', 'resolve', 'drone', 'autoContinueCorrect'] as const) {
     if (typeof s[name] === 'boolean') result[name] = s[name];
   }
   if (GAME_MODES.some(m => m.id === s.mode)) result.mode = s.mode!;
+  if (POCKET_EXERCISES.some(exercise => exercise.id === result.mode) || result.mode === 'pocket') result.randomTonic = true;
+  result.pocket = normalizePocketSettings(s.pocket);
+  result.degreeOptions = normalizeDegreeSettings(s.degreeOptions);
+  result.reviewSkip = REVIEW_SKIP_OPTIONS.some(option => option.id === s.reviewSkip) ? s.reviewSkip! : result.degreeOptions.reviewSkip;
+  result.degreeOptions.reviewSkip = result.reviewSkip;
   if (SCALE_MODES.some(m => m.id === s.scale)) result.scale = s.scale!;
   if (s.order === 'chromatic' || s.order === 'fifths') result.order = s.order;
   result.tonic = Math.round(range(s.tonic, 0, 11, result.tonic));
   result.octave = Math.round(range(s.octave, 2, 6, result.octave));
   result.melodyLength = Math.round(range(s.melodyLength, 2, 8, result.melodyLength));
   result.rounds = Math.round(range(s.rounds, 1, 100, result.rounds));
+  result.questionsPerKey = Math.round(range(s.questionsPerKey, 1, 100, result.questionsPerKey));
   result.wheelStyle = s.wheelStyle === 'minimal' ? 'minimal' : 'compass';
   result.answerSeconds = s.answerSeconds === 2 || s.answerSeconds === 5 ? s.answerSeconds : 0;
+  result.autoContinueSeconds = AUTO_CONTINUE_DELAYS.some(delay => delay === s.autoContinueSeconds) ? s.autoContinueSeconds! : 2;
   result.noteGap = range(s.noteGap, 0.3, 2, result.noteGap);
   result.volume = range(s.volume, 0, 1, result.volume);
   result.droneVolume = range(s.droneVolume, 0, 0.5, result.droneVolume);
@@ -67,12 +163,23 @@ export function normalizeSettings(input: unknown): Settings {
   return result;
 }
 
-export function allowedDegrees(s: Settings): number[] {
-  const scale = scaleDegrees(s.scale);
-  return s.degrees.filter(d => s.mode !== 'chords' || scale.includes(d));
+/** Upgrade the previous app defaults once; newer saves retain explicitly chosen settings. */
+export function migrateSettingsDefaults(input: unknown): Settings {
+  const settings = normalizeSettings(input);
+  if (input && typeof input === 'object' && !('reviewSkip' in input)) {
+    if (settings.rounds === 20) settings.rounds = 10;
+    if (settings.reviewSkip === 'none') settings.reviewSkip = settings.degreeOptions.reviewSkip = 'correct';
+  }
+  return settings;
 }
 
+export function allowedDegrees(s: Settings): number[] {
+  const scale = scaleDegrees(s.scale);
+  return s.degrees.filter(d => exerciseMode(s) !== 'chords' || scale.includes(d));
+}
+
+export const exerciseMode = (s: Settings): GameMode => s.mode === 'pocket' ? s.pocket.exercise : s.mode;
 export function settingsError(s: Settings): string | null {
-  if (s.mode === 'quality') return s.qualities.length ? null : 'Select at least one chord quality.';
+  if (exerciseMode(s) === 'quality') return s.qualities.length ? null : 'Select at least one chord quality.';
   return allowedDegrees(s).length ? null : 'Select at least one available degree for this mode.';
 }

@@ -1,0 +1,1 @@
+import{an as c,O as t}from"./disclose-version-C9g44vam.js";import{B as f}from"./class-BI8aHQ6u.js";function l(r,e,n){var o=new f(r),s=!c();t(()=>{var a=e();s&&a!==null&&typeof a=="object"&&(a={}),o.ensure(a,n)})}export{l as k};

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { ANGLE_STEP, CHROMATIC_NOTES, FIXED_INTERVAL_COLOUR, getContrastColor, mod12, wheelPitchClasses, wheelPoint, wheelSegmentPath, type WheelOrder } from '@mlt/compass-core';
+  import { ANGLE_STEP, CHROMATIC_NOTES, getContrastColor, mod12, wheelPitchClasses, wheelPoint, wheelSegmentPath, type WheelOrder } from '@mlt/compass-core';
   import { chordLabel, degreeLabel, type ScaleMode } from '@mlt/audiationer-trainer-core';
-  let { tonic, scale, order, allowed, active, enabled, chords = false, onanswer } = $props<{
+  import { PITCH_COLOURS as colours } from './pitchColours.ts';
+  let { tonic, scale, order, allowed, active, enabled, chords = false, showCentre = true, onanswer } = $props<{
     tonic: number; scale: ScaleMode; order: WheelOrder; allowed: number[];
-    active: number | null; enabled: boolean; chords?: boolean; onanswer: (degree: number) => void;
+    active: number | null; enabled: boolean; chords?: boolean; showCentre?: boolean; onanswer: (degree: number) => void;
   }>();
-  const colours: Record<number, string> = FIXED_INTERVAL_COLOUR;
   const display = $derived(wheelPitchClasses(order));
 </script>
 
@@ -30,9 +30,11 @@
       <path class="focus-sector" d={wheelSegmentPath(110, 225, angle)} fill="none" stroke-width="4" />
     </g>
   {/each}
-  <text y="-25" class="centre-caption" fill="var(--at-muted)" font-size="13">TONIC</text>
-  <text y="9" fill="var(--at-text)" font-size="29" font-weight="700">{CHROMATIC_NOTES[tonic]}</text>
-  <text y="39" fill="var(--at-muted)" font-size="12">{order === 'fifths' ? 'Circle of fifths' : 'Chromatic compass'}</text>
+  {#if showCentre}
+    <text y="-25" class="centre-caption" fill="var(--at-muted)" font-size="13">TONIC</text>
+    <text y="9" fill="var(--at-text)" font-size="29" font-weight="700">{CHROMATIC_NOTES[tonic]}</text>
+    <text y="39" fill="var(--at-muted)" font-size="12">{order === 'fifths' ? 'Circle of fifths' : 'Chromatic compass'}</text>
+  {/if}
 </svg>
 
 <style>

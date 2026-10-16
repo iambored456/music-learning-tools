@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { ANGLE_STEP, CHROMATIC_NOTES, FIXED_INTERVAL_COLOUR, mod12, wheelPitchClasses, wheelPoint, wheelSegmentPath, type WheelOrder } from '@mlt/compass-core';
+  import { ANGLE_STEP, CHROMATIC_NOTES, mod12, wheelPitchClasses, wheelPoint, wheelSegmentPath, type WheelOrder } from '@mlt/compass-core';
   import { chordLabel, degreeLabel, type ScaleMode } from '@mlt/audiationer-trainer-core';
+  import { PITCH_COLOURS as colours } from './pitchColours.ts';
   let { tonic, scale, order, allowed, active, enabled, chords = false, onanswer, activeDegrees = [], sustained = [], ongesture }: {
     tonic: number; scale: ScaleMode; order: WheelOrder; allowed: number[];
     active: number | null; enabled: boolean; chords?: boolean; onanswer: (degree: number) => void;
     activeDegrees?: number[]; sustained?: number[]; ongesture?: (degree: number, event: PointerEvent) => void;
   } = $props();
-  const colours: Record<number, string> = FIXED_INTERVAL_COLOUR;
   const display = $derived(wheelPitchClasses(order));
 </script>
 <svg class="trainer-wheel" style:touch-action={ongesture ? 'none' : undefined} viewBox="-240 -240 480 480" role="group" aria-label="Musical degree answer wheel">

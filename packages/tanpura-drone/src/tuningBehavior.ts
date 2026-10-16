@@ -3,6 +3,7 @@ import {
   PURETONES_DEFAULT_TANPURA_PRESET,
   PURETONES_NOTE_LABELS,
   getTanpuraPlaybackRate,
+  type TanpuraPlaybackRateConfig,
 } from './tanpuraPresets';
 
 export type DroneEngine = 'tanpura' | 'synth';
@@ -173,13 +174,14 @@ function centsToPlaybackRate(cents: number): number {
 export function getTanpuraPlaybackRateForTuning(
   targetMidi: number,
   tuning: TanpuraTuningBehavior,
-  phase = 0
+  phase = 0,
+  config: TanpuraPlaybackRateConfig = DEFAULT_TANPURA_PLAYBACK_RATE_CONFIG
 ): number {
   const normalized = normalizeTanpuraTuningBehavior(tuning);
-  const baseRate = getTanpuraPlaybackRate(targetMidi, DEFAULT_TANPURA_PLAYBACK_RATE_CONFIG);
+  const baseRate = getTanpuraPlaybackRate(targetMidi, config);
   const driftCents = Math.sin(phase * Math.PI * 2) * (normalized.variance * 0.08);
   const tunedRate = baseRate * centsToPlaybackRate(normalized.fineTuneCents + driftCents);
-  return clamp(tunedRate, DEFAULT_TANPURA_PLAYBACK_RATE_CONFIG.minRate, DEFAULT_TANPURA_PLAYBACK_RATE_CONFIG.maxRate);
+  return clamp(tunedRate, config.minRate, config.maxRate);
 }
 
 export function getTanpuraStringRatio(noteIndex: number): number {

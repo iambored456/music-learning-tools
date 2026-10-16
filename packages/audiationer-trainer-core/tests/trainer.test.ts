@@ -15,11 +15,12 @@ class AudioMock implements TrainerAudio {
   stop() { this.stops++; }
 }
 const instant = async (_ms: number, signal: AbortSignal) => { signal.throwIfAborted(); };
-function setup(extra = {}) {
+function setup(extra = {}, initialRandom = 0) {
   const audio = new AudioMock();
   let state: SessionState;
-  const session = new TrainerSession(audio, next => { state = next; }, () => 0, instant, () => 1000);
-  const settings = normalizeSettings({ mode: 'degrees', cadence: false, drone: false, rounds: 1, resolve: false, ...extra });
+  let firstRandom = true;
+  const session = new TrainerSession(audio, next => { state = next; }, () => { if (firstRandom) { firstRandom = false; return initialRandom; } return 0; }, instant, () => 1000);
+  const settings = normalizeSettings({ mode: 'degrees', cadence: false, drone: false, rounds: 1, resolve: false, degreeOptions: { reviewSkip: 'all' }, ...extra });
   return { audio, session, settings, state: () => state! };
 }
 
@@ -68,7 +69,7 @@ test('melodies contain only allowed degrees, even with a single degree selected'
   assert.ok(melody([0, 4, 7], 20).every(n => [0, 4, 7].includes(n)));
 });
 test('Degrees hides the target, repeats without a new question, and records a correct result', async () => {
-  const t = setup({ tonic: 11, degrees: [2] });
+  const t = setup({ degrees: [2] }, 11 / 12);
   await t.session.start(t.settings);
   assert.equal(t.state().phase, 'answering');
   assert.equal(t.state().activeDegree, null);
@@ -82,7 +83,7 @@ test('Degrees hides the target, repeats without a new question, and records a co
   assert.equal(t.state().results[0].correct, true);
 });
 test('wrong answers reveal and replay the target, recording confusion', async () => {
-  const t = setup({ degrees: [0, 2] });
+  const t = setup({ degrees: [0, 2], degreeOptions: { reviewSkip: 'none' } });
   await t.session.start(t.settings); await t.session.answer(2);
   assert.deepEqual(t.audio.played, [[60], [60]]);
   assert.equal(t.state().results[0].expected, '1');
@@ -90,7 +91,7 @@ test('wrong answers reveal and replay the target, recording confusion', async ()
   assert.equal(t.state().results[0].correct, false);
 });
 test('Melody waits for the whole answer and supports undo', async () => {
-  const t = setup({ mode: 'melody', degrees: [0], melodyLength: 3 });
+  const t = setup({ mode: 'melody', degrees: [0], melodyLength: 3, reviewSkip: 'none' });
   await t.session.start(t.settings);
   await t.session.answer(0); await t.session.answer(0);
   assert.equal(t.state().results.length, 0);
@@ -103,7 +104,7 @@ test('Melody waits for the whole answer and supports undo', async () => {
 });
 
 test('Melody feedback supports comparing both melodies and free play without changing the score', async () => {
-  const t = setup({ mode: 'melody', degrees: [0, 4, 7], melodyLength: 2, rounds: 2 });
+  const t = setup({ mode: 'melody', degrees: [0, 4, 7], melodyLength: 2, rounds: 2, reviewSkip: 'none' });
   await t.session.start(t.settings);
   await t.session.next(); // Next cannot skip an unanswered question.
   assert.equal(t.state().phase, 'answering');
@@ -139,7 +140,7 @@ test('Melody feedback supports comparing both melodies and free play without cha
 });
 
 test('Melody feedback octave controls affect exploration and reset for the next question', async () => {
-  const t = setup({ mode: 'melody', degrees: [0], melodyLength: 2, rounds: 2 });
+  const t = setup({ mode: 'melody', degrees: [0], melodyLength: 2, rounds: 2, reviewSkip: 'none' });
   await t.session.start(t.settings);
   t.session.setFeedbackOctave(6);
   assert.equal(t.state().octave, 4);
@@ -156,7 +157,7 @@ test('Melody feedback octave controls affect exploration and reset for the next 
 });
 
 test('Next cancels a melody replay without allowing stale playback to alter the next question', async () => {
-  const t = setup({ mode: 'melody', degrees: [0], melodyLength: 2, rounds: 2 });
+  const t = setup({ mode: 'melody', degrees: [0], melodyLength: 2, rounds: 2, reviewSkip: 'none' });
   await t.session.start(t.settings);
   await t.session.answer(0); await t.session.answer(0);
   const originalNotes = t.audio.notes.bind(t.audio);
@@ -237,8 +238,8 @@ test('a newer session wins if an older audio unlock completes late', async () =>
 });
 test('stop cancels scheduled feedback and prevents the next question', async () => {
   const audio = new AudioMock(); let session: TrainerSession;
-  session = new TrainerSession(audio, () => {}, () => 0, async (ms, signal) => { if (ms === 1400) session.stop(); signal.throwIfAborted(); });
-  await session.start(normalizeSettings({ mode: 'degrees', cadence: false, resolve: false, rounds: 5, degrees: [0] }));
+  session = new TrainerSession(audio, () => {}, () => 0, async (ms, signal) => { if (ms === 400) session.stop(); signal.throwIfAborted(); });
+  await session.start(normalizeSettings({ mode: 'chords', cadence: false, resolve: false, rounds: 5, degrees: [0] }));
   await session.answer(0);
   assert.equal(session.snapshot().phase, 'finished');
   assert.equal(audio.played.length, 1);
@@ -247,10 +248,10 @@ test('Pocket mode speaks answers and Cycle walks selected degrees until stopped'
   for (const mode of ['pocket', 'cycle'] as const) {
     const audio = new AudioMock(); let session: TrainerSession; let rounds = 0;
     session = new TrainerSession(audio, () => {}, () => 0, async (ms, signal) => {
-      if (ms === 800 && ++rounds === 2) session.stop();
+      if (ms === (mode === 'pocket' ? 1500 : 800) && ++rounds === 2) session.stop();
       signal.throwIfAborted();
     });
-    await session.start(normalizeSettings({ mode, cadence: false, degrees: [0, 7] }));
+    await session.start(normalizeSettings({ mode, cadence: false, degrees: [0, 7], pocket: { replays: 0 } }));
     assert.equal(audio.played.length, 2);
     assert.deepEqual(audio.played, mode === 'cycle' ? [[60], [67]] : [[60], [60]]);
     assert.equal(audio.spoken.length, mode === 'pocket' ? 2 : 0);

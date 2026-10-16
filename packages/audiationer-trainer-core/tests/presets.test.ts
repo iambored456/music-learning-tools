@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME_MODES, allowedDegrees, applyPreset, challengePresetGroups, challengePresets, degreeLabel, normalizeCustomPresets, normalizeProgress, normalizeSettings, pathPresetGroups, pathPresets, recordProgress, settingsError, TrainerSession, type Result, type TrainerAudio } from '../src/index.ts';
+import { GAME_MODES, allowedDegrees, applyPreset, challengePresetGroups, challengePresets, degreeLabel, normalizeCustomPresets, normalizeProgress, normalizeSettings, pathPresetGroups, pathPresets, recordProgress, setWheelView, settingsError, wheelView, TrainerSession, type Result, type TrainerAudio } from '../src/index.ts';
 
 test('every built-in preset has a usable answer pool for its mode', () => {
   for (const mode of GAME_MODES) {
@@ -25,17 +25,33 @@ test('preset application preserves sound, difficulty and wheel preferences', () 
   assert.deepEqual(source.degrees, [0, 2, 4, 5, 7, 9, 11]);
 });
 
+test('Minimal Chromatic survives level selection and storage and remains distinct from Minimal', () => {
+  const settings = normalizeSettings({ mode: 'degrees' });
+  setWheelView(settings, 'minimal-chromatic');
+  const preset = applyPreset(settings, pathPresets('degrees')[0]);
+  const restored = normalizeSettings(JSON.parse(JSON.stringify(preset)));
+  assert.equal(restored.wheelStyle, 'minimal');
+  assert.equal(restored.order, 'chromatic');
+  assert.equal(wheelView(restored), 'minimal-chromatic');
+  setWheelView(restored, 'minimal');
+  assert.equal(restored.order, 'fifths');
+  assert.equal(wheelView(restored), 'minimal');
+  setWheelView(restored, 'chromatic');
+  assert.equal(restored.wheelStyle, 'compass');
+  assert.equal(wheelView(restored), 'chromatic');
+});
+
 test('Degrees and Melody include the screenshot paths and named challenges with their full note sets', () => {
   const expected = {
-    'Path of the Moon': [
-      ['Moon 1', '1 ♭3'], ['Moon 2', '1 ♭3 5'], ['Moon 3', '1 2 ♭3 5'],
-      ['Moon 4', '1 2 ♭3 5 ♭6'], ['Moon 5', '1 2 ♭3 5 ♭6 ♭7'],
-      ['Moon 6', '1 2 ♭3 4 5 ♭6 ♭7'], ['Moon 7', '1 ♭2 2 ♭3 4 5 ♭6 ♭7'],
+    'Minor Progression': [
+      ['Minor I', '1 ♭3'], ['Minor II', '1 ♭3 5'], ['Minor III', '1 2 ♭3 5'],
+      ['Minor IV', '1 2 ♭3 5 ♭6'], ['Minor V', '1 2 ♭3 5 ♭6 ♭7'],
+      ['Minor VI', '1 2 ♭3 4 5 ♭6 ♭7'], ['Minor VII', '1 ♭2 2 ♭3 4 5 ♭6 ♭7'],
     ],
-    'Path of the Union': [
-      ['Union 1', '1 ♭3 3 5'], ['Union 2', '1 ♭2 2 ♭3 3 5'],
-      ['Union 3', '1 ♭2 2 ♭3 3 5 ♭6 6'], ['Union 4', '1 ♭2 2 ♭3 3 5 ♭6 6 ♭7 7'],
-      ['Union 5', '1 ♭2 2 ♭3 3 4 ♯4 5 ♭6 6 ♭7 7'],
+    'Chromatic Progression': [
+      ['Chromatic I', '1 ♭3 3 5'], ['Chromatic II', '1 ♭2 2 ♭3 3 5'],
+      ['Chromatic III', '1 ♭2 2 ♭3 3 5 ♭6 6'], ['Chromatic IV', '1 ♭2 2 ♭3 3 5 ♭6 6 ♭7 7'],
+      ['Chromatic V', '1 ♭2 2 ♭3 3 4 ♯4 5 ♭6 6 ♭7 7'],
     ],
     Modes: [
       ['Ionian (major)', '1 2 3 4 5 6 7'], ['Aeolian (minor)', '1 2 ♭3 4 5 ♭6 ♭7'],
@@ -59,7 +75,7 @@ test('Degrees and Melody include the screenshot paths and named challenges with 
   };
   for (const mode of ['degrees', 'melody'] as const) {
     const path = pathPresetGroups(mode), challenges = challengePresetGroups(mode);
-    assert.deepEqual(path.map(group => group.name), ['Path of the Sun', 'Path of the Moon', 'Path of the Union']);
+    assert.deepEqual(path.map(group => group.name), ['Major Progression', 'Minor Progression', 'Chromatic Progression']);
     assert.deepEqual(challenges.map(group => group.name), ['Modes', 'Challenge', 'Oddball', 'Chords']);
     for (const [name, notes] of Object.entries(expected)) {
       const group = [...path, ...challenges].find(group => group.name === name)!;
@@ -155,7 +171,7 @@ function timed(extra = {}) {
   const session = new TrainerSession(audio, () => {}, () => 0, async (_ms, signal) => { signal.throwIfAborted(); }, () => now, (callback, ms) => {
     const timer = { callback, ms, cancelled: false }; timers.push(timer); return () => { timer.cancelled = true; };
   });
-  const settings = normalizeSettings({ mode: 'degrees', degrees: [0], cadence: false, resolve: false, rounds: 1, answerSeconds: 2, ...extra });
+  const settings = normalizeSettings({ mode: 'degrees', degrees: [0], cadence: false, resolve: false, rounds: 1, answerSeconds: 2, degreeOptions: { reviewSkip: 'all' }, ...extra });
   return { session, audio, timers, settings, advance: (ms: number) => { now += ms; } };
 }
 
@@ -171,8 +187,21 @@ test('timed questions start the deadline after playback and score an unanswered 
   await t.session.answer(0); assert.equal(t.session.snapshot().results.length, 1);
 });
 
+test('timeouts count toward answered totals and the five-question key boundary', async () => {
+  const t = timed({ rounds: 6 }); await t.session.start(t.settings);
+  const keys: number[] = [];
+  for (let question = 0; question < 6; question++) {
+    keys.push(t.session.snapshot().tonic);
+    t.advance(2000); t.timers[question].callback(); await flush();
+    assert.equal(t.session.snapshot().results.length, question + 1);
+    assert.equal(t.session.snapshot().results.filter(result => result.correct).length, 0);
+  }
+  assert.deepEqual(keys, [0, 0, 0, 0, 0, 1]);
+  assert.equal(t.session.snapshot().phase, 'finished');
+});
+
 test('late clicks cannot beat an expired clock, and partial melody answers time out', async () => {
-  const t = timed({ mode: 'melody', melodyLength: 3 });
+  const t = timed({ mode: 'melody', melodyLength: 3, reviewSkip: 'correct' });
   await t.session.start(t.settings); await t.session.answer(0);
   t.advance(2001); await t.session.answer(0);
   const result = t.session.snapshot();

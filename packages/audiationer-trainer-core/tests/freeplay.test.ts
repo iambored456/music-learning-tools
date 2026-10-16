@@ -36,6 +36,19 @@ test('Free Play normalizes sound settings and locks pitch octaves to 3–6', () 
   assert.equal(normalizeFreeplaySettings({ soundPreset: 'bad' }).soundPreset, 'synth');
   assert.equal(normalizeFreeplaySettings({ melodyVolume: NaN }).melodyVolume, 0.9);
   assert.equal(normalizeFreeplaySettings({ droneVolume: 4 }).droneVolume, 1);
+  assert.equal(normalizeFreeplaySettings({}).order, 'fifths');
+  assert.equal(normalizeFreeplaySettings({ order: 'invalid' }).order, 'fifths');
+});
+
+test('Free Play remembers Random or a fixed key across saved settings', () => {
+  assert.equal(normalizeFreeplaySettings({}).randomTonic, true);
+  assert.equal(normalizeFreeplaySettings({ randomTonic: 'false' }).randomTonic, true);
+  for (const randomTonic of [false, true]) {
+    const settings = normalizeFreeplaySettings({ tonic: 8, randomTonic });
+    const restored = normalizeFreeplaySettings(JSON.parse(JSON.stringify(settings)));
+    assert.equal(restored.randomTonic, randomTonic);
+    assert.equal(restored.tonic, 8);
+  }
 });
 
 test('opening and configuring Free Play does not start audio', () => {
@@ -112,6 +125,19 @@ test('sound and independent volume settings update without retriggering a sustai
   assert.equal(t.audio.drones.at(-1)?.volume, 0.7);
   assert.equal(t.audio.held.length, 1);
   assert.equal(t.audio.held[0].released, false);
+});
+
+test('switching Free Play to Minimal Chromatic preserves sounding notes and survives storage', async () => {
+  const t = setup(); t.session.press(4).finish(true); await flush();
+  const settings = normalizeFreeplaySettings({ ...t.settings, order: 'chromatic' });
+  const restored = normalizeFreeplaySettings(JSON.parse(JSON.stringify(settings)));
+  assert.equal(restored.order, 'chromatic');
+  t.session.configure(restored);
+  assert.equal(t.audio.held.length, 1);
+  assert.equal(t.audio.held[0].midi, 64);
+  assert.equal(t.audio.held[0].released, false);
+  assert.deepEqual(t.session.snapshot().sustained, [4]);
+  t.session.destroy();
 });
 
 test('Cycle traverses all twelve degrees and can stop cleanly', async () => {

@@ -1,16 +1,14 @@
 import { midiNote } from './music.ts';
+import type { WheelOrder } from '@mlt/compass-core';
 import { wait } from './session.ts';
+import { SOUND_PRESETS, type SoundPreset } from './sound.ts';
+export { SOUND_PRESETS, type SoundPreset } from './sound.ts';
 
 export const FREEPLAY_DEGREES = Array.from({ length: 12 }, (_, i) => i);
-export const SOUND_PRESETS = [
-  { id: 'synth', name: 'Synth', wave: 'triangle' },
-  { id: 'soft', name: 'Soft', wave: 'sine' },
-  { id: 'bright', name: 'Bright', wave: 'sawtooth' },
-  { id: 'hollow', name: 'Hollow', wave: 'square' },
-] as const;
-export type SoundPreset = typeof SOUND_PRESETS[number]['id'];
 export interface FreeplaySettings {
   tonic: number;
+  randomTonic: boolean;
+  order: WheelOrder;
   octave: number;
   soundPreset: SoundPreset;
   droneVolume: number;
@@ -22,6 +20,8 @@ export function normalizeFreeplaySettings(input: unknown): FreeplaySettings {
     typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
   return {
     tonic: Math.round(number(s.tonic, 0, 11, 0)), octave: Math.round(number(s.octave, 3, 6, 4)),
+    randomTonic: typeof s.randomTonic === 'boolean' ? s.randomTonic : true,
+    order: s.order === 'chromatic' ? 'chromatic' : 'fifths',
     soundPreset: SOUND_PRESETS.some(p => p.id === s.soundPreset) ? s.soundPreset! : 'synth',
     droneVolume: number(s.droneVolume, 0, 1, 0.8), melodyVolume: number(s.melodyVolume, 0, 1, 0.9),
   };

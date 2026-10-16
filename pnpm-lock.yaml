@@ -311,6 +311,9 @@ importers:
       '@mlt/font-atkinson':
         specifier: workspace:*
         version: link:../font-atkinson
+      '@mlt/tanpura-drone':
+        specifier: workspace:*
+        version: link:../tanpura-drone
     devDependencies:
       svelte:
         specifier: ^5.43.8

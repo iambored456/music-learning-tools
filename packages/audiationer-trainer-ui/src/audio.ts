@@ -1,13 +1,13 @@
 import { SOUND_PRESETS, midiFrequency, wait, type FreeplayAudio, type SoundPreset, type TrainerAudio } from '@mlt/audiationer-trainer-core';
+import { TanpuraDrone } from '@mlt/tanpura-drone';
 
-/** Local Web Audio synthesis: no soundfont downloads, backend, or desktop runtime. */
+/** Web Audio notes and the shared tanpura sample, loaded only after an audio gesture. */
 export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private voices = new Set<OscillatorNode>();
-  private droneOscillator: OscillatorNode | null = null;
-  private droneGain: GainNode | null = null;
-  private droneMidi: number | null = null;
+  private tanpura: TanpuraDrone | null = null;
+  private droneOutput: GainNode | null = null;
   private speech: SpeechSynthesisUtterance | null = null;
   private wave: OscillatorType = 'triangle';
 
@@ -19,10 +19,22 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
       this.master = this.context.createGain();
       this.master.gain.value = 0.65;
       this.master.connect(this.context.destination);
+      this.droneOutput = this.context.createGain();
+      this.droneOutput.connect(this.independentDroneVolume ? this.context.destination : this.master);
+      this.tanpura = new TanpuraDrone(this.context, this.droneOutput);
     }
+    const tanpura = this.tanpura;
     if (this.context.state !== 'running') await this.context.resume();
+    await tanpura?.prepare();
   }
   volume(value: number) { if (this.master) this.master.gain.value = value; }
+  separateDroneVolume(enabled: boolean) {
+    this.independentDroneVolume = enabled;
+    if (this.droneOutput && this.context && this.master) {
+      this.droneOutput.disconnect();
+      this.droneOutput.connect(enabled ? this.context.destination : this.master);
+    }
+  }
   preset(value: SoundPreset) {
     this.wave = SOUND_PRESETS.find(preset => preset.id === value)!.wave;
     for (const voice of this.voices) voice.type = this.wave;
@@ -72,38 +84,25 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
     finally { signal.removeEventListener('abort', cancel); }
   }
   drone(midi: number | null, volume: number) {
-    if (midi !== null && midi === this.droneMidi && this.droneGain && this.context) {
-      this.droneGain.gain.setTargetAtTime(volume * 0.4, this.context.currentTime, 0.04);
-      return;
-    }
-    if (this.droneOscillator) { try { this.droneOscillator.stop(); } catch { /* Already ended. */ } }
-    this.droneOscillator = null;
-    this.droneMidi = null;
-    this.droneGain?.disconnect(); this.droneGain = null;
-    if (midi === null || !this.context || !this.master) return;
-    const oscillator = this.context.createOscillator(), gain = this.context.createGain();
-    oscillator.type = 'sine'; oscillator.frequency.value = midiFrequency(midi);
-    gain.gain.setValueAtTime(0, this.context.currentTime);
-    gain.gain.linearRampToValueAtTime(volume * 0.4, this.context.currentTime + 0.1);
-    oscillator.connect(gain); gain.connect(this.independentDroneVolume ? this.context.destination : this.master);
-    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
-    oscillator.start(); this.droneOscillator = oscillator; this.droneGain = gain; this.droneMidi = midi;
+    this.tanpura?.set(midi, volume);
   }
-  async speak(text: string, signal: AbortSignal) {
-    if (!('speechSynthesis' in window)) throw new Error('Pocket mode needs browser speech synthesis. Please use Degrees or Cycle in this browser.');
+  async speak(text: string, signal: AbortSignal, volume = 0.8) {
     signal.throwIfAborted();
+    if (volume <= 0) return;
+    if (!('speechSynthesis' in window)) throw new Error('Spoken answers need browser speech synthesis. Turn off “Play answer after question” or choose another browser.');
     await new Promise<void>((resolve, reject) => {
       const utterance = new SpeechSynthesisUtterance(text);
       this.speech = utterance; utterance.lang = 'en-US'; utterance.rate = 0.85;
+      utterance.volume = Math.max(0, Math.min(1, volume));
       const clean = () => {
         clearTimeout(timeout); signal.removeEventListener('abort', cancel);
         utterance.onend = null; utterance.onerror = null;
         if (this.speech === utterance) this.speech = null;
       };
       const cancel = () => { clean(); window.speechSynthesis.cancel(); reject(new DOMException('Cancelled', 'AbortError')); };
-      const timeout = setTimeout(() => { clean(); window.speechSynthesis.cancel(); reject(new Error('Speech did not respond. Try Degrees or Cycle, or choose another browser.')); }, 12000);
+      const timeout = setTimeout(() => { clean(); window.speechSynthesis.cancel(); reject(new Error('Speech did not respond. Turn off spoken answers or choose another browser.')); }, 12000);
       utterance.onend = () => { clean(); resolve(); };
-      utterance.onerror = () => { clean(); reject(new Error('Speech could not play. Try Degrees or Cycle in this browser.')); };
+      utterance.onerror = () => { clean(); reject(new Error('Speech could not play. Turn off spoken answers or choose another browser.')); };
       signal.addEventListener('abort', cancel, { once: true });
       window.speechSynthesis.speak(utterance);
     });
@@ -114,5 +113,9 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
     if (this.speech && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     this.speech = null;
   }
-  dispose() { this.stop(); void this.context?.close(); this.context = null; this.master = null; }
+  dispose() {
+    this.stop(); this.tanpura?.dispose(); this.tanpura = null;
+    this.droneOutput?.disconnect(); this.droneOutput = null;
+    void this.context?.close(); this.context = null; this.master = null;
+  }
 }

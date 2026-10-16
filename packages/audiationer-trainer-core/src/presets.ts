@@ -16,23 +16,24 @@ const sun = [[0, 4], [0, 4, 7], [0, 2, 4, 7], [0, 2, 4, 7, 9], [0, 2, 4, 7, 9, 1
 const moon = [[0, 3], [0, 3, 7], [0, 2, 3, 7], [0, 2, 3, 7, 8], [0, 2, 3, 7, 8, 10], [0, 2, 3, 5, 7, 8, 10], [0, 1, 2, 3, 5, 7, 8, 10]];
 const union = [[0, 3, 4, 7], [0, 1, 2, 3, 4, 7], [0, 1, 2, 3, 4, 7, 8, 9], [0, 1, 2, 3, 4, 7, 8, 9, 10, 11], Array.from({ length: 12 }, (_, i) => i)];
 const hasAdditionalLevels = (mode: GameMode) => mode === 'degrees' || mode === 'melody';
+const exerciseNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 function notePreset(id: string, name: string, degrees: number[], scale: Settings['scale'] = '1'): Preset {
   return { id, name, patch: { scale, degrees: [...degrees] } };
 }
 export function pathPresetGroups(mode: GameMode): PresetGroup[] {
-  if (mode === 'quality') return [{ id: 'chord-path', name: 'The chord path', presets: [
+  if (mode === 'quality') return [{ id: 'chord-path', name: 'Chord Quality Progression', presets: [
     { id: 'triads-1', name: 'Major & minor', patch: { qualities: [0, 1] } },
     { id: 'triads-2', name: 'Add diminished', patch: { qualities: [0, 1, 2] } },
     { id: 'triads-3', name: 'All triads', patch: { qualities: [0, 1, 2, 3] } },
     { id: 'sevenths', name: 'Seventh chords', patch: { qualities: [4, 5, 6] } },
   ] }];
   // Diatonic Chords must remain inside the selected seven-note scale.
-  const groups: PresetGroup[] = [{ id: 'sun', name: 'Path of the Sun', presets: sun.slice(0, mode === 'chords' ? 6 : 7).map((degrees, i) =>
-    notePreset(`sun-${i + 1}`, `Sun ${i + 1}`, degrees)) }];
+  const groups: PresetGroup[] = [{ id: 'sun', name: 'Major Progression', presets: sun.slice(0, mode === 'chords' ? 6 : 7).map((degrees, i) =>
+    notePreset(`sun-${i + 1}`, `Major ${exerciseNumerals[i]}`, degrees)) }];
   if (hasAdditionalLevels(mode)) groups.push(
-    { id: 'moon', name: 'Path of the Moon', presets: moon.map((degrees, i) => notePreset(`moon-${i + 1}`, `Moon ${i + 1}`, degrees, '6')) },
-    { id: 'union', name: 'Path of the Union', presets: union.map((degrees, i) => notePreset(`union-${i + 1}`, `Union ${i + 1}`, degrees)) },
+    { id: 'moon', name: 'Minor Progression', presets: moon.map((degrees, i) => notePreset(`moon-${i + 1}`, `Minor ${exerciseNumerals[i]}`, degrees, '6')) },
+    { id: 'union', name: 'Chromatic Progression', presets: union.map((degrees, i) => notePreset(`union-${i + 1}`, `Chromatic ${exerciseNumerals[i]}`, degrees)) },
   );
   return groups;
 }

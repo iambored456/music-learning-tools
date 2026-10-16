@@ -1,1 +1,0 @@
-import{am as c,O as t}from"./disclose-version-CyFTFesa.js";import{B as f}from"./class-C5awdclq.js";function k(r,e,n){var o=new f(r),s=!c();t(()=>{var a=e();s&&a!==null&&typeof a=="object"&&(a={}),o.ensure(a,n)})}export{k};
