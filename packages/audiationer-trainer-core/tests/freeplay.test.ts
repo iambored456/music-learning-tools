@@ -36,8 +36,8 @@ test('Free Play normalizes sound settings and locks pitch octaves to 3–6', () 
   assert.equal(normalizeFreeplaySettings({ soundPreset: 'bad' }).soundPreset, 'synth');
   assert.equal(normalizeFreeplaySettings({ melodyVolume: NaN }).melodyVolume, 0.9);
   assert.equal(normalizeFreeplaySettings({ droneVolume: 4 }).droneVolume, 1);
-  assert.equal(normalizeFreeplaySettings({}).order, 'fifths');
-  assert.equal(normalizeFreeplaySettings({ order: 'invalid' }).order, 'fifths');
+  assert.equal(normalizeFreeplaySettings({}).order, 'chromatic');
+  assert.equal(normalizeFreeplaySettings({ order: 'invalid' }).order, 'chromatic');
 });
 
 test('Free Play remembers Random or a fixed key across saved settings', () => {

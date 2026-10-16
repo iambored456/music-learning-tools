@@ -54,5 +54,5 @@
     <label><input type="checkbox" bind:checked={settings.resolve} disabled={settings.mode !== 'degrees' && settings.mode !== 'melody'} />Resolve correct answers</label>
     <label><input type="checkbox" bind:checked={settings.drone} disabled={settings.mode === 'quality'} />Tonic drone</label>
   </div>
-  <label class="at-field">Drone volume<input type="range" min="0" max="0.5" step="0.025" bind:value={settings.droneVolume} disabled={!settings.drone || settings.mode === 'quality'} /></label>
+  <label class="at-field">Drone volume: {Math.round(settings.droneVolume * 100)}%<input type="range" min="0" max="1" step="0.01" bind:value={settings.droneVolume} disabled={!settings.drone || settings.mode === 'quality'} /></label>
 </details>

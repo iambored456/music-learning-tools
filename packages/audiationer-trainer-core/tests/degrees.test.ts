@@ -34,7 +34,7 @@ function setup(options: Partial<DegreeSettings> = {}, extra: Partial<Settings> =
 
 test('Degrees settings migrate old saves, validate values and persist independently', () => {
   const old = normalizeSettings({ mode: 'degrees', rounds: 10, answerSeconds: 2 });
-  assert.deepEqual(old.degreeOptions, { soundPreset: 'synth', reviewSkip: 'correct', droneVolume: 0.8, melodyVolume: 0.9, showTimeLeft: false });
+  assert.deepEqual(old.degreeOptions, { soundPreset: 'synth', reviewSkip: 'correct', droneVolume: 1, melodyVolume: 0.9, showTimeLeft: false });
   assert.deepEqual(normalizeDegreeSettings({ soundPreset: 'bad', reviewSkip: 'bad', droneVolume: 2, melodyVolume: NaN, showTimeLeft: 'yes' }),
     { ...old.degreeOptions, droneVolume: 1 });
   old.degreeOptions.soundPreset = 'soft';

@@ -234,10 +234,11 @@ test('stopping, restarting, and leaving a screen invalidate old timers', async (
   assert.equal(t.session.snapshot().phase, 'idle'); assert.equal(t.session.snapshot().answerDeadline, null);
 });
 
-test('Novice is untimed and old settings retain the original wheel views', async () => {
+test('Novice is untimed, missing views use Minimal Chromatic, and explicit views are preserved', async () => {
   const t = timed({ answerSeconds: 0 }); await t.session.start(t.settings);
   assert.equal(t.timers.length, 0); assert.equal(t.session.snapshot().answerDeadline, null);
-  assert.equal(normalizeSettings({ order: 'chromatic' }).wheelStyle, 'compass');
+  assert.equal(normalizeSettings({ order: 'chromatic' }).wheelStyle, 'minimal');
+  assert.equal(normalizeSettings({ order: 'fifths', wheelStyle: 'compass' }).wheelStyle, 'compass');
   assert.equal(normalizeSettings({ order: 'chromatic' }).order, 'chromatic');
   assert.equal(normalizeSettings({ answerSeconds: 99, wheelStyle: 'invalid' }).answerSeconds, 0);
 });

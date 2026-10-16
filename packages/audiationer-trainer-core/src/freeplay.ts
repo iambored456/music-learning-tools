@@ -5,7 +5,9 @@ import { SOUND_PRESETS, type SoundPreset } from './sound.ts';
 export { SOUND_PRESETS, type SoundPreset } from './sound.ts';
 
 export const FREEPLAY_DEGREES = Array.from({ length: 12 }, (_, i) => i);
+const DEFAULTS_VERSION = 1;
 export interface FreeplaySettings {
+  defaultsVersion: number;
   tonic: number;
   randomTonic: boolean;
   order: WheelOrder;
@@ -19,12 +21,21 @@ export function normalizeFreeplaySettings(input: unknown): FreeplaySettings {
   const number = (value: unknown, min: number, max: number, fallback: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
   return {
+    defaultsVersion: DEFAULTS_VERSION,
     tonic: Math.round(number(s.tonic, 0, 11, 0)), octave: Math.round(number(s.octave, 3, 6, 4)),
     randomTonic: typeof s.randomTonic === 'boolean' ? s.randomTonic : true,
-    order: s.order === 'chromatic' ? 'chromatic' : 'fifths',
+    order: s.order === 'fifths' ? 'fifths' : 'chromatic',
     soundPreset: SOUND_PRESETS.some(p => p.id === s.soundPreset) ? s.soundPreset! : 'synth',
-    droneVolume: number(s.droneVolume, 0, 1, 0.8), melodyVolume: number(s.melodyVolume, 0, 1, 0.9),
+    droneVolume: number(s.droneVolume, 0, 1, 1), melodyVolume: number(s.melodyVolume, 0, 1, 0.9),
   };
+}
+export function migrateFreeplaySettingsDefaults(input: unknown): FreeplaySettings {
+  const settings = normalizeFreeplaySettings(input);
+  if (input && typeof input === 'object' && (input as Partial<FreeplaySettings>).defaultsVersion !== DEFAULTS_VERSION) {
+    if (settings.order === 'fifths') settings.order = 'chromatic';
+    if (settings.droneVolume === 0.8) settings.droneVolume = 1;
+  }
+  return settings;
 }
 export interface FreeplayAudio {
   unlock(): Promise<void>;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
-  import { CHORD_QUALITIES, DIFFICULTIES, GAME_MODES, TrainerSession, allowedDegrees, applyPreset, difficultyIndex, emptyState, hasAnswerReview, isScored, migrateSettingsDefaults, normalizeCustomPresets, normalizeFreeplaySettings, normalizeProgress, normalizeSettings, recordProgress, settingsError, type CustomPreset, type GameMode, type Preset, type Progress, type Settings } from '@mlt/audiationer-trainer-core';
+  import { CHORD_QUALITIES, DIFFICULTIES, GAME_MODES, TrainerSession, allowedDegrees, applyPreset, difficultyIndex, emptyState, hasAnswerReview, isScored, migrateFreeplaySettingsDefaults, migrateSettingsDefaults, normalizeCustomPresets, normalizeFreeplaySettings, normalizeProgress, normalizeSettings, recordProgress, settingsError, type CustomPreset, type GameMode, type Preset, type Progress, type Settings } from '@mlt/audiationer-trainer-core';
   import TrainerWheel from './TrainerWheel.svelte';
   import PracticeSettings from './PracticeSettings.svelte';
   import PocketSettings from './PocketSettings.svelte';
@@ -78,7 +78,7 @@
   onMount(() => {
     settings = migrateSettingsDefaults(read('settings.v1'));
     if (settings.mode === 'cycle') settings.mode = 'freeplay';
-    freeplaySettings = normalizeFreeplaySettings(read('freeplay.v1') ?? { tonic: settings.tonic, octave: settings.octave });
+    freeplaySettings = migrateFreeplaySettingsDefaults(read('freeplay.v1') ?? { tonic: settings.tonic, octave: settings.octave });
     custom = normalizeCustomPresets(read('presets.v1')).map(preset => ({
       ...preset, settings: { ...preset.settings, mode: preset.settings.mode === 'cycle' ? 'freeplay' : preset.settings.mode },
     }));
@@ -113,7 +113,6 @@
     if (target === screen && (target === 'landing' || mode === settings.mode)) return;
     session.reset(); modal = null; selection = { id: null, name: 'Custom' };
     if (target !== 'landing') {
-      if (mode === 'melody' && settings.mode !== 'melody') settings.wheelStyle = 'minimal';
       settings.mode = mode as GameMode;
     }
     screen = target;
@@ -122,14 +121,12 @@
   function go(target: Screen, mode = settings.mode) {
     if (mode === 'cycle') mode = 'freeplay';
     if (mode === 'freeplay' && target !== 'landing') target = 'practice';
-    if (mode === 'melody' && settings.mode !== 'melody') settings.wheelStyle = 'minimal';
     session.reset(); modal = null; settings.mode = mode; screen = target;
     window.location.hash = target === 'landing' ? '' : `${target}/${mode}`;
     focusHeading();
   }
   function focusHeading() { void tick().then(() => document.getElementById('at-page-heading')?.focus({ preventScroll: true })); window.scrollTo({ top: 0 }); }
   function chooseMode(mode: GameMode) {
-    if (mode === 'melody') settings.wheelStyle = 'minimal';
     selection = { id: null, name: 'Custom' };
     go(mode === 'freeplay' ? 'practice' : 'presets', mode);
   }

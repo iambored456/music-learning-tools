@@ -2,6 +2,8 @@ import { CHORD_QUALITIES, SCALE_MODES, scaleDegrees, type ScaleMode } from './mu
 import type { WheelOrder } from '@mlt/compass-core';
 import { SOUND_PRESETS, type SoundPreset } from './sound.ts';
 
+const DEFAULTS_VERSION = 1;
+
 export const GAME_MODES = [
   { id: 'freeplay', name: 'Free Play', description: 'Explore the wheel and hear each degree in context.' },
   { id: 'degrees', name: 'Degrees', description: 'Listen to one note, then identify its scale degree.' },
@@ -51,7 +53,7 @@ export function normalizeDegreeSettings(input: unknown): DegreeSettings {
   return {
     soundPreset: SOUND_PRESETS.some(s => s.id === d.soundPreset) ? d.soundPreset! : 'synth',
     reviewSkip: REVIEW_SKIP_OPTIONS.some(option => option.id === d.reviewSkip) ? d.reviewSkip! : 'correct',
-    droneVolume: volume(d.droneVolume, 0.8),
+    droneVolume: volume(d.droneVolume, 1),
     melodyVolume: volume(d.melodyVolume, 0.9),
     showTimeLeft: typeof d.showTimeLeft === 'boolean' ? d.showTimeLeft : false,
   };
@@ -86,7 +88,7 @@ export function normalizePocketSettings(input: unknown): PocketSettings {
     waitSeconds: number(p.waitSeconds, 0, 15, 1),
     replays: Math.round(number(p.replays, 0, 4, 1)),
     answerVolume: number(p.answerVolume, 0, 1, 0.8),
-    droneVolume: number(p.droneVolume, 0, 1, 0.8),
+    droneVolume: number(p.droneVolume, 0, 1, 1),
     melodyVolume: number(p.melodyVolume, 0, 1, 0.9),
     questionsPerKey: POCKET_QUESTIONS_PER_KEY.some(n => n === p.questionsPerKey) ? p.questionsPerKey! : 5,
     notesWithAnswer: typeof p.notesWithAnswer === 'boolean' ? p.notesWithAnswer : false,
@@ -94,6 +96,7 @@ export function normalizePocketSettings(input: unknown): PocketSettings {
   };
 }
 export interface Settings {
+  defaultsVersion: number;
   mode: GameMode;
   pocket: PocketSettings;
   degreeOptions: DegreeSettings;
@@ -121,11 +124,12 @@ export interface Settings {
   wheelStyle: 'compass' | 'minimal';
 }
 export const DEFAULT_SETTINGS: Settings = {
+  defaultsVersion: DEFAULTS_VERSION,
   mode: 'freeplay', pocket: normalizePocketSettings({}), degreeOptions: normalizeDegreeSettings({}), tonic: 0, octave: 4, scale: '1', degrees: [0, 2, 4, 5, 7, 9, 11],
   qualities: [0, 1], melodyLength: 3, noteGap: 0.8, rounds: 10, reviewSkip: 'correct', answerSeconds: 0,
   autoContinueCorrect: false, autoContinueSeconds: 2,
   randomTonic: true, questionsPerKey: 5, randomOctave: false, cadence: true, resolve: true,
-  drone: true, droneVolume: 0.15, volume: 0.65, order: 'fifths', wheelStyle: 'compass',
+  drone: true, droneVolume: 1, volume: 0.65, order: 'chromatic', wheelStyle: 'minimal',
 };
 
 export function normalizeSettings(input: unknown): Settings {
@@ -149,12 +153,12 @@ export function normalizeSettings(input: unknown): Settings {
   result.melodyLength = Math.round(range(s.melodyLength, 2, 8, result.melodyLength));
   result.rounds = Math.round(range(s.rounds, 1, 100, result.rounds));
   result.questionsPerKey = Math.round(range(s.questionsPerKey, 1, 100, result.questionsPerKey));
-  result.wheelStyle = s.wheelStyle === 'minimal' ? 'minimal' : 'compass';
+  if (s.wheelStyle === 'minimal' || s.wheelStyle === 'compass') result.wheelStyle = s.wheelStyle;
   result.answerSeconds = s.answerSeconds === 2 || s.answerSeconds === 5 ? s.answerSeconds : 0;
   result.autoContinueSeconds = AUTO_CONTINUE_DELAYS.some(delay => delay === s.autoContinueSeconds) ? s.autoContinueSeconds! : 2;
   result.noteGap = range(s.noteGap, 0.3, 2, result.noteGap);
   result.volume = range(s.volume, 0, 1, result.volume);
-  result.droneVolume = range(s.droneVolume, 0, 0.5, result.droneVolume);
+  result.droneVolume = range(s.droneVolume, 0, 1, result.droneVolume);
   const selection = (v: unknown, max: number, fallback: number[]) => Array.isArray(v)
     ? [...new Set(v.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < max))].sort((a, b) => a - b)
     : fallback;
@@ -169,6 +173,13 @@ export function migrateSettingsDefaults(input: unknown): Settings {
   if (input && typeof input === 'object' && !('reviewSkip' in input)) {
     if (settings.rounds === 20) settings.rounds = 10;
     if (settings.reviewSkip === 'none') settings.reviewSkip = settings.degreeOptions.reviewSkip = 'correct';
+  }
+  if (input && typeof input === 'object' && (input as Partial<Settings>).defaultsVersion !== DEFAULTS_VERSION) {
+    // Both Compass/Fifths and Melody's forced Minimal/Fifths were previous defaults.
+    if (settings.order === 'fifths') { settings.order = 'chromatic'; settings.wheelStyle = 'minimal'; }
+    if (settings.droneVolume === 0.15) settings.droneVolume = 1;
+    if (settings.degreeOptions.droneVolume === 0.8) settings.degreeOptions.droneVolume = 1;
+    if (settings.pocket.droneVolume === 0.8) settings.pocket.droneVolume = 1;
   }
   return settings;
 }
