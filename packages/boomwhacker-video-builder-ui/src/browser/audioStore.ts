@@ -1,6 +1,6 @@
 const AUDIO_STORE_DB_NAME = 'mlt-boomwhacker-video-builder';
 const AUDIO_STORE_NAME = 'project-audio';
-const AUDIO_STORE_VERSION = 1;
+const AUDIO_STORE_VERSION = 2;
 
 type StoredAudioRecord = {
   token: string;
@@ -22,17 +22,33 @@ function openAudioDatabase(): Promise<IDBDatabase | null> {
       reject(request.error ?? new Error('Failed to open local audio storage.'));
     };
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const database = request.result;
+      // The MIDI project format deliberately starts fresh; discard pre-MIDI audio.
+      if (event.oldVersion < 2 && database.objectStoreNames.contains(AUDIO_STORE_NAME)) {
+        database.deleteObjectStore(AUDIO_STORE_NAME);
+      }
       if (!database.objectStoreNames.contains(AUDIO_STORE_NAME)) {
         database.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'token' });
       }
     };
 
     request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
       resolve(request.result);
     };
+    request.onblocked = () => reject(new Error('Close other Boomwhacker Builder tabs to reset old project storage.'));
   });
+}
+
+export async function resetObsoleteProjectStorage(): Promise<void> {
+  const prefix = 'mlt/boomwhacker-video-builder/';
+  const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));
+  for (const key of keys) {
+    if (key?.startsWith(prefix) && key !== `${prefix}autosave-v6`) localStorage.removeItem(key);
+  }
+  const database = await openAudioDatabase();
+  database?.close();
 }
 
 function runAudioStoreTransaction<T>(

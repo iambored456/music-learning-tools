@@ -25,8 +25,7 @@
   "dependencies": {
     "@mlt/boomwhacker-video-builder-core": "workspace:*",
     "@mlt/font-atkinson": "workspace:*",
-    "@mlt/notation-glyphs": "workspace:*",
-    "@mlt/tempo-controls-ui": "workspace:*"
+    "@mlt/notation-glyphs": "workspace:*"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

@@ -1,6 +1,4 @@
 import type {
-  DerivedBeatSpan,
-  DerivedTimingModel,
   DerivedGuideLine,
   TimedBoomwhackerNote,
 } from '@mlt/boomwhacker-video-builder-core';
@@ -47,24 +45,13 @@ export function getVisibleHighwayGuides(guides: DerivedGuideLine[]): DerivedGuid
   return guides.filter((guide) => guide.kind !== 'subdivision');
 }
 
-export function getActiveHighwayBeatSpan(
-  timing: DerivedTimingModel,
-  currentTimeSec: number,
-): DerivedBeatSpan | null {
-  for (const span of timing.beatSpans) {
-    if (currentTimeSec < span.endTimeSec) {
-      return span;
-    }
-  }
-
-  return null;
-}
-
-export function getHighwayJudgmentAreaWidthPx(
-  beatSpan: Pick<DerivedBeatSpan, 'durationSec'>,
+export function getHighwayTimeX(
+  timeSec: number,
+  referenceTimeSec: number,
+  referenceX: number,
   pixelsPerSecond: number,
 ): number {
-  return Math.max(2, Math.max(0, beatSpan.durationSec) * Math.max(0, pixelsPerSecond));
+  return referenceX + ((timeSec - referenceTimeSec) * pixelsPerSecond);
 }
 
 export function shouldRenderGuideAsBeat(guide: DerivedGuideLine): boolean {
@@ -86,9 +73,10 @@ export function getHighwayNoteLayout(options: {
   const height = Math.max(minShapeSize, laneInnerHeight);
   const width = options.note.shape === 'circle'
     ? options.isSustained
-      ? Math.max(height, durationWidth)
+      ? durationWidth
       : height
     : durationWidth;
+  // Center symbols within their occupied grid span; audio still starts at startX's time.
   const left = options.startX + ((spanWidthPx - width) / 2);
   const top = (options.visualRow * options.laneHeightPx) + ((options.laneHeightPx - height) / 2);
   const labelFontPx = getLabelFontPx(options.note.shape, width, height);

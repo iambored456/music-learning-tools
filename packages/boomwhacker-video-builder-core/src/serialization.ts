@@ -1,9 +1,9 @@
+import { withBeatTimes } from './beatMap.js';
 import { getBoomwhackerLane } from './lanes.js';
 import { createBoomwhackerVideoBuilderProject } from './project.js';
 import {
   BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION,
   type AnnotationState,
-  type AudioProcessingState,
   type AudioStorageStrategy,
   type BackgroundConfig,
   type BoomwhackerNoteShape,
@@ -24,10 +24,6 @@ import {
 const NOTE_SHAPES = new Set<BoomwhackerNoteShape>(['circle', 'oval', 'diamond']);
 const AUDIO_STORAGE_STRATEGIES = new Set<AudioStorageStrategy>(['embedded', 'file-handle', 'external-file']);
 const ACTIVE_TABS = new Set<ViewState['activeTab']>(['editor', 'export']);
-
-interface LegacyBeatTime {
-  timeSec: number;
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' ? value as Record<string, unknown> : null;
@@ -96,72 +92,24 @@ function normalizeAudio(value: unknown): ProjectAudio | null {
   };
 }
 
-function normalizeAudioProcessingState(value: unknown): AudioProcessingState {
-  const source = asRecord(value);
-  const base = createBoomwhackerVideoBuilderProject().audioProcessing;
-  return {
-    transposeSemitones: clampInteger(source?.transposeSemitones, -12, 12, base.transposeSemitones),
-  };
-}
-
-function normalizeLegacyBeatTime(value: unknown): LegacyBeatTime | null {
-  const source = asRecord(value);
-  const timeSec = asFiniteNumber(source?.timeSec);
-  if (timeSec === null) {
-    return null;
-  }
-
-  return {
-    timeSec: Math.max(0, timeSec),
-  };
-}
-
-function estimateTempoFromLegacyBeatTimes(legacyBeatTimes: LegacyBeatTime[]): number | null {
-  const orderedBeatTimes = [...legacyBeatTimes].sort((left, right) => left.timeSec - right.timeSec);
-  if (orderedBeatTimes.length < 2) {
-    return null;
-  }
-
-  const intervals: number[] = [];
-  for (let index = 1; index < orderedBeatTimes.length; index += 1) {
-    const interval = orderedBeatTimes[index].timeSec - orderedBeatTimes[index - 1].timeSec;
-    if (interval > 0) {
-      intervals.push(interval);
-    }
-  }
-
-  if (intervals.length === 0) {
-    return null;
-  }
-
-  const sortedIntervals = [...intervals].sort((left, right) => left - right);
-  const medianInterval = sortedIntervals[Math.floor(sortedIntervals.length / 2)] ?? intervals[0];
-  return medianInterval > 0 ? 60 / medianInterval : null;
-}
-
-function normalizeSongTiming(value: unknown, legacyBeatTimes: LegacyBeatTime[] = []): SongTimingState {
+function normalizeSongTiming(value: unknown): SongTimingState {
   const source = asRecord(value);
   const base = createBoomwhackerVideoBuilderProject().songTiming;
-  const legacyTempoBpm = estimateTempoFromLegacyBeatTimes(legacyBeatTimes);
-  const legacyFirstBeatOffsetSec = legacyBeatTimes[0]?.timeSec;
-  const legacyBeatCount = Math.max(0, legacyBeatTimes.length - 1);
-
-  return {
-    tempoBpm: Math.max(
-      20,
-      Math.min(320, asFiniteNumber(source?.tempoBpm) ?? legacyTempoBpm ?? base.tempoBpm),
-    ),
-    firstBeatOffsetSec: Math.max(
-      0,
-      asFiniteNumber(source?.firstBeatOffsetSec) ?? legacyFirstBeatOffsetSec ?? base.firstBeatOffsetSec,
-    ),
-    beatCount: clampInteger(source?.beatCount, 1, 1024, legacyBeatCount || base.beatCount),
-    countInBeats: clampInteger(source?.countInBeats, 0, 32, base.countInBeats),
-    timeSignatureNumerator: clampInteger(source?.timeSignatureNumerator, 1, 16, base.timeSignatureNumerator),
+  if (!Array.isArray(source?.beatTimesSec) || source.beatTimesSec.some(time => typeof time !== 'number')) {
+    throw new Error('Project is missing its MIDI beat map.');
+  }
+  const times = source.beatTimesSec as number[];
+  if (times.length && !asString(source?.midiFileName)) throw new Error('Project is missing its MIDI filename.');
+  return withBeatTimes({
+    ...base,
+    midiFileName: asString(source?.midiFileName),
+    firstDownbeatIndex: asFiniteNumber(source?.firstDownbeatIndex),
+    countInEnabled: asBoolean(source?.countInEnabled) ?? false,
+    silentLeadInEnabled: asBoolean(source?.silentLeadInEnabled) ?? false,
+    timeSignatureNumerator: clampInteger(source?.timeSignatureNumerator, 1, 16, 4),
     timeSignatureDenominator: [2, 4, 8, 16].includes(asFiniteNumber(source?.timeSignatureDenominator) ?? 0)
-      ? asFiniteNumber(source?.timeSignatureDenominator) as SongTimingState['timeSignatureDenominator']
-      : base.timeSignatureDenominator,
-  };
+      ? source!.timeSignatureDenominator as number : 4,
+  }, times);
 }
 
 function normalizeGrid(value: unknown): GridSubdivisionState {
@@ -198,11 +146,7 @@ function normalizeNote(value: unknown, index: number): BoomwhackerGridNote | nul
   const normalizedEndSlotIndex = Math.max(normalizedStartSlotIndex, Math.round(endSlotIndex));
   const normalizedRow = clampInteger(row, 0, 7, 0);
   const lane = getBoomwhackerLane(normalizedRow);
-  const normalizedShape = shape === 'sustain'
-    ? 'circle'
-    : NOTE_SHAPES.has(shape as BoomwhackerNoteShape)
-      ? shape as BoomwhackerNoteShape
-      : 'circle';
+  const normalizedShape = NOTE_SHAPES.has(shape as BoomwhackerNoteShape) ? shape as BoomwhackerNoteShape : 'circle';
 
   return {
     id: asString(source?.id) ?? `note-${index + 1}`,
@@ -289,21 +233,21 @@ function normalizeViewState(value: unknown): ViewState {
 function normalizePlaybackState(value: unknown): PlaybackState {
   const source = asRecord(value);
   const base = createBoomwhackerVideoBuilderProject().previewState;
-  const mixMode = asString(source?.mixMode);
-  const legacyPlayAudio = mixMode === 'notes-only' ? false : base.playAudio;
-  const playAudio = asBoolean(source?.playAudio) ?? legacyPlayAudio;
+  const playAudio = asBoolean(source?.playAudio) ?? base.playAudio;
+  const playMetronome = asBoolean(source?.playMetronome) ?? base.playMetronome;
   let playGrid = asBoolean(source?.playGrid) ?? base.playGrid;
-  if (!playAudio && !playGrid) {
+  if (!playAudio && !playGrid && !playMetronome) {
     playGrid = true;
   }
   return {
     includeSynthPlayback: asBoolean(source?.includeSynthPlayback) ?? base.includeSynthPlayback,
+    playMetronome,
+    metronomeVolume: clampUnitInterval(source?.metronomeVolume, base.metronomeVolume),
     playAudio,
     playGrid,
     audioVolume: clampUnitInterval(source?.audioVolume, base.audioVolume),
     synthVolume: clampUnitInterval(source?.synthVolume, base.synthVolume),
     playbackOffsetSec: asFiniteNumber(source?.playbackOffsetSec) ?? base.playbackOffsetSec,
-    previewOriginalAudio: asBoolean(source?.previewOriginalAudio) ?? base.previewOriginalAudio,
   };
 }
 
@@ -365,18 +309,14 @@ export function normalizeBoomwhackerVideoBuilderProject(input: unknown): Boomwha
   const rawMetadata = asRecord(source?.metadata);
   const fallbackTitle = asString(rawMetadata?.title) ?? 'Imported Boomwhacker Video';
   const metadata = normalizeMetadata(rawMetadata, fallbackTitle);
-  const legacyBeatTimes = Array.isArray(asRecord(source?.beatMap)?.beatPins)
-    ? (asRecord(source?.beatMap)?.beatPins as unknown[])
-      .map((entry) => normalizeLegacyBeatTime(entry))
-      .filter((entry): entry is LegacyBeatTime => entry !== null)
-      .sort((left, right) => left.timeSec - right.timeSec)
-    : [];
+  if (rawMetadata?.schemaVersion !== BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION) {
+    throw new Error('This project uses an unsupported format. Create a new project with audio and MIDI.');
+  }
 
   return {
     metadata,
     audio: normalizeAudio(source?.audio),
-    audioProcessing: normalizeAudioProcessingState(source?.audioProcessing),
-    songTiming: normalizeSongTiming(source?.songTiming, legacyBeatTimes),
+    songTiming: normalizeSongTiming(source?.songTiming),
     grid: normalizeGrid(source?.grid),
     notes: {
       placedNotes: Array.isArray(asRecord(source?.notes)?.placedNotes)

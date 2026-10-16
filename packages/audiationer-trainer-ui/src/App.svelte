@@ -65,9 +65,9 @@
   const error = $derived(settingsError(settings));
   const draftError = $derived(settingsError(draft));
   const secondsLeft = $derived(sessionState.answerDeadline === null ? null : Math.min(settings.answerSeconds, Math.max(0, (sessionState.answerDeadline - clockNow) / 1000)));
-  const centreLabel = $derived(reviewFeedback || autoContinuing ? sessionState.results.length >= settings.rounds ? 'Show results' : 'Next question' : !active ? (sessionState.results.length ? 'Start again' : 'Start') : sessionState.phase === 'exploring' ? 'Play cadence' : sessionState.phase === 'answering' ? 'Hear again' : sessionState.phase === 'feedback' ? 'Answer' : 'Listening');
+  const centreLabel = $derived(reviewFeedback || autoContinuing ? sessionState.results.length >= settings.rounds ? 'Show results' : 'Next question' : sessionState.tonicizing ? 'Establishing key' : !active ? (sessionState.results.length ? 'Start again' : 'Start') : sessionState.phase === 'exploring' ? 'Play cadence' : sessionState.phase === 'answering' ? 'Hear again' : sessionState.phase === 'feedback' ? 'Answer' : 'Listening');
   const centreEnabled = $derived(autoContinuing || reviewFeedback || !active || ['exploring', 'answering'].includes(sessionState.phase));
-  const centreIcon = $derived(reviewFeedback ? 'next' : sessionState.phase === 'listening' ? 'ear' : answerState === 'accepting' ? 'question' : centreEnabled ? 'play' : 'note');
+  const centreIcon = $derived(reviewFeedback ? 'next' : sessionState.tonicizing ? 'hourglass' : sessionState.phase === 'listening' ? 'ear' : answerState === 'accepting' ? 'question' : centreEnabled ? 'play' : 'note');
   const currentTonic = $derived(active ? sessionState.tonic : settings.tonic);
 
   function read(key: string): unknown { try { return JSON.parse(localStorage.getItem(prefix + key) ?? 'null'); } catch { return null; } }

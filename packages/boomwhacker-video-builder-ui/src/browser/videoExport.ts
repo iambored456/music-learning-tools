@@ -239,7 +239,7 @@ function scheduleCountInClicks(
   timing: DerivedTimingModel,
   durationSec: number,
 ): void {
-  const countInBeats = Math.max(0, Math.round(project.songTiming.countInBeats));
+  const countInBeats = timing.countInBeats;
   if (countInBeats <= 0 || timing.secondsPerBeat <= 0) {
     return;
   }
@@ -282,7 +282,7 @@ async function renderExportAudioBuffer(
 ): Promise<AudioBuffer | null> {
   const shouldIncludeSource = Boolean(sourceAudioBuffer);
   const shouldIncludeSynth = project.exportState.includeSynthPlayback && timedNotes.length > 0;
-  const shouldIncludeCountIn = project.songTiming.countInBeats > 0;
+  const shouldIncludeCountIn = timing.countInBeats > 0;
   if (!shouldIncludeSource && !shouldIncludeSynth && !shouldIncludeCountIn) {
     return null;
   }

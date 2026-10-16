@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { TempoControls } from '@mlt/tempo-controls-ui';
+  import BeatMapEditor from './BeatMapEditor.svelte';
   import {
     BOOMWHACKER_LANES,
     clampNoteEndSlotIndex,
     createBoomwhackerVideoBuilderProject,
-    createSampleBoomwhackerVideoBuilderProject,
+    importMidiTiming,
+    withBeatTimes,
     deriveGuideLines,
     deriveTimedNotes,
     deriveTimingModel,
@@ -27,20 +28,20 @@
   } from '@mlt/boomwhacker-video-builder-core';
 
   import {
-    audioBufferToWavBlob,
     hydrateProjectAudio,
     hydrateProjectAudioFromBlob,
     importAudioFile,
     type ImportedAudioAsset,
   } from './browser/audio.js';
-  import { renderTransposedAudioBuffer } from './browser/audioTransform.js';
   import {
     loadLocalProjectAudio,
+    resetObsoleteProjectStorage,
     saveLocalProjectAudio,
   } from './browser/audioStore.js';
   import { readFileAsDataUrl, saveBlobFile, saveTextFile } from './browser/files.js';
   import { getExportStartTimeSec, getExportTotalDurationSec, renderExportFrame } from './browser/exportRenderer.js';
   import { TrianglePreviewSynth } from './browser/previewSynth.js';
+  import { BeatMapMetronome } from './browser/beatMapMetronome.js';
   import {
     exportProjectVideo,
     getPreferredExportContainer,
@@ -48,8 +49,7 @@
   } from './browser/videoExport.js';
   import HighwayNoteGlyph from './HighwayNoteGlyph.svelte';
   import {
-    getActiveHighwayBeatSpan,
-    getHighwayJudgmentAreaWidthPx,
+    getHighwayTimeX,
     getHighwayNoteLayout,
     getVisibleHighwayGuides,
     shouldRenderGuideAsBeat,
@@ -85,6 +85,7 @@
     historyEntry: EditorHistoryEntry;
     noteId: string;
     stageRect: DOMRect;
+    anchorSlotIndex: number;
     currentEndSlotIndex: number;
   };
 
@@ -171,29 +172,19 @@
   ];
 
   const VISUAL_BOOMWHACKER_LANES = [...BOOMWHACKER_LANES].reverse();
-  const AUTOSAVE_STORAGE_KEY = 'mlt/boomwhacker-video-builder/autosave-v2';
+  const AUTOSAVE_STORAGE_KEY = 'mlt/boomwhacker-video-builder/autosave-v6';
   const MIN_TIMELINE_ZOOM = 0.01;
   const MAX_TIMELINE_ZOOM = 8;
   const EDITOR_BASE_LANE_MIN_PX = 42;
   const EDITOR_BASE_LANE_MAX_PX = 78;
   const EDITOR_LANE_MIN_PX = 2;
   const EDITOR_LANE_MAX_PX = 220;
-  const PLAYBACK_HIGHWAY_VERTICAL_CHROME_PX = 24;
-  const COMPACT_WAVEFORM_HEIGHT_PX = 120;
   const CIRCLE_RESIZE_HOTZONE_PX = 18;
   const HISTORY_LIMIT = 80;
   const TEMPO_MIN_BPM = 20;
-  const TEMPO_MAX_BPM = 320;
-  const BEAT_COUNT_MIN = 1;
-  const BEAT_COUNT_MAX = 1024;
-  const COUNT_IN_BEATS_MIN = 0;
-  const COUNT_IN_BEATS_MAX = 32;
-  const TRANSPOSE_MIN_SEMITONES = -12;
-  const TRANSPOSE_MAX_SEMITONES = 12;
   const TIME_SIGNATURE_NUMERATOR_MIN = 1;
   const TIME_SIGNATURE_NUMERATOR_MAX = 16;
   const TIME_SIGNATURE_DENOMINATORS = [2, 4, 8, 16] as const;
-  const TEMPO_SHORTCUT_VALUES = [80, 90, 100, 110, 120, 140] as const;
   const SIMPLE_NOTATION_DEFAULT_ROOT_MIDI = 60;
   const hubHref = '../';
   const homeIconHref = new URL('../../simple-notation-ui/src/assets/home-icon.svg', import.meta.url).href;
@@ -209,6 +200,8 @@
   const studentNotationZoomOutIconHref = new URL('../../student-notation-ui/public/assets/icons/zoomOut.svg', import.meta.url).href;
 
   let project = createBoomwhackerVideoBuilderProject();
+  let midiInput: HTMLInputElement | null = null;
+  let pendingSetupMidiFile: File | null = null;
   let audioInput: HTMLInputElement | null = null;
   let projectInput: HTMLInputElement | null = null;
   let backgroundImageInput: HTMLInputElement | null = null;
@@ -226,29 +219,20 @@
   let editorHighwayTrailingPaddingPx = 700;
   let editorHighwayDurationSec = 0;
   let editorHighwayStageWidthPx = 920;
-  let topToolbarHeightPx = 0;
   let exportPreviewCanvas: HTMLCanvasElement | null = null;
   let viewportHeightPx = 900;
   let sourceAudioBuffer: AudioBuffer | null = null;
-  let decodedAudioBuffer: AudioBuffer | null = null;
-  let renderedTransposeSemitones: number | null = null;
-  let audioPresentationVersion = 0;
   let audioPreviewUrl: string | null = null;
   let waveformPeaks: number[] = [];
-  let statusMessage = 'Set a tempo, place Boomwhacker notes, and preview the chart.';
+  let statusMessage = 'Import audio and a MIDI tempo map to begin placing notes.';
   let errorMessage = '';
   let busyMessage = '';
   let projectMenuOpen = false;
   let volumePopupOpen = false;
   let isSetupModalOpen = false;
-  let setupModalTitle = project.metadata.title;
-  let setupModalTempoBpm = project.songTiming.tempoBpm;
-  let setupModalFirstBeatOffsetSec = project.songTiming.firstBeatOffsetSec;
-  let setupModalBeatCount = project.songTiming.beatCount;
-  let setupModalCountInBeats = project.songTiming.countInBeats;
-  let setupModalTimeSignatureNumerator = project.songTiming.timeSignatureNumerator;
-  let setupModalTimeSignatureDenominator = project.songTiming.timeSignatureDenominator;
-  let setupModalGrouping: MacrobeatGrouping = project.grid.defaultMacrobeatGrouping;
+  let setupModalTitle = '';
+  let setupModalCountInEnabled = false;
+  let setupModalSilentLeadInEnabled = false;
   let setupModalTitleTouched = false;
   let pendingSetupAudioFile: File | null = null;
   let activeNoteShape: NoteShape | null = 'circle';
@@ -296,40 +280,12 @@
   let hasInitializedAutosave = false;
   let suppressAutosave = false;
   let hasPendingAutosaveWrite = false;
-  let activeJudgmentBeatSpan: DerivedBeatSpan | null = null;
   let selectedBeatSpan: DerivedBeatSpan | null = null;
   let playbackStartBeatSpan: DerivedBeatSpan | null = null;
   let highwayZoomPreview = '';
   let highwayZoomPreviewTimeoutId: ReturnType<typeof setTimeout> | null = null;
   const previewSynth = new TrianglePreviewSynth();
-
-  function clampTempoBpm(value: number): number {
-    if (!Number.isFinite(value)) {
-      return project.songTiming.tempoBpm;
-    }
-    return Math.max(TEMPO_MIN_BPM, Math.min(TEMPO_MAX_BPM, Math.round(value)));
-  }
-
-  function clampBeatCount(value: number): number {
-    if (!Number.isFinite(value)) {
-      return project.songTiming.beatCount;
-    }
-    return Math.max(BEAT_COUNT_MIN, Math.min(BEAT_COUNT_MAX, Math.trunc(value)));
-  }
-
-  function clampFirstBeatOffsetSec(value: number): number {
-    if (!Number.isFinite(value)) {
-      return project.songTiming.firstBeatOffsetSec;
-    }
-    return Math.max(0, Number(value.toFixed(3)));
-  }
-
-  function clampCountInBeats(value: number): number {
-    if (!Number.isFinite(value)) {
-      return project.songTiming.countInBeats;
-    }
-    return Math.max(COUNT_IN_BEATS_MIN, Math.min(COUNT_IN_BEATS_MAX, Math.round(value)));
-  }
+  const beatMapMetronome = new BeatMapMetronome();
 
   function clampTimeSignatureNumerator(value: number): number {
     if (!Number.isFinite(value)) {
@@ -344,29 +300,8 @@
       : project.songTiming.timeSignatureDenominator;
   }
 
-  function clampTransposeSemitones(value: number): number {
-    if (!Number.isFinite(value)) {
-      return project.audioProcessing.transposeSemitones;
-    }
-    return Math.max(TRANSPOSE_MIN_SEMITONES, Math.min(TRANSPOSE_MAX_SEMITONES, Math.round(value)));
-  }
-
-  function formatSemitones(value: number): string {
-    const semitones = clampTransposeSemitones(value);
-    if (semitones === 0) {
-      return '0 semitones';
-    }
-    return `${semitones > 0 ? '+' : ''}${semitones} semitone${Math.abs(semitones) === 1 ? '' : 's'}`;
-  }
-
   function getSecondsPerBeat(): number {
     return timing.secondsPerBeat > 0 ? timing.secondsPerBeat : 60 / Math.max(TEMPO_MIN_BPM, project.songTiming.tempoBpm);
-  }
-
-  function getAudioFitBeatCount(durationSec: number, tempoBpm = project.songTiming.tempoBpm, firstBeatOffsetSec = project.songTiming.firstBeatOffsetSec): number {
-    const secondsPerBeat = 60 / Math.max(TEMPO_MIN_BPM, tempoBpm);
-    const chartDurationSec = Math.max(secondsPerBeat, durationSec - Math.max(0, firstBeatOffsetSec));
-    return clampBeatCount(Math.ceil(chartDurationSec / secondsPerBeat));
   }
 
   function formatSeconds(value: number): string {
@@ -384,20 +319,7 @@
     return Math.max(MIN_TIMELINE_ZOOM, Math.min(MAX_TIMELINE_ZOOM, value));
   }
 
-  function getEditorBaseLaneHeightForViewport(
-    viewportHeight: number,
-    playbackActive = false,
-    toolbarHeightPx = 0,
-  ): number {
-    if (playbackActive) {
-      const availableHighwayHeight = (
-        Math.max(1, viewportHeight)
-        - Math.max(0, toolbarHeightPx)
-        - PLAYBACK_HIGHWAY_VERTICAL_CHROME_PX
-      );
-      return Math.max(EDITOR_LANE_MIN_PX, Math.floor(availableHighwayHeight / BOOMWHACKER_LANES.length));
-    }
-
+  function getEditorBaseLaneHeightForViewport(viewportHeight: number): number {
     return Math.max(
       EDITOR_BASE_LANE_MIN_PX,
       Math.min(
@@ -448,7 +370,7 @@
   }
 
   function needsAudioReattach(sourceProject: BoomwhackerVideoBuilderProject = project): boolean {
-    return Boolean(sourceProject.audio && !audioPreviewUrl && !decodedAudioBuffer);
+    return Boolean(sourceProject.audio && !audioPreviewUrl && !sourceAudioBuffer);
   }
 
   function getProjectAudioToken(projectId: string): string {
@@ -527,19 +449,16 @@
   }
 
   function syncSetupModalState(sourceProject: BoomwhackerVideoBuilderProject = project): void {
-    setupModalTitle = sourceProject.metadata.title;
-    setupModalTempoBpm = sourceProject.songTiming.tempoBpm;
-    setupModalFirstBeatOffsetSec = sourceProject.songTiming.firstBeatOffsetSec;
-    setupModalBeatCount = sourceProject.songTiming.beatCount;
-    setupModalCountInBeats = sourceProject.songTiming.countInBeats;
-    setupModalTimeSignatureNumerator = sourceProject.songTiming.timeSignatureNumerator;
-    setupModalTimeSignatureDenominator = sourceProject.songTiming.timeSignatureDenominator;
-    setupModalGrouping = sourceProject.grid.defaultMacrobeatGrouping;
+    setupModalTitle = isFreshBlankProject(sourceProject) ? '' : sourceProject.metadata.title;
+    setupModalCountInEnabled = Boolean(sourceProject.songTiming.countInEnabled);
+    setupModalSilentLeadInEnabled = Boolean(sourceProject.songTiming.silentLeadInEnabled);
     setupModalTitleTouched = false;
     pendingSetupAudioFile = null;
+    pendingSetupMidiFile = null;
   }
 
   function openSetupModal(): void {
+    pausePreview();
     syncSetupModalState();
     isSetupModalOpen = true;
   }
@@ -547,6 +466,7 @@
   function closeSetupModal(): void {
     isSetupModalOpen = false;
     pendingSetupAudioFile = null;
+    pendingSetupMidiFile = null;
     setupModalTitleTouched = false;
   }
 
@@ -606,144 +526,16 @@
     );
   }
 
-  function updateSongTiming(partial: Partial<SongTimingState>, nextStatus?: string): void {
-    const nextTiming: SongTimingState = {
-      tempoBpm: clampTempoBpm(partial.tempoBpm ?? project.songTiming.tempoBpm),
-      firstBeatOffsetSec: clampFirstBeatOffsetSec(partial.firstBeatOffsetSec ?? project.songTiming.firstBeatOffsetSec),
-      beatCount: clampBeatCount(partial.beatCount ?? project.songTiming.beatCount),
-      countInBeats: clampCountInBeats(partial.countInBeats ?? project.songTiming.countInBeats),
+  function updateSongTiming(partial: Partial<SongTimingState>, nextStatus = 'Updated beat map.'): void {
+    const nextTiming = withBeatTimes({
+      ...project.songTiming,
+      ...partial,
       timeSignatureNumerator: clampTimeSignatureNumerator(partial.timeSignatureNumerator ?? project.songTiming.timeSignatureNumerator),
       timeSignatureDenominator: clampTimeSignatureDenominator(partial.timeSignatureDenominator ?? project.songTiming.timeSignatureDenominator),
-    };
-
-    setProjectState(
-      touchProject({
-        ...project,
-        songTiming: nextTiming,
-      }),
-      nextStatus,
-      { recordHistory: true },
-    );
-    resetPreviewTransport();
-  }
-
-  function getMeasureBeatCount(): number {
-    return Math.max(1, clampTimeSignatureNumerator(project.songTiming.timeSignatureNumerator));
-  }
-
-  function canAddMeasure(): boolean {
-    return project.songTiming.beatCount < BEAT_COUNT_MAX;
-  }
-
-  function canDeleteMeasure(): boolean {
-    return project.songTiming.beatCount > getMeasureBeatCount();
-  }
-
-  async function changeSongLengthByMeasures(deltaMeasures: 1 | -1): Promise<void> {
-    const measureBeatCount = getMeasureBeatCount();
-    const currentBeatCount = clampBeatCount(project.songTiming.beatCount);
-    const minimumBeatCount = measureBeatCount;
-    if (deltaMeasures < 0 && currentBeatCount <= minimumBeatCount) {
-      statusMessage = 'Keep at least one measure in the chart.';
-      return;
-    }
-    const nextBeatCount = deltaMeasures > 0
-      ? clampBeatCount(currentBeatCount + measureBeatCount)
-      : Math.max(minimumBeatCount, currentBeatCount - measureBeatCount);
-
-    if (nextBeatCount === currentBeatCount) {
-      statusMessage = deltaMeasures > 0
-        ? 'The song is already at the maximum length.'
-        : 'Keep at least one measure in the chart.';
-      return;
-    }
-
-    const preservedHighwayScrollLeft = editorHighwayViewport?.scrollLeft ?? null;
-    const nextTiming: SongTimingState = {
-      ...project.songTiming,
-      beatCount: nextBeatCount,
-    };
-    const nextTimingModel = deriveTimingModel(nextTiming, project.grid);
-    const nextMaxSlotIndex = Math.max(0, nextTimingModel.totalSlotCount - 1);
-    let removedNoteCount = 0;
-    let shortenedNoteCount = 0;
-    const nextPlacedNotes = sortGridNotes(project.notes.placedNotes.map((note) => {
-      if (deltaMeasures > 0 || note.endSlotIndex <= nextMaxSlotIndex) {
-        return note;
-      }
-
-      if (note.startSlotIndex > nextMaxSlotIndex) {
-        removedNoteCount += 1;
-        return null;
-      }
-
-      const minimumEndSlotIndex = note.startSlotIndex + getMinimumSlotSpanForShape(note.shape, nextTimingModel, note.startSlotIndex) - 1;
-      if (minimumEndSlotIndex > nextMaxSlotIndex) {
-        removedNoteCount += 1;
-        return null;
-      }
-
-      shortenedNoteCount += 1;
-      return {
-        ...note,
-        endSlotIndex: Math.min(nextMaxSlotIndex, Math.max(minimumEndSlotIndex, note.endSlotIndex)),
-      };
-    }).filter((note): note is BoomwhackerGridNote => note !== null));
-
-    const nextSelectedBeatIndex = Math.max(0, Math.min(nextBeatCount - 1, project.viewState.selectedBeatIndex));
-    const changedBeatCount = Math.abs(nextBeatCount - currentBeatCount);
-    const statusParts = deltaMeasures > 0
-      ? [changedBeatCount === measureBeatCount ? 'Added 1 measure.' : `Extended the song length to ${nextBeatCount} beats.`]
-      : [changedBeatCount === measureBeatCount ? 'Deleted 1 measure.' : `Reduced the song length to ${nextBeatCount} beats.`];
-    if (removedNoteCount > 0) {
-      statusParts.push(`Removed ${removedNoteCount} note${removedNoteCount === 1 ? '' : 's'} beyond the new song end.`);
-    }
-    if (shortenedNoteCount > 0) {
-      statusParts.push(`Shortened ${shortenedNoteCount} sustain note${shortenedNoteCount === 1 ? '' : 's'} at the new song end.`);
-    }
-
-    setProjectState(
-      touchProject({
-        ...project,
-        songTiming: nextTiming,
-        notes: {
-          placedNotes: nextPlacedNotes,
-        },
-        viewState: {
-          ...project.viewState,
-          selectedBeatIndex: nextSelectedBeatIndex,
-        },
-      }),
-      statusParts.join(' '),
-      { recordHistory: true },
-    );
-    resetPreviewTransport();
-    await tick();
-    if (preservedHighwayScrollLeft !== null && editorHighwayViewport) {
-      const maxScrollLeft = Math.max(0, editorHighwayViewport.scrollWidth - editorHighwayViewport.clientWidth);
-      editorHighwayViewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, preservedHighwayScrollLeft));
-    }
-  }
-
-  function addMeasure(): void {
-    void changeSongLengthByMeasures(1);
-  }
-
-  function deleteMeasure(): void {
-    void changeSongLengthByMeasures(-1);
-  }
-
-  function fitBeatCountToAudio(): void {
-    const durationSec = project.audio?.durationSec ?? waveformDurationSec;
-    if (durationSec <= 0) {
-      statusMessage = 'Attach audio before fitting the beat count.';
-      return;
-    }
-
-    updateSongTiming(
-      { beatCount: getAudioFitBeatCount(durationSec) },
-      'Beat count fitted to the attached audio duration.',
-    );
+    }, partial.beatTimesSec ?? project.songTiming.beatTimesSec);
+    pausePreview();
+    setProjectState(touchProject({ ...project, songTiming: nextTiming,
+      viewState: { ...project.viewState, playbackStartBeatIndex: null } }), nextStatus, { recordHistory: true });
   }
 
   function handleSetupTitleInput(event: Event): void {
@@ -751,41 +543,44 @@
     setupModalTitleTouched = true;
   }
 
-  function setSetupBeatCountToAudioDuration(): void {
-    const durationSec = pendingSetupAudioFile ? 0 : project.audio?.durationSec ?? 0;
-    if (durationSec <= 0) {
-      statusMessage = 'Import audio first, then fit beats to the song duration.';
-      return;
-    }
-    setupModalBeatCount = getAudioFitBeatCount(durationSec, setupModalTempoBpm, setupModalFirstBeatOffsetSec);
-  }
-
   async function applySetupModal(): Promise<void> {
-    const nextTitle = setupModalTitle.trim()
-      || (pendingSetupAudioFile ? stripExtension(pendingSetupAudioFile.name) : project.metadata.title)
-      || 'Untitled Boomwhacker Video';
-    const nextTiming: SongTimingState = {
-      tempoBpm: clampTempoBpm(setupModalTempoBpm),
-      firstBeatOffsetSec: clampFirstBeatOffsetSec(setupModalFirstBeatOffsetSec),
-      beatCount: clampBeatCount(setupModalBeatCount),
-      countInBeats: clampCountInBeats(setupModalCountInBeats),
-      timeSignatureNumerator: clampTimeSignatureNumerator(setupModalTimeSignatureNumerator),
-      timeSignatureDenominator: clampTimeSignatureDenominator(setupModalTimeSignatureDenominator),
-    };
-
-    if (pendingSetupAudioFile) {
-      const file = pendingSetupAudioFile;
-      closeSetupModal();
-      await handleAudioImport(file, {
-        title: nextTitle,
-        songTiming: nextTiming,
-        grouping: setupModalGrouping,
-      });
+    if (busyMessage) return;
+    errorMessage = '';
+    if ((!pendingSetupAudioFile && !project.audio) || (!pendingSetupMidiFile && !project.songTiming.midiFileName)) {
+      errorMessage = 'Choose both an audio file and a MIDI tempo map.';
       return;
     }
-
-    applyProjectSetup(nextTitle, nextTiming, setupModalGrouping, 'Updated project setup.', { recordHistory: true });
-    closeSetupModal();
+    busyMessage = 'Reading MIDI tempo map...';
+    try {
+      const nextTitle = setupModalTitle.trim() || 'Untitled Boomwhacker Video';
+      let nextTiming: SongTimingState = {
+        ...project.songTiming,
+        countInEnabled: setupModalCountInEnabled,
+        silentLeadInEnabled: setupModalSilentLeadInEnabled,
+      };
+      const grouping = project.grid.defaultMacrobeatGrouping;
+      if (pendingSetupMidiFile) {
+        nextTiming = importMidiTiming(new Uint8Array(await pendingSetupMidiFile.arrayBuffer()), pendingSetupMidiFile.name, nextTiming);
+      }
+      const slots = deriveTimingModel(nextTiming, { defaultMacrobeatGrouping: grouping }).totalSlotCount;
+      if (project.notes.placedNotes.some(note => note.endSlotIndex >= slots)) {
+        throw new Error('This MIDI is shorter than your arrangement. Create a new project or remove notes beyond its end first.');
+      }
+      if (pendingSetupAudioFile) {
+        const succeeded = await handleAudioImport(pendingSetupAudioFile, { title: nextTitle, songTiming: nextTiming, grouping });
+        if (!succeeded) return;
+      } else {
+        pausePreview();
+        applyProjectSetup(nextTitle, nextTiming, grouping, 'Updated project setup.', { recordHistory: true });
+      }
+      await tick();
+      resetPreviewTransport();
+      closeSetupModal();
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Could not import the MIDI tempo map.';
+    } finally {
+      busyMessage = '';
+    }
   }
 
   async function applyTimelineZoom(
@@ -873,10 +668,7 @@
 
   function clearAudioPresentation(): void {
     sourceAudioBuffer = null;
-    decodedAudioBuffer = null;
-    renderedTransposeSemitones = null;
     waveformPeaks = [];
-    audioPresentationVersion += 1;
     replaceAudioPreviewUrl(null);
     forceGridOnlyPlaybackWhenAudioMissing();
   }
@@ -895,54 +687,13 @@
     };
   }
 
-  async function refreshActiveAudioPresentation(nextStatus?: string): Promise<void> {
-    const sourceBuffer = sourceAudioBuffer;
-    const refreshVersion = audioPresentationVersion + 1;
-    audioPresentationVersion = refreshVersion;
-    if (!sourceBuffer) {
-      decodedAudioBuffer = null;
-      renderedTransposeSemitones = null;
-      replaceAudioPreviewUrl(null);
-      return;
-    }
-
-    const useOriginalPreview = project.previewState.previewOriginalAudio;
-    const transposeSemitones = clampTransposeSemitones(project.audioProcessing.transposeSemitones);
-    busyMessage = transposeSemitones !== 0 && !useOriginalPreview ? 'Rendering transposed audio preview...' : busyMessage;
-    try {
-      const nextAudioBuffer = useOriginalPreview || transposeSemitones === 0
-        ? sourceBuffer
-        : await renderTransposedAudioBuffer(sourceBuffer, transposeSemitones);
-      if (refreshVersion !== audioPresentationVersion) {
-        return;
-      }
-
-      decodedAudioBuffer = nextAudioBuffer;
-      renderedTransposeSemitones = useOriginalPreview ? null : transposeSemitones;
-      replaceAudioPreviewUrl(URL.createObjectURL(audioBufferToWavBlob(nextAudioBuffer)));
-      if (nextStatus) {
-        statusMessage = nextStatus;
-      }
-    } catch (error) {
-      console.error('Boomwhacker Video Builder audio transposition failed.', error);
-      errorMessage = 'Audio transposition failed. The original decoded audio is still available for preview.';
-      decodedAudioBuffer = sourceBuffer;
-      renderedTransposeSemitones = null;
-      replaceAudioPreviewUrl(URL.createObjectURL(audioBufferToWavBlob(sourceBuffer)));
-    } finally {
-      if (busyMessage === 'Rendering transposed audio preview...') {
-        busyMessage = '';
-      }
-    }
-  }
-
-  async function applyAudioPresentation(asset: ImportedAudioAsset | null): Promise<void> {
+  function applyAudioPresentation(asset: ImportedAudioAsset | null): void {
     if (!asset) {
       clearAudioPresentation();
       return;
     }
 
-    if (!project.previewState.playAudio && !audioPreviewUrl && !decodedAudioBuffer) {
+    if (!project.previewState.playAudio && !audioPreviewUrl && !sourceAudioBuffer) {
       project = {
         ...project,
         previewState: {
@@ -953,11 +704,8 @@
     }
 
     sourceAudioBuffer = asset.audioBuffer;
-    decodedAudioBuffer = asset.audioBuffer;
-    renderedTransposeSemitones = 0;
     waveformPeaks = asset.waveform.peaks;
-    URL.revokeObjectURL(asset.audioPreviewUrl);
-    await refreshActiveAudioPresentation();
+    replaceAudioPreviewUrl(asset.audioPreviewUrl);
   }
 
   async function persistProjectAudioLocally(
@@ -1031,14 +779,11 @@
   }
 
   function describePlaybackMode(): string {
-    const canUseAudio = Boolean(audioPreviewUrl) && project.previewState.playAudio;
-    if (canUseAudio && project.previewState.playGrid) {
-      return 'audio and grid';
-    }
-    if (canUseAudio) {
-      return 'audio only';
-    }
-    return 'grid only';
+    const channels = [];
+    if (previewCanUseSourceAudio()) channels.push('audio');
+    if (project.previewState.playGrid) channels.push('grid');
+    if (project.previewState.playMetronome) channels.push('beat-map metronome');
+    return channels.join(' + ');
   }
 
   function updatePreviewState(
@@ -1047,10 +792,8 @@
   ): void {
     const shouldSyncPreviewOutputs = (
       'playAudio' in nextPreviewState
-      || 'playGrid' in nextPreviewState
-      || 'includeSynthPlayback' in nextPreviewState
+      || 'playMetronome' in nextPreviewState
       || 'playbackOffsetSec' in nextPreviewState
-      || 'previewOriginalAudio' in nextPreviewState
     );
     const shouldRefreshPreviewSynth = (
       'playGrid' in nextPreviewState
@@ -1071,9 +814,6 @@
     if (shouldSyncPreviewOutputs) {
       void syncPreviewOutputsWhilePlaying();
     }
-    if ('previewOriginalAudio' in nextPreviewState) {
-      void refreshActiveAudioPresentation(nextPreviewState.previewOriginalAudio ? 'Previewing original audio.' : 'Previewing transposed audio.');
-    }
     if (shouldRefreshPreviewSynth) {
       if (previewIsPlaying) {
         restartPreviewSynthAtTime(previewCurrentTimeSec);
@@ -1089,8 +829,8 @@
       return;
     }
 
-    if (project.previewState.playAudio && !project.previewState.playGrid) {
-      statusMessage = 'Audio or grid playback must stay enabled.';
+    if (project.previewState.playAudio && !project.previewState.playGrid && !project.previewState.playMetronome) {
+      statusMessage = 'Audio, grid, or metronome playback must stay enabled.';
       return;
     }
 
@@ -1101,8 +841,8 @@
   }
 
   function togglePlaybackGrid(): void {
-    if (project.previewState.playGrid && !project.previewState.playAudio) {
-      statusMessage = 'Audio or grid playback must stay enabled.';
+    if (project.previewState.playGrid && !project.previewState.playAudio && !project.previewState.playMetronome) {
+      statusMessage = 'Audio, grid, or metronome playback must stay enabled.';
       return;
     }
 
@@ -1110,6 +850,15 @@
       { playGrid: !project.previewState.playGrid },
       'Updated playback channels.',
     );
+  }
+
+  function toggleBeatMapMetronome(): void {
+    if (project.previewState.playMetronome && !project.previewState.playAudio && !project.previewState.playGrid) {
+      statusMessage = 'Audio, grid, or metronome playback must stay enabled.';
+      return;
+    }
+    const playMetronome = !project.previewState.playMetronome;
+    updatePreviewState({ playMetronome }, playMetronome ? 'Beat-map metronome enabled.' : 'Beat-map metronome disabled.');
   }
 
   function setPreviewAudioVolume(nextVolume: number, nextStatus?: string): void {
@@ -1193,66 +942,12 @@
     }
   }
 
-  function handleQuarterTempoChange(quarterTempo: number): void {
-    updateSongTiming({ tempoBpm: quarterTempo }, 'Updated song tempo.');
-  }
-
-  function setQuarterTempoShortcut(quarterTempo: number): void {
-    handleQuarterTempoChange(quarterTempo);
-  }
-
   function isEditorInteractionBlocked(): boolean {
-    return Boolean(busyMessage && busyMessage !== 'Rendering transposed audio preview...');
-  }
-
-  function updateTransposeSemitones(value: number): void {
-    const transposeSemitones = clampTransposeSemitones(value);
-    setProjectState(
-      touchProject({
-        ...project,
-        audioProcessing: {
-          ...project.audioProcessing,
-          transposeSemitones,
-        },
-      }),
-      `Audio transposition set to ${formatSemitones(transposeSemitones)}.`,
-      { recordHistory: true },
-    );
-    if (project.previewState.previewOriginalAudio) {
-      return;
-    }
-    void refreshActiveAudioPresentation();
-  }
-
-  function togglePreviewOriginalAudio(): void {
-    updatePreviewState(
-      { previewOriginalAudio: !project.previewState.previewOriginalAudio },
-      !project.previewState.previewOriginalAudio ? 'Previewing original audio.' : 'Previewing transposed audio.',
-    );
-  }
-
-  async function getExportSourceAudioBuffer(): Promise<AudioBuffer | null> {
-    const sourceBuffer = sourceAudioBuffer;
-    if (!sourceBuffer) {
-      return null;
-    }
-
-    const transposeSemitones = clampTransposeSemitones(project.audioProcessing.transposeSemitones);
-    if (transposeSemitones === 0) {
-      return sourceBuffer;
-    }
-
-    if (!project.previewState.previewOriginalAudio && decodedAudioBuffer && renderedTransposeSemitones === transposeSemitones) {
-      return decodedAudioBuffer;
-    }
-
-    busyMessage = 'Rendering transposed export audio...';
-    const renderedBuffer = await renderTransposedAudioBuffer(sourceBuffer, transposeSemitones);
-    renderedTransposeSemitones = transposeSemitones;
-    return renderedBuffer;
+    return !project.audio || project.songTiming.beatTimesSec.length < 2 || Boolean(busyMessage);
   }
 
   function applyHistoryEntry(entry: EditorHistoryEntry, nextStatus: string): void {
+    pausePreview();
     project = entry.project;
     selectedNoteIds = [...entry.selectedNoteIds];
     statusMessage = nextStatus;
@@ -1304,7 +999,7 @@
   }
 
   function timeToEditorHighwayX(timeSec: number): number {
-    return editorHighwayLeadingPaddingPx + ((timeSec - previewStartTimeSec) * editorHighwayPixelsPerSecond);
+    return getHighwayTimeX(timeSec, previewStartTimeSec, editorHighwayLeadingPaddingPx, editorHighwayPixelsPerSecond);
   }
 
   function highwayGuideStyle(
@@ -1314,17 +1009,13 @@
     return `left:${getHighwayXForLayoutContext(timeSec, layoutContext)}px;`;
   }
 
-  function judgmentAreaStyle(
-    beatSpan: DerivedBeatSpan,
+  function hitLineStyle(
+    currentTimeSec: number,
     layoutContext: EditorHighwayLayoutContext = getCurrentEditorHighwayLayoutContext(),
-    fixedToViewport = false,
   ): string {
-    const left = fixedToViewport
-      ? layoutContext.leadingPaddingPx
-      : getHighwayXForLayoutContext(getJudgmentStartTimeSec(), layoutContext);
-    const width = getHighwayJudgmentAreaWidthPx(beatSpan, layoutContext.pixelsPerSecond);
+    const left = getHighwayXForLayoutContext(currentTimeSec, layoutContext);
     const height = BOOMWHACKER_LANES.length * layoutContext.laneHeightPx;
-    return `left:${left}px;width:${width}px;height:${height}px;--lane-height:${layoutContext.laneHeightPx}px;`;
+    return `left:${left}px;height:${height}px;`;
   }
 
   function selectedBeatStyle(
@@ -1353,13 +1044,7 @@
   }
 
   function getHighwayXForLayoutContext(timeSec: number, layoutContext: EditorHighwayLayoutContext): number {
-    return layoutContext.leadingPaddingPx + ((timeSec - layoutContext.previewStartTimeSec) * layoutContext.pixelsPerSecond);
-  }
-
-  function getJudgmentStartTimeSec(): number {
-    return project.songTiming.countInBeats > 0
-      ? timing.countInStartTimeSec
-      : project.songTiming.firstBeatOffsetSec;
+    return getHighwayTimeX(timeSec, layoutContext.previewStartTimeSec, layoutContext.leadingPaddingPx, layoutContext.pixelsPerSecond);
   }
 
   function getHighwayNoteLayoutForNote(
@@ -1464,15 +1149,6 @@
     editorHighwayViewport.scrollLeft = getEditorHighwayScrollLeftForTime(timeSec);
   }
 
-  function waveformPlayheadStyle(currentTimeSec: number, durationSec: number, isVisible = true): string {
-    if (!isVisible || durationSec <= 0) {
-      return 'display:none;';
-    }
-
-    const clampedTimeSec = Math.min(durationSec, Math.max(0, currentTimeSec));
-    return `left:${(clampedTimeSec / durationSec) * 100}%;`;
-  }
-
   function getCompactWaveformTimeline(): HTMLDivElement | null {
     return compactWaveformViewport?.querySelector<HTMLDivElement>('.compact-waveform__timeline') ?? null;
   }
@@ -1488,14 +1164,43 @@
   }
 
   function getCompactWaveformTimelineXForTime(timeSec: number): number {
-    const timelineWidth = getCompactWaveformTimeline()?.clientWidth ?? 0;
+    const timeline = getCompactWaveformTimeline();
+    const viewport = compactWaveformViewport;
+    const timelineWidth = timeline?.clientWidth ?? 0;
     const durationSec = waveformDurationSec;
-    if (timelineWidth <= 0 || durationSec <= 0) {
+    if (!timeline || !viewport || timelineWidth <= 0 || durationSec <= 0) {
       return 0;
     }
 
     const ratio = Math.min(1, Math.max(0, timeSec / durationSec));
-    return ratio * timelineWidth;
+    const timelineLeft = timeline.getBoundingClientRect().left - viewport.getBoundingClientRect().left
+      + viewport.scrollLeft - viewport.clientLeft;
+    return timelineLeft + (ratio * timelineWidth);
+  }
+
+  function revealTimelinePosition(viewport: HTMLDivElement, contentX: number): void {
+    const viewportWidth = viewport.clientWidth;
+    const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewportWidth);
+    if (viewportWidth <= 0 || maxScrollLeft <= 0) {
+      return;
+    }
+
+    // Let the playhead travel across the current view before scrolling to follow it.
+    const marginPx = Math.min(96, Math.max(24, viewportWidth * 0.18));
+    let nextScrollLeft = viewport.scrollLeft;
+    if (contentX < nextScrollLeft + marginPx) {
+      nextScrollLeft = contentX - marginPx;
+    } else if (contentX > nextScrollLeft + viewportWidth - marginPx) {
+      nextScrollLeft = contentX - viewportWidth + marginPx;
+    }
+    viewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft));
+  }
+
+  function syncPlaybackViewportsToTime(timeSec: number): void {
+    if (previewCanPlayGrid() && editorHighwayViewport) {
+      syncEditorHighwayViewportToTime(timeSec);
+    }
+    revealCompactWaveformTime(timeSec);
   }
 
   function revealCompactWaveformTime(timeSec: number): void {
@@ -1505,25 +1210,7 @@
       return;
     }
 
-    const viewportWidth = viewport.clientWidth;
-    const maxScrollLeft = Math.max(0, timeline.clientWidth - viewportWidth);
-    if (viewportWidth <= 0 || maxScrollLeft <= 0) {
-      return;
-    }
-
-    const targetX = getCompactWaveformTimelineXForTime(timeSec);
-    const marginPx = Math.min(96, Math.max(24, viewportWidth * 0.18));
-    const visibleStartX = viewport.scrollLeft;
-    const visibleEndX = visibleStartX + viewportWidth;
-    let nextScrollLeft = visibleStartX;
-
-    if (targetX < visibleStartX + marginPx) {
-      nextScrollLeft = targetX - marginPx;
-    } else if (targetX > visibleEndX - marginPx) {
-      nextScrollLeft = targetX - viewportWidth + marginPx;
-    }
-
-    viewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft));
+    revealTimelinePosition(viewport, getCompactWaveformTimelineXForTime(timeSec));
   }
 
   function clampPreviewTimeSec(timeSec: number): number {
@@ -1551,7 +1238,7 @@
 
   function getCountInBeatEvents(): CountInBeatEvent[] {
     const secondsPerBeat = getSecondsPerBeat();
-    const countInBeats = clampCountInBeats(project.songTiming.countInBeats);
+    const countInBeats = timing.countInBeats;
     if (secondsPerBeat <= 0 || countInBeats <= 0) {
       return [];
     }
@@ -1656,6 +1343,26 @@
   }
 
   async function startPreviewAudioAtCurrentTime(): Promise<void> {
+    if (project.previewState.playMetronome) {
+      previewAudioPlayer?.pause();
+      try {
+        await beatMapMetronome.start({
+          audioBuffer: previewCanUseSourceAudio() ? sourceAudioBuffer : null,
+          beats: timing.beatSpans.map(span => ({ timeSec: span.startTimeSec,
+            accent: timing.firstDownbeatIndex !== null && span.beatIndex >= timing.firstDownbeatIndex
+              && (span.beatIndex - timing.firstDownbeatIndex) % timing.timeSignatureNumerator === 0 })),
+          startTimeSec: previewCurrentTimeSec,
+          endTimeSec: previewDurationSec,
+          audioVolume: project.previewState.audioVolume,
+          clickVolume: project.previewState.metronomeVolume,
+        });
+      } catch (error) {
+        pausePreview();
+        errorMessage = error instanceof Error ? error.message : 'Beat-map metronome playback failed.';
+      }
+      return;
+    }
+    beatMapMetronome.stop();
     if (!previewCanUseSourceAudio() || !previewAudioPlayer || previewCurrentTimeSec < 0) {
       previewAudioPlayer?.pause();
       return;
@@ -1700,24 +1407,25 @@
     }
 
     const nextTimeSec = clampPreviewTimeSec(
-      previewHasActiveSourceAudio()
+      project.previewState.playMetronome && beatMapMetronome.isPlaying
+        ? beatMapMetronome.getCurrentTime()
+        : previewHasActiveSourceAudio()
         ? (previewAudioPlayer?.currentTime ?? previewCurrentTimeSec)
         : previewClockAnchorTimeSec + ((performance.now() - previewClockAnchorMs) / 1000),
     );
 
     previewCurrentTimeSec = nextTimeSec;
-    if (previewCanUseSourceAudio() && previewAudioPlayer && previewAudioPlayer.paused && nextTimeSec >= 0) {
+    if (!project.previewState.playMetronome && previewCanUseSourceAudio() && previewAudioPlayer && previewAudioPlayer.paused && nextTimeSec >= 0) {
       void startPreviewAudioAtCurrentTime();
     }
     advancePreviewSynth(nextTimeSec);
-    if (previewCanPlayGrid()) {
-      syncEditorHighwayViewportToTime(nextTimeSec);
-    }
+    syncPlaybackViewportsToTime(nextTimeSec);
 
     if (nextTimeSec >= previewDurationSec - 0.001) {
       previewIsPlaying = false;
       cancelPreviewAnimation();
       previewAudioPlayer?.pause();
+      beatMapMetronome.stop();
       stopPreviewSynth();
       previewCurrentTimeSec = clampPreviewTimeSec(previewDurationSec);
       syncPreviewClockAnchor();
@@ -1743,7 +1451,7 @@
       return;
     }
 
-    if (!previewCanPlayGrid() && !previewCanUseSourceAudio()) {
+    if (!previewCanPlayGrid() && !previewCanUseSourceAudio() && !project.previewState.playMetronome) {
       statusMessage = 'Turn on grid playback or attach audio before playing.';
       return;
     }
@@ -1757,12 +1465,11 @@
     await tick();
     syncPreviewClockAnchor();
     restartPreviewSynthAtTime(previewCurrentTimeSec);
-    if (previewCanPlayGrid()) {
-      syncEditorHighwayViewportToTime(previewCurrentTimeSec);
-    }
+    syncPlaybackViewportsToTime(previewCurrentTimeSec);
 
     await startPreviewAudioAtCurrentTime();
 
+    if (!previewIsPlaying) return;
     startPreviewAnimation();
     statusMessage = `Playing ${describePlaybackMode()}.`;
   }
@@ -1771,6 +1478,7 @@
     previewIsPlaying = false;
     cancelPreviewAnimation();
     previewAudioPlayer?.pause();
+    beatMapMetronome.stop();
     stopPreviewSynth();
     syncPreviewClockAnchor();
     if (nextStatus) {
@@ -1788,6 +1496,7 @@
     }
     if (previewIsPlaying) {
       restartPreviewSynthAtTime(previewCurrentTimeSec);
+      if (project.previewState.playMetronome) void startPreviewAudioAtCurrentTime();
     } else {
       stopPreviewSynth();
     }
@@ -1823,6 +1532,7 @@
   }
 
   function handlePreviewAudioEnded(): void {
+    if (project.previewState.playMetronome) return;
     if (!project.previewState.playGrid || previewCurrentTimeSec >= previewDurationSec - 0.001) {
       previewCurrentTimeSec = clampPreviewTimeSec(previewDurationSec);
       pausePreview('Playback complete.');
@@ -2063,13 +1773,12 @@
     exportRenderError = '';
 
     try {
-      const exportSourceAudioBuffer = await getExportSourceAudioBuffer();
       const result = await exportProjectVideo({
         project,
         timing,
         guides: highwayGuides,
         timedNotes,
-        sourceAudioBuffer: exportSourceAudioBuffer,
+        sourceAudioBuffer,
         onProgress: ({ frameIndex, totalFrames }) => {
           if (frameIndex === 1 || frameIndex === totalFrames || frameIndex % progressInterval === 0) {
             busyMessage = `Rendering export video... ${frameIndex}/${totalFrames} frames`;
@@ -2212,7 +1921,7 @@
     });
     seekPreview(
       measureSpan.startBeat.startTimeSec,
-      `Playback will begin at measure ${label ?? Math.floor(measureSpan.startBeat.beatIndex / Math.max(1, timing.timeSignatureNumerator)) + 1}.`,
+      `Playback will begin at measure ${label ?? Math.floor((measureSpan.startBeat.beatIndex - (timing.firstDownbeatIndex ?? 0)) / Math.max(1, timing.timeSignatureNumerator)) + 1}.`,
     );
   }
 
@@ -2565,8 +2274,8 @@
   }
 
   function validatePlacedNotes(placedNotes: BoomwhackerGridNote[]): string | null {
-    if (timing.totalSlotCount === 0 && placedNotes.length > 0) {
-      return 'Set a valid song tempo before placing notes.';
+    if ((!project.audio || timing.totalSlotCount === 0) && placedNotes.length > 0) {
+      return 'Import audio and a MIDI tempo map before placing notes.';
     }
 
     const orderedNotes = sortGridNotes(placedNotes);
@@ -2913,7 +2622,7 @@
       historyEntry: createHistoryEntry(),
       noteIds: dragNoteIds,
       anchorRow: anchorNote.row,
-      anchorSlotIndex: anchorNote.startSlotIndex,
+      anchorSlotIndex: getSlotIndexFromHighwayClientX(event.clientX, stageElement.getBoundingClientRect()),
       stageRect: stageElement.getBoundingClientRect(),
       currentRowDelta: 0,
       currentSlotDelta: 0,
@@ -3034,6 +2743,7 @@
       historyEntry: createHistoryEntry(),
       noteId,
       stageRect: stageElement.getBoundingClientRect(),
+      anchorSlotIndex: getSlotIndexFromHighwayClientX(event.clientX, stageElement.getBoundingClientRect()),
       currentEndSlotIndex: note.endSlotIndex,
     };
 
@@ -3047,7 +2757,7 @@
       }
       const nextEndSlotIndex = clampNoteEndSlotIndex(
         sourceNote.startSlotIndex,
-        getSlotIndexFromHighwayClientX(moveEvent.clientX, noteResizeState.stageRect),
+        sourceNote.endSlotIndex + getSlotIndexFromHighwayClientX(moveEvent.clientX, noteResizeState.stageRect) - noteResizeState.anchorSlotIndex,
         sourceNote.shape,
         getMaxSlotIndex(),
         timing,
@@ -3329,7 +3039,7 @@
     }
   }
 
-  async function handleAudioImport(file: File, options?: { title?: string; songTiming?: SongTimingState; grouping?: MacrobeatGrouping }): Promise<void> {
+  async function handleAudioImport(file: File, options: { title: string; songTiming: SongTimingState; grouping: MacrobeatGrouping }): Promise<boolean> {
     busyMessage = 'Decoding audio and building a waveform...';
     errorMessage = '';
     try {
@@ -3338,17 +3048,7 @@
       clipboardNotes = [];
       const importedAsset = await importAudioFile(file);
       const nextTitle = options?.title?.trim() || stripExtension(file.name) || project.metadata.title;
-      const optionTiming = options?.songTiming ?? project.songTiming;
-      const nextTiming: SongTimingState = {
-        tempoBpm: clampTempoBpm(optionTiming.tempoBpm),
-        firstBeatOffsetSec: clampFirstBeatOffsetSec(optionTiming.firstBeatOffsetSec),
-        beatCount: options?.songTiming
-          ? clampBeatCount(optionTiming.beatCount)
-          : getAudioFitBeatCount(importedAsset.audio.durationSec, optionTiming.tempoBpm, optionTiming.firstBeatOffsetSec),
-        countInBeats: clampCountInBeats(optionTiming.countInBeats),
-        timeSignatureNumerator: clampTimeSignatureNumerator(optionTiming.timeSignatureNumerator),
-        timeSignatureDenominator: clampTimeSignatureDenominator(optionTiming.timeSignatureDenominator),
-      };
+      const nextTiming = options.songTiming;
       const nextGrouping = options?.grouping ?? project.grid.defaultMacrobeatGrouping;
       const preserveExistingEditorData = hasExistingEditorWork();
       const baseProject = preserveExistingEditorData
@@ -3404,13 +3104,15 @@
         ...baseProject,
         audio: persistedAudio,
       });
-      setProjectState(nextProject, preserveExistingEditorData ? `Loaded "${file.name}" without clearing current notes.` : `Loaded "${file.name}" and fitted the constant-tempo grid.`);
+      setProjectState(nextProject, preserveExistingEditorData ? `Loaded "${file.name}" without clearing current notes.` : `Loaded "${file.name}" and its MIDI beat map.`);
       syncSetupModalState(nextProject);
       resetHistory();
-      await applyAudioPresentation(importedAsset);
+      applyAudioPresentation(importedAsset);
+      return true;
     } catch (error) {
       console.error('Boomwhacker Video Builder audio import failed.', error);
       errorMessage = 'Audio upload failed. Use a browser-decodable WAV, MP3, M4A, or OGG file.';
+      return false;
     } finally {
       busyMessage = '';
     }
@@ -3429,7 +3131,7 @@
       });
       setProjectState(nextProject, `Reattached "${file.name}" to the current chart.`);
       syncSetupModalState(nextProject);
-      await applyAudioPresentation(importedAsset);
+      applyAudioPresentation(importedAsset);
     } catch (error) {
       console.error('Boomwhacker Video Builder audio reattach failed.', error);
       errorMessage = 'Audio reattach failed. Choose the original song file to restore waveform and preview playback.';
@@ -3463,7 +3165,7 @@
       syncSetupModalState(hydratedProject);
       resetHistory();
       if (hydratedAudio) {
-        await applyAudioPresentation(hydratedAudio);
+        applyAudioPresentation(hydratedAudio);
       } else {
         clearAudioPresentation();
       }
@@ -3506,7 +3208,7 @@
       return;
     }
 
-    if (needsAudioReattach()) {
+    if (needsAudioReattach() && !isSetupModalOpen) {
       input.value = '';
       void reattachAudioToCurrentProject(file);
       return;
@@ -3566,21 +3268,21 @@
     }
   }
 
-  function flushAutosaveWrite(): void {
+  function flushAutosaveWrite(sourceProject: BoomwhackerVideoBuilderProject = project): void {
     clearPendingAutosaveWrite();
     hasPendingAutosaveWrite = false;
     if (!hasInitializedAutosave || suppressAutosave || noteDragState !== null || noteResizeState !== null || noteBankPlacementState !== null || highwayEraseState !== null) {
       return;
     }
     try {
-      const autosaveEnvelope = buildAutosaveEnvelope(project);
+      const autosaveEnvelope = buildAutosaveEnvelope(sourceProject);
       localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(autosaveEnvelope));
     } catch (error) {
       console.warn('Boomwhacker Video Builder autosave write failed.', error);
     }
   }
 
-  function queueAutosaveWrite(): void {
+  function queueAutosaveWrite(sourceProject: BoomwhackerVideoBuilderProject): void {
     if (!hasInitializedAutosave || suppressAutosave || noteDragState !== null || noteResizeState !== null || noteBankPlacementState !== null || highwayEraseState !== null) {
       return;
     }
@@ -3588,7 +3290,7 @@
     hasPendingAutosaveWrite = true;
     autosaveWriteTimeoutId = setTimeout(() => {
       autosaveWriteTimeoutId = null;
-      flushAutosaveWrite();
+      flushAutosaveWrite(sourceProject);
     }, 450);
   }
 
@@ -3603,15 +3305,16 @@
         project,
       };
     }
-    const project = parseBoomwhackerVideoBuilderProject(serializedValue);
-    return {
-      savedAtIso: project.metadata.updatedAtIso,
-      project,
-    };
+    throw new Error('Invalid autosave envelope.');
   }
 
   async function restoreAutosave(): Promise<void> {
     suppressAutosave = true;
+    try {
+      await resetObsoleteProjectStorage();
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Could not reset old local project storage.';
+    }
     try {
       const storedProject = localStorage.getItem(AUTOSAVE_STORAGE_KEY);
       if (!storedProject) {
@@ -3626,6 +3329,7 @@
       suppressAutosave = false;
       hasPendingAutosaveWrite = false;
       hasInitializedAutosave = true;
+      if (!project.audio || !project.songTiming.midiFileName) openSetupModal();
     }
   }
 
@@ -3634,21 +3338,11 @@
     selectedNoteIds = [];
     clipboardNotes = [];
     const nextProject = createBoomwhackerVideoBuilderProject();
-    setProjectState(nextProject, 'Created a new empty project.');
+    setProjectState(nextProject, 'Choose audio and MIDI for the new project.');
     clearAudioPresentation();
     syncSetupModalState(nextProject);
     resetHistory();
-  }
-
-  function loadDemoChart(): void {
-    resetPreviewTransport();
-    selectedNoteIds = [];
-    clipboardNotes = [];
-    const demoProject = createSampleBoomwhackerVideoBuilderProject();
-    setProjectState(demoProject, 'Loaded the demo chart.');
-    syncSetupModalState(demoProject);
-    clearAudioPresentation();
-    resetHistory();
+    openSetupModal();
   }
 
   function getShapeOptionForShortcut(event: KeyboardEvent): typeof noteShapeOptions[number] | null {
@@ -3668,7 +3362,7 @@
   }
 
   function handleWindowKeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented || project.viewState.activeTab !== 'editor') {
+    if (isSetupModalOpen || event.defaultPrevented || project.viewState.activeTab !== 'editor') {
       return;
     }
     if (event.key === 'Escape' && (volumePopupOpen || projectMenuOpen)) {
@@ -3784,14 +3478,6 @@
     }
   }
 
-  function handleCompactWaveformClick(event: MouseEvent): void {
-    if (busyMessage || previewScrubState) {
-      return;
-    }
-    const nextTimeSec = getTimelineTimeSecFromClientX(event.clientX);
-    seekPreview(nextTimeSec, previewIsPlaying ? undefined : `Playback moved to ${formatSeconds(nextTimeSec)}.`);
-  }
-
   function handleCompactWaveformKeyDown(event: KeyboardEvent): void {
     if (busyMessage) {
       return;
@@ -3891,6 +3577,7 @@
     flushAutosaveWrite();
     finishHighwayErase();
     previewSynth.dispose();
+    beatMapMetronome.dispose();
     cancelPreviewAnimation();
     if (highwayZoomPreviewTimeoutId !== null) {
       clearTimeout(highwayZoomPreviewTimeoutId);
@@ -3909,13 +3596,12 @@
     }
   }
   $: previewSynth.setMasterVolume(project.previewState.synthVolume);
+  $: beatMapMetronome.setAudioVolume(project.previewState.audioVolume);
+  $: beatMapMetronome.setClickVolume(project.previewState.metronomeVolume);
   $: timing = deriveTimingModel(project.songTiming, project.grid);
-  $: waveformDurationSec = project.audio?.durationSec ?? timing.totalDurationSec;
-  $: isEditorPlaybackActive = project.viewState.activeTab === 'editor' && previewIsPlaying;
-  $: editorBaseLaneHeightPx = getEditorBaseLaneHeightForViewport(viewportHeightPx, isEditorPlaybackActive, topToolbarHeightPx);
-  $: editorLaneHeightPx = isEditorPlaybackActive
-    ? editorBaseLaneHeightPx
-    : getZoomedEditorLaneHeight(editorBaseLaneHeightPx, project.viewState.zoom);
+  $: waveformDurationSec = Math.max(1, project.audio?.durationSec ?? 0, timing.totalDurationSec);
+  $: editorBaseLaneHeightPx = getEditorBaseLaneHeightForViewport(viewportHeightPx);
+  $: editorLaneHeightPx = getZoomedEditorLaneHeight(editorBaseLaneHeightPx, project.viewState.zoom);
   $: previewStartTimeSec = Math.min(0, timing.countInStartTimeSec);
   $: previewDurationSec = Math.max(project.audio?.durationSec ?? 0, timing.totalDurationSec);
   $: editorHighwayPixelsPerSecond = editorLaneHeightPx / Math.max(
@@ -3937,7 +3623,6 @@
   );
   $: guides = deriveGuideLines(timing);
   $: highwayGuides = getVisibleHighwayGuides(guides);
-  $: activeJudgmentBeatSpan = getActiveHighwayBeatSpan(timing, previewCurrentTimeSec);
   $: selectedBeatSpan = timing.beatSpans[Math.max(0, Math.min(timing.beatSpans.length - 1, project.viewState.selectedBeatIndex))] ?? null;
   $: {
     const playbackStartBeatIndex = project.viewState.playbackStartBeatIndex;
@@ -4002,7 +3687,7 @@
     void renderExportPreviewFrame(exportPreviewCanvas);
   }
   $: if (hasInitializedAutosave && !suppressAutosave && noteDragState === null && noteResizeState === null && noteBankPlacementState === null && highwayEraseState === null) {
-    queueAutosaveWrite();
+    queueAutosaveWrite(project);
   }
 </script>
 
@@ -4012,7 +3697,13 @@
 
 <svelte:window bind:innerHeight={viewportHeightPx} />
 
-<div class="builder-shell" class:playback-active={isEditorPlaybackActive}>
+<input bind:this={midiInput} class="visually-hidden" type="file" accept=".mid,.midi,audio/midi" on:change={(event) => {
+  const input = event.currentTarget as HTMLInputElement;
+  pendingSetupMidiFile = input.files?.[0] ?? null;
+  input.value = '';
+}} />
+
+<div class="builder-shell">
   <input
     bind:this={audioInput}
     class="visually-hidden"
@@ -4035,66 +3726,17 @@
     on:change={handleBackgroundImageInputChange}
   />
 
-  <header class="top-toolbar" class:playback-compact={isEditorPlaybackActive} bind:clientHeight={topToolbarHeightPx}>
+  <header class="top-toolbar">
     <div class="top-toolbar__brand">
       <div class="top-toolbar__brand-row">
         <p class="eyebrow">Boomwhacker Video Builder</p>
       </div>
       <p class="top-toolbar__meta">
-        {project.metadata.title || 'Untitled Boomwhacker Video'} &middot; {formatTempo(project.songTiming.tempoBpm)}
+        {project.metadata.title || 'Untitled Boomwhacker Video'} &middot; {project.songTiming.midiFileName ? 'MIDI beat map' : 'Import audio + MIDI'}
       </p>
     </div>
 
     <div class="top-toolbar__actions">
-      {#if project.viewState.activeTab === 'editor' && !isEditorPlaybackActive}
-        <div class="tempo-inline-group bvb-tempo-panel">
-          <div class="tempo-stack">
-            <div class="tempo-left-stack">
-              <TempoControls
-                quarterTempo={project.songTiming.tempoBpm}
-                minQuarter={TEMPO_MIN_BPM}
-                maxQuarter={TEMPO_MAX_BPM}
-                step={1}
-                sliderOrientation="vertical"
-                onchange={handleQuarterTempoChange}
-                showEighth={false}
-                showQuarter={true}
-                showDottedQuarter={false}
-                showRows={true}
-                showSlider={false}
-              />
-              <div class="tempo-shortcut-buttons" aria-label="Tempo shortcuts">
-                {#each TEMPO_SHORTCUT_VALUES as tempoValue}
-                  <button
-                    type="button"
-                    class:active={project.songTiming.tempoBpm === tempoValue}
-                    aria-pressed={project.songTiming.tempoBpm === tempoValue}
-                    on:click={() => setQuarterTempoShortcut(tempoValue)}
-                  >
-                    {tempoValue}
-                  </button>
-                {/each}
-              </div>
-            </div>
-            <div class="tempo-slider-column">
-              <TempoControls
-                quarterTempo={project.songTiming.tempoBpm}
-                minQuarter={TEMPO_MIN_BPM}
-                maxQuarter={TEMPO_MAX_BPM}
-                step={1}
-                sliderOrientation="vertical"
-                onchange={handleQuarterTempoChange}
-                showEighth={false}
-                showQuarter={false}
-                showDottedQuarter={false}
-                showRows={false}
-                showSlider={true}
-              />
-            </div>
-          </div>
-        </div>
-      {/if}
-
       <div class="project-menu-wrapper" bind:this={projectMenuWrapper}>
         <button
           type="button"
@@ -4119,7 +3761,7 @@
               <img src={studentNotationSettingsIconHref} alt="" class="project-menu__icon" />
               <span>Setup</span>
             </button>
-            <button type="button" class="project-menu__item" disabled={Boolean(busyMessage)} on:click={() => runProjectMenuAction(saveProject)} role="menuitem">
+            <button type="button" class="project-menu__item" disabled={Boolean(busyMessage) || !project.audio || !project.songTiming.midiFileName} on:click={() => runProjectMenuAction(saveProject)} role="menuitem">
               <img src={studentNotationSaveAsIconHref} alt="" class="project-menu__icon" />
               <span>Save</span>
             </button>
@@ -4131,7 +3773,7 @@
               type="button"
               class="project-menu__item"
               class:active={project.viewState.activeTab === 'export'}
-              disabled={Boolean(busyMessage)}
+              disabled={Boolean(busyMessage) || !project.audio || !project.songTiming.midiFileName}
               on:click={() => runProjectMenuAction(toggleEditorExportTab)}
               role="menuitem"
             >
@@ -4247,6 +3889,11 @@
             <button type="button" class:active={project.previewState.playGrid} on:click={togglePlaybackGrid}>
               Grid
             </button>
+            <button type="button" class:active={project.previewState.playMetronome}
+              aria-pressed={project.previewState.playMetronome} disabled={timing.beatSpans.length === 0 || Boolean(busyMessage)}
+              title="Hear clicks from the beat map alongside the audio" on:click={toggleBeatMapMetronome}>
+              Metronome
+            </button>
           </div>
           <div class="volume-control-wrapper" bind:this={volumeControlWrapper}>
             <button
@@ -4292,11 +3939,15 @@
                 />
                 <strong>{formatVolumePercent(project.previewState.synthVolume)}</strong>
               </label>
+              <label class="volume-popup-control">
+                <span class="range-field__label">Beat-map clicks</span>
+                <input class="volume-slider" type="range" min="0" max="1" step="0.01"
+                  value={project.previewState.metronomeVolume}
+                  on:input={(event) => updatePreviewState({ metronomeVolume: clampPreviewVolume(Number((event.currentTarget as HTMLInputElement).value)) })} />
+                <strong>{formatVolumePercent(project.previewState.metronomeVolume)}</strong>
+              </label>
             </div>
           </div>
-          <button type="button" class="ghost-button" disabled={Boolean(busyMessage)} on:click={loadDemoChart}>
-            Demo chart
-          </button>
           <button type="button" class="ghost-button ghost-button--icon" disabled={previewDurationSec <= 0} aria-label="Zoom out" title="Zoom out" on:click={() => void zoomHighwayBy(0.8)}>
             <img src={studentNotationZoomOutIconHref} alt="" class="toolbar-icon" />
           </button>
@@ -4318,18 +3969,17 @@
       <button type="button" class="modal-backdrop__dismiss" aria-label="Close setup modal" on:click={closeSetupModal}></button>
       <div class="modal-card" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="setup-modal-title">
         <div class="panel__header">
-          <p class="panel__eyebrow">Project Setup</p>
-          <h2 id="setup-modal-title">Song + Timing</h2>
+          <h2 id="setup-modal-title">Project Setup</h2>
         </div>
 
-        <div class="export-grid">
+        <div class="project-setup-fields">
           <label class="field">
-            <span class="field__label">Project title</span>
-            <input class="text-input" type="text" value={setupModalTitle} on:input={handleSetupTitleInput} />
+            <span class="visually-hidden">Project title</span>
+            <input class="text-input" type="text" placeholder="Enter Project Title" value={setupModalTitle} on:input={handleSetupTitleInput} />
           </label>
 
           <div class="field">
-            <span class="field__label">Audio file</span>
+            <span class="field__label">Audio File</span>
             <div class="modal-audio-box">
               <strong>{pendingSetupAudioFile?.name ?? getProjectAudioSummary()}</strong>
               <button type="button" class="action-button action-button--small" disabled={Boolean(busyMessage)} on:click={promptSetupAudioSelection}>
@@ -4337,111 +3987,35 @@
               </button>
             </div>
           </div>
-        </div>
 
-        <div class="panel__subsection">
-          <p class="panel__eyebrow">Constant Song Timing</p>
-          <div class="export-grid">
-            <label class="field">
-              <span class="field__label">Tempo BPM</span>
-              <input
-                class="text-input"
-                type="number"
-                min={TEMPO_MIN_BPM}
-                max={TEMPO_MAX_BPM}
-                step="1"
-                value={setupModalTempoBpm}
-                on:change={(event) => {
-                  setupModalTempoBpm = clampTempoBpm(Number((event.currentTarget as HTMLInputElement).value));
-                }}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">First beat offset</span>
-              <input
-                class="text-input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={setupModalFirstBeatOffsetSec}
-                on:change={(event) => {
-                  setupModalFirstBeatOffsetSec = clampFirstBeatOffsetSec(Number((event.currentTarget as HTMLInputElement).value));
-                }}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Beats</span>
-              <input
-                class="text-input"
-                type="number"
-                min={BEAT_COUNT_MIN}
-                max={BEAT_COUNT_MAX}
-                step="1"
-                value={setupModalBeatCount}
-                on:change={(event) => {
-                  setupModalBeatCount = clampBeatCount(Number((event.currentTarget as HTMLInputElement).value));
-                }}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Count-in beats</span>
-              <input
-                class="text-input"
-                type="number"
-                min={COUNT_IN_BEATS_MIN}
-                max={COUNT_IN_BEATS_MAX}
-                step="1"
-                value={setupModalCountInBeats}
-                on:change={(event) => {
-                  setupModalCountInBeats = clampCountInBeats(Number((event.currentTarget as HTMLInputElement).value));
-                }}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Time signature beats</span>
-              <input
-                class="text-input"
-                type="number"
-                min={TIME_SIGNATURE_NUMERATOR_MIN}
-                max={TIME_SIGNATURE_NUMERATOR_MAX}
-                step="1"
-                value={setupModalTimeSignatureNumerator}
-                on:change={(event) => {
-                  setupModalTimeSignatureNumerator = clampTimeSignatureNumerator(Number((event.currentTarget as HTMLInputElement).value));
-                }}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Time signature note</span>
-              <select
-                class="text-input"
-                value={setupModalTimeSignatureDenominator}
-                on:change={(event) => {
-                  setupModalTimeSignatureDenominator = clampTimeSignatureDenominator(Number((event.currentTarget as HTMLSelectElement).value));
-                }}
-              >
-                {#each TIME_SIGNATURE_DENOMINATORS as denominator}
-                  <option value={denominator}>{denominator}</option>
-                {/each}
-              </select>
-            </label>
-            <label class="field">
-              <span class="field__label">Subdivision feel</span>
-              <select class="text-input" bind:value={setupModalGrouping}>
-                <option value={2}>2-based</option>
-                <option value={3}>3-based</option>
-              </select>
-            </label>
+          <div class="field">
+            <span class="field__label">Beat Map File</span>
+            <div class="modal-audio-box">
+              <strong>{pendingSetupMidiFile?.name ?? project.songTiming.midiFileName ?? 'No beat map selected'}</strong>
+              <button type="button" class="action-button action-button--small" disabled={Boolean(busyMessage)} on:click={() => midiInput?.click()}>Choose beat map file</button>
+            </div>
           </div>
         </div>
 
+        <details class="setup-playback-settings">
+          <summary>Playback settings</summary>
+          <div class="project-setup-fields">
+            <label class="checkbox">
+              <input type="checkbox" bind:checked={setupModalCountInEnabled} disabled={Boolean(busyMessage)} />
+              <span>Four-beat count-in</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" bind:checked={setupModalSilentLeadInEnabled} disabled={Boolean(busyMessage)} />
+              <span>Silent lead-in (one beat)</span>
+            </label>
+          </div>
+        </details>
+
+        {#if errorMessage}<p class="banner banner--error" role="alert">{errorMessage}</p>{/if}
         <div class="modal-card__actions">
           <button type="button" class="ghost-button" on:click={closeSetupModal}>Cancel</button>
-          <button type="button" class="ghost-button" disabled={Boolean(pendingSetupAudioFile) || !project.audio} on:click={setSetupBeatCountToAudioDuration}>
-            Fit beats to current audio
-          </button>
-          <button type="button" class="action-button action-button--primary" disabled={Boolean(busyMessage)} on:click={() => void applySetupModal()}>
-            {pendingSetupAudioFile ? 'Import Audio' : 'Apply Setup'}
+          <button type="button" class="action-button action-button--primary" disabled={Boolean(busyMessage) || (!pendingSetupAudioFile && !project.audio) || (!pendingSetupMidiFile && !project.songTiming.midiFileName)} on:click={() => void applySetupModal()}>
+            {pendingSetupAudioFile || pendingSetupMidiFile ? 'Import audio + timing' : 'Apply setup'}
           </button>
         </div>
       </div>
@@ -4617,282 +4191,42 @@
                     <div class="highway__selection-box" style={getRelativeSelectionBoxStyle(noteBoxSelectionState)} aria-hidden="true"></div>
                   {/if}
 
-                  {#if activeJudgmentBeatSpan && !isEditorPlaybackActive}
-                    <span class="highway__judgment-area" style={judgmentAreaStyle(activeJudgmentBeatSpan, editorHighwayLayoutContext)} aria-hidden="true"></span>
+                  {#if timing.beatSpans.length > 0}
+                    <span class="highway__hit-line" style={hitLineStyle(previewCurrentTimeSec, editorHighwayLayoutContext)} aria-hidden="true"></span>
                   {/if}
                 </div>
-                <div class="highway__measure-gutter" style={`width:${editorHighwayStageWidthPx}px;`}>
-                  <div class="highway__measure-actions" aria-label="Measure controls" on:pointerdown={(event) => event.stopPropagation()}>
-                    <button type="button" on:click={deleteMeasure} disabled={!canDeleteMeasure()} title="Delete measure" aria-label="Delete measure">-</button>
-                    <button type="button" on:click={addMeasure} disabled={!canAddMeasure()} title="Add measure" aria-label="Add measure">+</button>
-                  </div>
-                </div>
               </div>
-              {#if activeJudgmentBeatSpan && isEditorPlaybackActive}
-                <span class="highway__judgment-area highway__judgment-area--overlay" style={judgmentAreaStyle(activeJudgmentBeatSpan, editorHighwayLayoutContext, true)} aria-hidden="true"></span>
-              {/if}
             </div>
           </div>
         </div>
 
-        <div class="panel__subsection panel__subsection--waveform">
-          {#if waveformPeaks.length > 0}
-            <div class="compact-waveform">
-              <div bind:this={compactWaveformViewport} class="compact-waveform__viewport" on:wheel={handleTimelineWheel}>
-                <div class="compact-waveform__timeline-wrap" style={`width:${Math.max(100, project.viewState.zoom * 100)}%;`}>
-                  <div
-                    class="compact-waveform__timeline"
-                    role="button"
-                    tabindex="0"
-                    aria-label="Playback waveform transport"
-                    style={`height:${COMPACT_WAVEFORM_HEIGHT_PX}px;`}
-                    on:click={handleCompactWaveformClick}
-                    on:keydown={handleCompactWaveformKeyDown}
-                  >
-                    <div class="waveform-bars compact-waveform__bars" style={`--waveform-bar-count:${waveformPeaks.length};`}>
-                      {#each waveformPeaks as peak}
-                        <span class="waveform-bars__bar" style={`height:${Math.max(8, peak * 100)}%;`}></span>
-                      {/each}
-                    </div>
-
-                    <button
-                      type="button"
-                      class="waveform-playhead waveform-playhead--preview"
-                      class:is-scrubbing={previewScrubState !== null}
-                      style={waveformPlayheadStyle(previewCurrentTimeSec, waveformDurationSec)}
-                      aria-label={`Playback cursor at ${formatSeconds(previewCurrentTimeSec)}`}
-                      title="Drag to scrub playback"
-                      on:click|stopPropagation
-                      on:pointerdown={startCompactWaveformScrub}
-                      on:pointermove={updateCompactWaveformScrub}
-                      on:pointerup={finishCompactWaveformScrub}
-                      on:pointercancel={finishCompactWaveformScrub}
-                    >
-                      <span class="waveform-playhead__cap"></span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="compact-waveform__footer">
-                <span class="compact-waveform__readout">{formatSeconds(previewCurrentTimeSec)} / {formatSeconds(previewDurationSec)}</span>
-              </div>
-            </div>
-          {:else}
-            <div class="empty-state empty-state--compact">
-              <p>{getProjectAudioSummary()}</p>
-              <button type="button" class="ghost-button" on:click={openSetupModal}>Setup song timing</button>
-            </div>
-          {/if}
-        </div>
-
+        {#if project.audio && project.songTiming.midiFileName}
+          <div class="panel__subsection">
+          {#key project.metadata.id}
+            <BeatMapEditor timing={project.songTiming} peaks={waveformPeaks} audioDurationSec={project.audio.durationSec}
+              waveformHeight={project.viewState.waveformHeight} onheightchange={(height) => updateViewState({ waveformHeight: height })}
+              currentTimeSec={previewCurrentTimeSec} playbackDurationSec={previewDurationSec}
+              scrubbing={previewScrubState !== null} transportDisabled={Boolean(busyMessage)} bind:viewport={compactWaveformViewport}
+              onscrubstart={startCompactWaveformScrub} onscrubmove={updateCompactWaveformScrub} onscrubend={finishCompactWaveformScrub}
+              ontransportkeydown={handleCompactWaveformKeyDown}
+              disabled={Boolean(busyMessage) || previewIsPlaying} onchange={(next) => updateSongTiming(next)} onseek={(time) => seekPreview(time)} />
+          {/key}
+          </div>
+        {:else}
+          <p>Choose an audio file and MIDI tempo map before placing notes.</p>
+          <button type="button" class="action-button" on:click={openSetupModal}>Import audio + MIDI</button>
+        {/if}
         <div class="panel__subsection">
-          <p class="panel__eyebrow">Audio Processing</p>
-          <div class="summary-grid summary-grid--editor">
-            <div>
-              <span>Transpose</span>
-              <strong>{formatSemitones(project.audioProcessing.transposeSemitones)}</strong>
-            </div>
-            <div>
-              <span>Preview</span>
-              <strong>{project.previewState.previewOriginalAudio ? 'Original' : 'Transposed'}</strong>
-            </div>
-            <div>
-              <span>Export audio</span>
-              <strong>{project.exportState.includeSynthPlayback ? 'Transposed + boomwhackers' : 'Transposed only'}</strong>
-            </div>
-          </div>
-
-          <div class="export-grid">
-            <label class="range-field">
-              <span class="range-field__label">Transpose audio</span>
-              <input
-                type="range"
-                min={TRANSPOSE_MIN_SEMITONES}
-                max={TRANSPOSE_MAX_SEMITONES}
-                step="1"
-                value={project.audioProcessing.transposeSemitones}
-                disabled={!sourceAudioBuffer}
-                on:input={(event) => updateTransposeSemitones(Number((event.currentTarget as HTMLInputElement).value))}
-              />
-              <strong>{formatSemitones(project.audioProcessing.transposeSemitones)}</strong>
-            </label>
-            <label class="field">
-              <span class="field__label">Semitones</span>
-              <input
-                class="text-input"
-                type="number"
-                min={TRANSPOSE_MIN_SEMITONES}
-                max={TRANSPOSE_MAX_SEMITONES}
-                step="1"
-                value={project.audioProcessing.transposeSemitones}
-                disabled={!sourceAudioBuffer}
-                on:change={(event) => updateTransposeSemitones(Number((event.currentTarget as HTMLInputElement).value))}
-              />
-            </label>
-          </div>
-
-          <div class="action-row action-row--stack">
-            <button type="button" class="ghost-button" class:is-active-toolbar={project.previewState.previewOriginalAudio} disabled={!sourceAudioBuffer} on:click={togglePreviewOriginalAudio}>
-              {project.previewState.previewOriginalAudio ? 'Preview transposed audio' : 'Preview original audio'}
-            </button>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                checked={project.previewState.includeSynthPlayback}
-                on:change={(event) => updatePreviewState({ includeSynthPlayback: (event.currentTarget as HTMLInputElement).checked }, (event.currentTarget as HTMLInputElement).checked ? 'Preview boomwhacker playback enabled.' : 'Preview boomwhacker playback disabled.')}
-              />
-              <span>Preview boomwhacker sounds</span>
-            </label>
-          </div>
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              checked={project.previewState.includeSynthPlayback}
+              on:change={(event) => updatePreviewState({ includeSynthPlayback: (event.currentTarget as HTMLInputElement).checked }, (event.currentTarget as HTMLInputElement).checked ? 'Preview boomwhacker playback enabled.' : 'Preview boomwhacker playback disabled.')}
+            />
+            <span>Preview boomwhacker sounds</span>
+          </label>
         </div>
 
-        <div class="panel__subsection">
-          <p class="panel__eyebrow">Song Timing</p>
-          <div class="summary-grid summary-grid--editor">
-            <div>
-              <span>Tempo</span>
-              <strong>{formatTempo(project.songTiming.tempoBpm)}</strong>
-            </div>
-            <div>
-              <span>First beat</span>
-              <strong>{formatSeconds(project.songTiming.firstBeatOffsetSec)}</strong>
-            </div>
-            <div>
-              <span>Beats</span>
-              <strong>{project.songTiming.beatCount}</strong>
-            </div>
-            <div>
-              <span>Subdivision</span>
-              <strong>{project.grid.defaultMacrobeatGrouping}-based</strong>
-            </div>
-            <div>
-              <span>Count-in</span>
-              <strong>{project.songTiming.countInBeats} beats</strong>
-            </div>
-            <div>
-              <span>Signature</span>
-              <strong>{project.songTiming.timeSignatureNumerator}/{project.songTiming.timeSignatureDenominator}</strong>
-            </div>
-          </div>
-
-          <div class="export-grid">
-            <label class="field">
-              <span class="field__label">Tempo BPM</span>
-              <input
-                class="text-input"
-                type="number"
-                min={TEMPO_MIN_BPM}
-                max={TEMPO_MAX_BPM}
-                step="1"
-                value={project.songTiming.tempoBpm}
-                on:change={(event) => updateSongTiming({ tempoBpm: Number((event.currentTarget as HTMLInputElement).value) }, 'Updated song tempo.')}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">First beat offset</span>
-              <input
-                class="text-input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={project.songTiming.firstBeatOffsetSec}
-                on:change={(event) => updateSongTiming({ firstBeatOffsetSec: Number((event.currentTarget as HTMLInputElement).value) }, 'Updated first beat offset.')}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Beats</span>
-              <input
-                class="text-input"
-                type="number"
-                min={BEAT_COUNT_MIN}
-                max={BEAT_COUNT_MAX}
-                step="1"
-                value={project.songTiming.beatCount}
-                on:change={(event) => updateSongTiming({ beatCount: Number((event.currentTarget as HTMLInputElement).value) }, 'Updated song length.')}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Count-in beats</span>
-              <input
-                class="text-input"
-                type="number"
-                min={COUNT_IN_BEATS_MIN}
-                max={COUNT_IN_BEATS_MAX}
-                step="1"
-                value={project.songTiming.countInBeats}
-                on:change={(event) => updateSongTiming({ countInBeats: Number((event.currentTarget as HTMLInputElement).value) }, 'Updated count-in.')}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Measure beats</span>
-              <input
-                class="text-input"
-                type="number"
-                min={TIME_SIGNATURE_NUMERATOR_MIN}
-                max={TIME_SIGNATURE_NUMERATOR_MAX}
-                step="1"
-                value={project.songTiming.timeSignatureNumerator}
-                on:change={(event) => updateSongTiming({ timeSignatureNumerator: Number((event.currentTarget as HTMLInputElement).value) }, 'Updated time signature.')}
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">Beat note</span>
-              <select
-                class="text-input"
-                value={project.songTiming.timeSignatureDenominator}
-                on:change={(event) => updateSongTiming({ timeSignatureDenominator: Number((event.currentTarget as HTMLSelectElement).value) }, 'Updated time signature.')}
-              >
-                {#each TIME_SIGNATURE_DENOMINATORS as denominator}
-                  <option value={denominator}>{denominator}</option>
-                {/each}
-              </select>
-            </label>
-            <label class="field">
-              <span class="field__label">Subdivision feel</span>
-              <select
-                class="text-input"
-                value={project.grid.defaultMacrobeatGrouping}
-                on:change={(event) => {
-                  const grouping = Number((event.currentTarget as HTMLSelectElement).value) === 3 ? 3 : 2;
-                  setProjectState(
-                    touchProject({
-                      ...project,
-                      grid: {
-                        defaultMacrobeatGrouping: grouping,
-                      },
-                    }),
-                    `Set the chart to ${grouping}-based subdivision.`,
-                    { recordHistory: true },
-                  );
-                }}
-              >
-                <option value={2}>2-based</option>
-                <option value={3}>3-based</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="action-row">
-            <button type="button" class="ghost-button" disabled={!project.audio} on:click={fitBeatCountToAudio}>Fit beats to audio</button>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                checked={project.viewState.showMeasureLabels}
-                on:change={(event) => updateViewState({ showMeasureLabels: (event.currentTarget as HTMLInputElement).checked })}
-              />
-              <span>Measure labels</span>
-            </label>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                checked={project.viewState.showNoteOutlines}
-                on:change={(event) => updateViewState({ showNoteOutlines: (event.currentTarget as HTMLInputElement).checked })}
-              />
-              <span>Note outlines</span>
-            </label>
-          </div>
-        </div>
       </article>
     </section>
   {/if}
@@ -4953,15 +4287,11 @@
           </div>
           <div>
             <span>Count-in</span>
-            <strong>{project.songTiming.countInBeats} beats</strong>
+            <strong>{timing.countInBeats} beats</strong>
           </div>
           <div>
             <span>Background</span>
             <strong>{project.exportState.background.type}</strong>
-          </div>
-          <div>
-            <span>Export audio</span>
-            <strong>{project.exportState.includeSynthPlayback ? 'transposed + boomwhackers' : 'transposed only'}</strong>
           </div>
           <div>
             <span>Timing</span>

@@ -14,6 +14,8 @@ export interface TrainerAudio {
 }
 export type Phase = 'idle' | 'listening' | 'answering' | 'feedback' | 'exploring' | 'finished';
 export const SKIPPED_CORRECT_FLASH_MS = 400;
+const QUESTION_LEAD_IN_MS = 500;
+const DEGREE_QUESTION_MIN_SECONDS = 1.2;
 export interface Result {
   expected: string;
   received: string;
@@ -34,10 +36,11 @@ export interface SessionState {
   answerDeadline: number | null;
   autoContinueDeadline: number | null;
   reviewSkipped: boolean;
+  tonicizing: boolean;
 }
 export const emptyState = (): SessionState => ({
   phase: 'idle', tonic: 0, octave: 4, round: 0, activeDegree: null,
-  input: [], revealed: [], message: '', results: [], error: null, answerDeadline: null, autoContinueDeadline: null, reviewSkipped: false,
+  input: [], revealed: [], message: '', results: [], error: null, answerDeadline: null, autoContinueDeadline: null, reviewSkipped: false, tonicizing: false,
 });
 
 export function hasAnswerReview(state: SessionState): boolean {
@@ -89,6 +92,7 @@ export class TrainerSession {
   private cancel(keepAutoContinue = false) {
     this.clearDeadline();
     if (!keepAutoContinue) this.clearAutoContinue();
+    this.state = { ...this.state, tonicizing: false };
     this.controller.abort();
     this.controller = new AbortController();
     this.audio.stop();
@@ -241,7 +245,7 @@ export class TrainerSession {
     this.updateDrone();
     if (s.cadence && this.lastTonic !== tonic && s.mode !== 'quality') await this.playCadence(signal);
     this.lastTonic = tonic;
-    await this.pause(300, signal); this.check(signal);
+    await this.pause(QUESTION_LEAD_IN_MS, signal); this.check(signal);
   }
   private async nextQuestion(signal: AbortSignal) {
     this.emit({ phase: 'listening', reviewSkipped: false, message: 'Listen…', round: this.state.results.length + 1 });
@@ -278,12 +282,12 @@ export class TrainerSession {
       if (token === this.autoContinueToken && this.state.phase === 'feedback' && this.state.autoContinueDeadline !== null) void this.next();
     }, ms);
   }
-  private async playDegree(degree: number, reveal: boolean, signal: AbortSignal, asChord = false) {
+  private async playDegree(degree: number, reveal: boolean, signal: AbortSignal, asChord = false, minimumSeconds = 0) {
     this.check(signal);
     if (reveal) this.emit({ activeDegree: degree % 12 });
     const degrees = asChord ? triad(degree, this.settings.scale) : [degree];
     const gap = this.settings.mode === 'pocket' ? 60 / this.settings.pocket.tempo : this.settings.noteGap;
-    await this.audio.notes(degrees.map(d => midiNote(this.state.tonic, this.state.octave, d)), gap * 0.8, signal);
+    await this.audio.notes(degrees.map(d => midiNote(this.state.tonic, this.state.octave, d)), Math.max(gap * 0.8, minimumSeconds), signal);
     this.check(signal);
     if (reveal) this.emit({ activeDegree: null });
     await this.pause(gap * 200, signal); this.check(signal);
@@ -295,7 +299,8 @@ export class TrainerSession {
       await this.audio.notes(intervals.map(d => midiNote(this.state.tonic, this.state.octave, d)), this.settings.mode === 'pocket' ? 60 / this.settings.pocket.tempo * 0.8 : 1, signal);
       this.check(signal);
     } else {
-      for (const degree of values) await this.playDegree(degree, reveal, signal, mode === 'chords');
+      const minimumSeconds = this.settings.mode === 'degrees' ? DEGREE_QUESTION_MIN_SECONDS : 0;
+      for (const degree of values) await this.playDegree(degree, reveal, signal, mode === 'chords', minimumSeconds);
     }
   }
   async repeat() {
@@ -304,6 +309,7 @@ export class TrainerSession {
     this.repeatBusy = true;
     this.emit({ phase: 'listening', answerDeadline: null, message: 'Listen again…' });
     await this.run(async signal => {
+      await this.pause(QUESTION_LEAD_IN_MS, signal); this.check(signal);
       await this.playQuestion(signal); this.check(signal);
       this.repeatBusy = false;
       this.beginAnswer();
@@ -336,8 +342,11 @@ export class TrainerSession {
     } else await this.nextQuestion(signal);
   }
   private async playCadence(signal: AbortSignal) {
-    this.emit({ message: 'Establishing the tonic: 1 · 4 · 5 · 1' });
+    this.check(signal);
+    this.emit({ tonicizing: true, message: 'Establishing the tonic: 1 · 4 · 5 · 1' });
     for (const degree of [0, 5, 7, 0]) await this.playDegree(degree, true, signal);
+    this.check(signal);
+    this.emit({ tonicizing: false, message: 'Listen…' });
   }
   async cadence() {
     if (this.state.phase !== 'exploring') return;

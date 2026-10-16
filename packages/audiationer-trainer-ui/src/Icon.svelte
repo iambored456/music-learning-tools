@@ -6,6 +6,7 @@
     chevron: 'm6 9 6 6 6-6', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14',
     note: 'M15 4v12m0-12 4 3M15 16c0 4-7 5-7 1 0-3 7-4 7-1',
     question: 'M9 7a3 3 0 0 1 6 1c0 2-3 2.5-3 4.5M12 17.5h.01',
+    hourglass: 'M5 3h14M5 21h14M7 3v4c0 2 3 3 5 5-2 2-5 3-5 5v4M17 3v4c0 2-3 3-5 5 2 2 5 3 5 5v4M9 6h6M9 18h6',
     melody: 'M8 16V6l11-3v11M8 16c0 4-6 5-6 1 0-3 6-4 6-1m11-2c0 4-6 5-6 1 0-3 6-4 6-1',
     pocket: 'M4 14v-3a8 8 0 0 1 16 0v3M4 12h3v8H4zm13 0h3v8h-3z',
     freeplay: 'M3 5h18v14H3zM7 5v14M12 5v14M17 5v14M5 5v7M10 5v7M15 5v7',

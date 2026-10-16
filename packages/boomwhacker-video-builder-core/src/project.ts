@@ -1,10 +1,5 @@
-import { getBoomwhackerLane } from './lanes.js';
-import { deriveTimingModel } from './timing.js';
 import type {
   AnnotationState,
-  AudioProcessingState,
-  BoomwhackerNoteShape,
-  BoomwhackerGridNote,
   BoomwhackerVideoBuilderProject,
   ExportState,
   GridSubdivisionState,
@@ -31,16 +26,16 @@ export const DEFAULT_GRID_STATE: GridSubdivisionState = {
 };
 
 export const DEFAULT_SONG_TIMING_STATE: SongTimingState = {
+  beatTimesSec: [],
+  midiFileName: null,
+  firstDownbeatIndex: null,
   tempoBpm: 120,
   firstBeatOffsetSec: 0,
-  beatCount: 64,
-  countInBeats: 4,
+  beatCount: 0,
+  countInEnabled: false,
+  silentLeadInEnabled: false,
   timeSignatureNumerator: 4,
   timeSignatureDenominator: 4,
-};
-
-export const DEFAULT_AUDIO_PROCESSING_STATE: AudioProcessingState = {
-  transposeSemitones: 0,
 };
 
 export const DEFAULT_VIEW_STATE: ViewState = {
@@ -57,12 +52,13 @@ export const DEFAULT_VIEW_STATE: ViewState = {
 
 export const DEFAULT_PREVIEW_STATE: PlaybackState = {
   includeSynthPlayback: true,
+  playMetronome: false,
+  metronomeVolume: 0.7,
   playAudio: true,
   playGrid: true,
   audioVolume: 1,
   synthVolume: 1,
   playbackOffsetSec: 0,
-  previewOriginalAudio: false,
 };
 
 export const DEFAULT_EXPORT_STATE: ExportState = {
@@ -109,8 +105,7 @@ export function createBoomwhackerVideoBuilderProject(options?: {
   return {
     metadata: createProjectMetadata(title, options?.appVersion ?? DEFAULT_APP_VERSION),
     audio: options?.audio ?? null,
-    audioProcessing: { ...DEFAULT_AUDIO_PROCESSING_STATE },
-    songTiming: { ...DEFAULT_SONG_TIMING_STATE },
+    songTiming: { ...DEFAULT_SONG_TIMING_STATE, beatTimesSec: [] },
     grid: { ...DEFAULT_GRID_STATE },
     notes: {
       placedNotes: [],
@@ -130,69 +125,3 @@ export function createBoomwhackerVideoBuilderProject(options?: {
   };
 }
 
-function createLaneNote(
-  row: number,
-  startSlotIndex: number,
-  endSlotIndex: number,
-  shape: BoomwhackerNoteShape,
-): BoomwhackerGridNote {
-  const lane = getBoomwhackerLane(row);
-  if (!lane) {
-    throw new Error(`Invalid Boomwhacker lane row: ${row}`);
-  }
-
-  return {
-    id: createId('bvb-note'),
-    row,
-    startSlotIndex,
-    endSlotIndex,
-    shape,
-    color: lane.color,
-    noteId: lane.noteId,
-    pitchInterval: lane.pitchInterval,
-  };
-}
-
-export function createSampleBoomwhackerVideoBuilderProject(): BoomwhackerVideoBuilderProject {
-  const project = createBoomwhackerVideoBuilderProject({
-    title: 'Boomwhacker Video Builder Shell',
-    audio: null,
-  });
-
-  project.songTiming = {
-    tempoBpm: 112,
-    firstBeatOffsetSec: 0.25,
-    beatCount: 12,
-    countInBeats: 4,
-    timeSignatureNumerator: 4,
-    timeSignatureDenominator: 4,
-  };
-
-  project.grid = {
-    defaultMacrobeatGrouping: 2,
-  };
-
-  project.notes.placedNotes = [
-    createLaneNote(0, 0, 3, 'circle'),
-    createLaneNote(1, 4, 7, 'circle'),
-    createLaneNote(2, 8, 11, 'circle'),
-    createLaneNote(3, 12, 15, 'circle'),
-    createLaneNote(4, 16, 16, 'diamond'),
-    createLaneNote(5, 17, 19, 'oval'),
-    createLaneNote(6, 20, 25, 'circle'),
-    createLaneNote(7, 28, 33, 'circle'),
-  ];
-
-  project.annotations = {
-    sections: [],
-    timelineNotes: [],
-  };
-
-  project.viewState.activeTab = 'editor';
-  project.exportState.leadInDurationSec = 2.25;
-
-  const timing = deriveTimingModel(project.songTiming, project.grid);
-  project.viewState.scrollSlotIndex = Math.min(12, timing.totalSlotCount);
-
-  return project;
-}

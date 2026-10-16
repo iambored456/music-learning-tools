@@ -358,9 +358,6 @@ importers:
       '@mlt/notation-glyphs':
         specifier: workspace:*
         version: link:../notation-glyphs
-      '@mlt/tempo-controls-ui':
-        specifier: workspace:*
-        version: link:../tempo-controls-ui
     devDependencies:
       svelte:
         specifier: ^5.46.1

@@ -1,6 +1,6 @@
 import type { NoteShape } from '@mlt/types';
 
-export const BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION = 5 as const;
+export const BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION = 6 as const;
 export type BoomwhackerSchemaVersion = typeof BOOMWHACKER_VIDEO_BUILDER_SCHEMA_VERSION;
 export type MacrobeatGrouping = 2 | 3;
 export type AudioStorageStrategy = 'embedded' | 'file-handle' | 'external-file';
@@ -27,16 +27,17 @@ export interface ProjectAudio {
 }
 
 export interface SongTimingState {
+  beatTimesSec: number[];
+  midiFileName: string | null;
+  firstDownbeatIndex: number | null;
+  // Cached summaries, recalculated by withBeatTimes; never edited independently.
   tempoBpm: number;
   firstBeatOffsetSec: number;
   beatCount: number;
-  countInBeats: number;
+  countInEnabled: boolean;
+  silentLeadInEnabled: boolean;
   timeSignatureNumerator: number;
   timeSignatureDenominator: number;
-}
-
-export interface AudioProcessingState {
-  transposeSemitones: number;
 }
 
 export interface GridSubdivisionState {
@@ -92,12 +93,13 @@ export interface ViewState {
 
 export interface PlaybackState {
   includeSynthPlayback: boolean;
+  playMetronome: boolean;
+  metronomeVolume: number;
   playAudio: boolean;
   playGrid: boolean;
   audioVolume: number;
   synthVolume: number;
   playbackOffsetSec: number;
-  previewOriginalAudio: boolean;
 }
 
 export type BackgroundConfig =
@@ -137,7 +139,6 @@ export interface ExportState {
 export interface BoomwhackerVideoBuilderProject {
   metadata: ProjectMetadata;
   audio: ProjectAudio | null;
-  audioProcessing: AudioProcessingState;
   songTiming: SongTimingState;
   grid: GridSubdivisionState;
   notes: ProjectNotesState;
@@ -180,6 +181,7 @@ export interface DerivedSlotBoundary {
 }
 
 export interface DerivedTimingModel {
+  firstDownbeatIndex: number | null;
   beatSpans: DerivedBeatSpan[];
   slotBoundaries: DerivedSlotBoundary[];
   totalSlotCount: number;

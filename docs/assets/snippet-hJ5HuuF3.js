@@ -1,1 +1,0 @@
-import{O as p,a5 as t}from"./disclose-version-C9g44vam.js";import{B as c}from"./class-BI8aHQ6u.js";function f(a,r,...s){var e=new c(a);p(()=>{const n=r()??null;e.ensure(n,n&&(o=>n(o,...s)))},t)}export{f as s};

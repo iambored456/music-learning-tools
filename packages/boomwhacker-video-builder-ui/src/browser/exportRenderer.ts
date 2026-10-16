@@ -7,14 +7,13 @@ import {
   type TimedBoomwhackerNote,
 } from '@mlt/boomwhacker-video-builder-core';
 import {
-  getActiveHighwayBeatSpan,
-  getHighwayJudgmentAreaWidthPx,
+  getHighwayTimeX,
   getHighwayNoteLayout,
 } from '../highwayLayout.js';
 
 const backgroundImageCache = new Map<string, Promise<HTMLImageElement>>();
 
-const JUDGMENT_LINE_RATIO = 0.22;
+const HIT_LINE_RATIO = 0.22;
 const SECONDS_VISIBLE_AHEAD = 3.2;
 
 type ExportFrameRenderParams = {
@@ -434,8 +433,8 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
   const viewportY = highwayTop;
   const viewportWidth = width - viewportX - 72;
   const viewportHeight = laneHeight * laneCount;
-  const judgmentX = viewportX + (viewportWidth * JUDGMENT_LINE_RATIO);
-  const pixelsPerSecond = (viewportWidth * (1 - JUDGMENT_LINE_RATIO)) / SECONDS_VISIBLE_AHEAD;
+  const hitLineX = viewportX + (viewportWidth * HIT_LINE_RATIO);
+  const pixelsPerSecond = (viewportWidth * (1 - HIT_LINE_RATIO)) / SECONDS_VISIBLE_AHEAD;
   const songTimeSec = getExportSongTimeSec(project, timing, frameTimeSec);
 
   const stageGradient = context.createLinearGradient(viewportX, viewportY, viewportX, viewportY + viewportHeight);
@@ -486,36 +485,8 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
     context.stroke();
   }
 
-  const activeJudgmentBeatSpan = getActiveHighwayBeatSpan(timing, songTimeSec);
-  if (activeJudgmentBeatSpan) {
-    const areaWidth = getHighwayJudgmentAreaWidthPx(activeJudgmentBeatSpan, pixelsPerSecond);
-    const clippedLeft = Math.max(viewportX, Math.min(judgmentX, viewportX + viewportWidth));
-    const clippedRight = Math.max(viewportX, Math.min(judgmentX + areaWidth, viewportX + viewportWidth));
-
-    if (clippedRight > clippedLeft) {
-      const judgmentAreaGradient = context.createLinearGradient(clippedLeft, viewportY, clippedRight, viewportY);
-      judgmentAreaGradient.addColorStop(0, 'rgba(121, 187, 255, 0.08)');
-      judgmentAreaGradient.addColorStop(0.5, 'rgba(121, 187, 255, 0.18)');
-      judgmentAreaGradient.addColorStop(1, 'rgba(121, 187, 255, 0.08)');
-      context.save();
-      context.fillStyle = judgmentAreaGradient;
-      context.fillRect(clippedLeft, viewportY, clippedRight - clippedLeft, viewportHeight);
-      context.fillStyle = 'rgba(215, 238, 255, 0.08)';
-      context.fillRect(clippedLeft, viewportY, clippedRight - clippedLeft, viewportHeight);
-      context.strokeStyle = 'rgba(215, 238, 255, 0.76)';
-      context.lineWidth = 2;
-      context.beginPath();
-      context.moveTo(clippedLeft, viewportY);
-      context.lineTo(clippedLeft, viewportY + viewportHeight);
-      context.moveTo(clippedRight, viewportY);
-      context.lineTo(clippedRight, viewportY + viewportHeight);
-      context.stroke();
-      context.restore();
-    }
-  }
-
   for (const guide of guides) {
-    const guideX = judgmentX + ((guide.timeSec - songTimeSec) * pixelsPerSecond);
+    const guideX = getHighwayTimeX(guide.timeSec, songTimeSec, hitLineX, pixelsPerSecond);
     if (guideX < viewportX - 4 || guideX > viewportX + viewportWidth + 4) {
       continue;
     }
@@ -548,8 +519,8 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
 
   for (const note of timedNotes) {
     const visualRow = getVisualLaneRow(note.row, laneCount);
-    const noteStartX = judgmentX + ((note.startTimeSec - songTimeSec) * pixelsPerSecond);
-    const noteEndX = judgmentX + ((note.endTimeSec - songTimeSec) * pixelsPerSecond);
+    const noteStartX = getHighwayTimeX(note.startTimeSec, songTimeSec, hitLineX, pixelsPerSecond);
+    const noteEndX = getHighwayTimeX(note.endTimeSec, songTimeSec, hitLineX, pixelsPerSecond);
     const noteIsSustainedCircle = isSustainedCircleNote(note, timing);
     const noteLayout = getHighwayNoteLayout({
       note,
@@ -605,6 +576,17 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
       );
     }
   }
+
+  // Draw above notes and highlights so the attack reference stays visible.
+  context.save();
+  context.strokeStyle = '#ffd166';
+  context.lineWidth = 3;
+  context.setLineDash([]);
+  context.beginPath();
+  context.moveTo(hitLineX, viewportY);
+  context.lineTo(hitLineX, viewportY + viewportHeight);
+  context.stroke();
+  context.restore();
 
   context.fillStyle = 'rgba(159, 178, 204, 0.92)';
   context.font = '500 20px "Atkinson Hyperlegible Next", system-ui, sans-serif';

@@ -12,7 +12,7 @@
 {#if shape === 'circle'}
   {#if sustained}
     <svg class="token-glyph sustain" viewBox="0 0 160 80" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-      <rect x="8" y="8" width="144" height="64" rx="32" />
+      <rect x="0" y="8" width="160" height="64" rx="32" />
     </svg>
   {:else}
     <svg class="token-glyph circle" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
