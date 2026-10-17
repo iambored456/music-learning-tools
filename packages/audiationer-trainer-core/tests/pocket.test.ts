@@ -55,11 +55,12 @@ test('Pocket settings migrate old saves, validate limits and do not share defaul
   assert.deepEqual(normalizeSettings(JSON.parse(JSON.stringify(old))), old);
 });
 
-test('Pocket wraps Degrees, Melody, Chord Progressions and Chord Quality with matching spoken answers', async () => {
+test('Pocket wraps all exercises with matching spoken answers', async () => {
   const cases = [
     { exercise: 'degrees', extra: { degrees: [3], scale: '6' }, notes: [[63]], speech: ['flat 3'] },
     { exercise: 'melody', extra: { degrees: [0, 2] }, notes: [[60], [62], [60]], speech: ['1', '2', '1'] },
     { exercise: 'chords', extra: { degrees: [1, 2] }, notes: [[62, 65, 69]], speech: ['two minor'] },
+    { exercise: 'chord-progressions', extra: { degrees: [1, 2] }, notes: [[62, 65, 69], [62, 65, 69], [62, 65, 69]], speech: ['two minor', 'two minor', 'two minor'] },
     { exercise: 'quality', extra: { degrees: [], qualities: [2] }, notes: [[60, 63, 66]], speech: ['Diminished'] },
   ] as const;
   for (const item of cases) {

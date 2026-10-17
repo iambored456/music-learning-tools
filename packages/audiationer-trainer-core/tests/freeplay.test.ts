@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FREEPLAY_DEGREES, FreeplaySession, normalizeFreeplaySettings, type FreeplayAudio, type SoundPreset } from '../src/index.ts';
+import { FREEPLAY_DEGREES, FreeplaySession, normalizeFreeplaySettings, normalizeLessonTiming, type FreeplayAudio, type SoundPreset } from '../src/index.ts';
 
 class AudioMock implements FreeplayAudio {
   held: { midi: number; released: boolean }[] = [];
@@ -9,6 +9,7 @@ class AudioMock implements FreeplayAudio {
   melodyVolume = 0;
   drones: { midi: number | null; volume: number }[] = [];
   unlocks = 0;
+  stops = 0;
   async unlock() { this.unlocks++; }
   volume(value: number) { this.melodyVolume = value; }
   preset(value: SoundPreset) { this.presets.push(value); }
@@ -18,7 +19,7 @@ class AudioMock implements FreeplayAudio {
   }
   async notes(midis: number[], _seconds: number, signal: AbortSignal) { signal.throwIfAborted(); this.played.push(midis); }
   drone(midi: number | null, volume: number) { this.drones.push({ midi, volume }); }
-  stop() { for (const voice of this.held) voice.released = true; }
+  stop() { this.stops++; for (const voice of this.held) voice.released = true; }
 }
 const flush = () => new Promise<void>(resolve => setImmediate(resolve));
 function setup(extra = {}) {
@@ -49,6 +50,28 @@ test('Free Play remembers Random or a fixed key across saved settings', () => {
     assert.equal(restored.randomTonic, randomTonic);
     assert.equal(restored.tonic, 8);
   }
+});
+
+test('Free Play saves its own tap and Cycle timing and applies both to playback', async () => {
+  const timing = normalizeLessonTiming({ tapSeconds: 0.6, noteSeconds: 0.2, noteGapSeconds: 0.35 });
+  const t = setup({ timing });
+  assert.deepEqual(normalizeFreeplaySettings(JSON.parse(JSON.stringify(t.settings))).timing, timing);
+  const tap = t.session.press(0); tap.finish(false); await flush();
+  assert.equal(t.timers[0].ms, 600);
+  t.session.stopAll();
+  const durations: number[] = [], gaps: number[] = [];
+  t.audio.notes = async (_midis, seconds, signal) => { signal.throwIfAborted(); durations.push(seconds); };
+  let cycle: FreeplaySession;
+  cycle = new FreeplaySession(t.audio, t.settings, () => {}, async (ms, signal) => {
+    gaps.push(ms);
+    if (gaps.length === 2) cycle.stopAll();
+    signal.throwIfAborted();
+  });
+  await cycle.toggleCycle();
+  assert.deepEqual(durations, [0.2, 0.2]);
+  assert.deepEqual(gaps, [350, 350]);
+  assert.equal(cycle.snapshot().cycling, false);
+  cycle.destroy(); t.session.destroy();
 });
 
 test('opening and configuring Free Play does not start audio', () => {
@@ -159,4 +182,106 @@ test('turning Cycle off before unlock prevents stale playback', async () => {
   unlock(); await cycle;
   assert.deepEqual(t.audio.played, []);
   assert.equal(t.session.snapshot().cycling, false);
+});
+
+test('dragging plays successive notes, sustains the final one and preserves other latched notes', async () => {
+  const t = setup();
+  t.session.press(7).finish(true); await flush();
+  const drag = t.session.press(0); await flush();
+  drag.move(2); drag.move(4); drag.finish(true);
+  assert.deepEqual(t.audio.held.map(voice => voice.midi), [67, 60, 62, 64]);
+  assert.deepEqual(t.audio.held.map(voice => voice.released), [false, true, true, false]);
+  assert.deepEqual(t.session.snapshot().sustained, [7, 4]);
+  assert.equal(t.audio.stops, 0);
+  t.session.press(4).finish(false);
+  assert.deepEqual(t.session.snapshot().sustained, [7]);
+  t.session.destroy();
+});
+
+test('a 7-to-1 octave crossing plays the next tonic directly and keeps the drone running', async () => {
+  const t = setup();
+  const drag = t.session.press(11); await flush();
+  drag.move(0, 5);
+  t.session.configure({ ...t.settings, octave: 5 }); // The UI saves the new displayed octave.
+  assert.deepEqual(t.audio.held.map(voice => voice.midi), [71, 72]);
+  assert.equal(t.audio.held[0].released, true);
+  drag.move(11, 4);
+  assert.deepEqual(t.audio.held.map(voice => voice.midi), [71, 72, 71]);
+  assert.equal(t.audio.stops, 0);
+  assert.ok(t.audio.drones.every(drone => drone.midi === 48));
+  drag.finish(true);
+  drag.move(0, 5); // A finished gesture cannot change the pitch later.
+  assert.equal(t.audio.held.length, 3);
+  assert.deepEqual(t.session.snapshot().sustained, [11]);
+  t.session.destroy();
+});
+
+test('a drag that moves before audio unlock plays only its latest pitch and octave', async () => {
+  const t = setup(); let unlock!: () => void;
+  t.audio.unlock = () => new Promise<void>(resolve => { unlock = resolve; });
+  const drag = t.session.press(11);
+  drag.move(0, 5); drag.move(2, 5); drag.finish(true);
+  unlock(); await flush();
+  assert.deepEqual(t.audio.held.map(voice => voice.midi), [74]);
+  assert.deepEqual(t.session.snapshot().sustained, [2]);
+  t.session.destroy();
+});
+
+test('cancelling a moved drag before unlock prevents stale audio and further movement', async () => {
+  const t = setup(); let unlock!: () => void;
+  t.audio.unlock = () => new Promise<void>(resolve => { unlock = resolve; });
+  const drag = t.session.press(11);
+  drag.move(0, 5); drag.cancel(); drag.move(2, 5);
+  unlock(); await flush();
+  assert.deepEqual(t.audio.held, []);
+  assert.deepEqual(t.session.snapshot().sounding, []);
+  t.session.destroy();
+});
+
+test('manual pitch changes preserve an active drag handle and never stop the drone', async () => {
+  const t = setup();
+  const drag = t.session.press(0); await flush();
+  t.session.configure({ ...t.settings, tonic: 2, octave: 5 });
+  drag.move(2); drag.finish(true);
+  assert.deepEqual(t.audio.held.map(voice => voice.midi), [60, 74, 76]);
+  assert.deepEqual(t.audio.held.map(voice => voice.released), [true, true, false]);
+  assert.equal(t.audio.stops, 0);
+  assert.deepEqual(t.session.snapshot().sustained, [2]);
+  t.session.destroy();
+});
+
+test('dragging onto an already sustained degree preserves it without leaving duplicate latches', async () => {
+  const t = setup();
+  t.session.press(4).finish(true); await flush();
+  const drag = t.session.press(0); await flush();
+  drag.move(4); drag.cancel();
+  assert.deepEqual(t.session.snapshot().sustained, [4]);
+  assert.equal(t.audio.held[0].released, false);
+  const second = t.session.press(0); await flush();
+  second.move(4); second.finish(true);
+  t.session.press(4).finish(false);
+  assert.deepEqual(t.session.snapshot().sounding, []);
+  assert.ok(t.audio.held.every(voice => voice.released));
+  t.session.destroy();
+});
+
+test('starting on a sustained degree turns it off and still allows dragging to a different note', async () => {
+  const t = setup();
+  t.session.press(0).finish(true); await flush();
+  const drag = t.session.press(0);
+  assert.deepEqual(t.session.snapshot().sounding, []);
+  drag.move(2); drag.finish(true); await flush();
+  assert.deepEqual(t.audio.held.map(voice => voice.midi), [60, 62]);
+  assert.deepEqual(t.session.snapshot().sustained, [2]);
+  t.session.destroy();
+});
+
+test('simultaneous drags own independent voices and cancelling one leaves the other playing', async () => {
+  const t = setup();
+  const first = t.session.press(0), second = t.session.press(4); await flush();
+  first.move(2); second.move(7);
+  assert.deepEqual(t.session.snapshot().sounding, [2, 7]);
+  first.cancel(); second.finish(true);
+  assert.deepEqual(t.session.snapshot().sustained, [7]);
+  t.session.destroy();
 });

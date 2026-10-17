@@ -43,6 +43,13 @@ export function chordLabel(degree: number, mode: ScaleMode): string {
   return (third === 3 ? roman.toLowerCase() : roman) + (fifth === 6 ? '°' : fifth === 8 ? '+' : '');
 }
 
+export function spokenChordLabel(degree: number, mode: ScaleMode): string {
+  const label = chordLabel(degree, mode);
+  const number = ['one', 'two', 'three', 'four', 'five', 'six', 'seven'][scaleDegrees(mode).indexOf(degree)];
+  const quality = label.endsWith('°') ? 'diminished' : label.endsWith('+') ? 'augmented' : label === label.toLowerCase() ? 'minor' : 'major';
+  return `${number} ${quality}`;
+}
+
 export function pick<T>(values: readonly T[], random: () => number = Math.random): T {
   if (!values.length) throw new Error('Select at least one answer to practise.');
   return values[Math.min(values.length - 1, Math.max(0, Math.floor(random() * values.length)))];

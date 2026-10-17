@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { CHORD_QUALITIES, POCKET_EXERCISES, POCKET_QUESTIONS_PER_KEY, SCALE_MODES, SOUND_PRESETS, chordLabel, degreeLabel, scaleDegrees, type Settings } from '@mlt/audiationer-trainer-core';
+  import { CHORD_QUALITIES, POCKET_EXERCISES, POCKET_QUESTIONS_PER_KEY, SCALE_MODES, SOUND_PRESETS, chordLabel, degreeLabel, isChordMode, lessonTiming, scaleDegrees, setLessonTiming, type Settings } from '@mlt/audiationer-trainer-core';
   import Icon from './Icon.svelte';
+  import TimingTimeline from './TimingTimeline.svelte';
   let { settings = $bindable() }: { settings: Settings } = $props();
   let chooseSound = $state(false);
   const p = $derived(settings.pocket);
   const soundName = $derived(SOUND_PRESETS.find(sound => sound.id === p.soundPreset)!.name);
+  const timing = $derived(lessonTiming(settings));
   function toggleDegree(degree: number) {
     settings.degrees = settings.degrees.includes(degree) ? settings.degrees.filter(d => d !== degree) : [...settings.degrees, degree].sort((a, b) => a - b);
   }
@@ -26,18 +28,19 @@
   <section class="at-mode-setting" aria-labelledby="at-pocket-cadence">
     <h3 id="at-pocket-cadence">Play a melody before each key change</h3>
     <p>Helps your ear adjust to the new tonic.</p>
-    {@render toggle('Play a melody before each key change', settings.cadence, value => { settings.cadence = value; })}
+    {@render toggle('Play a melody before each key change', timing.tonicizationEnabled, value => setLessonTiming(settings, { tonicizationEnabled: value }))}
   </section>
 
-  <label class="at-mode-setting at-settings-slider">Tempo: {p.tempo} BPM
-    <span>Affects note length and the speed of the game.</span>
-    <input aria-label="Pocket tempo" type="range" min="30" max="180" step="10" bind:value={p.tempo} />
-  </label>
 
   <section class="at-mode-setting" aria-labelledby="at-pocket-length">
+    {#if p.exercise === 'chord-progressions'}
+    <h3 id="at-pocket-length">Number of chords in progression</h3>
+    <div class="at-settings-segment" role="group" aria-label="Number of chords in progression">{#each [2, 3, 4, 5, 6, 7, 8] as length}<button type="button" aria-pressed={p.progressionLength === length} onclick={() => { p.progressionLength = length; }}>{length}</button>{/each}</div>
+    {:else}
     <h3 id="at-pocket-length">Number of notes in melody</h3>
     <p>Choose the Melody exercise to practise sequences of up to five notes.</p>
     <div class="at-settings-segment" role="group" aria-label="Number of notes in melody">{#each [1, 2, 3, 4, 5] as length}<button type="button" disabled={p.exercise !== 'melody'} aria-pressed={p.melodyLength === length} onclick={() => { p.melodyLength = length; }}>{length}</button>{/each}</div>
+    {/if}
   </section>
 
   <section class="at-mode-setting" aria-labelledby="at-pocket-repeats">
@@ -45,16 +48,14 @@
     <div class="at-settings-segment" role="group" aria-label="Question plays before answer">{#each [1, 2, 3, 4, 5] as count}<button type="button" aria-pressed={p.repeats === count} onclick={() => { p.repeats = count; }}>{count}</button>{/each}</div>
   </section>
 
-  <label class="at-mode-setting at-settings-slider">Wait time before answer: {p.waitSeconds} s
-    <span>Silent time to think about the answer.</span>
-    <input aria-label="Wait time before answer" type="range" min="0" max="15" step="0.5" bind:value={p.waitSeconds} />
-  </label>
 
   <section class="at-mode-setting" aria-labelledby="at-pocket-replays">
     <h3 id="at-pocket-replays">Replay question after answer</h3>
     <p>Hear the question again after the answer has been given.</p>
     <div class="at-settings-segment" role="group" aria-label="Question replays after answer">{#each [0, 1, 2, 3, 4] as count}<button type="button" aria-pressed={p.replays === count} onclick={() => { p.replays = count; }}>{count || 'No'}</button>{/each}</div>
   </section>
+
+  <TimingTimeline {settings} ontiming={(timing) => { settings.timings = { ...settings.timings, [settings.mode]: timing }; }} />
 
   <details class="at-settings-section" open>
     <summary>Volume settings<Icon name="chevron" /></summary>
@@ -90,7 +91,7 @@
       <fieldset class="at-check-list"><legend>Chord qualities</legend>{#each CHORD_QUALITIES as quality, index}<label><input type="checkbox" checked={settings.qualities.includes(index)} onchange={() => { settings.qualities = settings.qualities.includes(index) ? settings.qualities.filter(q => q !== index) : [...settings.qualities, index]; }} />{quality.name}</label>{/each}</fieldset>
     {:else}
       <label class="at-field">Scale mode<select bind:value={settings.scale} onchange={(event) => { settings.scale = event.currentTarget.value as Settings['scale']; settings.degrees = scaleDegrees(settings.scale); }}>{#each SCALE_MODES as mode}<option value={mode.id}>{mode.name}</option>{/each}</select></label>
-      <fieldset class="at-check-list"><legend>{p.exercise === 'chords' ? 'Chords to practise' : 'Degrees to practise'}</legend><div class="at-degree-options">{#each Array.from({ length: 12 }, (_, i) => i) as degree}{@const unavailable = p.exercise === 'chords' && !scaleDegrees(settings.scale).includes(degree)}<label class:at-unavailable={unavailable}><input type="checkbox" disabled={unavailable} checked={settings.degrees.includes(degree)} onchange={() => toggleDegree(degree)} />{p.exercise === 'chords' ? chordLabel(degree, settings.scale) : degreeLabel(degree, settings.scale)}</label>{/each}</div></fieldset>
+      <fieldset class="at-check-list"><legend>{isChordMode(p.exercise) ? 'Chords to practise' : 'Degrees to practise'}</legend><div class="at-degree-options">{#each Array.from({ length: 12 }, (_, i) => i) as degree}{@const unavailable = isChordMode(p.exercise) && !scaleDegrees(settings.scale).includes(degree)}<label class:at-unavailable={unavailable}><input type="checkbox" disabled={unavailable} checked={settings.degrees.includes(degree)} onchange={() => toggleDegree(degree)} />{isChordMode(p.exercise) ? chordLabel(degree, settings.scale) : degreeLabel(degree, settings.scale)}</label>{/each}</div></fieldset>
     {/if}
     <div class="at-check-list"><label><input type="checkbox" bind:checked={settings.randomOctave} />Random octave (3–5)</label><label><input type="checkbox" bind:checked={settings.drone} />Tonic drone</label></div>
   </details>

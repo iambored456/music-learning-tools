@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { QUESTIONS_PER_KEY, SOUND_PRESETS, WHEEL_VIEWS, degreeLabel, setWheelView, wheelView, type Settings } from '@mlt/audiationer-trainer-core';
+  import { QUESTIONS_PER_KEY, SOUND_PRESETS, WHEEL_VIEWS, degreeLabel, lessonTiming, setLessonTiming, setWheelView, wheelView, type Settings } from '@mlt/audiationer-trainer-core';
   import Icon from './Icon.svelte';
   import AutoContinueSettings from './AutoContinueSettings.svelte';
   import ReviewSettings from './ReviewSettings.svelte';
+  import TimingTimeline from './TimingTimeline.svelte';
   let { settings = $bindable(), custom = false }: { settings: Settings; custom?: boolean } = $props();
   let chooseSound = $state(false);
   const options = $derived(settings.degreeOptions);
   const soundName = $derived(SOUND_PRESETS.find(sound => sound.id === options.soundPreset)!.name);
+  const timing = $derived(lessonTiming(settings));
 </script>
 
 {#snippet toggle(name: string, value: boolean, change: (value: boolean) => void)}
@@ -25,11 +27,12 @@
   <AutoContinueSettings bind:settings />
 
   <ReviewSettings bind:settings />
+  <TimingTimeline {settings} ontiming={(timing) => { settings.timings = { ...settings.timings, [settings.mode]: timing }; }} />
 
   <section class="at-mode-setting" aria-labelledby="at-degrees-cadence">
     <h3 id="at-degrees-cadence">Play a melody before each key change</h3>
     <p>Helps your ear adjust to the new tonic.</p>
-    {@render toggle('Play a melody before each key change', settings.cadence, value => { settings.cadence = value; })}
+    {@render toggle('Play a melody before each key change', timing.tonicizationEnabled, value => setLessonTiming(settings, { tonicizationEnabled: value }))}
   </section>
 
   <label class="at-field at-mode-setting">Session length<select bind:value={settings.rounds}>{#each [...new Set([5, 10, 20, 40, settings.rounds])].sort((a, b) => a - b) as rounds}<option value={rounds}>{rounds} questions</option>{/each}</select></label>

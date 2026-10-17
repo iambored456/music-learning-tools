@@ -24,8 +24,8 @@ function setup(extra = {}, initialRandom = 0) {
   return { audio, session, settings, state: () => state! };
 }
 
-test('all seven modes have the requested public names', () => {
-  assert.deepEqual(GAME_MODES.map(m => m.name), ['Free Play', 'Degrees', 'Melody', 'Chord Progressions', 'Chord Quality', 'Pocket Mode', 'Cycle']);
+test('all modes have the requested public names', () => {
+  assert.deepEqual(GAME_MODES.map(m => m.name), ['Free Play', 'Degrees', 'Melody', 'Chords', 'Chord Progressions', 'Chord Quality', 'Pocket Mode', 'Cycle']);
 });
 test('wheel order preserves pitch identity and shares 30-degree sectors', () => {
   assert.deepEqual(wheelPitchClasses('fifths'), [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]);
@@ -194,10 +194,10 @@ test('Chords uses modal triads and Chord Quality uses the selected voicing', asy
 test('cadence establishes a tonic once; configured sessions advance and end', async () => {
   const t = setup({ cadence: true, rounds: 2, degrees: [0] });
   await t.session.start(t.settings);
-  assert.deepEqual(t.audio.played.slice(0, 4), [[60], [65], [67], [60]]);
+  assert.deepEqual(t.audio.played.slice(0, 7), [[60], [64], [67], [65], [62], [59], [60]]);
   await t.session.answer(0);
   assert.equal(t.state().round, 2);
-  assert.equal(t.audio.played.length, 6);
+  assert.equal(t.audio.played.length, 9);
   await t.session.answer(0); assert.equal(t.state().phase, 'finished');
 });
 test('Freeplay plays selected notes without scoring', async () => {
@@ -248,7 +248,7 @@ test('Pocket mode speaks answers and Cycle walks selected degrees until stopped'
   for (const mode of ['pocket', 'cycle'] as const) {
     const audio = new AudioMock(); let session: TrainerSession; let rounds = 0;
     session = new TrainerSession(audio, () => {}, () => 0, async (ms, signal) => {
-      if (ms === (mode === 'pocket' ? 1500 : 800) && ++rounds === 2) session.stop();
+      if (ms === (mode === 'pocket' ? 1500 : 1800) && ++rounds === 2) session.stop();
       signal.throwIfAborted();
     });
     await session.start(normalizeSettings({ mode, cadence: false, degrees: [0, 7], pocket: { replays: 0 } }));

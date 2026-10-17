@@ -107,9 +107,10 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
       window.speechSynthesis.speak(utterance);
     });
   }
-  stop() {
+  stop({ preserveDrone = false }: { preserveDrone?: boolean } = {}) {
     for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } }
-    this.voices.clear(); this.drone(null, 0);
+    this.voices.clear();
+    if (!preserveDrone) this.drone(null, 0);
     if (this.speech && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     this.speech = null;
   }

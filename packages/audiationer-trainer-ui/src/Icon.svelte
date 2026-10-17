@@ -4,6 +4,7 @@
   const paths: Record<string, string> = {
     back: 'm14 5-7 7 7 7M7 12h14', close: 'm6 6 12 12M6 18 18 6',
     chevron: 'm6 9 6 6 6-6', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14',
+    lock: 'M7 10V7a5 5 0 0 1 10 0v3M5 10h14v11H5zM12 14v3',
     note: 'M15 4v12m0-12 4 3M15 16c0 4-7 5-7 1 0-3 7-4 7-1',
     question: 'M9 7a3 3 0 0 1 6 1c0 2-3 2.5-3 4.5M12 17.5h.01',
     hourglass: 'M5 3h14M5 21h14M7 3v4c0 2 3 3 5 5-2 2-5 3-5 5v4M17 3v4c0 2-3 3-5 5 2 2 5 3 5 5v4M9 6h6M9 18h6',
@@ -34,6 +35,9 @@
   {:else if name === 'stop'}<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" />
   {:else if name === 'pause'}<path d="M8 6v12m8-12v12" stroke-width="4" />
   {:else if name === 'help'}<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20ZM12 5.5c-2.3 0-4 1.5-4 3.6h2c0-1 .8-1.7 2-1.7s2 .7 2 1.6c0 .7-.4 1.2-1.3 1.8-1.2.8-1.7 1.6-1.7 3.2h2c0-.9.2-1.3 1.3-2 1.1-.8 1.7-1.7 1.7-3 0-2-1.7-3.5-4-3.5ZM13.2 17a1.2 1.2 0 1 1-2.4 0 1.2 1.2 0 0 1 2.4 0Z" />
+  {:else if name === 'chord-progressions'}
+    <g transform="translate(0 3) scale(.48 .8)"><path d={paths.chords} /></g>
+    <g transform="translate(13 0) scale(.48 .8)"><path d={paths.chords} /></g>
   {:else}<path d={paths[name] ?? paths.note} />{/if}
 </svg>
 {/if}

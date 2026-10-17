@@ -7,6 +7,7 @@ function setup(extra: Partial<Settings> = {}) {
   let now = 1000;
   let session: TrainerSession;
   const events: Event[] = [];
+  const activeDegrees: number[] = [];
   const audio: TrainerAudio = {
     async unlock() {},
     async notes(midis, seconds, signal) {
@@ -16,13 +17,15 @@ function setup(extra: Partial<Settings> = {}) {
     },
     drone() {}, volume() {}, async speak() {}, stop() {},
   };
-  session = new TrainerSession(audio, () => {}, () => 0, async (ms, signal) => {
+  session = new TrainerSession(audio, state => {
+    if (state.tonicizing && state.activeDegree !== null) activeDegrees.push(state.activeDegree);
+  }, () => 0, async (ms, signal) => {
     signal.throwIfAborted();
     events.push({ kind: 'pause', ms, tonicizing: session.snapshot().tonicizing });
     now += ms;
   }, () => now, () => () => {});
   const settings = normalizeSettings({ mode: 'degrees', degrees: [0], qualities: [0], cadence: false, resolve: false, rounds: 10, ...extra });
-  return { audio, session, settings, events, now: () => now };
+  return { audio, session, settings, events, activeDegrees, now: () => now };
 }
 
 test('every scored mode waits half a second before the first question and every subsequent question', async () => {
@@ -43,14 +46,41 @@ test('every scored mode waits half a second before the first question and every 
   }
 });
 
+test('major Degrees and Melody tonicize at 60 BPM with eighth notes and a quarter-note final tonic', async () => {
+  for (const mode of ['degrees', 'melody'] as const) {
+    for (const noteGap of [0.6, 1.2]) {
+      const t = setup({ mode, cadence: true, octave: 3, noteGap, answerSeconds: 2 });
+      await t.session.start(t.settings);
+      const notes = t.events.filter(event => event.kind === 'note').filter(event => event.tonicizing);
+      assert.deepEqual(notes.map(event => event.midis), [[48], [52], [55], [53], [50], [47], [48]]);
+      assert.deepEqual(notes.map(event => event.seconds), [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.8]);
+      assert.deepEqual(t.events.filter(event => event.kind === 'pause').filter(event => event.tonicizing).map(event => event.ms), [100, 100, 100, 100, 100, 100, 200]);
+      assert.deepEqual(t.activeDegrees, [0, 4, 7, 5, 2, 11, 0]);
+      assert.equal(t.session.snapshot().answerDeadline, t.now() + 2000);
+      t.session.destroy();
+    }
+  }
+});
+
+test('non-major scales and chord exercises keep their context phrase with a doubled final tonic at 60 BPM', async () => {
+  for (const extra of [{ mode: 'degrees', scale: '6' }, { mode: 'melody', scale: '6' }, { mode: 'chords' }, { mode: 'chord-progressions' }] as const) {
+    const t = setup({ ...extra, cadence: true });
+    await t.session.start(t.settings);
+    const notes = t.events.filter(event => event.kind === 'note').filter(event => event.tonicizing);
+    assert.deepEqual(notes.map(event => event.midis), [[60], [65], [67], [60]]);
+    assert.deepEqual(notes.map(event => event.seconds), [0.8, 0.8, 0.8, 1.6]);
+    t.session.destroy();
+  }
+});
+
 test('tonicization marks only cadence notes, followed by a half-second gap and a longer Degrees question', async () => {
   const t = setup({ cadence: true });
   await t.session.start(t.settings);
   for (let question = 1; question <= 5; question++) await t.session.answer(0);
   const notes = t.events.filter(event => event.kind === 'note');
   const cadenceNotes = notes.filter(event => event.tonicizing);
-  assert.deepEqual(cadenceNotes.map(event => event.midis), [[60], [65], [67], [60], [61], [66], [68], [61]]);
-  assert.ok(cadenceNotes.every(event => Math.abs(event.seconds - 0.64) < 1e-9));
+  assert.deepEqual(cadenceNotes.map(event => event.midis), [[60], [64], [67], [65], [62], [59], [60], [61], [65], [68], [66], [63], [60], [61]]);
+  assert.deepEqual(cadenceNotes.map(event => event.seconds), [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.8]);
   assert.equal(notes.filter(event => !event.tonicizing).length, 6);
   for (let index = 0; index < t.events.length; index++) {
     const event = t.events[index];

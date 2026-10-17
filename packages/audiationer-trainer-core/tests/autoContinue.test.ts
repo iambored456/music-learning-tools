@@ -149,7 +149,7 @@ test('replay, exploration and octave changes preserve the original countdown wit
   t.session.destroy();
 });
 
-test('the countdown can interrupt long resolution audio and stale audio cannot alter the next question', async () => {
+test('the countdown starts after resolution audio finishes so the timeline keeps its event order', async () => {
   const t = setup({ resolve: true, degrees: [4] });
   await t.session.start(t.settings);
   const notes = t.audio.notes.bind(t.audio);
@@ -162,10 +162,39 @@ test('the countdown can interrupt long resolution audio and stale audio cannot a
   const answer = t.session.answer(4);
   assert.equal(t.session.snapshot().phase, 'feedback');
   await t.elapse(2000);
-  assert.equal(t.session.snapshot().phase, 'answering');
+  assert.equal(t.session.snapshot().phase, 'feedback');
+  assert.equal(t.session.snapshot().autoContinueDeadline, null);
   release(); await answer;
+  assert.equal(t.session.snapshot().autoContinueDeadline, 5000);
+  await t.elapse(2000);
   assert.equal(t.session.snapshot().round, 2);
   assert.equal(t.session.snapshot().activeDegree, null);
   assert.equal(t.session.snapshot().results.length, 1);
   t.session.destroy();
+});
+
+test('exploration during resolution still starts one countdown after the replacement feedback ends', async () => {
+  for (const action of ['explore', 'replay', 'octave'] as const) {
+    const t = setup({ mode: 'melody', resolve: true, degrees: [4] });
+    await t.session.start(t.settings);
+    const notes = t.audio.notes.bind(t.audio);
+    let release!: () => void;
+    let block = true;
+    t.audio.notes = async (midis, seconds, signal) => {
+      if (block) { block = false; await new Promise<void>(resolve => { release = resolve; }); }
+      await notes(midis, seconds, signal);
+    };
+    await t.session.answer(4);
+    const answer = t.session.answer(4);
+    assert.equal(t.session.snapshot().autoContinueDeadline, null);
+    if (action === 'explore') await t.session.answer(4);
+    else if (action === 'replay') await t.session.replaySequence('revealed');
+    else t.session.setFeedbackOctave(5);
+    assert.equal(t.session.snapshot().autoContinueDeadline, 3000, action);
+    release(); await answer;
+    assert.equal(t.timers.length, 1, action);
+    await t.elapse(2000);
+    assert.equal(t.session.snapshot().round, 2, action);
+    t.session.destroy();
+  }
 });

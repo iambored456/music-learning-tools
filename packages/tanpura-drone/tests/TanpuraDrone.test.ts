@@ -24,7 +24,7 @@ class Source extends Node {
   stop() { this.stops++; }
 }
 class Oscillator extends Source { frequency = new Param(); }
-class Filter extends Node { type = ''; frequency = new Param(); Q = new Param(); }
+class Filter extends Node { type = ''; frequency = new Param(); Q = new Param(); gain = new Param(); }
 class Context {
   currentTime = 10;
   gains: Gain[] = [];
@@ -56,13 +56,18 @@ test('constructing and loading the tanpura creates no playing nodes and shares p
   assert.equal(loads, 1);
 });
 
-test('tanpura plays the shared six-string preset with staggered attacks and filtering', async () => {
+test('tanpura plays the six-string preset and octave-down tonic with staggered attacks and bass EQ', async () => {
   const t = setup(); await t.drone.prepare(); t.drone.set(48, 0.8);
-  assert.equal(t.context.sources.length, 6);
+  assert.equal(t.context.sources.length, 7);
   assert.ok(t.context.sources.every(voice => voice.buffer === sample && voice.loop));
-  assert.deepEqual(t.context.sources.map(voice => voice.starts), [[10], [10.28], [10.58], [10.46], [10.8], [10.12]]);
-  assert.deepEqual(t.context.filters.map(filter => filter.type), ['lowpass', 'lowpass']);
-  assert.ok(t.context.filters.every(filter => filter.frequency.value > 300 && filter.Q.value > 0));
+  assert.deepEqual(t.context.sources.map(voice => voice.starts), [[10], [10.28], [10.58], [10.46], [10.8], [10.12], [10]]);
+  assert.deepEqual(t.context.filters.map(filter => filter.type), ['lowpass', 'lowpass', 'lowshelf']);
+  assert.ok(t.context.filters.slice(0, 2).every(filter => filter.frequency.value > 300 && filter.Q.value > 0));
+  const bassEq = t.context.filters[2];
+  assert.equal(bassEq.frequency.value, 220);
+  assert.equal(bassEq.gain.value, 4);
+  assert.deepEqual(t.context.filters[1].connections, [bassEq]);
+  assert.ok(bassEq.connections.length > 0);
   assert.equal(t.context.oscillators.length, 1);
   assert.ok(t.context.oscillators[0].frequency.value > 1);
   assert.deepEqual(t.context.gains[0].connections, [t.output]);
@@ -75,10 +80,25 @@ test('every key transposes every string including upper-octave strings without c
     t.drone.set(48 + tonic, 0.8);
     const pitches = t.context.sources.map(voice => 48 + 12 * Math.log2(voice.playbackRate.value));
     const fifth = 12 * Math.log2(3 / 2);
-    const expected = [fifth, 12, 0, fifth, 12, 0].map(offset => 48 + tonic + offset);
+    const expected = [fifth, 12, 0, fifth, 12, 0, -12].map(offset => 48 + tonic + offset);
     pitches.forEach((pitch, index) => assert.ok(Math.abs(pitch - expected[index]) < 0.02, `key ${tonic}, string ${index}: ${pitch}`));
   }
-  assert.equal(t.context.sources.length, 6); // Retuning does not restart the strings.
+  assert.equal(t.context.sources.length, 7); // Retuning does not restart the strings or bass layer.
+  t.drone.dispose();
+});
+
+test('the lower tonic strings receive a 6 dB boost while the new bass layer keeps its own level', async () => {
+  const t = setup(); await t.drone.prepare(); t.drone.set(48, 1);
+  const levels = t.context.sources.map(voice => (voice.connections[0] as Gain).gain.value);
+  const boostDb = (level: number) => 20 * Math.log10(level / levels[0]);
+  assert.ok(Math.abs(boostDb(levels[2]) - 6) < 1e-9);
+  assert.ok(Math.abs(boostDb(levels[5]) - 6) < 1e-9);
+  assert.equal(levels[1], levels[0]);
+  assert.equal(levels[6], levels[0]);
+  assert.ok(t.context.gains[0].gain.value > 0 && t.context.gains[0].gain.value < 0.4);
+  // Even the summed voice levels plus the shelf gain leave nominal output headroom.
+  const mixPeak = levels.reduce((sum, value) => sum + value, 0) * 10 ** (4 / 20) * t.context.gains[0].gain.value;
+  assert.ok(mixPeak < 0.8);
   t.drone.dispose();
 });
 
@@ -88,14 +108,14 @@ test('volume changes preserve playback, and muting or stopping releases every no
   const loud = t.context.gains[0].gain.value;
   t.drone.set(50, 0.4);
   assert.equal(t.context.gains[0].gain.value, loud / 2);
-  assert.equal(t.context.sources.length, 6);
+  assert.equal(t.context.sources.length, 7);
   assert.ok(voices.every(voice => voice.stops === 0));
   t.drone.set(50, 0);
   assert.ok(t.context.nodes.every(node => node.disconnected));
   assert.ok(voices.every(voice => voice.stops === 1));
   assert.equal(t.context.oscillators[0].stops, 1);
   t.drone.set(50, 0.8);
-  assert.equal(t.context.sources.length, 12);
+  assert.equal(t.context.sources.length, 14);
   t.drone.set(null, 0);
   assert.ok(t.context.sources.every(voice => voice.stops === 1));
   t.drone.dispose();
@@ -121,6 +141,6 @@ test('a failed sample load can retry on the next user action', async () => {
   assert.equal(t.context.nodes.length, 0);
   await t.drone.prepare(); t.drone.set(48, 0.8);
   assert.equal(loads, 2);
-  assert.equal(t.context.sources.length, 6);
+  assert.equal(t.context.sources.length, 7);
   t.drone.dispose();
 });

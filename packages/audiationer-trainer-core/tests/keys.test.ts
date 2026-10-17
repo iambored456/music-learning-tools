@@ -46,7 +46,7 @@ test('each scored mode holds a key for five submitted answers and always picks a
     assert.equal(session.snapshot().phase, 'finished');
     assert.equal(session.snapshot().results.filter(result => result.correct).length, 11);
     if (mode !== 'quality') {
-      const cadences = states.filter((state, index) => state.message === 'Establishing the tonic: 1 · 4 · 5 · 1' && states[index - 1]?.message !== state.message);
+      const cadences = states.filter((state, index) => state.tonicizing && !states[index - 1]?.tonicizing);
       assert.equal(cadences.length, 3);
     }
     session.destroy();

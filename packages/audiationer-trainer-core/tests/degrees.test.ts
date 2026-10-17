@@ -148,8 +148,8 @@ test('Degrees melody toggle establishes each changed tonic and can silence that 
     await changing.start(t.settings);
     await changing.answer(0);
     assert.equal(changing.snapshot().tonic, 6);
-    assert.equal(t.audio.played.length, cadence ? 10 : 2);
-    if (cadence) assert.deepEqual(t.audio.played.slice(5, 9), [[66], [71], [73], [66]]);
+    assert.equal(t.audio.played.length, cadence ? 16 : 2);
+    if (cadence) assert.deepEqual(t.audio.played.slice(8, 15), [[66], [70], [73], [71], [68], [65], [66]]);
     changing.stop();
   }
 });

@@ -1,13 +1,13 @@
 import { SCALE_MODES, scaleDegrees } from './music.ts';
-import { GAME_MODES, normalizeSettings, settingsError, type GameMode, type Settings } from './settings.ts';
+import { GAME_MODES, isChordMode, normalizeSettings, settingsError, type GameMode, type Settings } from './settings.ts';
 import type { Result } from './session.ts';
 
 export const DIFFICULTIES = [
-  { name: 'Novice', seconds: 0, detail: 'No time limit', colour: '#4ed795' },
-  { name: 'Adept', seconds: 5, detail: 'Answer time: 5 s', colour: '#ffc55c' },
-  { name: 'Master', seconds: 2, detail: 'Answer time: 2 s', colour: '#f15c8e' },
+  { name: 'Novice', seconds: 0, detail: 'No time limit', colour: '#aaa0fa' },
+  { name: 'Adept', seconds: 5, detail: 'Answer time: 5 s', colour: '#df9f48' },
+  { name: 'Master', seconds: 2, detail: 'Answer time: 2 s', colour: '#ef8aaa' },
 ] as const;
-export const isScored = (mode: GameMode) => ['degrees', 'melody', 'chords', 'quality'].includes(mode);
+export const isScored = (mode: GameMode) => ['degrees', 'melody', 'chords', 'chord-progressions', 'quality'].includes(mode);
 export const difficultyIndex = (seconds: number) => Math.max(0, DIFFICULTIES.findIndex(d => d.seconds === seconds));
 export interface Preset { id: string; name: string; patch: Partial<Settings> }
 export interface PresetGroup { id: string; name: string; presets: Preset[] }
@@ -22,18 +22,18 @@ function notePreset(id: string, name: string, degrees: number[], scale: Settings
   return { id, name, patch: { scale, degrees: [...degrees] } };
 }
 export function pathPresetGroups(mode: GameMode): PresetGroup[] {
-  if (mode === 'quality') return [{ id: 'chord-path', name: 'Chord Quality Progression', presets: [
+  if (mode === 'quality') return [{ id: 'chord-path', name: 'Chord Quality Levels', presets: [
     { id: 'triads-1', name: 'Major & minor', patch: { qualities: [0, 1] } },
     { id: 'triads-2', name: 'Add diminished', patch: { qualities: [0, 1, 2] } },
     { id: 'triads-3', name: 'All triads', patch: { qualities: [0, 1, 2, 3] } },
     { id: 'sevenths', name: 'Seventh chords', patch: { qualities: [4, 5, 6] } },
   ] }];
   // Diatonic Chords must remain inside the selected seven-note scale.
-  const groups: PresetGroup[] = [{ id: 'sun', name: 'Major Progression', presets: sun.slice(0, mode === 'chords' ? 6 : 7).map((degrees, i) =>
+  const groups: PresetGroup[] = [{ id: 'sun', name: 'Major Levels', presets: sun.slice(0, isChordMode(mode) ? 6 : 7).map((degrees, i) =>
     notePreset(`sun-${i + 1}`, `Major ${exerciseNumerals[i]}`, degrees)) }];
   if (hasAdditionalLevels(mode)) groups.push(
-    { id: 'moon', name: 'Minor Progression', presets: moon.map((degrees, i) => notePreset(`moon-${i + 1}`, `Minor ${exerciseNumerals[i]}`, degrees, '6')) },
-    { id: 'union', name: 'Chromatic Progression', presets: union.map((degrees, i) => notePreset(`union-${i + 1}`, `Chromatic ${exerciseNumerals[i]}`, degrees)) },
+    { id: 'moon', name: 'Minor Levels', presets: moon.map((degrees, i) => notePreset(`moon-${i + 1}`, `Minor ${exerciseNumerals[i]}`, degrees, '6')) },
+    { id: 'union', name: 'Chromatic Levels', presets: union.map((degrees, i) => notePreset(`union-${i + 1}`, `Chromatic ${exerciseNumerals[i]}`, degrees)) },
   );
   return groups;
 }
@@ -48,13 +48,16 @@ export function challengePresetGroups(mode: GameMode): PresetGroup[] {
   ] }];
   const modeOrder: Settings['scale'][] = hasAdditionalLevels(mode) ? ['1', '6', '2', '3', '4', '5', '7'] : SCALE_MODES.map(scale => scale.id);
   const modes = modeOrder.map(id => {
-    const name = hasAdditionalLevels(mode) && id === '1' ? 'Ionian (major)' : hasAdditionalLevels(mode) && id === '6' ? 'Aeolian (minor)' : SCALE_MODES.find(scale => scale.id === id)!.name;
+    const scaleName = SCALE_MODES.find(scale => scale.id === id)!.name;
+    const name = hasAdditionalLevels(mode)
+      ? id === '1' ? 'Major' : id === '6' ? 'Minor' : `${'①②③④⑤⑥⑦'[Number(id) - 1]} ${scaleName}`
+      : scaleName;
     return notePreset(`mode-${id}`, name, scaleDegrees(id), id);
   });
   if (!hasAdditionalLevels(mode)) return [{ id: 'modes', name: 'Modes', presets: modes }];
   return [
-    { id: 'modes', name: 'Modes', presets: [
-      ...modes,
+    { id: 'modes', name: 'Modes', presets: modes },
+    { id: 'other-scales', name: 'Other Scales', presets: [
       notePreset('pentatonic', 'Pentatonic', [0, 2, 4, 7, 9]),
       notePreset('minor-pentatonic', 'Minor Pentatonic', [0, 3, 5, 7, 10], '6'),
       notePreset('melodic-minor', 'Melodic Minor', [0, 2, 3, 5, 7, 9, 11], '6'),
@@ -63,7 +66,7 @@ export function challengePresetGroups(mode: GameMode): PresetGroup[] {
       notePreset('half-whole', 'Half-Whole Scale', [0, 1, 3, 4, 6, 7, 9, 10]),
       notePreset('chromatic', 'Chromatic', Array.from({ length: 12 }, (_, i) => i)),
     ] },
-    { id: 'challenge', name: 'Challenge', presets: [
+    { id: 'challenge', name: 'Tricky', presets: [
       notePreset('clean', 'Clean', [0, 2, 5, 7]),
       notePreset('threes-and-sixes', 'Threes and Sixes', [3, 4, 8, 9]),
       notePreset('twos-and-sevens', 'Twos and Sevens', [1, 2, 10, 11]),
@@ -89,8 +92,16 @@ export function challengePresetGroups(mode: GameMode): PresetGroup[] {
 export function challengePresets(mode: GameMode): Preset[] {
   return challengePresetGroups(mode).flatMap(group => group.presets);
 }
+/** Follow the displayed level/challenge order without changing exercise or wrapping. */
+export function nextPreset(mode: GameMode, currentId: string | null): Preset | null {
+  if (!isScored(mode) || !currentId) return null;
+  const presets = [...pathPresets(mode), ...challengePresets(mode)];
+  const index = presets.findIndex(preset => preset.id === currentId);
+  return index < 0 ? null : presets[index + 1] ?? null;
+}
 export function applyPreset(settings: Settings, preset: Preset): Settings {
-  return normalizeSettings({ ...settings, ...preset.patch, mode: settings.mode });
+  return normalizeSettings({ ...settings, ...preset.patch, mode: settings.mode,
+    randomOctave: hasAdditionalLevels(settings.mode) ? true : preset.patch.randomOctave ?? settings.randomOctave });
 }
 export interface CustomPreset { id: string; name: string; settings: Settings }
 export function normalizeCustomPresets(input: unknown): CustomPreset[] {
@@ -112,7 +123,7 @@ export function normalizeProgress(input: unknown): Progress {
   const builtInKeys = new Set(GAME_MODES.filter(mode => isScored(mode.id)).flatMap(mode =>
     [...pathPresets(mode.id), ...challengePresets(mode.id)].map(preset => progressKey(mode.id, preset.id))));
   return Object.fromEntries(Object.entries(input).filter(([key, value]) =>
-    (builtInKeys.has(key) || /^(degrees|melody|chords|quality):custom-[\w-]+$/.test(key))
+    (builtInKeys.has(key) || /^(degrees|melody|chords|chord-progressions|quality):custom-[\w-]+$/.test(key))
     && Number.isInteger(value) && value >= 1 && value <= 3));
 }
 /** A full session at 80% accuracy earns the selected difficulty; easier runs never erase progress. */

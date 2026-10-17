@@ -1,6 +1,7 @@
 import { CHORD_QUALITIES, SCALE_MODES, scaleDegrees, type ScaleMode } from './music.ts';
 import type { WheelOrder } from '@mlt/compass-core';
 import { SOUND_PRESETS, type SoundPreset } from './sound.ts';
+import { defaultLessonTiming, normalizeLessonTiming, type TimingProfiles } from './timing.ts';
 
 const DEFAULTS_VERSION = 1;
 
@@ -8,12 +9,15 @@ export const GAME_MODES = [
   { id: 'freeplay', name: 'Free Play', description: 'Explore the wheel and hear each degree in context.' },
   { id: 'degrees', name: 'Degrees', description: 'Listen to one note, then identify its scale degree.' },
   { id: 'melody', name: 'Melody', description: 'Listen to a short melody, then enter its degrees in order.' },
-  { id: 'chords', name: 'Chord Progressions', description: 'Identify the scale degree of a diatonic triad.' },
+  { id: 'chords', name: 'Chords', description: 'Identify the scale degree of one diatonic triad.' },
+  { id: 'chord-progressions', name: 'Chord Progressions', description: 'Listen to a sequence of diatonic chords, then enter them in order.' },
   { id: 'quality', name: 'Chord Quality', description: 'Identify the quality of the chord you hear.' },
   { id: 'pocket', name: 'Pocket Mode', description: 'Practise any exercise hands-free with spoken answers.' },
   { id: 'cycle', name: 'Cycle', description: 'Hear the selected degrees in ascending order.' },
 ] as const;
 export type GameMode = typeof GAME_MODES[number]['id'];
+export const isChordMode = (mode: GameMode) => mode === 'chords' || mode === 'chord-progressions';
+export const isSequenceMode = (mode: GameMode) => mode === 'melody' || mode === 'chord-progressions';
 export const WHEEL_VIEWS = [
   { id: 'fifths', name: 'Fifths', wheelStyle: 'compass', order: 'fifths' },
   { id: 'chromatic', name: 'Chromatic', wheelStyle: 'compass', order: 'chromatic' },
@@ -29,7 +33,7 @@ export function setWheelView(settings: Pick<Settings, 'wheelStyle' | 'order'>, i
 }
 export const POCKET_EXERCISES = [
   { id: 'degrees', name: 'Degrees' }, { id: 'melody', name: 'Melody' },
-  { id: 'chords', name: 'Chord Progressions' }, { id: 'quality', name: 'Chord Quality' },
+  { id: 'chords', name: 'Chords' }, { id: 'chord-progressions', name: 'Chord Progressions' }, { id: 'quality', name: 'Chord Quality' },
 ] as const;
 export type PocketExercise = typeof POCKET_EXERCISES[number]['id'];
 export const REVIEW_SKIP_OPTIONS = [
@@ -40,7 +44,7 @@ export const REVIEW_SKIP_OPTIONS = [
 export const AUTO_CONTINUE_DELAYS = [0.5, 1, 2, 5] as const;
 export interface DegreeSettings {
   soundPreset: SoundPreset;
-  /** Legacy saved preference; Settings.reviewSkip is shared by all scored modes. */
+  /** Legacy saved preference; new per-mode choices live in Settings.timings. */
   reviewSkip: typeof REVIEW_SKIP_OPTIONS[number]['id'];
   droneVolume: number;
   melodyVolume: number;
@@ -65,6 +69,7 @@ export interface PocketSettings {
   soundPreset: SoundPreset;
   tempo: number;
   melodyLength: number;
+  progressionLength: number;
   repeats: number;
   waitSeconds: number;
   replays: number;
@@ -84,6 +89,7 @@ export function normalizePocketSettings(input: unknown): PocketSettings {
     soundPreset: SOUND_PRESETS.some(s => s.id === p.soundPreset) ? p.soundPreset! : 'synth',
     tempo: Math.round(number(p.tempo, 30, 180, 40)),
     melodyLength: Math.round(number(p.melodyLength, 1, 5, 1)),
+    progressionLength: Math.round(number(p.progressionLength, 2, 8, 3)),
     repeats: Math.round(number(p.repeats, 1, 5, 1)),
     waitSeconds: number(p.waitSeconds, 0, 15, 1),
     replays: Math.round(number(p.replays, 0, 4, 1)),
@@ -96,6 +102,7 @@ export function normalizePocketSettings(input: unknown): PocketSettings {
   };
 }
 export interface Settings {
+  timings: TimingProfiles;
   defaultsVersion: number;
   mode: GameMode;
   pocket: PocketSettings;
@@ -106,6 +113,7 @@ export interface Settings {
   degrees: number[];
   qualities: number[];
   melodyLength: number;
+  progressionLength: number;
   noteGap: number;
   rounds: number;
   reviewSkip: typeof REVIEW_SKIP_OPTIONS[number]['id'];
@@ -124,9 +132,10 @@ export interface Settings {
   wheelStyle: 'compass' | 'minimal';
 }
 export const DEFAULT_SETTINGS: Settings = {
+  timings: {},
   defaultsVersion: DEFAULTS_VERSION,
   mode: 'freeplay', pocket: normalizePocketSettings({}), degreeOptions: normalizeDegreeSettings({}), tonic: 0, octave: 4, scale: '1', degrees: [0, 2, 4, 5, 7, 9, 11],
-  qualities: [0, 1], melodyLength: 3, noteGap: 0.8, rounds: 10, reviewSkip: 'correct', answerSeconds: 0,
+  qualities: [0, 1], melodyLength: 3, progressionLength: 3, noteGap: 0.8, rounds: 10, reviewSkip: 'correct', answerSeconds: 0,
   autoContinueCorrect: false, autoContinueSeconds: 2,
   randomTonic: true, questionsPerKey: 5, randomOctave: false, cadence: true, resolve: true,
   drone: true, droneVolume: 1, volume: 0.65, order: 'chromatic', wheelStyle: 'minimal',
@@ -134,7 +143,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export function normalizeSettings(input: unknown): Settings {
   const s = (input && typeof input === 'object' ? input : {}) as Partial<Settings>;
-  const result: Settings = { ...DEFAULT_SETTINGS, degrees: [...DEFAULT_SETTINGS.degrees], qualities: [...DEFAULT_SETTINGS.qualities] };
+  const result: Settings = { ...DEFAULT_SETTINGS, timings: {}, degrees: [...DEFAULT_SETTINGS.degrees], qualities: [...DEFAULT_SETTINGS.qualities] };
   const range = (v: unknown, min: number, max: number, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
   for (const name of ['randomTonic', 'randomOctave', 'cadence', 'resolve', 'drone', 'autoContinueCorrect'] as const) {
@@ -151,6 +160,7 @@ export function normalizeSettings(input: unknown): Settings {
   result.tonic = Math.round(range(s.tonic, 0, 11, result.tonic));
   result.octave = Math.round(range(s.octave, 2, 6, result.octave));
   result.melodyLength = Math.round(range(s.melodyLength, 2, 8, result.melodyLength));
+  result.progressionLength = Math.round(range(s.progressionLength, 2, 8, result.progressionLength));
   result.rounds = Math.round(range(s.rounds, 1, 100, result.rounds));
   result.questionsPerKey = Math.round(range(s.questionsPerKey, 1, 100, result.questionsPerKey));
   if (s.wheelStyle === 'minimal' || s.wheelStyle === 'compass') result.wheelStyle = s.wheelStyle;
@@ -164,6 +174,12 @@ export function normalizeSettings(input: unknown): Settings {
     : fallback;
   result.degrees = selection(s.degrees, 12, result.degrees);
   result.qualities = selection(s.qualities, CHORD_QUALITIES.length, result.qualities);
+  if (s.timings && typeof s.timings === 'object') {
+    for (const mode of GAME_MODES) {
+      const value = s.timings[mode.id];
+      if (value && typeof value === 'object') result.timings[mode.id] = normalizeLessonTiming(value, defaultLessonTiming(result, mode.id));
+    }
+  }
   return result;
 }
 
@@ -186,10 +202,15 @@ export function migrateSettingsDefaults(input: unknown): Settings {
 
 export function allowedDegrees(s: Settings): number[] {
   const scale = scaleDegrees(s.scale);
-  return s.degrees.filter(d => exerciseMode(s) !== 'chords' || scale.includes(d));
+  return s.degrees.filter(d => !isChordMode(exerciseMode(s)) || scale.includes(d));
 }
 
 export const exerciseMode = (s: Settings): GameMode => s.mode === 'pocket' ? s.pocket.exercise : s.mode;
+export function questionLength(s: Settings): number {
+  const mode = exerciseMode(s);
+  const options = s.mode === 'pocket' ? s.pocket : s;
+  return mode === 'chord-progressions' ? options.progressionLength : mode === 'melody' ? options.melodyLength : 1;
+}
 export function settingsError(s: Settings): string | null {
   if (exerciseMode(s) === 'quality') return s.qualities.length ? null : 'Select at least one chord quality.';
   return allowedDegrees(s).length ? null : 'Select at least one available degree for this mode.';

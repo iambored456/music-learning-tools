@@ -2,11 +2,13 @@ import { midiNote } from './music.ts';
 import type { WheelOrder } from '@mlt/compass-core';
 import { wait } from './session.ts';
 import { SOUND_PRESETS, type SoundPreset } from './sound.ts';
+import { normalizeLessonTiming, type LessonTiming } from './timing.ts';
 export { SOUND_PRESETS, type SoundPreset } from './sound.ts';
 
 export const FREEPLAY_DEGREES = Array.from({ length: 12 }, (_, i) => i);
 const DEFAULTS_VERSION = 1;
 export interface FreeplaySettings {
+  timing: LessonTiming;
   defaultsVersion: number;
   tonic: number;
   randomTonic: boolean;
@@ -21,6 +23,7 @@ export function normalizeFreeplaySettings(input: unknown): FreeplaySettings {
   const number = (value: unknown, min: number, max: number, fallback: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
   return {
+    timing: normalizeLessonTiming(s.timing),
     defaultsVersion: DEFAULTS_VERSION,
     tonic: Math.round(number(s.tonic, 0, 11, 0)), octave: Math.round(number(s.octave, 3, 6, 4)),
     randomTonic: typeof s.randomTonic === 'boolean' ? s.randomTonic : true,
@@ -53,8 +56,9 @@ export interface FreeplayState {
   awake: boolean;
   error: string | null;
 }
-export interface FreeplayGesture { finish(sustain: boolean): void; cancel(): void }
+export interface FreeplayGesture { move(degree: number, octave?: number): void; finish(sustain: boolean): void; cancel(): void }
 interface Voice {
+  degree: number;
   intent: 'held' | 'tap' | 'sustained';
   release?: () => void;
   cancelTimer?: () => void;
@@ -63,7 +67,7 @@ interface Voice {
 /** Free Play has no answer pool or levels. Audio starts only through an explicit action. */
 export class FreeplaySession {
   private settings: FreeplaySettings;
-  private voices = new Map<number, Voice>();
+  private voices = new Set<Voice>();
   private cycleController: AbortController | null = null;
   private cycleDegree: number | null = null;
   private awake = false;
@@ -82,8 +86,8 @@ export class FreeplaySession {
 
   snapshot(): FreeplayState {
     return {
-      sounding: [...this.voices].filter(([, voice]) => voice.release).map(([degree]) => degree).concat(this.cycleDegree === null ? [] : [this.cycleDegree]),
-      sustained: [...this.voices].filter(([, voice]) => voice.release && voice.intent === 'sustained').map(([degree]) => degree),
+      sounding: [...new Set([...this.voices].filter(voice => voice.release).map(voice => voice.degree).concat(this.cycleDegree === null ? [] : [this.cycleDegree]))],
+      sustained: [...new Set([...this.voices].filter(voice => voice.release && voice.intent === 'sustained').map(voice => voice.degree))],
       cycling: this.cycleController !== null, awake: this.awake, error: this.error,
     };
   }
@@ -93,12 +97,16 @@ export class FreeplaySession {
     this.audio.volume(this.settings.melodyVolume);
     this.audio.drone(this.settings.droneVolume ? midiNote(this.settings.tonic, 3, 0) : null, this.settings.droneVolume);
   }
-  private release(degree: number, voice: Voice) {
-    if (this.voices.get(degree) !== voice) return;
-    voice.cancelTimer?.(); voice.release?.(); this.voices.delete(degree); this.emit();
+  private release(voice: Voice) {
+    if (!this.voices.has(voice)) return;
+    voice.cancelTimer?.(); voice.release?.(); this.voices.delete(voice); this.emit();
   }
-  private finishTap(degree: number, voice: Voice) {
-    voice.cancelTimer = this.schedule(() => this.release(degree, voice), 250);
+  private soundVoice(voice: Voice) {
+    voice.release?.();
+    voice.release = this.audio.sustain(midiNote(this.settings.tonic, this.settings.octave, voice.degree));
+  }
+  private finishTap(voice: Voice) {
+    voice.cancelTimer = this.schedule(() => this.release(voice), this.settings.timing.tapSeconds * 1000);
   }
   private fail(error: unknown, revision: number) {
     if (revision !== this.revision) return;
@@ -107,47 +115,67 @@ export class FreeplaySession {
     this.emit();
   }
   press(degree: number): FreeplayGesture {
-    const noop = { finish: () => {}, cancel: () => {} };
+    const noop = { move: () => {}, finish: () => {}, cancel: () => {} };
     if (!FREEPLAY_DEGREES.includes(degree)) return noop;
     if (this.cycleController) this.stopAll();
-    const previous = this.voices.get(degree);
+    const previous = [...this.voices].find(voice => voice.degree === degree && voice.intent === 'sustained')
+      ?? [...this.voices].find(voice => voice.degree === degree);
     if (previous) {
-      this.release(degree, previous);
-      if (previous.intent === 'sustained') return noop;
+      this.release(previous);
     }
-    const voice: Voice = { intent: 'held' };
-    this.voices.set(degree, voice); this.error = null;
+    const voice: Voice = { degree, intent: 'held' };
+    let active = false, finished = false;
     const revision = this.revision;
-    void this.audio.unlock().then(() => {
-      if (revision !== this.revision || this.voices.get(degree) !== voice) return;
-      this.awake = true; this.applyAudio();
-      voice.release = this.audio.sustain(midiNote(this.settings.tonic, this.settings.octave, degree));
-      if (voice.intent === 'tap') this.finishTap(degree, voice);
-      this.emit();
-    }).catch(error => { if (this.voices.get(degree) === voice) this.fail(error, revision); });
+    const activate = () => {
+      active = true; this.voices.add(voice); this.error = null;
+      void this.audio.unlock().then(() => {
+        if (revision !== this.revision || !this.voices.has(voice)) return;
+        this.awake = true; this.applyAudio(); this.soundVoice(voice);
+        if (voice.intent === 'tap') this.finishTap(voice);
+        this.emit();
+      }).catch(error => { if (this.voices.has(voice)) this.fail(error, revision); });
+    };
+    // Clicking a latched degree turns it off; moving away can still begin a new drag.
+    if (previous?.intent !== 'sustained') activate();
     return {
-      finish: sustain => {
-        if (this.voices.get(degree) !== voice || voice.intent !== 'held') return;
-        voice.intent = sustain ? 'sustained' : 'tap';
-        if (!sustain && voice.release) this.finishTap(degree, voice);
+      move: (nextDegree, octave = this.settings.octave) => {
+        if (finished || revision !== this.revision || !FREEPLAY_DEGREES.includes(nextDegree) || (active && !this.voices.has(voice))) return;
+        const next = normalizeFreeplaySettings({ ...this.settings, octave });
+        const octaveChanged = next.octave !== this.settings.octave;
+        if (nextDegree === voice.degree && !octaveChanged) return;
+        voice.degree = nextDegree;
+        if (octaveChanged) {
+          this.settings = next;
+          if (this.awake) this.applyAudio();
+          for (const other of this.voices) if (other !== voice && other.release) this.soundVoice(other);
+        }
+        if (!active) activate();
+        else if (voice.release) this.soundVoice(voice);
         this.emit();
       },
-      cancel: () => this.release(degree, voice),
+      finish: sustain => {
+        if (finished) return;
+        finished = true;
+        if (!this.voices.has(voice) || voice.intent !== 'held') return;
+        if (sustain && [...this.voices].some(other => other !== voice && other.degree === voice.degree && other.intent === 'sustained')) {
+          this.release(voice); return;
+        }
+        voice.intent = sustain ? 'sustained' : 'tap';
+        if (!sustain && voice.release) this.finishTap(voice);
+        this.emit();
+      },
+      cancel: () => { finished = true; this.release(voice); },
     };
   }
   configure(input: FreeplaySettings) {
     const next = normalizeFreeplaySettings(input);
     const pitchChanged = next.tonic !== this.settings.tonic || next.octave !== this.settings.octave;
     if (!pitchChanged) { this.settings = next; if (this.awake) this.applyAudio(); return; }
-    const sustained = [...this.voices].filter(([, voice]) => voice.intent === 'sustained').map(([degree]) => degree);
-    const cycling = this.cycleController !== null, awake = this.awake;
-    this.stopAll(); this.settings = next;
-    if (cycling) void this.toggleCycle();
-    else {
-      if (awake) { this.awake = true; this.applyAudio(); }
-      for (const degree of sustained) this.press(degree).finish(true);
-      this.emit();
-    }
+    if (this.cycleController) { this.stopAll(); this.settings = next; void this.toggleCycle(); return; }
+    this.settings = next;
+    if (this.awake) this.applyAudio();
+    for (const voice of this.voices) if (voice.release) this.soundVoice(voice);
+    this.emit();
   }
   async playDrone() {
     const revision = this.revision;
@@ -169,9 +197,9 @@ export class FreeplaySession {
       while (!signal.aborted) {
         for (const degree of FREEPLAY_DEGREES) {
           signal.throwIfAborted(); this.cycleDegree = degree; this.emit();
-          await this.audio.notes([midiNote(this.settings.tonic, this.settings.octave, degree)], 0.64, signal);
+          await this.audio.notes([midiNote(this.settings.tonic, this.settings.octave, degree)], this.settings.timing.noteSeconds, signal);
           signal.throwIfAborted(); this.cycleDegree = null; this.emit();
-          await this.pause(160, signal);
+          await this.pause(this.settings.timing.noteGapSeconds * 1000, signal);
         }
       }
     } catch (error) { if (!signal.aborted) this.fail(error, revision); }
@@ -179,7 +207,7 @@ export class FreeplaySession {
   stopAll() {
     this.revision++;
     this.cycleController?.abort(); this.cycleController = null; this.cycleDegree = null;
-    for (const voice of this.voices.values()) { voice.cancelTimer?.(); voice.release?.(); }
+    for (const voice of this.voices) { voice.cancelTimer?.(); voice.release?.(); }
     this.voices.clear(); this.audio.stop(); this.awake = false; this.emit();
   }
   destroy() { this.stopAll(); }

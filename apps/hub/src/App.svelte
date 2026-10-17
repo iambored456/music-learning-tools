@@ -4,6 +4,17 @@
 
 <main class="hub">
   <header class="hero">
+    <a
+      class="hub-switch"
+      href="https://iambored456.github.io/classroom-tools/"
+      aria-label="Classroom Tools"
+      title="Classroom Tools"
+    >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m16 3 5 5L8 21H3v-5L16 3Z" />
+        <path d="m13 6 5 5M3 16l5 5" />
+      </svg>
+    </a>
     <p class="eyebrow">Quinn Fleming's</p>
     <h1>Amateur Music Learning Tools</h1>
     <p class="subhead">

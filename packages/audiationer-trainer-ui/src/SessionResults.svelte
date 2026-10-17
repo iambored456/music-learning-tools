@@ -1,67 +1,59 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { CHROMATIC_NOTES } from '@mlt/compass-core';
   import { DIFFICULTIES, difficultyIndex, type Result, type Settings } from '@mlt/audiationer-trainer-core';
+  import DifficultyCard from './DifficultyCard.svelte';
   import Gem from './Gem.svelte';
-  import Gems from './Gems.svelte';
   import Icon from './Icon.svelte';
 
-  let { results, settings, presetName, degreesProgress, onexport, onagain, ondegrees, onfreeplay, onfinish }: {
-    results: Result[]; settings: Settings; presetName: string; degreesProgress: number;
-    onexport: () => void; onagain: () => void; ondegrees: () => void;
-    onfreeplay: () => void; onfinish: () => void;
+  let { results, settings, presetName, nextLevelName, nextLevelLocked, nextLevelPrerequisite, nextDifficulty, ondifficulty, onagain, onnext, onfinish }: {
+    results: Result[]; settings: Settings; presetName: string; nextLevelName: string | null;
+    nextLevelLocked: boolean; nextLevelPrerequisite: string | null;
+    nextDifficulty: number; ondifficulty: (seconds: number) => void;
+    onagain: () => void; onnext: () => void; onfinish: () => void;
   } = $props();
-  let page = $state<'score' | 'actions'>('score');
+  let changeDifficulty = $state(false);
   const correct = $derived(results.filter(r => r.correct).length);
-  const average = $derived(results.length ? results.reduce((sum, r) => sum + r.seconds, 0) / results.length : 0);
   const difficulty = $derived(DIFFICULTIES[difficultyIndex(settings.answerSeconds)]);
   const target = $derived(Math.ceil(settings.rounds * 0.8));
   const complete = $derived(results.length === settings.rounds);
   const cleared = $derived(complete && correct >= target);
-  async function showActions() {
-    page = 'actions';
-    await tick();
-    document.getElementById('at-page-heading')?.focus({ preventScroll: true });
-    window.scrollTo({ top: 0 });
-  }
-  const summary = $derived.by(() => {
-    const rows = new Map<string, { total: number; correct: number; seconds: number; confusions: Set<string> }>();
-    for (const result of results) {
-      const row = rows.get(result.expected) ?? { total: 0, correct: 0, seconds: 0, confusions: new Set<string>() };
-      row.total++; row.correct += Number(result.correct); row.seconds += result.seconds;
-      if (!result.correct) row.confusions.add(result.received);
-      rows.set(result.expected, row);
-    }
-    return [...rows.entries()];
-  });
 </script>
-<section class="at-results" class:at-result-actions={page === 'actions'} aria-label="Session results">
-  <button class="at-icon-button at-results-close" aria-label="Close results and return to presets" onclick={onfinish}><Icon name="close" size={27} /></button>
-  {#if page === 'score'}
-    <div class="at-result-score-page">
-      <h1 id="at-page-heading" tabindex="-1">Results</h1>
-      <div class="at-result-preset"><span>{presetName}</span><span>{difficulty.name}</span></div>
-      <p class="at-result-score" aria-label={`${correct} out of ${results.length} correct`}>{correct}/{results.length}</p>
-      <div class="at-result-gem" role="img" aria-label={cleared ? `${difficulty.name} cleared` : `${difficulty.name} not cleared`}><Gem lit={cleared} colour={difficulty.colour} /></div>
-      <div class="at-result-messages" role="status">
-        <span class="at-result-message-dot" aria-hidden="true"></span>
-        <div><p>{cleared ? 'Well played!' : 'Back to Rehearsal!'}</p><p>{cleared ? `${difficulty.name} cleared.` : !complete ? `Complete all ${settings.rounds} questions to clear ${difficulty.name}.` : `Get ${target}/${settings.rounds} to clear ${difficulty.name}.`}</p></div>
-      </div>
+<section class="at-results" aria-label="Session results">
+  <div class="at-result-overview">
+    <h1 id="at-page-heading" tabindex="-1">Results</h1>
+    <div class="at-result-preset"><span>{presetName}</span><span>{difficulty.name}</span></div>
+    <p class="at-result-score" aria-label={`${correct} out of ${results.length} correct`}>{correct}/{results.length}</p>
+    <div class="at-result-gem" role="img" aria-label={cleared ? `${difficulty.name} cleared` : `${difficulty.name} not cleared`}><Gem lit={cleared} colour={difficulty.colour} /></div>
+    <div class="at-result-messages" role="status">
+      <span class="at-result-message-dot" aria-hidden="true"></span>
+      <div><p>{cleared ? 'Well played!' : 'Back to Rehearsal!'}</p><p>{cleared ? `${difficulty.name} cleared.` : !complete ? `Complete all ${settings.rounds} questions to clear ${difficulty.name}.` : `Get ${target}/${settings.rounds} to clear ${difficulty.name}.`}</p></div>
     </div>
-    <div class="at-result-bottom"><button class="at-primary" onclick={showActions}><Icon name="forward" size={23} />Next</button></div>
-  {:else}
-    <div class="at-result-options-page">
-      <h1 id="at-page-heading" class="at-result-preset" tabindex="-1"><span>{presetName}</span><span>{difficulty.name}</span></h1>
-      <nav class="at-result-options" aria-label="Continue practicing">
-        <button onclick={onagain}><Icon name="replay" size={25} /><span>Play again</span></button>
-        <button onclick={ondegrees}><span class="at-result-degrees-icon"><Icon name="note" size={25} /></span><span>Play in degrees</span><Gems value={degreesProgress} /></button>
-        <button onclick={onfreeplay}><span class="at-result-freeplay-icon"><Icon name="freeplay" size={25} /></span><span>Play in free play</span></button>
-      </nav>
-      <details class="at-result-details"><summary>Answer breakdown</summary>
-        <div class="at-metrics"><div><strong>{Math.round(correct / results.length * 100)}%</strong><span>Accuracy</span></div><div><strong>{average.toFixed(1)}s</strong><span>Average response</span></div></div>
-        <button onclick={onexport}>Save results</button>
-        <div class="at-table-wrap"><table><thead><tr><th>Answer</th><th>Correct</th><th>Avg. time</th><th>Confused with</th></tr></thead><tbody>{#each summary as [label, row]}<tr><th scope="row">{label}</th><td>{row.correct} / {row.total}</td><td>{(row.seconds / row.total).toFixed(1)}s</td><td>{[...row.confusions].join('; ') || '—'}</td></tr>{/each}</tbody></table></div>
-      </details>
+  </div>
+  <div>
+    <nav class="at-result-options" aria-label="Continue practicing">
+      <button type="button" onclick={onagain}><Icon name="replay" size={25} /><span>Play again</span></button>
+      <button type="button" disabled={nextLevelLocked} onclick={onnext}><Icon name={nextLevelLocked ? 'lock' : 'next'} size={25} /><span>Next Level<small>{nextLevelName ?? 'Choose another level'}</small></span></button>
+      <button type="button" aria-expanded={changeDifficulty} aria-controls="at-result-difficulty" onclick={() => { changeDifficulty = !changeDifficulty; }}><Icon name="sliders" size={25} /><span>Change difficulty</span><span class="at-result-disclosure" class:at-expanded={changeDifficulty}><Icon name="chevron" size={20} /></span></button>
+    </nav>
+    {#if nextLevelLocked && nextLevelPrerequisite}<p class="at-hint">Earn a gem in {nextLevelPrerequisite} to unlock {nextLevelName}.</p>{/if}
+    <div id="at-result-difficulty" class="at-result-difficulty" hidden={!changeDifficulty}>
+      <p class="at-hint">Applies to your next game.</p>
+      <DifficultyCard seconds={nextDifficulty} onchange={ondifficulty} />
     </div>
-    <div class="at-result-bottom"><button class="at-primary" onclick={onfinish}><Icon name="check" size={23} />Finish game</button></div>
-  {/if}
+  </div>
+  <details class="at-result-details" open><summary>Answer breakdown</summary>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to focus this region to scroll through all table columns.) -->
+    <div class="at-table-wrap" role="region" aria-label="Question results" tabindex="0">
+      <table class="at-question-results">
+        <caption class="at-sr-only">Each question in the order it was played</caption>
+        <thead><tr><th scope="col">Question</th><th scope="col">Key</th><th scope="col" title="The tonic's octave for this question">Octave</th><th scope="col">Correct answer</th><th scope="col">Your answer</th><th scope="col">Result</th><th scope="col">Time</th></tr></thead>
+        <tbody>
+          {#each results as result, index}
+            <tr><th scope="row">{index + 1}</th><td>{CHROMATIC_NOTES[result.tonic]}</td><td>{result.octave}</td><td>{result.expected}</td><td>{result.received}</td><td>{result.correct ? 'Correct' : result.received === 'Time out' ? 'Timed out' : 'Incorrect'}</td><td>{result.seconds.toFixed(1)} s</td></tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  <div class="at-result-bottom"><button type="button" class="at-primary" onclick={onfinish}><Icon name="check" size={23} />Finish game</button></div>
 </section>

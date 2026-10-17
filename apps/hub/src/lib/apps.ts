@@ -53,7 +53,7 @@ export const appCards: AppCard[] = [
     name: 'Audiationer Trainer',
     description: 'Hear musical relationships through degrees, melodies, and chords.',
     href: withBase('audiationer-trainer/'),
-    preview: withBase('previews/audiationer-trainer.svg'),
+    preview: withBase('previews/audiationer-trainer.png'),
     tags: ['Ear training'],
     accent: '#27b6a1',
   },

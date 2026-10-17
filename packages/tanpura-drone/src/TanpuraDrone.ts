@@ -6,9 +6,19 @@ import {
   getTanpuraTremoloDepthFromTuning, getTanpuraTremoloFrequencyFromTuning,
 } from './tuningBehavior';
 
-// Match Singing Trainer's six-string mix and staggered attacks.
+// Keep the six-string preset and staggered attacks, with a stronger tonic foundation.
 const START_OFFSETS = [0, 0.28, 0.58, 0.46, 0.8, 0.12] as const;
 const PLAYBACK_RANGE = { baseMidi: 48, minRate: 0.125, maxRate: 8 };
+const LOWER_TONIC_BOOST_DB = 6;
+const BASS_EQ = { frequency: 220, gainDb: 4 };
+// Leave output headroom for the boosted strings, octave-down layer and bass EQ.
+const OUTPUT_GAIN = 0.24;
+const VOICE_MIX = DEFAULT_TANPURA_STRING_BEHAVIORS.map((string, index) => {
+  const semitoneOffset = getTanpuraStringSemitoneOffset(string.noteIndex);
+  return { string, semitoneOffset, gainDb: string.gainDb + (semitoneOffset === 0 ? LOWER_TONIC_BOOST_DB : 0), startOffset: START_OFFSETS[index] };
+});
+const lowerTonic = VOICE_MIX.find(voice => voice.semitoneOffset === 0);
+if (lowerTonic) VOICE_MIX.push({ ...lowerTonic, semitoneOffset: -12, gainDb: lowerTonic.string.gainDb, startOffset: 0 });
 type SampleLoader = (context: AudioContext) => Promise<AudioBuffer>;
 
 async function loadSample(context: AudioContext): Promise<AudioBuffer> {
@@ -48,7 +58,7 @@ export class TanpuraDrone {
     if (midi === null || !Number.isFinite(midi) || !Number.isFinite(volume) || volume <= 0) { this.stop(); return; }
     if (!this.buffer) throw new Error('Load the tanpura drone before starting playback.');
     const now = this.context.currentTime, tuning = DEFAULT_TANPURA_TUNING_BEHAVIOR;
-    const level = Math.min(1, volume) * 0.4;
+    const level = Math.min(1, volume) * OUTPUT_GAIN;
     if (!this.gain) {
       this.gain = this.own(this.context.createGain());
       this.gain.gain.setValueAtTime(0, now);
@@ -73,17 +83,21 @@ export class TanpuraDrone {
         filter.Q.value = getTanpuraFilterQFromTuning(tuning);
         return filter;
       });
-      filters[0].connect(filters[1]); filters[1].connect(modulation);
-      this.voices = DEFAULT_TANPURA_STRING_BEHAVIORS.map((string, index) => {
+      const bassEq = this.own(this.context.createBiquadFilter());
+      bassEq.type = 'lowshelf';
+      bassEq.frequency.value = BASS_EQ.frequency;
+      bassEq.gain.value = BASS_EQ.gainDb;
+      filters[0].connect(filters[1]); filters[1].connect(bassEq); bassEq.connect(modulation);
+      this.voices = VOICE_MIX.map(({ string, gainDb }) => {
         const voice = this.own(this.context.createBufferSource());
         voice.buffer = this.buffer; voice.loop = true;
         const gain = this.own(this.context.createGain());
-        gain.gain.value = string.enabled ? 0.22 * 10 ** (string.gainDb / 20) : 0;
+        gain.gain.value = string.enabled ? 0.22 * 10 ** (gainDb / 20) : 0;
         voice.connect(gain); gain.connect(filters[0]);
         return voice;
       });
       this.retune(midi);
-      this.voices.forEach((voice, index) => voice.start(now + START_OFFSETS[index]));
+      this.voices.forEach((voice, index) => voice.start(now + VOICE_MIX[index].startOffset));
     } else if (midi !== this.midi) this.retune(midi);
     this.midi = midi;
     this.gain.gain.setTargetAtTime(level, now, 0.04);
@@ -92,8 +106,8 @@ export class TanpuraDrone {
   private retune(midi: number) {
     const tuning = DEFAULT_TANPURA_TUNING_BEHAVIOR, now = this.context.currentTime;
     this.voices.forEach((voice, index) => {
-      const string = DEFAULT_TANPURA_STRING_BEHAVIORS[index];
-      const rate = getTanpuraPlaybackRateForTuning(midi + getTanpuraStringSemitoneOffset(string.noteIndex), {
+      const { string, semitoneOffset } = VOICE_MIX[index];
+      const rate = getTanpuraPlaybackRateForTuning(midi + semitoneOffset, {
         ...tuning,
         fineTuneCents: tuning.fineTuneCents + string.fineTuneCents + string.ultraFineTuneCents / 100,
         variance: (tuning.variance + string.variance) / 2,

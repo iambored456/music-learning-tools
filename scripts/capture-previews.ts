@@ -177,6 +177,14 @@ const TARGETS: CaptureTarget[] = [
 `,
   },
   {
+    id: 'audiationer-trainer',
+    distDir: 'apps/hub/dist',
+    route: '/audiationer-trainer/',
+    waitFor: '.audiationer-trainer .at-mode-list',
+    theme: 'dark',
+    delayMs: 400,
+  },
+  {
     id: 'visual-metronome',
     distDir: 'apps/hub/dist',
     route: '/visual-metronome/',

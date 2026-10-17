@@ -3,7 +3,10 @@
 Tanpura drone assets, preset utilities, and Web Audio playback for Music Learning Tools.
 
 `TanpuraDrone` provides Audiation Trainer with the sample, six-string preset, filtering,
-and modulation used by Singing Trainer. Pass an existing, user-unlocked `AudioContext`
+and modulation derived from Singing Trainer. Its default mix boosts the two lower tonic
+strings by 6 dB, adds a sampled tonic one octave below the root, and applies a 4 dB low-shelf
+bass boost at 220 Hz. The output gain reserves headroom for this stronger bass mix.
+Pass an existing, user-unlocked `AudioContext`
 and an output node, await `prepare()`, then call `set(rootMidi, volume)` to play or retune.
 `set(null, 0)` stops playback; `dispose()` also discards the decoded sample. Loading
 and constructing the engine never starts playback. Volume is linear from 0 to 1.

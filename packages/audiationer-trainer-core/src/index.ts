@@ -3,3 +3,7 @@ export * from './settings.ts';
 export * from './session.ts';
 export * from './presets.ts';
 export * from './freeplay.ts';
+export * from './timing.ts';
+export * from './timeline.ts';
+export * from './levelLocks.ts';
+export * from './freeplayWheel.ts';

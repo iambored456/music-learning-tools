@@ -68,8 +68,37 @@ body {
 }
 
 .hero {
+  position: relative;
   display: grid;
   gap: 1rem;
+}
+
+.hero .eyebrow {
+  padding-inline-end: 3.5rem;
+}
+
+.hub-switch {
+  position: absolute;
+  top: -0.75rem;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  color: #756556;
+  text-decoration: none;
+}
+
+.hub-switch:hover,
+.hub-switch:focus-visible {
+  color: var(--text-main);
+  background: rgba(238, 220, 197, 0.08);
+}
+
+.hub-switch:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }
 
 .eyebrow {

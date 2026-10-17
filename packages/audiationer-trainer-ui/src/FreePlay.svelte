@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onDestroy, type Snippet } from 'svelte';
-  import { CHROMATIC_NOTES } from '@mlt/compass-core';
-  import { FREEPLAY_DEGREES, SOUND_PRESETS, WHEEL_VIEWS, FreeplaySession, normalizeFreeplaySettings, type FreeplayGesture, type FreeplaySettings, type FreeplayState } from '@mlt/audiationer-trainer-core';
+  import { CHROMATIC_NOTES, wheelPitchClasses } from '@mlt/compass-core';
+  import { FREEPLAY_DEGREES, SOUND_PRESETS, WHEEL_VIEWS, FreeplaySession, freeplayDragOctave, normalizeFreeplaySettings, normalizeSettings, type FreeplayGesture, type FreeplaySettings, type FreeplayState } from '@mlt/audiationer-trainer-core';
   import MinimalWheel from './MinimalWheel.svelte';
   import Icon from './Icon.svelte';
   import { BrowserTrainerAudio } from './audio.ts';
+  import TimingTimeline from './TimingTimeline.svelte';
 
   let { settings = $bindable(), homeButton }: { settings: FreeplaySettings; homeButton: Snippet } = $props();
   let chooseSound = $state(false);
@@ -15,31 +16,52 @@
   let playback = $state<FreeplayState>({ sounding: [], sustained: [], cycling: false, awake: false, error: null });
   const audio = new BrowserTrainerAudio(true);
   const session = new FreeplaySession(audio, normalizeFreeplaySettings({}), next => { playback = next; });
-  const gestures = new Map<number, { x: number; y: number; dragged: boolean; handle: FreeplayGesture }>();
+  const gestures = new Map<number, { x: number; y: number; dragged: boolean; index: number | null; target: Element; handle: FreeplayGesture }>();
   const soundName = $derived(SOUND_PRESETS.find(preset => preset.id === settings.soundPreset)!.name);
+  const timelineSettings = $derived(normalizeSettings({ ...settings, mode: 'freeplay', volume: settings.melodyVolume,
+    degreeOptions: { soundPreset: settings.soundPreset, melodyVolume: settings.melodyVolume, droneVolume: settings.droneVolume },
+    droneVolume: settings.droneVolume, timings: { freeplay: settings.timing } }));
   $effect(() => session.configure($state.snapshot(settings)));
   $effect(() => { if (settingsOpen && settingsDialog && !settingsDialog.open) settingsDialog.showModal(); });
-  onDestroy(() => { session.destroy(); audio.dispose(); });
+  onDestroy(() => { cancelGestures(); session.destroy(); audio.dispose(); });
 
-  function stop() {
-    for (const gesture of gestures.values()) gesture.handle.cancel();
-    gestures.clear(); session.stopAll();
+  function cancelGestures() {
+    const pending = [...gestures]; gestures.clear();
+    for (const [id, gesture] of pending) {
+      gesture.handle.cancel();
+      if (gesture.target.hasPointerCapture(id)) gesture.target.releasePointerCapture(id);
+    }
   }
-  function pointer(degree: number, event: PointerEvent) {
+  function stop() { cancelGestures(); session.stopAll(); }
+  function pointer(degree: number, event: PointerEvent, hit: { degree: number; index: number } | null) {
     if (event.type === 'pointerdown') {
       if (event.button !== 0) return;
       event.preventDefault();
-      (event.currentTarget as Element).setPointerCapture(event.pointerId);
-      gestures.set(event.pointerId, { x: event.clientX, y: event.clientY, dragged: false, handle: session.press(degree) });
+      const target = event.currentTarget as Element;
+      target.setPointerCapture(event.pointerId);
+      gestures.set(event.pointerId, { x: event.clientX, y: event.clientY, dragged: false,
+        index: hit?.index ?? wheelPitchClasses(settings.order).indexOf(degree), target, handle: session.press(degree) });
       return;
     }
     const gesture = gestures.get(event.pointerId);
     if (!gesture) return;
-    if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= 8) gesture.dragged = true;
-    if (event.type !== 'pointermove') {
+    const released = event.type === 'pointermove' && event.buttons === 0;
+    if (!released && (event.type === 'pointermove' || event.type === 'pointerup')) {
+      if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= 8) gesture.dragged = true;
+      if (!hit) gesture.index = null;
+      else if (gesture.index !== hit.index) {
+        gesture.dragged = true;
+        const octave = freeplayDragOctave(gesture.index, hit.index, settings.octave);
+        gesture.handle.move(hit.degree, octave);
+        settings.octave = octave;
+        gesture.index = hit.index;
+      }
+    }
+    if (event.type !== 'pointermove' || released) {
       gestures.delete(event.pointerId);
       if (event.type === 'pointerup') gesture.handle.finish(gesture.dragged);
       else gesture.handle.cancel();
+      if (gesture.target.hasPointerCapture(event.pointerId)) gesture.target.releasePointerCapture(event.pointerId);
     }
   }
   function showSettings() { stop(); chooseSound = false; settingsOpen = true; }
@@ -77,6 +99,7 @@
       <button class="at-sound-change" aria-expanded={chooseSound} aria-controls="at-sound-presets" onclick={() => { chooseSound = !chooseSound; }}><Icon name="note" />Change</button>
       {#if chooseSound}<fieldset class="at-sound-presets" id="at-sound-presets"><legend>Choose a sound</legend>{#each SOUND_PRESETS as preset}<label><input type="radio" name="freeplay-sound" value={preset.id} bind:group={settings.soundPreset} />{preset.name}</label>{/each}</fieldset>{/if}
       <label class="at-field at-freeplay-wheel-view">Wheel view<select bind:value={settings.order}>{#each WHEEL_VIEWS.filter(view => view.wheelStyle === 'minimal') as view}<option value={view.order}>{view.name}</option>{/each}</select></label>
+      <TimingTimeline settings={timelineSettings} ontiming={(timing) => { settings.timing = timing; }} />
       <details class="at-freeplay-volume" open>
         <summary>Volume settings<Icon name="chevron" /></summary>
         <label class="at-field">Drone volume: {Math.round(settings.droneVolume * 100)}%<input aria-label="Drone volume" type="range" min="0" max="1" step="0.01" bind:value={settings.droneVolume} /></label>
@@ -84,7 +107,7 @@
       </details>
     </div>
   {/snippet}
-    <div class="at-session-chips"><button disabled={!settings.randomTonic} onclick={randomKey}>{settings.randomTonic ? 'Random Key' : `Key: ${keyNames[settings.tonic]}`}</button><button class:at-cycling={playback.cycling} aria-pressed={playback.cycling} onclick={() => { void session.toggleCycle(); }}>Cycle</button></div>
+    <div class="at-session-chips"><button disabled={!settings.randomTonic} onclick={randomKey}>{settings.randomTonic ? 'Random Key' : `Key: ${keyNames[settings.tonic]}`}</button><button class:at-cycling={playback.cycling} aria-pressed={playback.cycling} onclick={() => { cancelGestures(); void session.toggleCycle(); }}>Cycle</button></div>
     <div class="at-wheel-stage at-minimal">
       <MinimalWheel tonic={settings.tonic} scale="1" order={settings.order} allowed={FREEPLAY_DEGREES} active={null} activeDegrees={playback.sounding} sustained={playback.sustained} enabled={true} ongesture={pointer} onanswer={(degree) => session.press(degree).finish(true)} />
       <button class="at-play-button at-wheel-centre" aria-label={playback.awake || playback.cycling ? 'Stop all notes and drone' : 'Play tonic drone'} onclick={() => playback.awake || playback.cycling ? stop() : session.playDrone()}><Icon name={playback.awake || playback.cycling ? 'pause' : 'play'} size={48} /></button>
@@ -100,6 +123,7 @@
   </dialog>
   <dialog bind:this={helpDialog} id="at-freeplay-help" class="at-dialog" aria-labelledby="at-freeplay-help-title" aria-describedby="at-freeplay-help-text">
     <div class="at-dialog-heading"><h2 id="at-freeplay-help-title">Free Play</h2><button class="at-icon-button" aria-label="Close Free Play help" onclick={() => helpDialog?.close()}><Icon name="close" /></button></div>
-    <p id="at-freeplay-help-text">Click to play. Drag to sustain. Click a sustained degree to stop it.</p>
+    <p id="at-freeplay-help-text">Click to play a note. Hold and drag around the note ring to play neighbouring notes; release a drag to sustain the final note. Click a sustained degree to stop it.</p>
+    <p>Cross the top of the wheel clockwise to raise the octave, or counterclockwise to lower it, within octaves 3–6. In Chromatic view this is 7 → 1 and 1 → 7. Dragging through the centre or outside the ring does not change octaves.</p>
   </dialog>
 </section>
