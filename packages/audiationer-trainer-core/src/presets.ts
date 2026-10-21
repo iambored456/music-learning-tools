@@ -1,14 +1,29 @@
 import { SCALE_MODES, scaleDegrees } from './music.ts';
-import { GAME_MODES, isChordMode, normalizeSettings, settingsError, type GameMode, type Settings } from './settings.ts';
+import { GAME_MODES, isChordMode, normalizeSettings, settingsError, type DifficultySettings, type GameMode, type Settings } from './settings.ts';
 import type { Result } from './session.ts';
 
 export const DIFFICULTIES = [
-  { name: 'Novice', seconds: 0, detail: 'No time limit', colour: '#aaa0fa' },
-  { name: 'Adept', seconds: 5, detail: 'Answer time: 5 s', colour: '#df9f48' },
-  { name: 'Master', seconds: 2, detail: 'Answer time: 2 s', colour: '#ef8aaa' },
+  { name: 'Novice', colour: '#aaa0fa' },
+  { name: 'Adept', colour: '#df9f48' },
+  { name: 'Master', colour: '#ef8aaa' },
 ] as const;
 export const isScored = (mode: GameMode) => ['degrees', 'melody', 'chords', 'chord-progressions', 'quality'].includes(mode);
-export const difficultyIndex = (seconds: number) => Math.max(0, DIFFICULTIES.findIndex(d => d.seconds === seconds));
+/** Rank 4 is the three-gem gold Master award. */
+export function difficultyRank(settings: DifficultySettings): number {
+  const matrix = settings.answerSeconds === 2 ? [2, 3, 4] : settings.answerSeconds === 5 ? [1, 2, 3] : [1, 2, 2];
+  return matrix[settings.octaveCount - 1];
+}
+export function gemAward(rank: number) {
+  return { name: rank === 4 ? 'Gold Master' : DIFFICULTIES[Math.max(0, rank - 1)]?.name ?? 'Novice',
+    colour: rank === 4 ? '#ffd43b' : DIFFICULTIES[Math.max(0, rank - 1)]?.colour ?? DIFFICULTIES[0].colour,
+    count: Math.min(3, Math.max(0, rank)), accuracy: rank === 4 ? 1 : 0.8 };
+}
+export function earnedRank(settings: Settings, results: Result[]): number {
+  if (!isScored(settings.mode) || results.length !== settings.rounds || !results.length) return 0;
+  const rank = difficultyRank(settings), accuracy = results.filter(result => result.correct).length / results.length;
+  if (accuracy < 0.8) return 0;
+  return rank === 4 && accuracy < 1 ? 3 : rank;
+}
 export interface Preset { id: string; name: string; patch: Partial<Settings> }
 export interface PresetGroup { id: string; name: string; presets: Preset[] }
 
@@ -101,7 +116,7 @@ export function nextPreset(mode: GameMode, currentId: string | null): Preset | n
 }
 export function applyPreset(settings: Settings, preset: Preset): Settings {
   return normalizeSettings({ ...settings, ...preset.patch, mode: settings.mode,
-    randomOctave: hasAdditionalLevels(settings.mode) ? true : preset.patch.randomOctave ?? settings.randomOctave });
+    octaveCount: settings.octaveCount, answerSeconds: settings.answerSeconds, difficulties: settings.difficulties });
 }
 export interface CustomPreset { id: string; name: string; settings: Settings }
 export function normalizeCustomPresets(input: unknown): CustomPreset[] {
@@ -124,11 +139,12 @@ export function normalizeProgress(input: unknown): Progress {
     [...pathPresets(mode.id), ...challengePresets(mode.id)].map(preset => progressKey(mode.id, preset.id))));
   return Object.fromEntries(Object.entries(input).filter(([key, value]) =>
     (builtInKeys.has(key) || /^(degrees|melody|chords|chord-progressions|quality):custom-[\w-]+$/.test(key))
-    && Number.isInteger(value) && value >= 1 && value <= 3));
+    && Number.isInteger(value) && value >= 1 && value <= 4));
 }
-/** A full session at 80% accuracy earns the selected difficulty; easier runs never erase progress. */
+/** Regular ranks require 80%; gold requires a perfect full session. Lower awards never erase progress. */
 export function recordProgress(progress: Progress, settings: Settings, presetId: string | null, results: Result[]): Progress {
-  if (!presetId || !isScored(settings.mode) || results.length !== settings.rounds || results.filter(r => r.correct).length / results.length < 0.8) return progress;
+  const earned = earnedRank(settings, results);
+  if (!presetId || !earned) return progress;
   const key = progressKey(settings.mode, presetId);
-  return { ...progress, [key]: Math.max(progress[key] ?? 0, difficultyIndex(settings.answerSeconds) + 1) };
+  return { ...progress, [key]: Math.max(progress[key] ?? 0, earned) };
 }

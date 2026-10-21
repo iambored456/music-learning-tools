@@ -1,13 +1,14 @@
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { BrowserTrainerAudio } from '../src/audio.ts';
-import { FreeplaySession, TrainerSession, normalizeFreeplaySettings, normalizeSettings, questionLength } from '@mlt/audiationer-trainer-core';
+import { FreeplaySession, RESULTS_DRONE_FADE_SECONDS, TrainerSession, normalizeFreeplaySettings, normalizeSettings, questionLength } from '@mlt/audiationer-trainer-core';
 
 class Param {
   value = 0;
+  ramps: { value: number; time: number }[] = [];
   setValueAtTime(value: number) { this.value = value; }
   setTargetAtTime(value: number) { this.value = value; }
-  linearRampToValueAtTime(value: number) { this.value = value; }
+  linearRampToValueAtTime(value: number, time: number) { this.value = value; this.ramps.push({ value, time }); }
   cancelScheduledValues() {}
 }
 class Node {
@@ -187,4 +188,55 @@ test('disposing while the sample loads cannot leave a late tanpura playing', asy
   await unlocking;
   assert.equal(Context.instances[0].state, 'closed');
   assert.equal(Context.instances[0].sources.length, 0);
+});
+
+test('completed levels show Results immediately and fade the drone before releasing its voices', async t => {
+  environment(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const mode of ['degrees', 'melody', 'chords', 'chord-progressions'] as const) {
+    for (const reviewSkip of ['none', 'all'] as const) {
+      const audio = new BrowserTrainerAudio();
+      t.mock.method(audio, 'notes', async (_midis: number[], _seconds: number, signal: AbortSignal) => { signal.throwIfAborted(); });
+      const session = new TrainerSession(audio, () => {}, () => 0, async (_ms, signal) => { signal.throwIfAborted(); });
+      t.after(() => { session.destroy(); audio.dispose(); });
+      const settings = normalizeSettings({ mode, degrees: [0], melodyLength: 2, progressionLength: 2,
+        rounds: 1, reviewSkip, cadence: false, resolve: false });
+      await session.start(settings);
+      const ctx = Context.instances.at(-1)!, voices = [...ctx.sources];
+      assert.equal(voices.length, 7);
+      for (let answer = 0; answer < questionLength(settings); answer++) await session.answer(0);
+      if (reviewSkip === 'none') await session.next();
+      assert.equal(session.snapshot().phase, 'finished', `${mode}/${reviewSkip}`);
+      assert.deepEqual(ctx.gains[1].gain.ramps.at(-1), { value: 0, time: ctx.currentTime + RESULTS_DRONE_FADE_SECONDS });
+      assert.ok(voices.every(voice => !voice.stopped), 'The drone continues during the fade');
+      t.mock.timers.tick(RESULTS_DRONE_FADE_SECONDS * 1000 - 1);
+      assert.ok(voices.every(voice => !voice.stopped));
+      t.mock.timers.tick(1);
+      assert.ok(voices.every(voice => voice.stopped), 'Release voices once the fade is silent');
+      session.destroy(); audio.dispose();
+    }
+  }
+});
+
+test('restarting or disposing during a Results fade cancels delayed drone cleanup', async t => {
+  environment(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const audio = new BrowserTrainerAudio();
+  t.after(() => audio.dispose());
+  await audio.unlock(); audio.drone(48, 0.8);
+  const ctx = Context.instances[0], original = [...ctx.sources];
+  audio.stop({ droneFadeSeconds: RESULTS_DRONE_FADE_SECONDS });
+  t.mock.timers.tick(400);
+  // Starting another session stops the previous one, then starts a fresh drone.
+  audio.stop(); audio.drone(55, 0.8);
+  const restarted = ctx.sources.slice(original.length);
+  assert.ok(original.every(voice => voice.stopped));
+  assert.equal(ctx.gains[1].gain.value, 1, 'The new drone is not left muted');
+  t.mock.timers.tick(1000);
+  assert.ok(restarted.every(voice => !voice.stopped), 'Old cleanup cannot stop the new drone');
+  audio.stop({ droneFadeSeconds: RESULTS_DRONE_FADE_SECONDS });
+  audio.dispose();
+  assert.ok(restarted.every(voice => voice.stopped));
+  t.mock.timers.tick(1000);
+  assert.equal(ctx.state, 'closed');
 });

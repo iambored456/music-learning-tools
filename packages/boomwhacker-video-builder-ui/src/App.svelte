@@ -48,22 +48,25 @@
     type ExportVideoContainer,
   } from './browser/videoExport.js';
   import HighwayNoteGlyph from './HighwayNoteGlyph.svelte';
+  import NoteHitBurst from './NoteHitBurst.svelte';
+  import JudgmentColumn from './JudgmentColumn.svelte';
+  import { getJudgmentColumnWidth } from './browser/judgmentColumn.js';
+  import { getNoteHitBounds, isNoteHitBurstActive } from './browser/noteHitBurst.js';
   import {
     getHighwayTimeX,
+    getHighwayTimeAtX,
     getHighwayNoteLayout,
     getVisibleHighwayGuides,
     shouldRenderGuideAsBeat,
     type HighwayNoteLayout,
+    type HighwayTimeLayout,
   } from './highwayLayout.js';
 
   type NoteShape = BoomwhackerNoteShape;
   type HighwayEditorTool = 'place' | 'lasso' | 'eraser';
 
-  type EditorHighwayLayoutContext = {
+  type EditorHighwayLayoutContext = HighwayTimeLayout & {
     laneHeightPx: number;
-    pixelsPerSecond: number;
-    leadingPaddingPx: number;
-    previewStartTimeSec: number;
   };
 
   type EditorHistoryEntry = {
@@ -110,14 +113,6 @@
     row: number;
     startSlotIndex: number;
     endSlotIndex: number;
-  };
-
-  type HighwayPlaybackHighlight = {
-    id: string;
-    left: number;
-    top: number;
-    width: number;
-    height: number;
   };
 
   type CountInBeatEvent = {
@@ -207,7 +202,6 @@
   let backgroundImageInput: HTMLInputElement | null = null;
   let previewAudioPlayer: HTMLAudioElement | null = null;
   let compactWaveformViewport: HTMLDivElement | null = null;
-  let projectMenuWrapper: HTMLDivElement | null = null;
   let volumeControlWrapper: HTMLDivElement | null = null;
   let editorHighwayViewport: HTMLDivElement | null = null;
   let editorHighwayStage: HTMLDivElement | null = null;
@@ -227,7 +221,6 @@
   let statusMessage = 'Import audio and a MIDI tempo map to begin placing notes.';
   let errorMessage = '';
   let busyMessage = '';
-  let projectMenuOpen = false;
   let volumePopupOpen = false;
   let isSetupModalOpen = false;
   let setupModalTitle = '';
@@ -254,7 +247,6 @@
   let previewClockAnchorTimeSec = 0;
   let previewClockAnchorMs = 0;
   let previewDurationSec = 0;
-  let waveformDurationSec = 0;
   let previewSynthCursorTimeSec = 0;
   let previewScrubState: PreviewScrubState | null = null;
   let exportPreviewTimeSec = 0;
@@ -273,7 +265,7 @@
   let highwayHoverPreview: HighwayPlacementPreview | null = null;
   let activeHighwayPlacementPreview: HighwayPlacementPreview | null = null;
   let highwayEraserPreview: HighwayEraserPreview | null = null;
-  let activePlaybackHighlights: HighwayPlaybackHighlight[] = [];
+  let activePlaybackBursts: TimedBoomwhackerNote[] = [];
   let removeHighwayEraseListeners: (() => void) | null = null;
   let resizeHotspotNoteId: string | null = null;
   let autosaveWriteTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -598,20 +590,22 @@
     }
 
     const rect = viewport.getBoundingClientRect();
-    const anchorOffsetPx = Math.min(rect.width, Math.max(0, clientX - rect.left));
-    const contentWidthBefore = Math.max(rect.width, viewport.scrollWidth);
-    const anchorContentRatio = contentWidthBefore > 0
-      ? (viewport.scrollLeft + anchorOffsetPx) / contentWidthBefore
-      : 0.5;
+    const anchorOffsetPx = Math.min(viewport.clientWidth, Math.max(0, clientX - rect.left - viewport.clientLeft));
+    const timeline = viewport === compactWaveformViewport ? getCompactWaveformTimeline() : editorHighwayStage;
+    const timelineBorderPx = timeline?.clientLeft ?? 0;
+    const anchorTimeSec = getHighwayTimeAtX(
+      viewport.scrollLeft + anchorOffsetPx - timelineBorderPx,
+      editorHighwayLayoutContext,
+    );
 
     updateViewState({ zoom: nextZoom });
     showHighwayZoomPreview(nextZoom);
     await tick();
 
-    const contentWidthAfter = Math.max(viewport.clientWidth, viewport.scrollWidth);
-    const unclampedScrollLeft = (contentWidthAfter * anchorContentRatio) - anchorOffsetPx;
+    const unclampedScrollLeft = timeToEditorHighwayX(anchorTimeSec) + timelineBorderPx - anchorOffsetPx;
     const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
     viewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, unclampedScrollLeft));
+    syncTimelineScroll(viewport);
   }
 
   function showHighwayZoomPreview(zoom: number): void {
@@ -630,12 +624,15 @@
       return;
     }
 
-    const viewport = event.currentTarget as HTMLDivElement | null;
+    event.preventDefault();
+    event.stopPropagation();
+    const viewport = event.currentTarget === compactWaveformViewport
+      ? compactWaveformViewport
+      : editorHighwayViewport;
     if (!viewport) {
       return;
     }
 
-    event.preventDefault();
     const normalizedDeltaY = normalizeWheelDelta(event.deltaY, event.deltaMode);
     const zoomFactor = Math.exp(-normalizedDeltaY * 0.003);
     void applyTimelineZoom(zoomFactor, viewport, event.clientX);
@@ -662,6 +659,7 @@
     await tick();
     if (editorHighwayViewport) {
       editorHighwayViewport.scrollLeft = 0;
+      syncTimelineScroll(editorHighwayViewport);
     }
     statusMessage = 'Zoomed to fit the full song timeline.';
   }
@@ -887,23 +885,6 @@
     setPreviewSynthVolume(synthVolume, `Canvas note volume set to ${formatVolumePercent(synthVolume)}.`);
   }
 
-  function closeProjectMenu(): void {
-    projectMenuOpen = false;
-  }
-
-  function handleProjectMenuIconClick(event: MouseEvent): void {
-    event.stopPropagation();
-    projectMenuOpen = !projectMenuOpen;
-    if (projectMenuOpen) {
-      closeVolumePopup();
-    }
-  }
-
-  function runProjectMenuAction(action: () => void | Promise<void>): void {
-    closeProjectMenu();
-    void action();
-  }
-
   function openProjectFilePicker(): void {
     projectInput?.click();
   }
@@ -915,9 +896,6 @@
   function handleVolumeIconClick(event: MouseEvent): void {
     event.stopPropagation();
     volumePopupOpen = !volumePopupOpen;
-    if (volumePopupOpen) {
-      closeProjectMenu();
-    }
   }
 
   function closeVolumePopup(): void {
@@ -934,12 +912,6 @@
       closeVolumePopup();
     }
 
-    if (projectMenuOpen) {
-      if (target instanceof Node && projectMenuWrapper?.contains(target)) {
-        return;
-      }
-      closeProjectMenu();
-    }
   }
 
   function isEditorInteractionBlocked(): boolean {
@@ -1061,6 +1033,15 @@
     });
   }
 
+  function getHighwayNoteHitBounds(note: TimedBoomwhackerNote, layout: EditorHighwayLayoutContext) {
+    return getNoteHitBounds(
+      getHighwayXForLayoutContext(note.startTimeSec, layout),
+      getHighwayXForLayoutContext(note.endTimeSec, layout),
+      getVisualLaneRow(note.row) * layout.laneHeightPx,
+      layout.laneHeightPx,
+    );
+  }
+
   function highwayNoteStyle(layout: HighwayNoteLayout): string {
     return `left:${layout.left}px;width:${layout.width}px;top:${layout.top}px;height:${layout.height}px;--note-label-size:${layout.labelFontPx}px;`;
   }
@@ -1071,42 +1052,6 @@
     }
     const minimumEndSlotIndex = note.startSlotIndex + getMinimumSlotSpanForShape(note.shape, timing, note.startSlotIndex) - 1;
     return note.endSlotIndex > minimumEndSlotIndex;
-  }
-
-  function getHighwayPlaybackHighlightForNote(
-    note: TimedBoomwhackerNote,
-    layoutContext: EditorHighwayLayoutContext = getCurrentEditorHighwayLayoutContext(),
-  ): HighwayPlaybackHighlight {
-    const left = getHighwayXForLayoutContext(note.startTimeSec, layoutContext);
-    const right = getHighwayXForLayoutContext(note.endTimeSec, layoutContext);
-
-    return {
-      id: note.id,
-      left,
-      top: getVisualLaneRow(note.row) * layoutContext.laneHeightPx,
-      width: Math.max(1, right - left),
-      height: layoutContext.laneHeightPx,
-    };
-  }
-
-  function getActiveHighwayPlaybackHighlights(
-    notes: TimedBoomwhackerNote[],
-    layoutContext: EditorHighwayLayoutContext = getCurrentEditorHighwayLayoutContext(),
-    currentTimeSec = previewCurrentTimeSec,
-    isPlaying = previewIsPlaying,
-    playGrid = project.previewState.playGrid,
-  ): HighwayPlaybackHighlight[] {
-    if (!isPlaying || !playGrid) {
-      return [];
-    }
-
-    return notes
-      .filter((note) => note.startTimeSec <= currentTimeSec && note.endTimeSec > currentTimeSec)
-      .map((note) => getHighwayPlaybackHighlightForNote(note, layoutContext));
-  }
-
-  function highwayPlaybackHighlightStyle(highlight: HighwayPlaybackHighlight): string {
-    return `left:${highlight.left}px;width:${highlight.width}px;top:${highlight.top}px;height:${highlight.height}px;`;
   }
 
   function getPlacementPreviewStyle(
@@ -1147,6 +1092,26 @@
       return;
     }
     editorHighwayViewport.scrollLeft = getEditorHighwayScrollLeftForTime(timeSec);
+    syncTimelineScroll(editorHighwayViewport);
+  }
+
+  function syncTimelineScroll(source: HTMLDivElement | null): void {
+    if (!source) return;
+    const target = source === editorHighwayViewport ? compactWaveformViewport : editorHighwayViewport;
+    if (target && Math.abs(target.scrollLeft - source.scrollLeft) > 0.5) {
+      target.scrollLeft = source.scrollLeft;
+    }
+  }
+
+  async function syncTimelineLayout(
+    _width: number,
+    highway: HTMLDivElement | null,
+    waveform: HTMLDivElement | null,
+  ): Promise<void> {
+    await tick();
+    if (highway === editorHighwayViewport && waveform === compactWaveformViewport) {
+      syncTimelineScroll(highway);
+    }
   }
 
   function getCompactWaveformTimeline(): HTMLDivElement | null {
@@ -1156,26 +1121,10 @@
   function getTimelineTimeSecFromClientX(clientX: number): number {
     const timeline = getCompactWaveformTimeline();
     const rect = timeline?.getBoundingClientRect();
-    if (!rect) {
+    if (!timeline || !rect) {
       return 0;
     }
-    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(1, rect.width)));
-    return clampPreviewTimeSec(ratio * waveformDurationSec);
-  }
-
-  function getCompactWaveformTimelineXForTime(timeSec: number): number {
-    const timeline = getCompactWaveformTimeline();
-    const viewport = compactWaveformViewport;
-    const timelineWidth = timeline?.clientWidth ?? 0;
-    const durationSec = waveformDurationSec;
-    if (!timeline || !viewport || timelineWidth <= 0 || durationSec <= 0) {
-      return 0;
-    }
-
-    const ratio = Math.min(1, Math.max(0, timeSec / durationSec));
-    const timelineLeft = timeline.getBoundingClientRect().left - viewport.getBoundingClientRect().left
-      + viewport.scrollLeft - viewport.clientLeft;
-    return timelineLeft + (ratio * timelineWidth);
+    return clampPreviewTimeSec(getHighwayTimeAtX(clientX - rect.left - timeline.clientLeft, editorHighwayLayoutContext));
   }
 
   function revealTimelinePosition(viewport: HTMLDivElement, contentX: number): void {
@@ -1199,18 +1148,19 @@
   function syncPlaybackViewportsToTime(timeSec: number): void {
     if (previewCanPlayGrid() && editorHighwayViewport) {
       syncEditorHighwayViewportToTime(timeSec);
+    } else {
+      revealCompactWaveformTime(timeSec);
     }
-    revealCompactWaveformTime(timeSec);
   }
 
   function revealCompactWaveformTime(timeSec: number): void {
-    const viewport = compactWaveformViewport;
-    const timeline = getCompactWaveformTimeline();
-    if (!viewport || !timeline) {
+    const viewport = editorHighwayViewport ?? compactWaveformViewport;
+    if (!viewport) {
       return;
     }
 
-    revealTimelinePosition(viewport, getCompactWaveformTimelineXForTime(timeSec));
+    revealTimelinePosition(viewport, timeToEditorHighwayX(timeSec));
+    syncTimelineScroll(viewport);
   }
 
   function clampPreviewTimeSec(timeSec: number): number {
@@ -3365,10 +3315,9 @@
     if (isSetupModalOpen || event.defaultPrevented || project.viewState.activeTab !== 'editor') {
       return;
     }
-    if (event.key === 'Escape' && (volumePopupOpen || projectMenuOpen)) {
+    if (event.key === 'Escape' && volumePopupOpen) {
       event.preventDefault();
       closeVolumePopup();
-      closeProjectMenu();
       return;
     }
     if (shouldIgnoreEditorShortcut(event.target)) {
@@ -3599,7 +3548,6 @@
   $: beatMapMetronome.setAudioVolume(project.previewState.audioVolume);
   $: beatMapMetronome.setClickVolume(project.previewState.metronomeVolume);
   $: timing = deriveTimingModel(project.songTiming, project.grid);
-  $: waveformDurationSec = Math.max(1, project.audio?.durationSec ?? 0, timing.totalDurationSec);
   $: editorBaseLaneHeightPx = getEditorBaseLaneHeightForViewport(viewportHeightPx);
   $: editorLaneHeightPx = getZoomedEditorLaneHeight(editorBaseLaneHeightPx, project.viewState.zoom);
   $: previewStartTimeSec = Math.min(0, timing.countInStartTimeSec);
@@ -3621,6 +3569,7 @@
     Math.max(1, editorHighwayViewportWidthPx),
     Math.ceil((editorHighwayDurationSec * editorHighwayPixelsPerSecond) + editorHighwayLeadingPaddingPx + editorHighwayTrailingPaddingPx),
   );
+  $: void syncTimelineLayout(editorHighwayStageWidthPx, editorHighwayViewport, compactWaveformViewport);
   $: guides = deriveGuideLines(timing);
   $: highwayGuides = getVisibleHighwayGuides(guides);
   $: selectedBeatSpan = timing.beatSpans[Math.max(0, Math.min(timing.beatSpans.length - 1, project.viewState.selectedBeatIndex))] ?? null;
@@ -3652,13 +3601,9 @@
     highwayEraserPreview = null;
   }
   $: timedNotes = deriveTimedNotes(project.notes.placedNotes, timing);
-  $: activePlaybackHighlights = getActiveHighwayPlaybackHighlights(
-    timedNotes,
-    editorHighwayLayoutContext,
-    previewCurrentTimeSec,
-    previewIsPlaying,
-    project.previewState.playGrid,
-  );
+  $: activePlaybackBursts = previewIsPlaying && project.previewState.playGrid
+    ? timedNotes.filter((note) => isNoteHitBurstActive(note.startTimeSec, previewCurrentTimeSec))
+    : [];
   $: selectedNotes = sortGridNotes(project.notes.placedNotes.filter((note) => selectedNoteIds.includes(note.id)));
   $: if (selectedNoteIds.some((noteId) => !project.notes.placedNotes.some((note) => note.id === noteId))) {
     selectedNoteIds = selectedNoteIds.filter((noteId) => project.notes.placedNotes.some((note) => note.id === noteId));
@@ -3736,57 +3681,34 @@
       </p>
     </div>
 
-    <div class="top-toolbar__actions">
-      <div class="project-menu-wrapper" bind:this={projectMenuWrapper}>
-        <button
-          type="button"
-          class="project-menu-button"
-          class:active={projectMenuOpen}
-          title="Project menu"
-          aria-label="Open project menu"
-          aria-expanded={projectMenuOpen}
-          aria-haspopup="menu"
-          aria-controls="project-menu"
-          on:click={handleProjectMenuIconClick}
-        >
-          <img src={studentNotationSettingsIconHref} alt="" class="project-menu-button__icon" />
-        </button>
-        {#if projectMenuOpen}
-          <div id="project-menu" class="project-menu" role="menu" aria-label="Project menu">
-            <button type="button" class="project-menu__item" disabled={Boolean(busyMessage)} on:click={() => runProjectMenuAction(createNewProject)} role="menuitem">
-              <img src={studentNotationNewPageIconHref} alt="" class="project-menu__icon" />
-              <span>New</span>
-            </button>
-            <button type="button" class="project-menu__item" disabled={Boolean(busyMessage)} on:click={() => runProjectMenuAction(openSetupModal)} role="menuitem">
-              <img src={studentNotationSettingsIconHref} alt="" class="project-menu__icon" />
-              <span>Setup</span>
-            </button>
-            <button type="button" class="project-menu__item" disabled={Boolean(busyMessage) || !project.audio || !project.songTiming.midiFileName} on:click={() => runProjectMenuAction(saveProject)} role="menuitem">
-              <img src={studentNotationSaveAsIconHref} alt="" class="project-menu__icon" />
-              <span>Save</span>
-            </button>
-            <button type="button" class="project-menu__item" disabled={Boolean(busyMessage)} on:click={() => runProjectMenuAction(openProjectFilePicker)} role="menuitem">
-              <img src={studentNotationOpenIconHref} alt="" class="project-menu__icon" />
-              <span>Load</span>
-            </button>
-            <button
-              type="button"
-              class="project-menu__item"
-              class:active={project.viewState.activeTab === 'export'}
-              disabled={Boolean(busyMessage) || !project.audio || !project.songTiming.midiFileName}
-              on:click={() => runProjectMenuAction(toggleEditorExportTab)}
-              role="menuitem"
-            >
-              <img src={studentNotationPrintIconHref} alt="" class="project-menu__icon" />
-              <span>{project.viewState.activeTab === 'export' ? 'Editor' : 'Export'}</span>
-            </button>
-            <a class="project-menu__item" href={hubHref} role="menuitem">
-              <img src={homeIconHref} alt="" class="project-menu__icon" />
-              <span>Home</span>
-            </a>
-          </div>
-        {/if}
-      </div>
+    <div class="top-toolbar__actions" role="group" aria-label="Project actions">
+      <button type="button" class="project-action" title="New project" aria-label="New project" disabled={Boolean(busyMessage)} on:click={createNewProject}>
+        <img src={studentNotationNewPageIconHref} alt="" class="project-action__icon" />
+      </button>
+      <button type="button" class="project-action" title="Setup" aria-label="Setup" disabled={Boolean(busyMessage)} on:click={openSetupModal}>
+        <img src={studentNotationSettingsIconHref} alt="" class="project-action__icon" />
+      </button>
+      <button type="button" class="project-action" title="Save project" aria-label="Save project" disabled={Boolean(busyMessage) || !project.audio || !project.songTiming.midiFileName} on:click={saveProject}>
+        <img src={studentNotationSaveAsIconHref} alt="" class="project-action__icon" />
+      </button>
+      <button type="button" class="project-action" title="Load project" aria-label="Load project" disabled={Boolean(busyMessage)} on:click={openProjectFilePicker}>
+        <img src={studentNotationOpenIconHref} alt="" class="project-action__icon" />
+      </button>
+      <button
+        type="button"
+        class="project-action"
+        class:active={project.viewState.activeTab === 'export'}
+        title={project.viewState.activeTab === 'export' ? 'Editor' : 'Export'}
+        aria-label={project.viewState.activeTab === 'export' ? 'Editor' : 'Export'}
+        aria-pressed={project.viewState.activeTab === 'export'}
+        disabled={Boolean(busyMessage) || !project.audio || !project.songTiming.midiFileName}
+        on:click={toggleEditorExportTab}
+      >
+        <img src={studentNotationPrintIconHref} alt="" class="project-action__icon" />
+      </button>
+      <a class="project-action" href={hubHref} title="Home" aria-label="Home">
+        <img src={homeIconHref} alt="" class="project-action__icon" />
+      </a>
     </div>
 
     {#if project.viewState.activeTab === 'editor'}
@@ -4033,32 +3955,21 @@
           <audio bind:this={previewAudioPlayer} class="visually-hidden" preload="metadata" src={audioPreviewUrl} on:ended={handlePreviewAudioEnded}></audio>
         {/if}
 
-        <div class="highway-shell">
+        <div class="highway-shell" on:wheel|nonpassive={handleTimelineWheel}>
           {#if highwayZoomPreview}
             <div class="highway-shell__zoom-preview" aria-live="polite">
               Zoom {highwayZoomPreview}
             </div>
           {/if}
           <div class="highway">
-            <div
-              class="highway__labels"
-              style={`--lane-height:${editorLaneHeightPx}px;--lane-label-font-size:${Math.min(16, Math.max(4, editorLaneHeightPx * 0.38))}px;`}
-            >
-              {#each VISUAL_BOOMWHACKER_LANES as lane}
-                <div class="highway__label">
-                  <span class={laneClass(lane.marker)}>{lane.label}</span>
-                </div>
-              {/each}
-            </div>
-
             <div class="highway__viewport-shell">
               <div
                 bind:this={editorHighwayViewport}
                 bind:clientWidth={editorHighwayViewportWidthPx}
                 class="highway__viewport highway__viewport--editor"
+                on:scroll={() => syncTimelineScroll(editorHighwayViewport)}
                 class:is-erasing={highwayEditorTool === 'eraser' || highwayTemporaryEraserActive || highwayEraseState !== null}
                 class:is-cursor-selecting={isHighwayCursorToolActive()}
-                on:wheel={handleTimelineWheel}
               >
                 <div
                   bind:this={editorHighwayStage}
@@ -4128,13 +4039,27 @@
                     </span>
                   {/each}
 
-                  {#each activePlaybackHighlights as highlight (highlight.id)}
-                    <span
-                      class="highway__playback-highlight"
-                      style={highwayPlaybackHighlightStyle(highlight)}
-                      aria-hidden="true"
-                    ></span>
-                  {/each}
+                  {#if timing.beatSpans.length > 0}
+                    <JudgmentColumn
+                      left={getHighwayXForLayoutContext(previewCurrentTimeSec, editorHighwayLayoutContext)}
+                      width={getJudgmentColumnWidth(timing, previewCurrentTimeSec, editorHighwayLayoutContext.pixelsPerSecond)}
+                      laneHeight={editorHighwayLayoutContext.laneHeightPx}
+                      hitNotes={activePlaybackBursts}
+                      currentTimeSec={previewCurrentTimeSec}
+                    />
+                  {/if}
+
+                  <div class="highway__hit-bursts" aria-hidden="true">
+                    {#each activePlaybackBursts as note (note.id)}
+                      <NoteHitBurst
+                        {note}
+                        ageSec={previewCurrentTimeSec - note.startTimeSec}
+                        bounds={getHighwayNoteHitBounds(note, editorHighwayLayoutContext)}
+                        layout={getHighwayNoteLayoutForNote(note, editorHighwayLayoutContext)}
+                        sustained={isSustainedCircleNote(note)}
+                      />
+                    {/each}
+                  </div>
 
                   {#each timedNotes as note (note.id)}
                     {@const noteLayout = getHighwayNoteLayoutForNote(note, editorHighwayLayoutContext)}
@@ -4142,9 +4067,10 @@
                     <button
                       type="button"
                       class="highway__note"
-                      class:is-selected={selectedNoteIds.includes(note.id)}
-                      class:is-crossing={project.previewState.playGrid && note.startTimeSec <= previewCurrentTimeSec && note.endTimeSec >= previewCurrentTimeSec}
-                      class:is-past={note.endTimeSec < previewCurrentTimeSec}
+                      class:is-selected={!previewIsPlaying && selectedNoteIds.includes(note.id)}
+                      class:is-crossing={!previewIsPlaying && project.previewState.playGrid && note.startTimeSec <= previewCurrentTimeSec && note.endTimeSec >= previewCurrentTimeSec}
+                      class:is-past={!previewIsPlaying && note.endTimeSec < previewCurrentTimeSec}
+                      class:is-shattered={previewIsPlaying && project.previewState.playGrid && note.startTimeSec <= previewCurrentTimeSec}
                       class:is-resize-hotspot={resizeHotspotNoteId === note.id}
                       class:shape-circle={note.shape === 'circle'}
                       class:shape-oval={note.shape === 'oval'}
@@ -4204,6 +4130,8 @@
           <div class="panel__subsection">
           {#key project.metadata.id}
             <BeatMapEditor timing={project.songTiming} peaks={waveformPeaks} audioDurationSec={project.audio.durationSec}
+              layout={editorHighwayLayoutContext} timelineWidthPx={editorHighwayStageWidthPx}
+              onzoomwheel={handleTimelineWheel} onscroll={() => syncTimelineScroll(compactWaveformViewport)}
               waveformHeight={project.viewState.waveformHeight} onheightchange={(height) => updateViewState({ waveformHeight: height })}
               currentTimeSec={previewCurrentTimeSec} playbackDurationSec={previewDurationSec}
               scrubbing={previewScrubState !== null} transportDisabled={Boolean(busyMessage)} bind:viewport={compactWaveformViewport}

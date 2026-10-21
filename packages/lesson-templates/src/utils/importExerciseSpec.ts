@@ -12,6 +12,7 @@ import type {
   ExerciseTimeGrid,
   DifficultyLevel,
   LessonSettingsSchema,
+  SpeakingPitchUsage,
 } from '../types.js';
 
 // ============================================================================
@@ -62,6 +63,9 @@ export interface ExerciseSpecMetadata {
   durationEstimate: string;
   voiceColors?: string[];
   settingsSchema?: LessonSettingsSchema;
+  speakingPitchUsage?: SpeakingPitchUsage;
+  preferredNotationStyle?: OverdubExerciseTemplate['config']['preferredNotationStyle'];
+  trimToScore?: boolean;
 }
 
 // ============================================================================
@@ -183,7 +187,7 @@ export function convertSpecToExercise(
     type: 'overdub',
     difficulty: metadata.difficulty,
     category: 'workshop',
-    speakingPitchUsage: 'none',
+    speakingPitchUsage: metadata.speakingPitchUsage ?? 'none',
     durationEstimate: metadata.durationEstimate,
     settingsSchema: metadata.settingsSchema ?? {
       fields: [
@@ -191,6 +195,8 @@ export function convertSpecToExercise(
       ],
     },
     config: {
+      preferredNotationStyle: metadata.preferredNotationStyle,
+      trimToScore: metadata.trimToScore,
       tempo: globals.tempoBpm,
       timeGrid,
       voices,

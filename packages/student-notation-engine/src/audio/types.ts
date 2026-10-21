@@ -284,6 +284,8 @@ export interface TransportState {
 export interface TransportVisualCallbacks {
   /** Give startup feedback a chance to paint before synchronous scheduling. */
   preparePlayback?: () => Promise<void>;
+  /** Continuous playhead X in musical-canvas CSS pixels, independent of display mode. */
+  updatePlayheadPosition?: (x: number) => void;
   /** Clear playhead canvas */
   clearPlayheadCanvas?: () => void;
   /** Clear drum playhead canvas */

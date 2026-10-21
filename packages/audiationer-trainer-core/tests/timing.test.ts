@@ -49,7 +49,7 @@ test('every scored mode waits half a second before the first question and every 
 test('major Degrees and Melody tonicize at 60 BPM with eighth notes and a quarter-note final tonic', async () => {
   for (const mode of ['degrees', 'melody'] as const) {
     for (const noteGap of [0.6, 1.2]) {
-      const t = setup({ mode, cadence: true, octave: 3, noteGap, answerSeconds: 2 });
+      const t = setup({ mode, cadence: true, octaveCount: 2, noteGap, answerSeconds: 2 });
       await t.session.start(t.settings);
       const notes = t.events.filter(event => event.kind === 'note').filter(event => event.tonicizing);
       assert.deepEqual(notes.map(event => event.midis), [[48], [52], [55], [53], [50], [47], [48]]);

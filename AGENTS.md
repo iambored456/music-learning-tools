@@ -83,7 +83,7 @@ Some packages retain `build`/`dev` TypeScript scripts that generate optional com
 
 - App-facing UI: `amateur-music-theory-ui`, `boomwhacker-video-builder-ui`, `diatonic-compass-ui`, `grand-frequency-staff-ui`, `simple-notation-ui`, `singing-trainer-ui`, `student-notation-ui`, and `visual-metronome-ui`.
 - Domain and engine packages: `boomwhacker-video-builder-core`, `simple-notation-core`, `singing-trainer-core`, `student-notation-engine`, `overdub-engine`, and `tempogram-toolbox-core`.
-- Shared packages: `audio-samples`, `font-atkinson`, `handoff`, `lesson-templates`, `lesson-trace`, `musicxml-import`, `notation-glyphs`, `pitch-data`, `pitch-trail`, `pitch-utils`, `pitch-viewport`, `talking-avatar`, `tanpura-drone`, `tempo-controls-ui`, `types`, and `ui-components`.
+- Shared packages: `audio-samples`, `font-atkinson`, `handoff`, `lesson-templates`, `lesson-trace`, `musicxml-import`, `notation-glyphs`, `pitch-data`, `pitch-utils`, `pitch-viewport`, `talking-avatar`, `tanpura-drone`, `tempo-controls-ui`, `types`, and `ui-components`.
 
 Inspect the relevant package manifest before using a command; not every workspace defines every script.
 

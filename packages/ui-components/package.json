@@ -18,6 +18,10 @@
       "svelte": "./src/canvas/index.ts",
       "import": "./src/canvas/index.ts"
     },
+    "./canvas/primitives": {
+      "types": "./src/canvas/notePrimitives.ts",
+      "import": "./src/canvas/notePrimitives.ts"
+    },
     "./pitch-wheels": {
       "types": "./src/pitch-wheels/index.ts",
       "svelte": "./src/pitch-wheels/index.ts",

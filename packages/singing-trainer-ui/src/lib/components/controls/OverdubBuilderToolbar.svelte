@@ -74,7 +74,7 @@
 
   function onPointerMove(event: PointerEvent) {
     if (!isResizing) return;
-    const deltaY = dragStartY - event.clientY;
+    const deltaY = event.clientY - dragStartY;
     const maxHeightPx = getMaxHeightPx();
     const nextHeight = clamp(dragStartHeightPx + deltaY, MIN_HEIGHT_PX, Math.round(maxHeightPx));
     heightPx = Math.round(nextHeight);
@@ -111,6 +111,9 @@
     aria-label="Overdub builder toolbar"
     style:height={`${heightPx}px`}
   >
+    <div class="builder-toolbar__content">
+      <OverdubControls compact />
+    </div>
     <button
       type="button"
       class="resize-handle"
@@ -120,9 +123,6 @@
     >
       <span class="resize-handle__grip" aria-hidden="true"></span>
     </button>
-    <div class="builder-toolbar__content">
-      <OverdubControls compact />
-    </div>
   </div>
 {/if}
 
@@ -132,9 +132,7 @@
     min-height: 148px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
-    background: var(--color-bg-light);
-    backdrop-filter: blur(8px);
-    box-shadow: var(--shadow-md);
+    background: var(--color-panel);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -148,7 +146,7 @@
   .resize-handle {
     height: 14px;
     border: none;
-    border-bottom: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
     background: var(--color-control);
     cursor: ns-resize;
     display: flex;

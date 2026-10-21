@@ -28,6 +28,31 @@ class ScrollSyncService {
     if (!this.isInitialized || !this.gridsWrapper) {return;}
     this.gridsWrapper.scrollLeft = scrollLeft;
   }
+
+  /** Follow the transport's CSS-pixel position without changing canvas geometry. */
+  followPlayhead(x: number, canvas: HTMLCanvasElement): void {
+    const wrapper = this.gridsWrapper;
+    if (!this.isInitialized || !wrapper || !Number.isFinite(x) || wrapper.clientWidth <= 0) {return;}
+
+    const maxScroll = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+    if (maxScroll === 0) {
+      this.syncScrollTo(0);
+      return;
+    }
+
+    // Playhead coordinates exclude legends. Recover the canvas origin in the
+    // shared scroll area so legends, borders, and layout changes stay aligned.
+    const canvasOrigin = canvas.getBoundingClientRect().left
+      - wrapper.getBoundingClientRect().left - wrapper.clientLeft + wrapper.scrollLeft;
+    const anchorX = wrapper.clientWidth * 0.25;
+    const target = Math.max(0, Math.min(maxScroll, canvasOrigin + x - anchorX));
+
+    // The transport calls this each animation frame; native immediate scrolling
+    // keeps the playhead fixed without a second easing animation trailing audio.
+    if (Math.abs(wrapper.scrollLeft - target) > 0.01) {
+      this.syncScrollTo(target);
+    }
+  }
 }
 
 // Create singleton instance

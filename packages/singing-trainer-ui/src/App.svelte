@@ -6,6 +6,7 @@
    */
   import { onMount, onDestroy, untrack } from 'svelte';
   import SolfegeRows from './lib/components/SolfegeRows.svelte';
+  import { FABER_PRACTICE, type VoicePracticeExercise } from '@mlt/singing-trainer-core/services/faberPractice.js';
   import type { SolfegeExercise } from './lib/solfegeExercises.js';
   import {
     SingingCanvas,
@@ -47,7 +48,8 @@
   const THEME_STORAGE_KEY = 'mlt-singing-trainer-theme';
 
   let showSettings = $state(false);
-  let solfegeExercise = $state<SolfegeExercise | null>(null);
+  let sidebarCollapsed = $state(false);
+  let solfegeExercise = $state<SolfegeExercise | VoicePracticeExercise | null>(null);
   let lessonOpen = $state(false);
   const hasOpenActivity = $derived(lessonOpen || solfegeExercise !== null || overdubExerciseState.state.isActive);
   const canOpenSolfegeRows = $derived(
@@ -110,7 +112,7 @@
   );
   const showExerciseBuilderToolbar = $derived(
     overdubExerciseState.state.isActive
-      && overdubExerciseState.state.template?.category === 'exercises'
+      && overdubExerciseState.isStandaloneExercise
   );
 
   $effect(() => {
@@ -353,6 +355,10 @@
    */
   function handleExerciseStart(exerciseId: string, settings: Record<string, number | boolean>) {
     closeCurrentActivity();
+    if (exerciseId === FABER_PRACTICE.id) {
+      solfegeExercise = FABER_PRACTICE;
+      return;
+    }
     exerciseControlsRef?.handleExerciseStart(exerciseId, settings);
   }
 
@@ -381,7 +387,7 @@
   {/if}
 
   <main class="main">
-    <aside class="sidebar sidebar--left">
+    <aside class="sidebar sidebar--left" class:sidebar--collapsed={sidebarCollapsed}>
       <div class="sidebar-header">
         <div class="sidebar-title-row">
           <div class="sidebar-nav-actions">
@@ -406,7 +412,22 @@
             </button>
           </div>
           <h1 class="sidebar-title">Singing Trainer</h1>
+          <button
+            class="header-icon-control sidebar-toggle"
+            type="button"
+            aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="singing-trainer-sidebar-content"
+            onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d={sidebarCollapsed ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'} />
+            </svg>
+          </button>
         </div>
+      </div>
+      <div id="singing-trainer-sidebar-content" class="sidebar-content" hidden={sidebarCollapsed}>
         {#if hasImportedSnapshot}
           <div class="handoff-controls">
             <div class="transposition-control">
@@ -421,7 +442,6 @@
             </button>
           </div>
         {/if}
-      </div>
 
       <section class="sidebar-settings-panels" aria-label="Singing Trainer controls">
         <section class="sidebar-settings-panel" aria-labelledby="mic-settings-title">
@@ -476,6 +496,7 @@
           {/if}
         </div>
       {/if}
+      </div>
     </aside>
 
     <section class="canvas-area">
@@ -488,11 +509,11 @@
           />
         {/key}
       {:else}
+      <ExerciseBuilderToolbar visible={showExerciseBuilderToolbar} />
+      <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
       <div class="canvas-main">
         <SingingCanvas {theme} {shortcutHighlightMidis} />
       </div>
-      <ExerciseBuilderToolbar visible={showExerciseBuilderToolbar} />
-      <OverdubBuilderToolbar visible={showOverdubBuilderToolbar} />
       {/if}
     </section>
   </main>
@@ -563,6 +584,42 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+  }
+
+  .sidebar-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    min-width: 0;
+  }
+
+  .sidebar-content[hidden] {
+    display: none;
+  }
+
+  .sidebar.sidebar--collapsed {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: var(--spacing-sm);
+  }
+
+  .sidebar--collapsed .sidebar-nav-actions,
+  .sidebar--collapsed .sidebar-title {
+    display: none;
+  }
+
+  .header-icon-control.sidebar-toggle {
+    margin-left: auto;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+  }
+
+  .sidebar-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   .sidebar-title-row {
@@ -882,6 +939,14 @@
       border-top: 1px solid var(--color-border);
       padding: var(--spacing-xs) var(--spacing-md) var(--spacing-md);
       max-height: 40vh;
+    }
+
+    .sidebar.sidebar--collapsed {
+      width: 100%;
+    }
+
+    .sidebar-toggle svg {
+      transform: rotate(-90deg);
     }
   }
 

@@ -1,5 +1,6 @@
 // js/services/keyboardHandler.ts
 import { copyLassoSelection, hasLassoClipboardContent, pasteLassoClipboard } from './annotation/annotationLassoClipboard.ts';
+import { selectAllPitchGridNotes } from './annotation/annotationLassoSelection.ts';
 import store from '@state/initStore.ts';
 import logger from '@utils/logger.ts';
 import type { PlacedNote, SixteenthStampPlacement, SixteenthThreeStampPlacement, TripletStampPlacement } from '@mlt/types';
@@ -36,14 +37,13 @@ function emitLassoPasteChanges(changed: {
   }
 }
 
-export function initKeyboardHandler(): void {
-  document.addEventListener('keydown', (e: KeyboardEvent) => {
+function handleKeyDown(e: KeyboardEvent): void {
     const activeElement = document.activeElement;
     if (!activeElement) {return;}
 
     const tagName = activeElement.tagName.toLowerCase();
-    const isEditable = (activeElement as HTMLElement).contentEditable === 'true';
-    if (['input', 'textarea'].includes(tagName) || isEditable) {
+    const isEditable = (activeElement as HTMLElement).isContentEditable;
+    if (['input', 'textarea', 'select'].includes(tagName) || isEditable) {
       return;
     }
     if (e.key === 'Escape') {
@@ -53,6 +53,17 @@ export function initKeyboardHandler(): void {
     }
     const isShortcut = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
+
+    if (isShortcut && key === 'a' && !e.altKey) {
+      e.preventDefault();
+      // Changing tools may finish an interaction and clear its previous selection.
+      store.setSelectedTool('select');
+      store.setPlaybackStartMacrobeat(null);
+      store.state.lassoSelection = selectAllPitchGridNotes(store.state, getLassoRenderOptions());
+      store.emit('selectionChanged', store.state.lassoSelection);
+      store.emit('render');
+      return;
+    }
 
     // Handle Ctrl+P for printing
     if (isShortcut && key === 'p') {
@@ -105,39 +116,35 @@ export function initKeyboardHandler(): void {
       return;
     }
 
+    const isCut = isShortcut && key === 'x' && !e.altKey;
+    if (isCut && copyLassoSelection(store.state.lassoSelection) === 0) return;
+
     let handled = false;
-    switch (e.key) {
+    switch (isCut ? 'Delete' : e.key) {
       case 'Backspace':
       case 'Delete':
         // Delete all items in lasso selection
         if (store.state.lassoSelection?.isActive) {
-          const selectedItems = store.state.lassoSelection.selectedItems;
+          // Cut removes only the note/stamp types that the clipboard can restore.
+          const selectedItems = store.state.lassoSelection.selectedItems.filter(item => !isCut
+            || ['note', 'sixteenthStamp', 'sixteenthThreeStamp', 'tripletStamp'].includes(item.type));
 
           selectedItems.forEach(item => {
             if (item.type === 'note') {
               const noteData = item.data as PlacedNote;
               const noteIndex = store.state.placedNotes.findIndex(note => note.uuid === noteData.uuid);
               if (noteIndex !== -1) {
-                store.state.placedNotes.splice(noteIndex, 1);
+                store.removeNote(store.state.placedNotes[noteIndex]!);
               }
             } else if (item.type === 'sixteenthStamp') {
               const stampData = item.data as SixteenthStampPlacement;
-              const stampIndex = store.state.sixteenthStampPlacements.findIndex(stamp => stamp.id === stampData.id);
-              if (stampIndex !== -1) {
-                store.state.sixteenthStampPlacements.splice(stampIndex, 1);
-              }
+              store.removeSixteenthStampPlacement(stampData.id);
             } else if (item.type === 'tripletStamp') {
               const tripletData = item.data as TripletStampPlacement;
-              const tripletIndex = store.state.tripletStampPlacements.findIndex(triplet => triplet.id === tripletData.id);
-              if (tripletIndex !== -1) {
-                store.state.tripletStampPlacements.splice(tripletIndex, 1);
-              }
+              store.removeTripletStampPlacement(tripletData.id);
             } else if (item.type === 'sixteenthThreeStamp') {
               const stampData = item.data as SixteenthThreeStampPlacement;
-              const stampIndex = store.state.sixteenthThreeStampPlacements.findIndex(stamp => stamp.id === stampData.id);
-              if (stampIndex !== -1) {
-                store.state.sixteenthThreeStampPlacements.splice(stampIndex, 1);
-              }
+              store.removeSixteenthThreeStampPlacement(stampData.id);
             } else if (item.type === 'annotation') {
               const annotationIndex = store.state.annotations.indexOf(item.data);
               if (annotationIndex !== -1) store.state.annotations.splice(annotationIndex, 1);
@@ -169,7 +176,11 @@ export function initKeyboardHandler(): void {
     if (handled) {
       e.preventDefault();
     }
-  });
+}
+
+export function initKeyboardHandler(): void {
+  document.removeEventListener('keydown', handleKeyDown);
+  document.addEventListener('keydown', handleKeyDown);
   logger.info('KeyboardHandler', 'Initialized', null, 'keyboard');
 }
 

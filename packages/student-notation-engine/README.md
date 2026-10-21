@@ -1,10 +1,8 @@
 # @mlt/student-notation-engine
 
-Framework-agnostic engine for Student Notation. Provides composable state, audio, transport, canvas, and utility primitives without any DOM dependencies.
+Framework-agnostic engine for Student Notation. Provides composable state, audio, transport, and utility primitives without any DOM dependencies.
 
 ## Package Status
-
-**Current Size:** 53.09 KB (gzipped: 13.03 KB)
 
 ### ✅ Completed Modules
 
@@ -51,12 +49,9 @@ Framework-agnostic engine for Student Notation. Provides composable state, audio
 - **types.ts** - Transport interfaces
 - **index.ts** - Module exports
 
-### ⏳ Placeholder Modules
+### Canvas ownership
 
-#### Canvas Module (3 files)
-- **pitchGridRenderer.ts** - Pitch grid rendering
-- **drumGridRenderer.ts** - Drum grid rendering
-- **index.ts** - Module exports
+Canvas drawing lives in `@mlt/ui-components`, with specialized editing and effects adapters in `@mlt/student-notation-ui`. The unused engine canvas export has been retired. See [PitchGrid rendering](../ui-components/docs/pitch-grid-rendering.md) for the shared drawing boundary.
 
 ## Architecture
 
@@ -187,9 +182,7 @@ All TypeScript interfaces exported from each module.
 ## Next Steps
 
 1. **Extract Transport Service** - Remove domCache, implement note scheduling
-2. **Extract Canvas Renderers** - Pure rendering functions for pitch/drum grids
-3. **Stabilize canvas renderer integration** - Keep renderer inputs aligned across consuming apps
-4. **Migrate app orchestration to shared primitives where useful**
+2. **Migrate app orchestration to shared primitives where useful**
 
 ## License
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
+  import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { untrack } from 'svelte';
   import { getPitchByMidi } from '@mlt/pitch-data';
 
@@ -63,9 +64,12 @@
 
   $effect(() => {
     void displayedSpeakingPitchMidi;
-    centerRangeAroundSpeakingPitch();
-    appState.setCenterGridOnSpeakingPitch(true);
-    appState.setCenterColorsOnSpeakingPitch(true);
+    // An active exercise owns its pitch range and tonic. Keep these defaults for freeplay.
+    if (!overdubExerciseState.state.isActive) {
+      centerRangeAroundSpeakingPitch();
+      appState.setCenterGridOnSpeakingPitch(true);
+      appState.setCenterColorsOnSpeakingPitch(true);
+    }
     untrack(() => applyNaturalKeyAccidentalPreference(displayedSpeakingPitchMidi));
   });
 </script>

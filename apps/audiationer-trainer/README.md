@@ -31,23 +31,63 @@ include selected chromatic degrees. Chord Quality identifies triad/seventh quali
 
 The landing page's Pitch button opens Degrees & Melody, and its Chords button opens
 Chords & Chord Progressions.
-Each pair shares level cards with separate exercise buttons and progress gems. The top
-difficulty selector applies to either exercise. Preset pages have Levels / Challenges /
-Custom tabs, and scored modes have three difficulty levels:
-Novice (untimed), Adept (5 seconds), and Master (2 seconds). The answer clock starts after
+The landing page places Free Play below these three practice categories, followed by a
+Pocket Mode switch. Enabling the switch displays Headphone Mode ON and No Touch badges;
+the category buttons then open their Pocket Mode levels and challenges. Pitch and Chords
+keep their paired exercises, with hands-free listening instead of scored answers. The
+switch is remembered locally and does not affect Free Play. Pocket routes include the
+category or exercise (for example, `#presets/pocket/degrees-melody` and
+`#practice/pocket/melody`) so reload and browser Back retain the listening context.
+Levels, challenges, and custom presets appear as full-width rows. Paired rows place the
+level title and degree grid on the left, with exercise buttons and gems on the right.
+Each pair shares level cards with separate exercise buttons and progress gems. Degrees
+and Melody share one difficulty setting, as do Chords and Chord Progressions. Each page
+remembers its octave count and time limit, starting with one octave and no time limit.
+Pocket pages share octave choices within each pair, remember them separately from scored
+practice, and do not award gems. Exercise-specific sound and timing settings stay separate.
+Preset pages have Levels / Challenges / Custom tabs. Difficulty uses two independent
+controls, with the following awards (1 = Novice, 2 = Adept, 3 = Master, 3* = Gold Master):
+
+| Answer time limit | 1 octave | 2 octaves | 3 octaves |
+| --- | --- | --- | --- |
+| None | 1 | 2 | 2 |
+| 5 seconds | 1 | 2 | 3 |
+| 2 seconds | 2 | 3 | 3* |
+
+One octave uses register 4, two use registers 3–4, and three use registers 3–5.
+In Melody (including Pocket Melody), two and three octaves allow individual notes to
+move between those registers, with adjacent leaps limited to 12 semitones. Questions
+alternate spans below an octave and spans of an octave or more while unused patterns
+remain in both groups. Major I–III vocabularies use exhaustive filtered libraries for
+two- and three-note melodies, balancing ascending, descending, turning and constant
+contours where possible. Longer melodies and other vocabularies use a pitch-aware
+generator favouring nearby notes. Exact pitched patterns do not repeat in the same
+key until the available pool is exhausted (indefinite Pocket history also resets after
+1,000 patterns per key). One-octave Melody keeps its existing generation behavior.
+Repeats and answer comparisons preserve every note's register; changing the review
+octave transposes the entire contour. Results include the original per-note registers.
+Answers still identify degrees, so E4–C4–E3 in C is answered 3–1–3.
+The complete three-note Major I–III enumerations are in
+[`major-i-iii-melody-enumerations.md`](../../packages/audiationer-trainer-core/reports/major-i-iii-melody-enumerations.md).
+The answer clock starts after
 playback and covers the entire melody or chord-progression answer. A complete ordered
 sequence counts as one question. Replaying a question restarts that clock. Timeouts count
 as incorrect answers and follow the selected answer-review policy.
+Degrees and single Chords accept answers while the question or its replay is sounding,
+after tonicization and the lead-in. Submitting early stops the question and starts feedback;
+the answer clock still starts after playback for users who wait.
 Compass exploration and sequence replay during review play over the continuous tonic
-drone. Moving to the next question keeps the drone running; ending or leaving a session
-stops it.
+drone. Moving to the next question keeps the drone running. Completing a level fades
+the drone out over 0.8 seconds as Results appears. Starting another session cancels any
+pending fade; leaving or manually stopping a session stops the audio immediately.
 Major Degrees and Melody establish each new tonic with 1–3–5–4–2–7–1 in eighth notes
 at the tonicization BPM, with the leading tone below the final tonic. The final note
 of every tonicization phrase lasts twice as long. Tonicization defaults to 60 BPM. Other
 exercises and scales retain the 1–4–5–1 context phrase.
-Choosing any Degrees or Melody level, including a custom level, enables random question
-registers across octaves 3, 4, and 5. Each melody uses one register throughout; question
-replays and answer review retain that question's selected octave.
+Level selection preserves the exercise's difficulty controls, including custom levels.
+Each question chooses a register from the selected octave range. Melodies keep one
+register throughout for now. Chord progressions can jump registers between chords;
+repeats, spoken-answer notes, and answer review preserve the original register pattern.
 
 ## Timing timeline
 
@@ -78,12 +118,17 @@ a single diatonic scale. Existing Chords saves and gems remain attached to singl
 questions; Chord Progressions earns separate gems. Pocket Mode also supports both exercises.
 Custom presets can be created, edited, and deleted. The selected difficulty on the Presets screen applies to built-in and custom presets alike. Changing a saved preset's settings
 clears its earned gems; renaming it preserves them. Custom presets remain freely accessible.
-A completed scored session with at least 80% accuracy earns its difficulty rank, and easier
-sessions do not erase a higher rank. Listening modes do not award accuracy gems.
+A completed scored session with at least 80% accuracy earns its regular difficulty rank.
+Three octaves with a two-second limit awards three golden yellow gems only at 100%
+accuracy; 80–99% earns regular Master. Easier sessions never erase a higher award.
+Listening modes do not award accuracy gems.
 
 Each built-in Levels and Challenges list starts with its first card available. Earn a gem
-at any difficulty in the preceding card to unlock the next one. Degrees/Melody and
-Chords/Chord Progressions share card access while retaining separate earned gems. Completed
+at any difficulty in the preceding card to unlock the next one for that exercise.
+Degrees, Melody, Chords, and Chord Progressions each advance independently, with their own
+earned gems and locks. Shared rows show a separate lock and prerequisite for each exercise;
+earning a Degrees gem does not unlock Melody, and earning a Chords gem does not unlock
+Chord Progressions. Difficulty controls remain shared within each paired page. Completed
 cards from older saves remain playable. Locked cards are grayed out, show their prerequisite,
 and cannot be selected or reached through Next Level until unlocked. Lists progress
 independently: Major, Minor, Chromatic, Modes, Other Scales, Tricky, and the other challenge
@@ -97,7 +142,8 @@ are stored separately from custom presets and progress. Listening modes have no 
 Scored sessions finish on one results page with the score, earned gem, continuation
 actions, and an answer breakdown that starts expanded. The breakdown has one table row
 per question, in played order, with its key, tonic octave, correct answer, submitted
-answer, result, and response time. Each result captures its own key and octave, so later
+answer, result, and response time. Each result captures its own key and octave (or each
+chord's octave for progressions), so later
 key changes and review exploration leave the original question context intact.
 Home and settings remain in the header. On the results page, Home returns to the current
 mode's level selection. Play again uses the current settings; Change difficulty expands the same

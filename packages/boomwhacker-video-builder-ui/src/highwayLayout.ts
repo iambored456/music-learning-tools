@@ -28,6 +28,12 @@ export type HighwayNoteLayout = {
   showLabel: boolean;
 };
 
+export type HighwayTimeLayout = {
+  previewStartTimeSec: number;
+  leadingPaddingPx: number;
+  pixelsPerSecond: number;
+};
+
 function getLabelFontPx(
   shape: TimedBoomwhackerNote['shape'],
   width: number,
@@ -52,6 +58,10 @@ export function getHighwayTimeX(
   pixelsPerSecond: number,
 ): number {
   return referenceX + ((timeSec - referenceTimeSec) * pixelsPerSecond);
+}
+
+export function getHighwayTimeAtX(x: number, layout: HighwayTimeLayout): number {
+  return layout.previewStartTimeSec + ((x - layout.leadingPaddingPx) / layout.pixelsPerSecond);
 }
 
 export function shouldRenderGuideAsBeat(guide: DerivedGuideLine): boolean {

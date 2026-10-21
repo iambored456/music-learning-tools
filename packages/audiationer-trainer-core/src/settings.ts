@@ -42,6 +42,34 @@ export const REVIEW_SKIP_OPTIONS = [
   { id: 'all', name: 'Skip all' },
 ] as const;
 export const AUTO_CONTINUE_DELAYS = [0.5, 1, 2, 5] as const;
+export interface DifficultySettings { octaveCount: 1 | 2 | 3; answerSeconds: number }
+export const DEFAULT_DIFFICULTY: DifficultySettings = { octaveCount: 1, answerSeconds: 0 };
+export function normalizeDifficulty(input: Partial<DifficultySettings> = {}): DifficultySettings {
+  return { octaveCount: input.octaveCount === 2 || input.octaveCount === 3 ? input.octaveCount : 1,
+    answerSeconds: input.answerSeconds === 2 || input.answerSeconds === 5 ? input.answerSeconds : 0 };
+}
+export function difficultyKey(mode: GameMode, exercise: PocketExercise): string {
+  const active = mode === 'pocket' ? exercise : mode;
+  const page = active === 'melody' ? 'degrees' : active === 'chord-progressions' ? 'chords' : active;
+  return mode === 'pocket' ? `pocket:${page}` : page;
+}
+export function difficultyFor(settings: Settings, mode = settings.mode, exercise = settings.pocket.exercise): DifficultySettings {
+  return difficultyKey(mode, exercise) === difficultyKey(settings.mode, settings.pocket.exercise)
+    ? normalizeDifficulty(settings) : settings.difficulties[difficultyKey(mode, exercise)] ?? { ...DEFAULT_DIFFICULTY };
+}
+export function setDifficulty(settings: Settings, patch: Partial<DifficultySettings>): void {
+  const value = normalizeDifficulty({ ...difficultyFor(settings), ...patch });
+  settings.octaveCount = value.octaveCount; settings.answerSeconds = value.answerSeconds;
+  settings.difficulties = { ...settings.difficulties, [difficultyKey(settings.mode, settings.pocket.exercise)]: value };
+}
+export function selectExercise(settings: Settings, mode: GameMode, exercise = settings.pocket.exercise): void {
+  if (mode === settings.mode && exercise === settings.pocket.exercise) return;
+  setDifficulty(settings, {});
+  const value = difficultyFor(settings, mode, exercise);
+  settings.mode = mode; settings.pocket.exercise = exercise;
+  setDifficulty(settings, value);
+}
+export const questionOctaves = (settings: Settings): number[] => settings.octaveCount === 3 ? [3, 4, 5] : settings.octaveCount === 2 ? [3, 4] : [4];
 export interface DegreeSettings {
   soundPreset: SoundPreset;
   /** Legacy saved preference; new per-mode choices live in Settings.timings. */
@@ -102,6 +130,8 @@ export function normalizePocketSettings(input: unknown): PocketSettings {
   };
 }
 export interface Settings {
+  octaveCount: 1 | 2 | 3;
+  difficulties: Record<string, DifficultySettings>;
   timings: TimingProfiles;
   defaultsVersion: number;
   mode: GameMode;
@@ -132,6 +162,7 @@ export interface Settings {
   wheelStyle: 'compass' | 'minimal';
 }
 export const DEFAULT_SETTINGS: Settings = {
+  octaveCount: 1, difficulties: {},
   timings: {},
   defaultsVersion: DEFAULTS_VERSION,
   mode: 'freeplay', pocket: normalizePocketSettings({}), degreeOptions: normalizeDegreeSettings({}), tonic: 0, octave: 4, scale: '1', degrees: [0, 2, 4, 5, 7, 9, 11],
@@ -143,7 +174,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export function normalizeSettings(input: unknown): Settings {
   const s = (input && typeof input === 'object' ? input : {}) as Partial<Settings>;
-  const result: Settings = { ...DEFAULT_SETTINGS, timings: {}, degrees: [...DEFAULT_SETTINGS.degrees], qualities: [...DEFAULT_SETTINGS.qualities] };
+  const result: Settings = { ...DEFAULT_SETTINGS, timings: {}, difficulties: {}, degrees: [...DEFAULT_SETTINGS.degrees], qualities: [...DEFAULT_SETTINGS.qualities] };
   const range = (v: unknown, min: number, max: number, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
   for (const name of ['randomTonic', 'randomOctave', 'cadence', 'resolve', 'drone', 'autoContinueCorrect'] as const) {
@@ -165,6 +196,14 @@ export function normalizeSettings(input: unknown): Settings {
   result.questionsPerKey = Math.round(range(s.questionsPerKey, 1, 100, result.questionsPerKey));
   if (s.wheelStyle === 'minimal' || s.wheelStyle === 'compass') result.wheelStyle = s.wheelStyle;
   result.answerSeconds = s.answerSeconds === 2 || s.answerSeconds === 5 ? s.answerSeconds : 0;
+  result.octaveCount = normalizeDifficulty(s).octaveCount;
+  if (s.difficulties && typeof s.difficulties === 'object') {
+    for (const key of [...GAME_MODES.map(mode => mode.id), ...POCKET_EXERCISES.map(exercise => `pocket:${exercise.id}`)]) {
+      const value = s.difficulties[key];
+      if (value && typeof value === 'object') result.difficulties[key] = normalizeDifficulty(value);
+    }
+  }
+  setDifficulty(result, {});
   result.autoContinueSeconds = AUTO_CONTINUE_DELAYS.some(delay => delay === s.autoContinueSeconds) ? s.autoContinueSeconds! : 2;
   result.noteGap = range(s.noteGap, 0.3, 2, result.noteGap);
   result.volume = range(s.volume, 0, 1, result.volume);

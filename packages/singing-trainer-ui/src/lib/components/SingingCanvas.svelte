@@ -45,11 +45,16 @@
   import { ultrastarState } from '@mlt/singing-trainer-core/stores/ultrastarState.svelte.js';
   import { overdubState, type RenderableTakeTrail } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
   import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
+  import { resolveExerciseTonality } from '@mlt/singing-trainer-core/services/exerciseTonality.js';
   import { MODE_SCALE_DEGREES, MODE_DEGREE_LABELS } from '@mlt/singing-trainer-core/constants/modes.js';
+  import { createTargetNoteGeometry, createNotationTargetGeometry, getNoteBounds } from '@mlt/ui-components/canvas/primitives';
+  import { NoteAuditionDrag, findAuditionNote, type AuditionNote } from '@mlt/singing-trainer-core/services/noteAudition.js';
+  import { NoteAuditionPlayer } from '@mlt/singing-trainer-core/services/noteAuditionPlayer.js';
   import { LyricsDisplay } from './karaoke/index.js';
   import YAxisDragZones from './YAxisDragZones.svelte';
   import JudgementLineDragHandle from './JudgementLineDragHandle.svelte';
-  import { SINGING_GRID, singingLegendWidth, singingPitchSizes, singingJudgmentLineWidth } from './pitchGridAppearance.js';
+  import { SINGING_GRID, singingLegendWidth, singingPitchSizes, singingJudgmentLineWidth, squareGridViewDurationMs } from './pitchGridAppearance.js';
+  import { createNoteFillFeedback } from './noteFillFeedback.svelte.js';
 
   interface Props {
     theme?: 'light' | 'dark';
@@ -60,6 +65,7 @@
 
   // Container element for measuring size
   let container: HTMLDivElement | undefined = $state(undefined);
+  let canvasFrame: HTMLDivElement | undefined = $state(undefined);
   let containerWidth = $state(800);
   let containerHeight = $state(400);
 
@@ -81,6 +87,12 @@
   let timelinePanStartClientX = 0;
   let timelinePanStartViewStartMs = 0;
   let timelinePanViewDurationMs = 0;
+  let auditionPointerId: number | null = null;
+  let auditionHover = $state(false);
+  let auditionNoteId = $state<string | null>(null);
+  const noteFill = createNoteFillFeedback();
+  const auditionDrag = new NoteAuditionDrag();
+  const auditionPlayer = new NoteAuditionPlayer();
   let highwayWaitFreezePerfMs = $state<number | null>(null);
   let viewportInfoLines = $state<string[]>([]);
   let viewportInfoTriggerKey = $state(0);
@@ -130,8 +142,20 @@
   const legendCanvasWidth = $derived(singingLegendWidth());
   const showLegends = $derived(showLegendLabels);
   const legendTotalWidth = $derived(showLegends ? legendCanvasWidth * (showRightLegend ? 2 : 1) : 0);
-  const gridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
+  const availableGridWidth = $derived(Math.max(0, containerWidth - legendTotalWidth));
   const gridOffsetX = $derived(showLegends ? legendCanvasWidth : 0);
+
+  // Every active score owns its grid tonic, independently of speaking-pitch display options.
+  const exerciseTonality = $derived(
+    overdubExerciseState.state.isActive
+      ? resolveExerciseTonality(overdubExerciseState.state.template, overdubExerciseState.state.exerciseBaseTransposeSemitones)
+      : null
+  );
+  const exerciseTonicPc = $derived(exerciseTonality?.pitchClass ?? null);
+  const studentNotationNotes = $derived(overdubExerciseState.state.isActive
+    && preferencesStore.getStudentNotationNotes(overdubExerciseState.state.exerciseId,
+      overdubExerciseState.state.template?.config.preferredNotationStyle === 'student-notation' ? true : undefined));
+  const squareGridEnabled = $derived(overdubExerciseState.state.isActive && highwayState.state.squareGridEnabled);
 
   // Generate row data for the pitch grid based on y-axis range
   // Uses the shared pitch data package which includes proper colors, frequencies, and enharmonic spellings
@@ -140,16 +164,17 @@
       appState.state.yAxisRange.minMidi,
       appState.state.yAxisRange.maxMidi,
     );
-    const speakingPitchMidi = preferencesStore.speakingPitchMidi;
+    const colorReferenceMidi = exerciseTonicPc !== null
+      ? 60 + exerciseTonicPc
+      : (appState.state.centerColorsOnSpeakingPitch ? preferencesStore.speakingPitchMidi : null);
     if (
-      !appState.state.centerColorsOnSpeakingPitch
-      || typeof speakingPitchMidi !== 'number'
-      || !Number.isFinite(speakingPitchMidi)
+      typeof colorReferenceMidi !== 'number'
+      || !Number.isFinite(colorReferenceMidi)
     ) {
       return rows;
     }
 
-    const colorShift = Math.round(speakingPitchMidi) - 60;
+    const colorShift = Math.round(colorReferenceMidi) - 60;
     return rows.map((row) => {
       if (typeof row.midi !== 'number') return row;
       const sourceRow = getPitchByMidi(row.midi - colorShift);
@@ -167,6 +192,12 @@
     })
   );
 
+  const gridWidth = $derived(squareGridEnabled && overdubExerciseState.state.template?.config.trimToScore
+    ? Math.min(availableGridWidth, overdubExerciseState.state.durationMs / 60_000
+      * viewportWindow.cellHeight * Math.max(20, overdubExerciseState.state.tempo))
+    : availableGridWidth);
+  const renderedCanvasWidth = $derived(gridWidth + legendTotalWidth);
+
   function getJustCentsFromTonic(semitonesFromTonic: number): number {
     const octave = Math.floor(semitonesFromTonic / 12);
     const pitchClassOffset = ((semitonesFromTonic % 12) + 12) % 12;
@@ -175,7 +206,7 @@
 
   const rowPositionOffsets = $derived<readonly number[] | undefined>((() => {
     if (appState.state.pitchTuningMode !== 'just') return undefined;
-    const referenceMidi = Math.round(preferencesStore.speakingPitchMidi ?? 60);
+    const referenceMidi = exerciseTonicPc ?? Math.round(preferencesStore.speakingPitchMidi ?? 60);
     return fullRowData.map((row) => {
       if (typeof row.midi !== 'number') return 0;
       const semitonesFromTonic = row.midi - referenceMidi;
@@ -411,9 +442,9 @@
     const drone = appState.state.drone;
     if (!drone.showDegrees) return undefined;
     const speakingPitchMidi = preferencesStore.speakingPitchMidi;
-    const tonicPc = typeof speakingPitchMidi === 'number' && Number.isFinite(speakingPitchMidi)
+    const tonicPc = exerciseTonicPc ?? (typeof speakingPitchMidi === 'number' && Number.isFinite(speakingPitchMidi)
       ? ((Math.round(speakingPitchMidi) % 12) + 12) % 12
-      : getTonicPitchClass(appState.state.tonic);
+      : getTonicPitchClass(appState.state.tonic));
     const offsets = MODE_SCALE_DEGREES[drone.selectedMode];
     const labels = MODE_DEGREE_LABELS[drone.selectedMode];
     if (!offsets || !labels) return undefined;
@@ -442,12 +473,14 @@
     return map;
   })());
 
-  // Standalone exercises always show the full grid, regardless of other activities' display settings.
+  // Practice and aligned arrangements retain their complete timing and tonic grid.
   const exerciseGridAlwaysVisible = $derived(
-    overdubExerciseState.state.isActive && overdubExerciseState.state.template?.category === 'exercises'
+    exerciseTonicPc !== null
+      || (overdubExerciseState.state.isActive && overdubExerciseState.isStandaloneExercise)
   );
   const showHorizontalGridLines = $derived(exerciseGridAlwaysVisible || appState.state.showHorizontalGridLines);
   const horizontalGridReferencePitchClass = $derived((() => {
+    if (exerciseTonicPc !== null) return exerciseTonicPc;
     const speakingPitchMidi = preferencesStore.speakingPitchMidi;
     if (
       appState.state.centerGridOnSpeakingPitch
@@ -504,6 +537,7 @@
     void appState.state.noteColorMode;
     void appState.state.centerColorsOnSpeakingPitch;
     void preferencesStore.speakingPitchMidi;
+    void exerciseTonicPc;
     return untrack(() => convertTargetNotes());
   });
 
@@ -528,17 +562,18 @@
     maxConnections: 0,
     connectorLineWidth: 2.5,
     connectorColor: 'rgba(0,0,0,0.4)',
-    useTonicRelativeColors: appState.state.centerColorsOnSpeakingPitch,
-    tonicPitchClass: appState.state.centerColorsOnSpeakingPitch
+    useTonicRelativeColors: exerciseTonicPc !== null || appState.state.centerColorsOnSpeakingPitch,
+    tonicPitchClass: exerciseTonicPc ?? (appState.state.centerColorsOnSpeakingPitch
       && typeof preferencesStore.speakingPitchMidi === 'number'
       ? ((Math.round(preferencesStore.speakingPitchMidi) % 12) + 12) % 12
-      : getTonicPitchClass(appState.state.tonic),
+      : getTonicPitchClass(appState.state.tonic)),
     clarityThreshold: 0.5,
     maxOpacity: appState.state.micTrailOpacity,
     connectedRibbon: appState.state.connectedMicTrailEnabled,
   });
 
   const labelConfig = $derived({
+    textColor: theme === 'dark' ? '#f5f6fa' : '#212529',
     mode: appState.state.lyricLabelMode,
     scale: appState.state.lyricLabelScale,
     fixedPx: appState.state.lyricLabelFixedPx,
@@ -628,6 +663,17 @@
   const timelinePanEnabled = $derived(
     timelineViewportEnabled && !freeplayTimelineEnabled
   );
+  const squareViewDurationMs = $derived(squareGridViewDurationMs(
+    gridWidth, viewportWindow.cellHeight, overdubExerciseState.state.tempo,
+  ));
+
+  $effect(() => {
+    if (!squareGridEnabled || gridWidth <= 0) return;
+    const desiredDuration = Math.min(highwayState.state.timelineDurationMs, Math.round(squareViewDurationMs));
+    if (Math.abs(highwayState.state.timelineViewDurationMs - desiredDuration) > 1) {
+      untrack(() => highwayState.setSquareGridViewDurationMs(desiredDuration));
+    }
+  });
   const timelineViewportProjection = $derived.by<{
     nowLineX: number;
     pixelsPerSecond: number;
@@ -637,7 +683,7 @@
     if (!timelineViewportEnabled || gridWidth <= 0) return null;
 
     const totalDurationMs = Math.max(1, Math.round(highwayState.state.timelineDurationMs));
-    const viewDurationMs = clampNumber(
+    const viewDurationMs = squareGridEnabled ? squareViewDurationMs : clampNumber(
       Math.round(highwayState.state.timelineViewDurationMs),
       1,
       totalDurationMs,
@@ -727,8 +773,111 @@
     startRow: viewportWindow.startRow,
     endRow: viewportWindow.endRow,
     zoomLevel: 1.0,
-    containerWidth,
+    containerWidth: renderedCanvasWidth,
     containerHeight,
+  });
+
+  const noteAuditionEnabled = $derived(mode === 'highway' && !useLoopTimeline
+    && !highwayState.state.isPlaying && !exerciseState.state.isPlaying
+    && !overdubExerciseState.state.isPlaying && !ultrastarState.state.isPlaying
+    && overdubState.mode !== 'recording');
+  const auditionNotes = $derived.by<AuditionNote[]>(() => {
+    if (!highwayConfig) return [];
+    const coords = createTimeCoordinates({ cellWidth, cellHeight: viewportWindow.cellHeight, viewport,
+      pixelsPerSecond: highwayConfig.pixelsPerSecond ?? 200, nowLineX: highwayConfig.nowLineX,
+      currentTimeMs: highwayConfig.currentTimeMs, rowPositionOffsets });
+    return cachedTargetNotes.flatMap((note, index) => {
+      if (typeof note.midi !== 'number') return [];
+      const row = fullRowData.findIndex(entry => entry.midi === note.midi);
+      if (row < 0) return [];
+      const y = coords.getRowY(row);
+      const startX = gridOffsetX + coords.getTimeX!(note.startTimeMs);
+      const endX = gridOffsetX + coords.getTimeX!(note.startTimeMs + note.durationMs);
+      const geometry = studentNotationNotes
+        ? createNotationTargetGeometry(startX, endX, y, viewportWindow.cellHeight)
+        : createTargetNoteGeometry(startX, endX, y, viewportWindow.cellHeight / 2 - 2);
+      if (!geometry) return [];
+      const bounds = getNoteBounds(geometry);
+      const left = Math.max(gridOffsetX, bounds.left);
+      const right = Math.min(gridOffsetX + gridWidth, bounds.right);
+      if (right <= left || bounds.bottom < 0 || bounds.top > containerHeight) return [];
+      return [{ id: note.id, voiceId: highwayState.state.targetNotes[index]?.voiceId ?? 'highway',
+        midi: note.midi - (rowPositionOffsets?.[row] ?? 0), geometry,
+        left, right, top: Math.max(0, bounds.top), bottom: Math.min(containerHeight, bounds.bottom) }];
+    });
+  });
+
+  function endNoteAudition(): void {
+    const pointerId = auditionPointerId;
+    auditionPointerId = null;
+    auditionNoteId = null;
+    auditionDrag.end();
+    if (pointerId !== null && container?.hasPointerCapture(pointerId)) container.releasePointerCapture(pointerId);
+  }
+
+  function stopNoteAudition(): void { endNoteAudition(); auditionPlayer.stop(); auditionHover = false; }
+
+  function noteAuditionPoint(event: PointerEvent) {
+    const rect = container!.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function handleGridPointerDown(event: PointerEvent): void {
+    if (event.button === 0 && noteAuditionEnabled && auditionPointerId === null && isPointerInsideGrid(event.clientX)) {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[data-judgement-drag-handle="true"], .legend-overlay')) return;
+      const note = auditionDrag.start(auditionNotes, noteAuditionPoint(event));
+      if (note) {
+        event.preventDefault();
+        auditionPointerId = event.pointerId;
+        container?.setPointerCapture(event.pointerId);
+        auditionPlayer.stop();
+        void auditionPlayer.play([note.midi], () => { auditionNoteId = note.id; }).catch(() => stopNoteAudition());
+        return;
+      }
+    }
+    handleTimelinePanPointerDown(event);
+  }
+
+  function handleGridPointerMove(event: PointerEvent): void {
+    if (auditionPointerId === null) {
+      const target = event.target instanceof Element ? event.target : null;
+      auditionHover = noteAuditionEnabled && !timelinePanDragActive
+        && !target?.closest('[data-judgement-drag-handle="true"], .legend-overlay')
+        && !!findAuditionNote(auditionNotes, noteAuditionPoint(event));
+    }
+    if (event.pointerId === auditionPointerId) {
+      const notes = auditionDrag.move(auditionNotes, noteAuditionPoint(event));
+      void auditionPlayer.play(notes.map(note => note.midi), index => { auditionNoteId = notes[index]!.id; }).catch(() => stopNoteAudition());
+      return;
+    }
+    handleTimelinePanPointerMove(event);
+  }
+
+  function handleGridPointerUp(event: PointerEvent): void {
+    if (event.pointerId === auditionPointerId) {
+      endNoteAudition();
+      if (event.type === 'pointercancel') auditionPlayer.stop();
+      else auditionPlayer.release();
+      return;
+    }
+    handleTimelinePanPointerUp(event);
+  }
+
+  $effect(() => {
+    void noteAuditionEnabled; void cachedTargetNotes; void rowPositionOffsets;
+    untrack(stopNoteAudition);
+  });
+
+  $effect(() => {
+    const ids = auditionNoteId ? [auditionNoteId] : [];
+    if (mode === 'highway' && highwayState.state.isPlaying) {
+      const time = highwayState.state.currentTimeMs;
+      for (const note of cachedTargetNotes) {
+        if (typeof note.midi === 'number' && note.startTimeMs <= time && time < note.startTimeMs + note.durationMs) ids.push(note.id);
+      }
+    }
+    noteFill.setActiveNotes(ids);
   });
 
   function clampNumber(value: number, min: number, max: number): number {
@@ -1240,11 +1389,11 @@
     });
 
     // Compute tonic pitch class dynamically for multi-tonic segments
-    const currentTonicPc = appState.state.tonicSegments.length > 0
+    const currentTonicPc = exerciseTonicPc ?? (appState.state.tonicSegments.length > 0
       ? getTonicPitchClass(appState.getTonicAt(
           mode === 'highway' && highwayConfig ? highwayConfig.currentTimeMs : 0
         ))
-      : trailConfig.tonicPitchClass;
+      : trailConfig.tonicPitchClass);
     const syncedTrailConfig: PitchTrailConfig = {
       ...trailConfig,
       tonicPitchClass: currentTonicPc,
@@ -1576,7 +1725,7 @@
 
   // Handle container resize
   $effect(() => {
-    if (!container) return;
+    if (!canvasFrame) return;
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -1585,7 +1734,7 @@
       }
     });
 
-    resizeObserver.observe(container);
+    resizeObserver.observe(canvasFrame);
 
     return () => {
       resizeObserver.disconnect();
@@ -1736,22 +1885,32 @@
   });
 
   onDestroy(() => {
+    stopNoteAudition();
+    noteFill.clear();
     stopTrailLoop();
     stopTimelinePan(null);
     timelineTrailHistoryCache.clear();
   });
 </script>
 
+<svelte:window onblur={stopNoteAudition} />
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="canvas-frame" bind:this={canvasFrame}>
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="singing-canvas-container"
+  style:width={`${renderedCanvasWidth}px`}
   class:singing-canvas-container--x-pan-active={timelinePanDragActive}
+  class:audition-hover={auditionHover}
   bind:this={container}
   onwheel={handleGridWheel}
-  onpointerdown={handleTimelinePanPointerDown}
-  onpointermove={handleTimelinePanPointerMove}
-  onpointerup={handleTimelinePanPointerUp}
-  onpointercancel={handleTimelinePanPointerUp}
+  onpointerdown={handleGridPointerDown}
+  onpointermove={handleGridPointerMove}
+  onpointerleave={() => { auditionHover = false; }}
+  onpointerup={handleGridPointerUp}
+  onpointercancel={handleGridPointerUp}
+  onlostpointercapture={handleGridPointerUp}
   oncontextmenu={handleTimelineContextMenu}
 >
   {#if showLegends}
@@ -1767,6 +1926,7 @@
   {/if}
 
   <PitchGrid
+    noteFillLevels={noteFill.levels}
     mode={effectiveGridMode}
     {fullRowData}
     {viewport}
@@ -1794,7 +1954,7 @@
     horizontalGridReferenceLineColor={SINGING_GRID.referenceLineColor}
     judgmentLineColor={SINGING_GRID.judgmentLineColor}
     judgmentLineWidth={singingJudgmentLineWidth(viewportWindow.cellHeight)}
-      targetNoteStyle={appState.state.noteType}
+      targetNoteStyle={studentNotationNotes ? 'student-notation' : appState.state.noteType}
       beatIntervalMs={gridBeatIntervalMs}
       measureIntervalMs={gridMeasureIntervalMs}
       {beatTimeOffsetMs}
@@ -1829,10 +1989,18 @@
     zIndex={20}
   />
 </div>
+</div>
 
 <style>
-  .singing-canvas-container {
+  .canvas-frame {
+    display: flex;
     flex: 1;
+    min-width: 0;
+    min-height: 300px;
+  }
+
+  .singing-canvas-container {
+    flex: 0 0 auto;
     width: 100%;
     min-height: 300px;
     position: relative;
@@ -1842,6 +2010,8 @@
     border-radius: var(--radius-md);
     overflow: hidden;
   }
+
+  .singing-canvas-container.audition-hover { cursor: pointer; }
 
   .singing-canvas-container--x-pan-active {
     cursor: grabbing;

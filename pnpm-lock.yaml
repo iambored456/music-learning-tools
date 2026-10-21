@@ -495,16 +495,6 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
-  packages/pitch-trail:
-    dependencies:
-      '@mlt/pitch-data':
-        specifier: workspace:*
-        version: link:../pitch-data
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-
   packages/pitch-utils:
     devDependencies:
       typescript:

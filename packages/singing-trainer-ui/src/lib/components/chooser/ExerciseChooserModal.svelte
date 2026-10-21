@@ -2,7 +2,7 @@
   /**
    * Shared lesson and exercise chooser.
    *
-   * Three sections share selection, settings, and keyboard navigation.
+   * Four sections share selection, settings, and keyboard navigation.
    * Matches the Results modal styling and interaction patterns.
    */
 
@@ -11,6 +11,7 @@
     getRegistryEntriesByCategory,
     type RegistryEntry,
   } from '@mlt/lesson-templates';
+  import { FABER_PRACTICE } from '@mlt/singing-trainer-core/services/faberPractice.js';
   import ExerciseCard from './ExerciseCard.svelte';
   import { SOLFEGE_EXERCISES, type SolfegeExercise } from '../../solfegeExercises.js';
 
@@ -36,7 +37,7 @@
   }
 
   interface ChooserSection {
-    id: 'lessons' | 'solmization' | 'exercises';
+    id: 'lessons' | 'solmization' | 'bicinia' | 'exercises';
     title: string;
     startLabel?: string;
     entries: RegistryEntry[];
@@ -68,6 +69,12 @@
         id: 'solmization',
         title: 'Solmization',
         entries: [],
+      },
+      {
+        id: 'bicinia',
+        title: 'Bicinia',
+        startLabel: 'Start Exercise',
+        entries: getRegistryEntriesByCategory('bicinia'),
       },
       {
         id: 'exercises',
@@ -161,7 +168,7 @@
     chooserState.resetSelection();
     if (entry.template.category === 'workshop') {
       onworkshopstart?.(entry.template.id, settings);
-    } else if (entry.template.category === 'exercises') {
+    } else if (entry.template.category === 'exercises' || entry.template.category === 'bicinia') {
       onexercisestart?.(entry.template.id, settings);
     } else {
       onstart?.(entry.template.id, settings);
@@ -199,7 +206,7 @@
         </button>
       </div>
 
-      <!-- Lessons, solmization, and exercises in one dialog -->
+      <!-- Lessons, solmization, bicinia, and exercises in one dialog -->
       <div class="modal-body">
         {#each sections as section (section.id)}
           <section class="chooser-column" aria-labelledby={`${section.id}-heading`}>
@@ -220,6 +227,12 @@
             {:else}
               <div class="exercise-list">
                 {#each section.entries as entry (entry.template.id)}
+                  {#if entry.template.id === FABER_PRACTICE.id}
+                    <button class="solfege-card" disabled={!canStartSolfege} onclick={() => {
+                      handleClose();
+                      onexercisestart?.(entry.template.id, {});
+                    }}><strong>{entry.template.name}</strong></button>
+                  {:else}
                   <ExerciseCard
                     {entry}
                     isSelected={selectedLessonId === entry.template.id}
@@ -230,6 +243,7 @@
                     startLabel={section.startLabel}
                     showSettings={entry.template.category !== 'workshop'}
                   />
+                  {/if}
                 {/each}
               </div>
             {/if}
@@ -327,7 +341,7 @@
 
   .modal-body {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     flex: 1;
     min-height: 0;
     overflow: hidden;

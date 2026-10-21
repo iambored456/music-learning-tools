@@ -6,8 +6,10 @@
  * calibrated speaking pitch.
  */
 
-/** How a lesson uses the calibrated speaking pitch */
-export type SpeakingPitchUsage = 'none' | 'asTonic' | 'asFloorNote' | 'custom';
+/** How a lesson uses the calibrated speaking pitch.
+ * 'aligned' places the lowest arrangement note three semitones below speaking pitch.
+ */
+export type SpeakingPitchUsage = 'none' | 'asTonic' | 'asFloorNote' | 'aligned' | 'custom';
 
 /** Lesson types */
 export type LessonType = 'pitch-matching' | 'interval' | 'rhythm' | 'melody' | 'overdub';
@@ -16,7 +18,7 @@ export type LessonType = 'pitch-matching' | 'interval' | 'rhythm' | 'melody' | '
 export type DifficultyLevel = 1 | 2 | 3;
 
 /** Lesson categories for browsing/filtering */
-export type LessonCategory = 'foundations' | 'beginning' | 'exercises' | 'workshop';
+export type LessonCategory = 'foundations' | 'beginning' | 'bicinia' | 'exercises' | 'workshop';
 
 // ============================================================================
 // Settings Schema Types
@@ -357,6 +359,10 @@ export interface ExerciseTimeGrid {
 
 /** Configuration for an overdub exercise */
 export interface OverdubExerciseConfig {
+  /** Default note presentation; users can override it in Singing Trainer settings. */
+  preferredNotationStyle?: 'student-notation';
+  /** Bound the practice timeline to the written score, without extra lead/trail bars. */
+  trimToScore?: boolean;
   /** Tempo in BPM */
   tempo: number;
   /** Time grid defining the rhythmic structure */

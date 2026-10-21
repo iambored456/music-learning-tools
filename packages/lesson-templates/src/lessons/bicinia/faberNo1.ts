@@ -1,0 +1,98 @@
+import type { OverdubExerciseTemplate } from '../../types.js';
+
+/**
+ * Faber No. 1, transcribed in the supplied Student Notation score.
+ * The initial two-column tonic sign consumes no time. Student Notation uses
+ * eighth-note columns; exercise columns are sixteenths, so all times are doubled.
+ */
+export const FABER_NO_1: OverdubExerciseTemplate = {
+  id: 'bicinia-faber-no-1',
+  name: 'Faber No. 1',
+  description: 'Practice either voice of this two-part bicinium.',
+  type: 'overdub',
+  difficulty: 2,
+  category: 'bicinia',
+  speakingPitchUsage: 'asFloorNote',
+  durationEstimate: '~29s',
+  settingsSchema: {
+    fields: [
+      { key: 'tempo', label: 'Tempo (BPM)', type: 'integer', default: 90, min: 40, max: 200, step: 1 },
+      { key: 'waitForInput', label: 'Waitgate', type: 'boolean', default: false },
+    ],
+  },
+  config: {
+    tempo: 90,
+    timeGrid: {
+      microbeatCount: 176,
+      microbeatsPerMacrobeat: 2,
+      macrobeatGroupings: Array.from({ length: 88 }, () => 2 as const),
+    },
+    beatsPerMeasure: 4,
+    voices: [
+      {
+        voiceId: 'faber-voice-1',
+        name: 'Voice 1',
+        color: '#44bcef',
+        notes: [
+          { startMicrobeatCol: 0, endMicrobeatCol: 7, midiPitch: 67, pitchName: 'G4' },
+          { startMicrobeatCol: 8, endMicrobeatCol: 15, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 16, endMicrobeatCol: 23, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 24, endMicrobeatCol: 31, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 32, endMicrobeatCol: 35, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 36, endMicrobeatCol: 39, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 40, endMicrobeatCol: 47, midiPitch: 76, pitchName: 'E5' },
+          { startMicrobeatCol: 48, endMicrobeatCol: 55, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 56, endMicrobeatCol: 63, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 64, endMicrobeatCol: 67, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 68, endMicrobeatCol: 71, midiPitch: 67, pitchName: 'G4' },
+          { startMicrobeatCol: 72, endMicrobeatCol: 79, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 80, endMicrobeatCol: 87, midiPitch: 67, pitchName: 'G4' },
+          { startMicrobeatCol: 88, endMicrobeatCol: 95, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 96, endMicrobeatCol: 103, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 104, endMicrobeatCol: 111, midiPitch: 76, pitchName: 'E5' },
+          { startMicrobeatCol: 112, endMicrobeatCol: 119, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 120, endMicrobeatCol: 127, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 128, endMicrobeatCol: 135, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 136, endMicrobeatCol: 143, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 144, endMicrobeatCol: 147, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 148, endMicrobeatCol: 151, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 152, endMicrobeatCol: 159, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 160, endMicrobeatCol: 175, midiPitch: 67, pitchName: 'G4' },
+        ],
+      },
+      {
+        voiceId: 'faber-voice-2',
+        name: 'Voice 2',
+        color: '#d293e0',
+        notes: [
+          { startMicrobeatCol: 16, endMicrobeatCol: 23, midiPitch: 67, pitchName: 'G4' },
+          { startMicrobeatCol: 24, endMicrobeatCol: 31, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 32, endMicrobeatCol: 39, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 40, endMicrobeatCol: 47, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 48, endMicrobeatCol: 51, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 52, endMicrobeatCol: 55, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 56, endMicrobeatCol: 63, midiPitch: 76, pitchName: 'E5' },
+          { startMicrobeatCol: 64, endMicrobeatCol: 71, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 72, endMicrobeatCol: 79, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 80, endMicrobeatCol: 83, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 84, endMicrobeatCol: 87, midiPitch: 67, pitchName: 'G4' },
+          { startMicrobeatCol: 88, endMicrobeatCol: 95, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 96, endMicrobeatCol: 103, midiPitch: 67, pitchName: 'G4' },
+          { startMicrobeatCol: 104, endMicrobeatCol: 111, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 112, endMicrobeatCol: 119, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 120, endMicrobeatCol: 127, midiPitch: 76, pitchName: 'E5' },
+          { startMicrobeatCol: 128, endMicrobeatCol: 135, midiPitch: 74, pitchName: 'D5' },
+          { startMicrobeatCol: 136, endMicrobeatCol: 143, midiPitch: 69, pitchName: 'A4' },
+          { startMicrobeatCol: 144, endMicrobeatCol: 151, midiPitch: 71, pitchName: 'B4' },
+          { startMicrobeatCol: 152, endMicrobeatCol: 159, midiPitch: 72, pitchName: 'C5' },
+          { startMicrobeatCol: 160, endMicrobeatCol: 175, midiPitch: 71, pitchName: 'B4' },
+        ],
+      },
+    ],
+    minMidiPitch: 62,
+    maxMidiPitch: 81,
+    tonalCenter: { pitchClass: 'G' },
+    countInBeats: 4,
+    waitForInput: false,
+  },
+};

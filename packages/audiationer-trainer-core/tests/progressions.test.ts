@@ -164,7 +164,7 @@ test('auto-continue waits for a full correct progression, and key changes count 
 });
 
 test('progression gems survive persistence and remain separate from existing Chords gems', async () => {
-  const t = trainer({ answerSeconds: 5, reviewSkip: 'correct' });
+  const t = trainer({ octaveCount: 2, answerSeconds: 5, reviewSkip: 'correct' });
   await t.session.start(t.settings);
   for (const degree of [0, 4, 0]) await t.session.answer(degree);
   const progress = recordProgress({ 'chords:sun-1': 3 }, t.settings, 'sun-1', t.session.snapshot().results);

@@ -15,6 +15,7 @@ import {
 } from '@mlt/lesson-templates';
 import { convertExerciseVoicesToTargetNotes, calculateExerciseDurationMs } from '../services/exerciseVoiceConverter.js';
 import { midiToScaleDegreeLabel } from '../services/diatonicAnalysis.js';
+import { resolveExerciseTonality } from '../services/exerciseTonality.js';
 import { updateDrone } from '../services/droneAudio.js';
 import { guideVoicePlayer } from '../services/guideVoicePlayer.js';
 import { highwayState, type TargetNote } from './highwayState.svelte.js';
@@ -82,26 +83,6 @@ const DEFAULT_STATE: OverdubExerciseSessionState = {
 
 const DEFAULT_SYNTH_GAIN = 1;
 const DEFAULT_SYNTH_PAN = 0;
-const TONIC_TO_PC: Record<TonicNote, number> = {
-  C: 0,
-  'C#': 1,
-  Db: 1,
-  D: 2,
-  'D#': 3,
-  Eb: 3,
-  E: 4,
-  F: 5,
-  'F#': 6,
-  Gb: 6,
-  G: 7,
-  'G#': 8,
-  Ab: 8,
-  A: 9,
-  'A#': 10,
-  Bb: 10,
-  B: 11,
-};
-const PC_TO_TONIC_SHARP: TonicNote[] = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const DEFAULT_EXERCISE_RANGE_PADDING_SEMITONES = 2;
 const AMAZING_GRACE_EXERCISE_ID = 'exercise-amazing-grace';
 const AMAZING_GRACE_RANGE_PADDING_SEMITONES = 1;
@@ -109,17 +90,6 @@ const AMAZING_GRACE_START_ZOOM_RATIO = 3.5;
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function parseTonicNote(value: string | undefined): TonicNote | null {
-  if (!value) return null;
-  return Object.prototype.hasOwnProperty.call(TONIC_TO_PC, value)
-    ? (value as TonicNote)
-    : null;
-}
-
-function wrapPitchClass(value: number): number {
-  return ((value % 12) + 12) % 12;
 }
 
 function createDefaultSynthMixByVoiceId(voiceIds: string[]): Record<string, VoiceSynthMix> {
@@ -163,7 +133,7 @@ function createOverdubExerciseState() {
   }
 
   function isStandaloneExerciseTemplate(): boolean {
-    return state.template?.category === 'exercises';
+    return state.template?.category === 'exercises' || state.template?.category === 'bicinia';
   }
 
   function getTotalTransposeSemitones(): number {
@@ -183,7 +153,10 @@ function createOverdubExerciseState() {
   }
 
   function computeBaseTransposeSemitones(template: OverdubExerciseTemplate): number {
-    if (template.category !== 'exercises') {
+    const isAligned = template.speakingPitchUsage === 'aligned';
+    const followsSpeakingPitch = isAligned || template.category === 'exercises'
+      || (template.category === 'bicinia' && template.speakingPitchUsage === 'asFloorNote');
+    if (!followsSpeakingPitch) {
       return 0;
     }
     const lowestMidi = getLowestMidiInTemplate(template);
@@ -191,7 +164,7 @@ function createOverdubExerciseState() {
     if (lowestMidi === null || typeof speakingPitchMidi !== 'number' || !Number.isFinite(speakingPitchMidi)) {
       return 0;
     }
-    return Math.round(speakingPitchMidi) - lowestMidi;
+    return Math.round(speakingPitchMidi) - (isAligned ? 3 : 0) - lowestMidi;
   }
 
   function getCurrentPitchRange(): { minMidi: number; maxMidi: number } | null {
@@ -233,7 +206,7 @@ function createOverdubExerciseState() {
       appState.setYAxisRange(range);
     }
     const beatDurationMs = 60_000 / Math.max(20, state.tempo);
-    const boundaryPaddingMs = Math.max(0, Math.round(beatDurationMs * 4));
+    const boundaryPaddingMs = state.template?.config.trimToScore ? 0 : Math.max(0, Math.round(beatDurationMs * 4));
     highwayState.fitTimelineToDuration(state.durationMs, {
       paddingBeforeMs: boundaryPaddingMs,
       paddingAfterMs: boundaryPaddingMs,
@@ -253,26 +226,25 @@ function createOverdubExerciseState() {
   }
 
   function syncScaleDegreeLabels() {
-    const tonic = parseTonicNote(state.template?.config.tonalCenter?.pitchClass);
-    if (!tonic) {
+    const tonality = resolveExerciseTonality(state.template, getTotalTransposeSemitones());
+    if (!tonality) {
       state.effectiveTonic = null;
       appState.setNoteScaleDegrees([]);
       return;
     }
-    const transposedTonicPc = wrapPitchClass(TONIC_TO_PC[tonic] + getTotalTransposeSemitones());
-    const effectiveTonic = PC_TO_TONIC_SHARP[transposedTonicPc] ?? 'C';
-    state.effectiveTonic = effectiveTonic;
-    const tonicPc = TONIC_TO_PC[effectiveTonic];
+    state.effectiveTonic = tonality.tonic;
     const degreeLabels = state.allTargetNotes.map((note) => {
       if (typeof note.midi !== 'number') return '';
-      return midiToScaleDegreeLabel(note.midi, tonicPc);
+      return midiToScaleDegreeLabel(note.midi, tonality.pitchClass);
     });
     appState.setNoteScaleDegrees(degreeLabels);
   }
 
   function applyExerciseTonic() {
-    if (!isStandaloneExerciseTemplate()) return;
-    if (!state.effectiveTonic || appState.state.tonic === state.effectiveTonic) return;
+    if (!isStandaloneExerciseTemplate() && state.template?.speakingPitchUsage !== 'aligned') return;
+    if (!state.effectiveTonic) return;
+    appState.setCenterGridOnSpeakingPitch(false);
+    if (appState.state.tonic === state.effectiveTonic) return;
     appState.setTonic(state.effectiveTonic);
     updateDrone();
   }
@@ -377,6 +349,10 @@ function createOverdubExerciseState() {
       return state;
     },
 
+    get isStandaloneExercise(): boolean {
+      return isStandaloneExerciseTemplate();
+    },
+
     /**
      * Get list of all voices in the current exercise.
      */
@@ -436,7 +412,7 @@ function createOverdubExerciseState() {
       state.synthMixByVoiceId = createDefaultSynthMixByVoiceId(config.voices.map((voice) => voice.voiceId));
       state.isActive = true;
       appState.setUseDegrees(false);
-      if (isStandaloneExerciseTemplate()) {
+      if (isStandaloneExerciseTemplate() || template.speakingPitchUsage === 'aligned') {
         appState.setShowBeatGridLines(true);
         appState.setShowMeasureGridLines(true);
         appState.setShowHorizontalGridLines(true);
@@ -445,6 +421,8 @@ function createOverdubExerciseState() {
       rebuildNotes();
       applyExerciseTonic();
       appState.setVisualizationMode('highway');
+      highwayState.setSquareGridEnabled(config.preferredNotationStyle === 'student-notation'
+        && preferencesStore.getStudentNotationNotes(exerciseId, true));
       if (isWorkshopTemplate()) {
         appState.setOverdubMicTrailColorMode('voice');
         overdubState.setRenderableTrailsVisible(true);
@@ -490,7 +468,8 @@ function createOverdubExerciseState() {
 
     /** Re-anchor exercise notes when the user's Speaking Pitch changes. */
     syncSpeakingPitch() {
-      if (!state.isActive || !state.template || !isStandaloneExerciseTemplate()) return;
+      if (!state.isActive || !state.template) return;
+      if (!isStandaloneExerciseTemplate() && state.template.speakingPitchUsage !== 'aligned') return;
       const nextTranspose = computeBaseTransposeSemitones(state.template);
       if (nextTranspose === state.exerciseBaseTransposeSemitones) return;
 
@@ -506,6 +485,7 @@ function createOverdubExerciseState() {
       if (wasPlaying) {
         highwayState.hardCutTo(resumeTimeMs, true);
       }
+      rescheduleGuidePlaybackIfPlaying();
     },
 
     isGuideVoiceEnabled(voiceId: string): boolean {
@@ -600,7 +580,7 @@ function createOverdubExerciseState() {
       const startDelayMs = Math.max(0, Math.round(options?.startDelayMs ?? 0));
       const leadInBeats = Math.max(0, Math.round(options?.leadInBeats ?? 0));
       const tempoBpm = Math.max(20, Math.round(options?.tempoBpm ?? state.tempo));
-      const tailBeatsAfterLastNote = 4;
+      const tailBeatsAfterLastNote = state.template?.config.trimToScore ? 0 : 4;
       const guidePreScheduleMs = 60;
       const shouldPlayGuideSynth = isWorkshopTemplate();
       const targetDownbeatPerfMs = (
@@ -652,7 +632,7 @@ function createOverdubExerciseState() {
             )
             : 0;
           const beatDurationMs = 60_000 / tempoBpm;
-          const autoStopOffsetMs = Math.max(
+          const autoStopOffsetMs = state.template?.config.trimToScore ? state.durationMs : Math.max(
             maxVisibleNoteEndMs,
             maxGuideNoteEndMs,
           ) + (tailBeatsAfterLastNote * beatDurationMs);
@@ -725,6 +705,7 @@ function createOverdubExerciseState() {
       stopPlaybackSession();
       guideVoicePlayer.dispose();
       highwayState.setTargetNotes([]);
+      highwayState.setSquareGridEnabled(false);
       overdubState.setRenderableTrailsVisible(false);
       appState.setNoteScaleDegrees([]);
       startInFlight = false;

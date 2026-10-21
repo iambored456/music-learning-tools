@@ -1,8 +1,10 @@
 <script lang="ts">
   import { shiftBeatTimes, withBeatTimes, type SongTimingState } from '@mlt/boomwhacker-video-builder-core';
+  import { getHighwayTimeAtX, getHighwayTimeX, type HighwayTimeLayout } from './highwayLayout.js';
 
   let { timing, peaks, audioDurationSec, currentTimeSec, playbackDurationSec, scrubbing = false,
     transportDisabled = false, viewport = $bindable<HTMLDivElement | null>(null), disabled = false,
+    layout, timelineWidthPx, onzoomwheel, onscroll,
     waveformHeight, onheightchange, onchange, onseek, onscrubstart, onscrubmove, onscrubend, ontransportkeydown }: {
     timing: SongTimingState;
     peaks: number[];
@@ -13,6 +15,10 @@
     transportDisabled?: boolean;
     viewport?: HTMLDivElement | null;
     disabled?: boolean;
+    layout: HighwayTimeLayout;
+    timelineWidthPx: number;
+    onzoomwheel: (event: WheelEvent) => void;
+    onscroll: () => void;
     waveformHeight: number;
     onheightchange: (height: number) => void;
     onchange: (timing: SongTimingState) => void;
@@ -23,21 +29,37 @@
     ontransportkeydown: (event: KeyboardEvent) => void;
   } = $props();
   let selected = $state<number[]>([]);
-  let zoom = $state(4);
-  let viewportWidth = $state(800);
   let timeline: HTMLDivElement;
   const MIN_WAVEFORM_HEIGHT = 96;
   const MAX_WAVEFORM_HEIGHT = 800;
   let resize = $state<{ pointerId: number; startY: number; startHeight: number; height: number } | null>(null);
   const displayHeight = $derived(resize?.height ?? clampHeight(waveformHeight));
   let gesture = $state<{
-    pointerId: number; startX: number; currentX: number; width: number; duration: number;
+    pointerId: number; startX: number; currentX: number; layout: HighwayTimeLayout;
     original: number[]; draft: number[]; indices: number[]; selecting: boolean;
   } | null>(null);
-  const duration = $derived(Math.max(1, audioDurationSec, timing.beatTimesSec.at(-1) ?? 0));
   const displayTimes = $derived(gesture?.draft ?? timing.beatTimesSec);
-  const displayDuration = $derived(gesture?.duration ?? duration);
   const firstSelected = $derived(selected.length === 1 && selected[0] < timing.beatCount ? selected[0] : null);
+  const zoomDisabled = $derived(transportDisabled || gesture !== null || scrubbing || resize !== null);
+
+  $effect(() => {
+    const element = viewport;
+    if (!element) return;
+    // Browser zoom must be cancelled synchronously by a non-passive listener.
+    element.addEventListener('wheel', handleWaveformWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleWaveformWheel);
+  });
+
+  function handleWaveformWheel(event: WheelEvent): void {
+    if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!zoomDisabled) onzoomwheel(event);
+  }
+
+  function timeToX(timeSec: number): number {
+    return getHighwayTimeX(timeSec, layout.previewStartTimeSec, layout.leadingPaddingPx, layout.pixelsPerSecond);
+  }
 
   function clampHeight(height: number): number {
     return Math.max(MIN_WAVEFORM_HEIGHT, Math.min(MAX_WAVEFORM_HEIGHT, Math.round(height)));
@@ -81,27 +103,27 @@
     if (disabled || gesture || scrubbing || resize || event.button !== 0) return;
     event.preventDefault(); event.stopPropagation();
     const rect = timeline.getBoundingClientRect();
-    const x = event.clientX - rect.left;
+    const x = event.clientX - rect.left - timeline.clientLeft;
     if (index !== undefined) {
       if (event.shiftKey || event.ctrlKey || event.metaKey) {
         selected = selected.includes(index) ? selected.filter(value => value !== index) : [...selected, index];
       } else if (!selected.includes(index)) selected = [index];
       (event.currentTarget as HTMLElement).focus();
     } else selected = [];
-    gesture = { pointerId: event.pointerId, startX: x, currentX: x, width: rect.width, duration,
+    gesture = { pointerId: event.pointerId, startX: x, currentX: x, layout: { ...layout },
       original: [...timing.beatTimesSec], draft: [...timing.beatTimesSec], indices: [...selected], selecting: index === undefined };
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
   function move(event: PointerEvent): void {
     if (!gesture || event.pointerId !== gesture.pointerId) return;
-    const x = event.clientX - timeline.getBoundingClientRect().left;
+    const x = event.clientX - timeline.getBoundingClientRect().left - timeline.clientLeft;
     gesture.currentX = x;
     if (gesture.selecting) {
-      const left = Math.min(x, gesture.startX) / gesture.width * gesture.duration;
-      const right = Math.max(x, gesture.startX) / gesture.width * gesture.duration;
+      const left = getHighwayTimeAtX(Math.min(x, gesture.startX), gesture.layout);
+      const right = getHighwayTimeAtX(Math.max(x, gesture.startX), gesture.layout);
       selected = gesture.original.flatMap((time, index) => time >= left && time <= right ? [index] : []);
     } else {
-      gesture.draft = shiftBeatTimes(gesture.original, gesture.indices, (x - gesture.startX) / gesture.width * gesture.duration);
+      gesture.draft = shiftBeatTimes(gesture.original, gesture.indices, (x - gesture.startX) / gesture.layout.pixelsPerSecond);
     }
   }
   function finish(event: PointerEvent): void {
@@ -110,7 +132,7 @@
     gesture = null;
     if (event.type === 'pointercancel') return;
     if (current.selecting) {
-      if (Math.abs(current.currentX - current.startX) < 3) onseek(Math.max(0, current.startX / current.width * current.duration));
+      if (Math.abs(current.currentX - current.startX) < 3) onseek(getHighwayTimeAtX(current.startX, current.layout));
     } else if (current.draft.some((time, index) => time !== current.original[index])) {
       onchange(withBeatTimes(timing, current.draft));
     }
@@ -135,18 +157,17 @@
   <div class="controls">
     <strong>Beat map</strong>
     <span>{timing.midiFileName} · {timing.beatCount} beats</span>
-    <label>Zoom <input type="range" min="1" max="20" step="0.5" bind:value={zoom} disabled={disabled || gesture !== null} /></label>
   </div>
-  <p>Click the waveform to seek or drag the red cursor to scrub. Drag a beat to adjust timing. Drag across the background to select beats, then drag a selected beat to shift the group. Shift-click adds to the selection. Arrow keys nudge by 0.01s; Shift + arrow by 0.1s.</p>
-  <div class="viewport" bind:this={viewport} bind:clientWidth={viewportWidth}>
+  <p>Zoom and horizontal scrolling are shared with the note highway. Ctrl + scroll wheel zooms both at the pointer. Click the waveform to seek or drag the red cursor to scrub. Drag a beat to adjust timing. Drag across the background to select beats, then drag a selected beat to shift the group. Shift-click adds to the selection. Arrow keys nudge by 0.01s; Shift + arrow by 0.1s.</p>
+  <div class="viewport highway__viewport" bind:this={viewport} {onscroll}>
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="timeline compact-waveform__timeline" bind:this={timeline} style:height={`${displayHeight}px`} style:width={`${Math.max(1, viewportWidth - 24) * zoom}px`} role="group" aria-label="Waveform with editable beat markers" onpointerdown={(event) => begin(event)}>
-      <div class="waveform-bars compact-waveform__bars" aria-hidden="true" style={`--waveform-bar-count:${peaks.length};width:${audioDurationSec / displayDuration * 100}%;`}>
+    <div class="timeline compact-waveform__timeline" bind:this={timeline} style:height={`${displayHeight}px`} style:width={`${timelineWidthPx}px`} role="group" aria-label="Waveform with editable beat markers" onpointerdown={(event) => begin(event)}>
+      <div class="waveform-bars compact-waveform__bars" aria-hidden="true" style={`--waveform-bar-count:${peaks.length};left:${timeToX(0)}px;width:${audioDurationSec * layout.pixelsPerSecond}px;`}>
         {#each peaks as peak}<span class="waveform-bars__bar" style:height={`${Math.max(8, peak * 100)}%`}></span>{/each}
       </div>
       {#each displayTimes as time, index}
         <button type="button" class="marker" class:selected={selected.includes(index)} class:downbeat={isDownbeat(index)}
-          style:left={`${time / displayDuration * 100}%`} {disabled}
+          style:left={`${timeToX(time)}px`} {disabled}
           aria-label={`${index === timing.beatCount ? 'End boundary' : `Beat ${index + 1}`}, ${time.toFixed(3)} seconds${isDownbeat(index) ? ', downbeat' : ''}`}
           aria-pressed={selected.includes(index)}
           title={`${index === timing.beatCount ? 'End' : `Beat ${index + 1}`} · ${time.toFixed(3)}s`}
@@ -155,7 +176,7 @@
         </button>
       {/each}
       <button type="button" class="waveform-playhead waveform-playhead--preview" class:is-scrubbing={scrubbing}
-        style:left={`${Math.min(1, Math.max(0, currentTimeSec / displayDuration)) * 100}%`}
+        style:left={`${timeToX(currentTimeSec)}px`}
         disabled={transportDisabled || gesture !== null || resize !== null}
         aria-label={`Playback cursor at ${currentTimeSec.toFixed(2)} seconds`}
         title="Drag to scrub playback" onclick={(event) => event.stopPropagation()}
@@ -190,13 +211,12 @@
 </section>
 
 <style>
-  .beat-map { padding: 1rem; border: 1px solid #60748c; border-radius: 12px; background: #101d2c; color: #edf5ff; }
-  .controls { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
-  p { font-size: .85rem; line-height: 1.5; color: #bdccdf; }
-  label { display: flex; align-items: center; gap: .5rem; }
+  .beat-map { min-width: 0; padding: 1rem 0; border-radius: 12px; background: #101d2c; box-shadow: inset 0 0 0 1px #60748c; color: #edf5ff; }
+  .controls { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; padding: 0 1rem; }
+  p { padding: 0 1rem; font-size: .85rem; line-height: 1.5; color: #bdccdf; }
   .controls button { font: inherit; color: inherit; background: #233c57; border: 1px solid #6f88a5; border-radius: 6px; padding: .45rem .65rem; }
   button:disabled { opacity: .45; }
-  .viewport { overflow-x: auto; padding: 0 12px; margin: 1rem 0; }
+  .viewport { margin: 1rem 0; }
   .timeline { position: relative; overflow: visible; touch-action: none; user-select: none; cursor: crosshair; }
   .resize-handle { display: grid; place-items: center; width: 100%; height: 20px; margin: -.5rem 0 .5rem; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: ns-resize; touch-action: none; user-select: none; }
   .resize-handle span { width: 44px; height: 4px; border-radius: 2px; background: #89a4bf; }
@@ -204,11 +224,13 @@
   .resize-handle[aria-disabled='true'] { opacity: .45; cursor: default; }
   .resize-handle:focus-visible { outline: 2px solid #69c9ff; outline-offset: 2px; }
   .waveform-bars { pointer-events: none; }
-  .compact-waveform__footer { margin: 0 0 .75rem; }
-  .marker { position: absolute; top: 0; height: 100%; width: 10px; padding: 0; transform: translateX(-50%); border: 0; border-left: 2px solid #a7c0d9; border-radius: 0; background: transparent; color: inherit; font: inherit; cursor: ew-resize; touch-action: none; }
-  .marker span { position: absolute; left: 0; top: 0; font-size: 10px; background: #101d2c; }
-  .marker.downbeat { border-color: #ffd166; border-left-width: 4px; }
-  .marker.selected { background: #69c9ff44; border-color: #69c9ff; z-index: 1; }
+  .compact-waveform__footer { margin: 0 0 .75rem; padding: 0 1rem; }
+  .marker { position: absolute; top: 0; height: 100%; width: 10px; padding: 0; transform: translateX(-50%); border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; cursor: ew-resize; touch-action: none; }
+  .marker::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #a7c0d9; }
+  .marker span { position: absolute; left: 50%; top: 0; font-size: 10px; background: #101d2c; }
+  .marker.downbeat::before { background: #ffd166; width: 4px; }
+  .marker.selected { background: #69c9ff44; z-index: 1; }
+  .marker.selected::before { background: #69c9ff; }
   .marker:focus-visible { outline: 2px solid white; }
   .selection { position: absolute; top: 0; bottom: 0; border: 1px solid #69c9ff; background: #69c9ff33; pointer-events: none; }
 </style>

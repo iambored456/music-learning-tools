@@ -43,7 +43,6 @@ export default defineConfig({
       '@mlt/pitch-utils',
       '@mlt/pitch-data',
       '@mlt/pitch-viewport',
-      '@mlt/pitch-trail',
       '@mlt/types',
       '@mlt/handoff',
       '@mlt/grand-frequency-staff-ui',

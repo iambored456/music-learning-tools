@@ -1,3 +1,5 @@
+import { NOTE_APPEARANCE } from '@mlt/ui-components/canvas/primitives';
+
 // js/constants.ts
 // Number of harmonic bins used by the harmonic bins component.  Previously this
 // value was 32, but the oscillator integration relies on 12 bins (harmonics
@@ -47,16 +49,16 @@ export const ZOOM_OUT_FACTOR = 0.8;
 
 // Visual Rendering Constants
 export const ROW_HEIGHT_RATIO = 0.5;
-export const OVAL_NOTE_FONT_RATIO = 0.7;
-export const FILLED_NOTE_FONT_RATIO = 0.9;
-export const MIN_FONT_SIZE = 4;
+export const OVAL_NOTE_FONT_RATIO = NOTE_APPEARANCE.ovalFontRatio;
+export const FILLED_NOTE_FONT_RATIO = NOTE_APPEARANCE.circleFontRatio;
+export const MIN_FONT_SIZE = NOTE_APPEARANCE.minFontSize;
 export const MIN_TONIC_FONT_SIZE = 6;
-export const MIN_STROKE_WIDTH_THICK = 1.5;
-export const MIN_STROKE_WIDTH_THIN = 0.5;
-export const STROKE_WIDTH_RATIO = 0.15;
-export const TAIL_LINE_WIDTH_RATIO = 0.2;
-export const MIN_TAIL_LINE_WIDTH = 1;
-export const SHADOW_BLUR_RADIUS = 1.5;
+export const MIN_STROKE_WIDTH_THICK = NOTE_APPEARANCE.minCircleStroke;
+export const MIN_STROKE_WIDTH_THIN = NOTE_APPEARANCE.minOvalStroke;
+export const STROKE_WIDTH_RATIO = NOTE_APPEARANCE.circleStrokeRatio;
+export const TAIL_LINE_WIDTH_RATIO = NOTE_APPEARANCE.tailStrokeRatio;
+export const MIN_TAIL_LINE_WIDTH = NOTE_APPEARANCE.minTailStroke;
+export const SHADOW_BLUR_RADIUS = NOTE_APPEARANCE.shadowBlur;
 export const TONIC_RADIUS_RATIO = 0.9;
 export const MIN_TONIC_RADIUS = 2;
 export const TONIC_BORDER_WIDTH = 2;

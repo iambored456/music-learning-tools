@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { appState, type TonicNote } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
   import { preferencesStore } from '@mlt/singing-trainer-core/stores/preferencesStore.svelte.js';
+  import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { updateDrone } from '@mlt/singing-trainer-core/services/droneAudio.js';
   import SegmentedToggle from './SegmentedToggle.svelte';
   import SpeakingPitchPanel from './SpeakingPitchPanel.svelte';
@@ -48,7 +49,8 @@
     }
 
     updateDrone();
-    if (!appState.state.drone.useSpeakingPitch) return;
+    // Exercise transposition owns the tonic while a score is open.
+    if (overdubExerciseState.state.isActive || !appState.state.drone.useSpeakingPitch) return;
 
     const { tonic, octave } = midiToTonicAndOctave(speakingPitchMidi);
     if (appState.state.tonic === tonic && appState.state.drone.octave === octave) return;

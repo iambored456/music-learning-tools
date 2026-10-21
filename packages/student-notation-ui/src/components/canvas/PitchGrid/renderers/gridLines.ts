@@ -1,9 +1,11 @@
 // js/components/Canvas/PitchGrid/renderers/gridLines.ts
-import { getColumnX, getRowY, getPitchClass, getLineStyleFromPitchClass } from './rendererUtils.ts';
+import { getColumnX, getRowY, getLineStyleFromPitchClass } from './rendererUtils.ts';
 import { shouldDrawVerticalLineAtColumn, isTonicColumn } from '../../../../utils/tonicColumnUtils.ts';
 import { getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
 import store from '@state/initStore.ts';
 import { getMacrobeatInfo, getPlacedTonicSigns } from '@state/selectors.ts';
+import columnMapService from '@services/columnMapService.ts';
+import { getTonicLineKind, getTonicLineSections } from '@utils/tonicLineStyling.ts';
 import type { AppState } from '@mlt/types';
 
 type PlacedTonicSigns = ReturnType<typeof getPlacedTonicSigns>;
@@ -134,6 +136,15 @@ function drawHorizontalMusicLines(ctx: CanvasRenderingContext2D, options: GridRe
 
   const lightRanges = buildLightRanges(options);
   const { stroke: anacrusisStroke } = getAnacrusisColors();
+  const sections = getTonicLineSections(
+    { ...store.state, fullRowData: options.fullRowData },
+    columnMapService.getColumnMap(store.state)
+  );
+  const segments = sections.flatMap(section => buildSegments(
+    getColumnX(section.startColumn, options),
+    getColumnX(section.endColumn, options),
+    lightRanges
+  ).map(segment => ({ ...segment, referencePitchClass: section.referencePitchClass })));
 
   for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
     const row = options.fullRowData[rowIndex];
@@ -153,56 +164,36 @@ function drawHorizontalMusicLines(ctx: CanvasRenderingContext2D, options: GridRe
       continue;
     }
 
-    const pitchClass = getPitchClass(row.pitch);
+    segments.forEach(seg => {
+      const kind = getTonicLineKind(row.toneNote, seg.referencePitchClass);
+      if (kind === 'hidden') return;
+      const style = getLineStyleFromPitchClass(
+        kind === 'tonic' ? 'C' : kind === 'dashed' ? 'E' : kind === 'fill' ? 'G' : ''
+      );
+      const isTonicLine = kind === 'tonic';
+      const lineColor = isTonicLine ? 'rgba(255, 0, 0, 0.9)' : style.color;
+      const width = seg.to - seg.from;
+      if (width <= 0) return;
 
-    // Skip drawing lines for certain pitch classes to achieve the correct visual effect
-    // Note: Unicode music symbols ♭ (U+266D) and ♯ (U+266F) are used in pitch names
-    const pitchClassesToSkip = ['B', 'A', 'F', 'E♭/D♯', 'D♭/C♯'];
-    if (pitchClassesToSkip.includes(pitchClass)) {
-      continue;
-    }
-
-    const style = getLineStyleFromPitchClass(pitchClass);
-    const isCLine = pitchClass === 'C';
-    const lineColor = isCLine ? 'rgba(255, 0, 0, 0.9)' : style.color;
-
-    // Canvas-space: column 0 = first musical beat, musicalColumnWidths.length = after last beat
-    // Check for non-empty array (empty array is truthy but useless)
-    const musicalColumnWidths = (options.musicalColumnWidths && options.musicalColumnWidths.length > 0)
-      ? options.musicalColumnWidths
-      : options.columnWidths || [];
-    const startX = getColumnX(0, options);
-    const endX = getColumnX(musicalColumnWidths.length, options);
-    const segments = buildSegments(startX, endX, lightRanges);
-
-    if (pitchClass === 'G') {
-      // G-line: Draw filled rectangle in musical area
-      segments.forEach(seg => {
-        const width = seg.to - seg.from;
-        if (width <= 0) {return;}
+      if (kind === 'fill') {
         ctx.save();
         ctx.fillStyle = seg.light ? anacrusisStroke : style.color;
         ctx.globalAlpha = seg.light ? 0.5 : 1;
         ctx.fillRect(seg.from, y - options.cellHeight / 2, width, options.cellHeight);
         ctx.restore();
-      });
-    } else {
-      // All other lines: Draw simple stroke
-      segments.forEach(seg => {
-        const width = seg.to - seg.from;
-        if (width <= 0) {return;}
+      } else {
         ctx.beginPath();
         ctx.moveTo(seg.from, y);
         ctx.lineTo(seg.to, y);
         ctx.lineWidth = style.lineWidth;
-        ctx.strokeStyle = seg.light && !isCLine ? anacrusisStroke : lineColor;
+        ctx.strokeStyle = seg.light && !isTonicLine ? anacrusisStroke : lineColor;
         ctx.setLineDash(style.dash);
         ctx.globalAlpha = seg.light ? 0.6 : 1;
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.globalAlpha = 1;
-      });
-    }
+      }
+    });
   }
 }
 

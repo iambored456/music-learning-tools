@@ -15,19 +15,18 @@ import type {
   PitchTrailConfig,
 } from '../types.js';
 import { getInterpolatedPitchColor, type RGB, type PitchRowData } from '@mlt/pitch-data';
+import {
+  NOTE_APPEARANCE, createNotationNoteGeometry, createTargetNoteGeometry, createNotationTargetGeometry, createNotePath,
+  drawNoteGlyph, drawNoteEnvelopeFill, getNoteTailYOffset, hasVisibleNoteTail,
+  noteColorWithAlpha as colorToRgbaString, getNoteLabelCategory, getNoteLabelFontSize,
+  resolveNoteLabelLayout,
+} from '../../notePrimitives.js';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const OVAL_NOTE_FONT_RATIO = 0.7;
-const FILLED_NOTE_FONT_RATIO = 0.9;
-const MIN_FONT_SIZE = 4;
-const MIN_STROKE_WIDTH_THICK = 1;
-const STROKE_WIDTH_RATIO = 0.15;
-const TAIL_LINE_WIDTH_RATIO = 0.2;
-const MIN_TAIL_LINE_WIDTH = 1;
-const SHADOW_BLUR_RADIUS = 1.5;
+const MIN_FONT_SIZE = NOTE_APPEARANCE.minFontSize;
 const WINDOW_FILL_COLOR = 'rgba(76, 175, 80, 0.18)';
 const WINDOW_STROKE_COLOR = 'rgba(76, 175, 80, 0.65)';
 const TARGET_LABEL_TEXT_X_OFFSET = 4;
@@ -53,6 +52,7 @@ export interface NoteRenderContext {
   config: NoteRenderConfig;
   coords: CoordinateUtils;
   allNotes: PlacedNote[];
+  getFillLevel?: (note: PlacedNote) => number;
   /** Optional: Function to get scale degree label for a note */
   getScaleDegreeLabel?: (note: PlacedNote) => { label: string | null; isAccidental: boolean };
 }
@@ -65,113 +65,6 @@ function hasRenderableDimensions(width: number, height: number): boolean {
   return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
 }
 
-/**
- * Determines if a note has a visible tail (duration extends beyond base shape).
- */
-function hasVisibleTail(note: PlacedNote): boolean {
-  if (!note || typeof note.startColumnIndex !== 'number' || typeof note.endColumnIndex !== 'number') {
-    return false;
-  }
-  const baselineEnd = note.shape === 'circle'
-    ? note.startColumnIndex + 1
-    : note.startColumnIndex;
-  return note.endColumnIndex > baselineEnd;
-}
-
-/**
- * Get timestamp from UUID for sorting notes at same position.
- */
-function getUuidTimestamp(value?: string): number {
-  const timestampSegment = value?.split('-')[1];
-  return Number.parseInt(timestampSegment ?? '0', 10);
-}
-
-/**
- * Calculate horizontal offset for stacked notes at same position.
- */
-function calculateColorOffset(
-  note: PlacedNote,
-  allNotes: PlacedNote[],
-  cellWidth: number
-): number {
-  const offsetAmount = cellWidth * 0.25;
-  const noteUuid = note.uuid;
-
-  if (!noteUuid) return 0;
-
-  const notesAtSamePosition = allNotes.filter(otherNote =>
-    !otherNote.isDrum &&
-    otherNote.row === note.row &&
-    otherNote.startColumnIndex === note.startColumnIndex &&
-    otherNote.uuid &&
-    otherNote.uuid !== noteUuid
-  );
-
-  if (notesAtSamePosition.length === 0) return 0;
-
-  const allNotesAtPosition = [note, ...notesAtSamePosition];
-  allNotesAtPosition.sort((a, b) => getUuidTimestamp(a.uuid) - getUuidTimestamp(b.uuid));
-
-  const currentNoteIndex = allNotesAtPosition.findIndex(n => n.uuid === noteUuid);
-  return currentNoteIndex * offsetAmount;
-}
-
-/**
- * Calculate Y offset for stacked note tails.
- */
-function calculateTailYOffset(
-  note: PlacedNote,
-  allNotes: PlacedNote[],
-  cellHeight: number
-): number {
-  const tailOffsetAmount = (cellHeight / 2) * 0.12;
-  const noteUuid = note.uuid;
-
-  if (!noteUuid) return 0;
-
-  const notesWithTailsAtSamePosition = allNotes.filter(otherNote =>
-    !otherNote.isDrum &&
-    otherNote.row === note.row &&
-    otherNote.startColumnIndex === note.startColumnIndex &&
-    otherNote.uuid &&
-    otherNote.uuid !== noteUuid &&
-    hasVisibleTail(otherNote)
-  );
-
-  if (notesWithTailsAtSamePosition.length === 0) return 0;
-
-  const allNotesWithTailsAtPosition = [note, ...notesWithTailsAtSamePosition];
-  allNotesWithTailsAtPosition.sort((a, b) => getUuidTimestamp(a.uuid) - getUuidTimestamp(b.uuid));
-
-  const currentNoteIndex = allNotesWithTailsAtPosition.findIndex(n => n.uuid === noteUuid);
-  return currentNoteIndex * tailOffsetAmount;
-}
-
-// ============================================================================
-// Scale Degree Text
-// ============================================================================
-
-interface DegreeFontResult {
-  multiplier: number;
-  category: 'natural' | 'single-accidental' | 'both-accidentals';
-}
-
-function getDegreeFontMultiplier(label: string | null): DegreeFontResult {
-  if (!label) return { multiplier: 1.0, category: 'natural' };
-
-  const hasFlat = label.includes('\u266D');
-  const hasSharp = label.includes('\u266F');
-  const hasBothAccidentals = label.includes('/');
-
-  if (!hasFlat && !hasSharp) {
-    return { multiplier: 1.0, category: 'natural' };
-  }
-  if (hasBothAccidentals) {
-    return { multiplier: 0.75, category: 'both-accidentals' };
-  }
-  return { multiplier: 0.88, category: 'single-accidental' };
-}
-
 function drawScaleDegreeText(
   ctx: CanvasRenderingContext2D,
   noteLabel: string,
@@ -180,40 +73,8 @@ function drawScaleDegreeText(
   centerY: number,
   noteWidth: number
 ): void {
-  const { multiplier: contentMultiplier, category } = getDegreeFontMultiplier(noteLabel);
-  let baseFontSize: number;
-
-  if (shape === 'circle') {
-    const circleBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        baseFontSize = circleBaseSize;
-        break;
-      case 'single-accidental':
-        baseFontSize = circleBaseSize * 0.8;
-        break;
-      case 'both-accidentals':
-        baseFontSize = circleBaseSize * 0.4;
-        break;
-      default:
-        baseFontSize = circleBaseSize * contentMultiplier;
-    }
-  } else {
-    const ovalBaseSize = noteWidth * 2 * OVAL_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        baseFontSize = ovalBaseSize * 1.5;
-        break;
-      case 'single-accidental':
-        baseFontSize = ovalBaseSize * 1.2;
-        break;
-      case 'both-accidentals':
-        baseFontSize = ovalBaseSize;
-        break;
-      default:
-        baseFontSize = ovalBaseSize * contentMultiplier;
-    }
-  }
+  const category = getNoteLabelCategory(noteLabel);
+  const baseFontSize = getNoteLabelFontSize(shape, noteWidth, category);
 
   if (baseFontSize < MIN_FONT_SIZE) return;
 
@@ -239,170 +100,51 @@ function drawScaleDegreeText(
   }
 }
 
-// ============================================================================
-// Stadium Shape (for long notes - style 2)
-// ============================================================================
-
-function drawStadiumShape(
-  ctx: CanvasRenderingContext2D,
-  note: PlacedNote,
-  leftCenterX: number,
-  rightCenterX: number,
-  centerY: number,
-  ry: number,
-  strokeWidth: number
-): void {
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(leftCenterX, centerY, ry, Math.PI / 2, -Math.PI / 2, false);
-  ctx.lineTo(rightCenterX, centerY - ry);
-  ctx.arc(rightCenterX, centerY, ry, -Math.PI / 2, Math.PI / 2, false);
-  ctx.lineTo(leftCenterX, centerY + ry);
-  ctx.closePath();
-
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = strokeWidth;
-  ctx.shadowColor = note.color;
-  ctx.shadowBlur = SHADOW_BLUR_RADIUS;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-  ctx.restore();
-}
-
-// ============================================================================
-// Main Rendering Functions
-// ============================================================================
-
-/**
- * Draw a single-column oval note.
- */
+/** Draw notation heads with the same primitives used by Student Notation. */
 export function drawSingleColumnOvalNote(
-  ctx: CanvasRenderingContext2D,
-  context: NoteRenderContext,
-  note: PlacedNote,
-  rowIndex: number
+  ctx: CanvasRenderingContext2D, context: NoteRenderContext, note: PlacedNote, rowIndex: number,
 ): void {
-  const { config, coords, allNotes, getScaleDegreeLabel } = context;
-  const { cellWidth, cellHeight, columnWidths, degreeDisplayMode } = config;
-
-  const y = coords.getRowY(rowIndex);
-  const x = coords.getColumnX(note.startColumnIndex);
-
-  // Calculate cell width for this column
-  const widthMultiplier = columnWidths[note.startColumnIndex] ?? 1;
-  const currentCellWidth = widthMultiplier * cellWidth;
-
-  if (!hasRenderableDimensions(currentCellWidth, cellHeight)) return;
-
-  const xOffset = calculateColorOffset(note, allNotes, cellWidth);
-  const dynamicStrokeWidth = Math.max(0.5, currentCellWidth * 0.15);
-  const cx = x + currentCellWidth / 2 + xOffset;
-  const rx = (currentCellWidth / 2) - (dynamicStrokeWidth / 2);
-  const ry = (cellHeight / 2) - (dynamicStrokeWidth / 2);
-
-  if (!hasRenderableDimensions(rx, ry)) return;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(cx, y, rx, ry, 0, 0, 2 * Math.PI);
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = dynamicStrokeWidth;
-  ctx.shadowColor = note.color;
-  ctx.shadowBlur = SHADOW_BLUR_RADIUS;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-  ctx.restore();
-
-  // Draw scale degree text
-  if (degreeDisplayMode !== 'off' && getScaleDegreeLabel) {
+  const { config, coords, getScaleDegreeLabel } = context;
+  const geometry = createNotationNoteGeometry(note, {
+    x: coords.getColumnX(note.startColumnIndex), y: coords.getRowY(rowIndex),
+    columnWidth: (config.columnWidths[note.startColumnIndex] ?? 1) * config.cellWidth,
+    cellHeight: config.cellHeight, endCapX: coords.getColumnX(note.endColumnIndex),
+    longNoteStyle: config.longNoteStyle,
+  });
+  if (!geometry) return;
+  drawNoteGlyph(ctx, geometry, { color: note.color, fillLevel: context.getFillLevel?.(note) });
+  if (config.degreeDisplayMode !== 'off' && getScaleDegreeLabel) {
     const { label } = getScaleDegreeLabel(note);
-    if (label) {
-      drawScaleDegreeText(ctx, label, 'oval', cx, y, rx);
-    }
+    if (label) drawScaleDegreeText(ctx, label, 'oval', geometry.centerX, geometry.centerY, geometry.radiusX);
   }
 }
 
-/**
- * Draw a two-column (circle) note, optionally with a tail or stadium shape.
- */
 export function drawTwoColumnOvalNote(
-  ctx: CanvasRenderingContext2D,
-  context: NoteRenderContext,
-  note: PlacedNote,
-  rowIndex: number
+  ctx: CanvasRenderingContext2D, context: NoteRenderContext, note: PlacedNote, rowIndex: number,
 ): void {
   const { config, coords, allNotes, getScaleDegreeLabel } = context;
-  const { cellWidth, cellHeight, degreeDisplayMode, longNoteStyle } = config;
-
+  const x = coords.getColumnX(note.startColumnIndex);
+  const columnWidth = coords.getColumnX(note.startColumnIndex + 1) - x;
   const y = coords.getRowY(rowIndex);
-  const xStart = coords.getColumnX(note.startColumnIndex);
-  const xNext = coords.getColumnX(note.startColumnIndex + 1);
-  const actualCellWidth = xNext - xStart;
-
-  if (!hasRenderableDimensions(actualCellWidth, cellHeight)) return;
-
-  const xOffset = calculateColorOffset(note, allNotes, cellWidth);
-  const centerX = xStart + actualCellWidth + xOffset;
-  const dynamicStrokeWidth = Math.max(MIN_STROKE_WIDTH_THICK, actualCellWidth * STROKE_WIDTH_RATIO);
-  const ry = (cellHeight / 2) - (dynamicStrokeWidth / 2);
-
-  const hasTail = hasVisibleTail(note);
-
-  // Style 2: Stadium shape
-  if (hasTail && longNoteStyle === 'style2') {
-    const leftCenterX = centerX;
-    const rightCenterX = coords.getColumnX(note.endColumnIndex);
-
-    if (hasRenderableDimensions(rightCenterX - leftCenterX, ry)) {
-      drawStadiumShape(ctx, note, leftCenterX, rightCenterX, y, ry, dynamicStrokeWidth);
-
-      // Keep the degree in the starting cap, aligned with ordinary note heads.
-      if (degreeDisplayMode !== 'off' && getScaleDegreeLabel) {
-        const { label } = getScaleDegreeLabel(note);
-        if (label) {
-          drawScaleDegreeText(ctx, label, 'circle', leftCenterX, y, ry);
-        }
-      }
-    }
-    return;
-  }
-
-  // Style 1: Tail line + circle
-  if (hasTail) {
-    const originalEndX = coords.getColumnX(note.endColumnIndex + 1);
-    const tailYOffset = calculateTailYOffset(note, allNotes, cellHeight);
-    const tailY = y + tailYOffset;
-
+  const geometry = createNotationNoteGeometry(note, {
+    x, y, columnWidth, cellHeight: config.cellHeight,
+    endCapX: coords.getColumnX(note.endColumnIndex), longNoteStyle: config.longNoteStyle,
+  });
+  if (!geometry) return;
+  if (hasVisibleNoteTail(note) && config.longNoteStyle === 'style1') {
+    const tailY = y + getNoteTailYOffset(note, allNotes, config.cellHeight);
     ctx.beginPath();
-    ctx.moveTo(centerX, tailY);
-    ctx.lineTo(originalEndX, tailY);
+    ctx.moveTo(x + columnWidth, tailY);
+    ctx.lineTo(coords.getColumnX(note.endColumnIndex + 1), tailY);
     ctx.strokeStyle = note.color;
-    ctx.lineWidth = Math.max(MIN_TAIL_LINE_WIDTH, actualCellWidth * TAIL_LINE_WIDTH_RATIO);
+    ctx.lineWidth = Math.max(NOTE_APPEARANCE.minTailStroke, columnWidth * NOTE_APPEARANCE.tailStrokeRatio);
     ctx.stroke();
   }
-
-  const rx = actualCellWidth - (dynamicStrokeWidth / 2);
-  if (!hasRenderableDimensions(rx, ry)) return;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(centerX, y, rx, ry, 0, 0, 2 * Math.PI);
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = dynamicStrokeWidth;
-  ctx.shadowColor = note.color;
-  ctx.shadowBlur = SHADOW_BLUR_RADIUS;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-  ctx.restore();
-
-  if (degreeDisplayMode !== 'off' && getScaleDegreeLabel) {
+  drawNoteGlyph(ctx, geometry, { color: note.color, fillLevel: context.getFillLevel?.(note) });
+  if (config.degreeDisplayMode !== 'off' && getScaleDegreeLabel) {
     const { label } = getScaleDegreeLabel(note);
-    if (label) {
-      drawScaleDegreeText(ctx, label, 'circle', centerX, y, rx);
-    }
+    const radius = geometry.kind === 'stadium' ? geometry.radiusY : geometry.radiusX;
+    if (label) drawScaleDegreeText(ctx, label, 'circle', x + columnWidth, y, radius);
   }
 }
 
@@ -452,6 +194,7 @@ export function drawTonicShape(
 // ============================================================================
 
 export interface UserPitchRenderConfig {
+  noteFillLevels?: ReadonlyMap<string, number>;
   cellHeight: number;
   viewportWidth: number;
   nowLineX?: number;
@@ -1006,62 +749,6 @@ export function drawUserPitchTrace(
 
 // TargetNote is imported from types.js
 
-function colorToRgbaString(color: string, alpha: number): string {
-  const normalizedAlpha = Math.max(0, Math.min(1, alpha));
-  const shortHexMatch = color.match(/^#([0-9a-fA-F]{3})$/);
-  if (shortHexMatch) {
-    const [r, g, b] = shortHexMatch[1].split('').map((char) => Number.parseInt(char + char, 16));
-    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
-  }
-
-  const longHexMatch = color.match(/^#([0-9a-fA-F]{6})$/);
-  if (longHexMatch) {
-    const hex = longHexMatch[1];
-    const r = Number.parseInt(hex.slice(0, 2), 16);
-    const g = Number.parseInt(hex.slice(2, 4), 16);
-    const b = Number.parseInt(hex.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
-  }
-
-  const rgbMatch = color.match(/^rgba?\(([^)]+)\)$/);
-  if (rgbMatch) {
-    const parts = rgbMatch[1].split(',').map((value) => Number.parseFloat(value.trim()));
-    const r = Math.max(0, Math.min(255, parts[0] ?? 255));
-    const g = Math.max(0, Math.min(255, parts[1] ?? 255));
-    const b = Math.max(0, Math.min(255, parts[2] ?? 255));
-    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
-  }
-
-  return `rgba(255, 255, 255, ${normalizedAlpha})`;
-}
-
-function createTargetNotePath(
-  startX: number,
-  endX: number,
-  centerY: number,
-  radiusY: number,
-): Path2D | null {
-  const noteWidth = endX - startX;
-  if (!hasRenderableDimensions(noteWidth, radiusY)) return null;
-
-  const path = new Path2D();
-  if (noteWidth >= 2 * radiusY) {
-    const leftCapCenterX = startX + radiusY;
-    const rightCapCenterX = endX - radiusY;
-    path.arc(leftCapCenterX, centerY, radiusY, Math.PI / 2, -Math.PI / 2, false);
-    path.lineTo(rightCapCenterX, centerY - radiusY);
-    path.arc(rightCapCenterX, centerY, radiusY, -Math.PI / 2, Math.PI / 2, false);
-    path.lineTo(leftCapCenterX, centerY + radiusY);
-  } else {
-    const centerX = (startX + endX) / 2;
-    const radiusX = noteWidth / 2;
-    if (!hasRenderableDimensions(radiusX, radiusY)) return null;
-    path.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-  }
-  path.closePath();
-  return path;
-}
-
 function drawStadiumTargetNote(
   ctx: CanvasRenderingContext2D,
   notePath: Path2D,
@@ -1351,14 +1038,58 @@ export function drawTargetNotes(
                          Math.abs(userMidi - note.midi) <= pitchToleranceSemitones;
     const isBeingHit = isAtJudgmentLine && pitchMatches;
     const noteWidth = endX - startX;
-    const notePath = createTargetNotePath(startX, endX, y, ry);
-    if (!notePath) continue;
+    const geometry = targetNoteStyle === 'student-notation'
+      ? createNotationTargetGeometry(startX, endX, y, cellHeight)
+      : createTargetNoteGeometry(startX, endX, y, ry);
+    if (!geometry) continue;
+    const notePath = createNotePath(geometry);
+
+    if (targetNoteStyle === 'student-notation') {
+      drawNoteGlyph(ctx, geometry, {
+        color: baseColor,
+        fillLevel: config.noteFillLevels?.get(note.id) ?? 0,
+        path: notePath,
+      });
+
+      const label = note.label?.trim();
+      if (label) {
+        // Fit the whole lyric/degree inside its note using the shared notation typography.
+        const labelWidth = Math.max(0, geometry.radiusX * 2 - geometry.strokeWidth * 2);
+        const labelHeight = Math.max(0, geometry.radiusY * 2 - geometry.strokeWidth * 2);
+        const preferredFontSize = config.labelConfig?.mode === 'fixed'
+          ? config.labelConfig.fixedPx ?? 14
+          : getNoteLabelFontSize('oval', Math.min(labelWidth / 2, ry), getNoteLabelCategory(label))
+            * (config.labelConfig?.scale ?? 1);
+        const layout = resolveNoteLabelLayout(ctx, [label], {
+          preferredFontSize,
+          maxWidth: labelWidth * 0.82,
+          maxHeight: labelHeight * 0.78,
+          lineHeightRatio: 1.1,
+          font: (size) => `bold ${size}px 'Atkinson Hyperlegible Next', sans-serif`,
+        });
+        if (layout.fontSize >= MIN_FONT_SIZE) {
+          ctx.save();
+          ctx.clip(notePath);
+          ctx.font = layout.font;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = config.labelConfig?.textColor ?? '#212529';
+          ctx.fillText(label, geometry.centerX, y + layout.fontSize * 0.08);
+          ctx.restore();
+        }
+      }
+      if (isBeingHit) drawHitParticles(ctx, nowLineX, y, ry);
+      if (isGolden && !isBeingHit) drawGoldenNoteIndicator(ctx, startX, y, ry);
+      continue;
+    }
 
     if (targetNoteStyle === 'gradient') {
       drawGradientTargetNote(ctx, notePath, startX, endX, y, ry, baseColor, isBeingHit, isGolden);
     } else {
       drawStadiumTargetNote(ctx, notePath, baseColor, isBeingHit, isGolden);
     }
+
+    drawNoteEnvelopeFill(ctx, geometry, baseColor, config.noteFillLevels?.get(note.id) ?? 0);
 
     if (isBeingHit) {
       drawHitParticles(ctx, nowLineX, y, ry);

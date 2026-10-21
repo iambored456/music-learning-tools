@@ -26,12 +26,14 @@ export class PitchGridNoteToolInteractor {
       return { handled: false, state };
     }
 
+    // Other voices must not intercept placement, even when their noteheads or
+    // sustained tails cover the selected voice's new note.
     const existingNote = store.state.placedNotes.find(note =>
       !note.isDrum &&
+      note.color === store.state.selectedNote?.color &&
       note.row === rowIndex &&
       colIndex >= note.startColumnIndex &&
-      colIndex < getNoteEndColumn(note) &&
-      (store.state.selectedNote?.shape !== 'diamond' || note.color === store.state.selectedNote.color)
+      colIndex < getNoteEndColumn(note)
     );
 
     if (!existingNote) {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { CHROMATIC_NOTES } from '@mlt/compass-core';
-  import { CHORD_QUALITIES, SCALE_MODES, DIFFICULTIES, QUESTIONS_PER_KEY, WHEEL_VIEWS, allowedDegrees, chordLabel, degreeLabel, exerciseMode, isChordMode, isScored, lessonTiming, scaleDegrees, setLessonTiming, setWheelView, wheelView, type Settings } from '@mlt/audiationer-trainer-core';
+  import { CHORD_QUALITIES, SCALE_MODES, QUESTIONS_PER_KEY, WHEEL_VIEWS, allowedDegrees, chordLabel, degreeLabel, exerciseMode, isChordMode, isScored, lessonTiming, scaleDegrees, setLessonTiming, setWheelView, wheelView, type Settings } from '@mlt/audiationer-trainer-core';
+  import DifficultyCard from './DifficultyCard.svelte';
   import AutoContinueSettings from './AutoContinueSettings.svelte';
   import ReviewSettings from './ReviewSettings.svelte';
   import TimingTimeline from './TimingTimeline.svelte';
@@ -37,8 +38,8 @@
   <fieldset class="at-check-list"><legend>Chord qualities</legend>{#each CHORD_QUALITIES as quality, i}<label><input type="checkbox" checked={settings.qualities.includes(i)} onchange={() => { settings.qualities = settings.qualities.includes(i) ? settings.qualities.filter(q => q !== i) : [...settings.qualities, i]; }} />{quality.name}</label>{/each}</fieldset>
 {/if}
 {#if isScored(settings.mode)}
+  {#if difficultyEditable}<DifficultyCard bind:settings />{/if}
   <div class="at-pair">
-    {#if difficultyEditable}<label class="at-field">Difficulty<select bind:value={settings.answerSeconds}>{#each DIFFICULTIES as difficulty}<option value={difficulty.seconds}>{difficulty.name} · {difficulty.seconds ? `${difficulty.seconds} s` : 'untimed'}</option>{/each}</select></label>{/if}
     <label class="at-field">Session length<select bind:value={settings.rounds}>{#each [...new Set([5, 10, 20, 40, settings.rounds])].sort((a,b) => a-b) as rounds}<option value={rounds}>{rounds} questions</option>{/each}</select></label>
   </div>
 {/if}
@@ -52,7 +53,7 @@
   <label class="at-field">Volume<input type="range" min="0" max="1" step="0.05" bind:value={settings.volume} /></label>
   <div class="at-check-list">
     {#if !isScored(settings.mode)}<label><input type="checkbox" bind:checked={settings.randomTonic} disabled={settings.mode === 'freeplay'} />Random tonic</label>{/if}
-    <label><input type="checkbox" bind:checked={settings.randomOctave} disabled={settings.mode === 'freeplay'} />Random octave (3–5)</label>
+    {#if settings.mode === 'cycle'}<label><input type="checkbox" bind:checked={settings.randomOctave} />Random octave (3–5)</label>{/if}
     <label><input type="checkbox" checked={timing.tonicizationEnabled} onchange={(event) => setLessonTiming(settings, { tonicizationEnabled: event.currentTarget.checked })} disabled={settings.mode === 'quality'} />Cadence on key change</label>
     <label><input type="checkbox" bind:checked={settings.resolve} disabled={settings.mode !== 'degrees' && settings.mode !== 'melody'} />Resolve correct answers</label>
     <label><input type="checkbox" bind:checked={settings.drone} disabled={settings.mode === 'quality'} />Tonic drone</label>

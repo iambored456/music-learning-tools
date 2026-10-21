@@ -1,7 +1,8 @@
 import { CHORD_QUALITIES, chordLabel, degreeLabel, melody, midiNote, pick, resolution, spokenChordLabel, triad } from './music.ts';
-import { allowedDegrees, DEFAULT_SETTINGS, exerciseMode, isChordMode, isSequenceMode, normalizeSettings, questionLength, settingsError, type Settings } from './settings.ts';
+import { allowedDegrees, DEFAULT_SETTINGS, exerciseMode, isChordMode, isSequenceMode, normalizeSettings, questionLength, questionOctaves, settingsError, type Settings } from './settings.ts';
 import type { SoundPreset } from './sound.ts';
 import { lessonTiming, tonicizationPhrase } from './timing.ts';
+import { MelodySampler } from './melodyLibrary.ts';
 
 export interface TrainerAudio {
   unlock(): Promise<void>;
@@ -11,16 +12,19 @@ export interface TrainerAudio {
   speak(text: string, signal: AbortSignal, volume?: number): Promise<void>;
   preset?(value: SoundPreset): void;
   separateDroneVolume?(enabled: boolean): void;
-  stop(options?: { preserveDrone?: boolean }): void;
+  stop(options?: { preserveDrone?: boolean; droneFadeSeconds?: number }): void;
 }
 export type Phase = 'idle' | 'listening' | 'answering' | 'feedback' | 'exploring' | 'finished';
 export const SKIPPED_CORRECT_FLASH_MS = 400;
+export const RESULTS_DRONE_FADE_SECONDS = 0.8;
 export interface Result {
   expected: string;
   received: string;
   tonic: number;
   /** The question's tonic register, captured before answer-review octave changes. */
   octave: number;
+  /** Original tonic register of each melody note or chord-progression item. */
+  octaves?: number[];
   correct: boolean;
   seconds: number;
 }
@@ -39,10 +43,11 @@ export interface SessionState {
   autoContinueDeadline: number | null;
   reviewSkipped: boolean;
   tonicizing: boolean;
+  answerDuringPlayback: boolean;
 }
 export const emptyState = (): SessionState => ({
   phase: 'idle', tonic: 0, octave: 4, round: 0, activeDegree: null,
-  input: [], revealed: [], message: '', results: [], error: null, answerDeadline: null, autoContinueDeadline: null, reviewSkipped: false, tonicizing: false,
+  input: [], revealed: [], message: '', results: [], error: null, answerDeadline: null, autoContinueDeadline: null, reviewSkipped: false, tonicizing: false, answerDuringPlayback: false,
 });
 
 export function hasAnswerReview(state: SessionState): boolean {
@@ -64,6 +69,9 @@ export class TrainerSession {
   private settings = normalizeSettings(DEFAULT_SETTINGS);
   private controller = new AbortController();
   private question: number[] = [];
+  private questionRegisters: number[] = [];
+  private questionOctave = 4;
+  private melodySampler = new MelodySampler();
   private answerStarted = 0;
   private cycleIndex = 0;
   private lastTonic: number | null = null;
@@ -85,7 +93,7 @@ export class TrainerSession {
   ) {}
 
   snapshot(): SessionState {
-    return { ...this.state, input: [...this.state.input], revealed: [...this.state.revealed], results: this.state.results.map(r => ({ ...r })) };
+    return { ...this.state, input: [...this.state.input], revealed: [...this.state.revealed], results: this.state.results.map(r => ({ ...r, ...(r.octaves ? { octaves: [...r.octaves] } : {}) })) };
   }
   private emit(patch: Partial<SessionState> = {}) {
     this.state = { ...this.state, ...patch };
@@ -94,7 +102,7 @@ export class TrainerSession {
   private cancel({ keepAutoContinue = false, preserveDrone = false }: { keepAutoContinue?: boolean; preserveDrone?: boolean } = {}) {
     this.clearDeadline();
     if (!keepAutoContinue) this.clearAutoContinue();
-    this.state = { ...this.state, tonicizing: false };
+    this.state = { ...this.state, tonicizing: false, answerDuringPlayback: false };
     this.controller.abort();
     this.controller = new AbortController();
     this.audio.stop({ preserveDrone });
@@ -123,6 +131,7 @@ export class TrainerSession {
     if (error) { this.emit({ error }); return; }
     this.lastTonic = null;
     this.cycleIndex = 0;
+    this.melodySampler = new MelodySampler();
     this.emit({ phase: 'listening', message: 'Starting audio…' });
     await this.run(async signal => {
       await this.audio.unlock(); this.check(signal);
@@ -157,6 +166,22 @@ export class TrainerSession {
       : isSequenceMode(mode) ? melody(degrees, questionLength(s), this.random)
       : [pick(degrees, this.random)];
   }
+  private prepareQuestion() {
+    this.questionOctave = this.state.octave;
+    if (exerciseMode(this.settings) === 'melody' && this.settings.octaveCount > 1) {
+      const pitches = this.melodySampler.next(allowedDegrees(this.settings), questionOctaves(this.settings),
+        questionLength(this.settings), this.state.tonic, this.random);
+      this.question = pitches.map(pitch => pitch % 12);
+      this.questionRegisters = pitches.map(pitch => Math.floor(pitch / 12));
+      return;
+    }
+    this.question = this.createQuestion();
+    this.questionRegisters = this.question.map((_, index) => index && exerciseMode(this.settings) === 'chord-progressions'
+      ? pick(questionOctaves(this.settings), this.random) : this.state.octave);
+  }
+  private questionRegister(index: number): number {
+    return (this.questionRegisters[index] ?? this.questionOctave) + this.state.octave - this.questionOctave;
+  }
   private pocketLabel(value: number, spoken = false): string {
     const s = this.settings, mode = s.pocket.exercise;
     if (mode === 'quality') return CHORD_QUALITIES[value].name;
@@ -169,7 +194,7 @@ export class TrainerSession {
     while (!signal.aborted) {
       this.emit({ phase: 'listening', message: 'Listen…' });
       await this.prepare(signal);
-      this.question = this.createQuestion();
+      this.prepareQuestion();
       this.emit({ round: this.state.round + 1, message: 'Listen to the question.' });
       this.check(signal);
       for (let repeat = 0; repeat < p.repeats; repeat++) {
@@ -182,11 +207,11 @@ export class TrainerSession {
         if (timing.feedbackGapSeconds) { await this.pause(timing.feedbackGapSeconds * 1000, signal); this.check(signal); }
         this.emit({ phase: 'feedback', revealed: [...this.question], message: this.question.map(value => this.pocketLabel(value)).join(' · ') });
         this.check(signal);
-        for (const value of this.question) {
+        for (const [index, value] of this.question.entries()) {
           this.emit({ activeDegree: p.exercise === 'quality' ? null : value });
           this.check(signal);
           const speech = this.audio.speak(this.pocketLabel(value, true), signal, p.answerVolume);
-          if (p.notesWithAnswer) await Promise.all([speech, this.playQuestion(signal, true, [value])]);
+          if (p.notesWithAnswer) await Promise.all([speech, this.playQuestion(signal, true, [value], index)]);
           else await speech;
           this.check(signal);
         }
@@ -241,7 +266,8 @@ export class TrainerSession {
     const tonic = s.randomTonic && changeKey
       ? this.lastTonic !== null ? (this.state.tonic + 1 + Math.floor(this.random() * 11)) % 12 : Math.floor(this.random() * 12)
       : (s.randomTonic ? this.state.tonic : s.tonic);
-    const octave = s.randomOctave ? pick([3, 4, 5], this.random) : s.octave;
+    const octave = s.mode === 'cycle' ? s.randomOctave ? pick([3, 4, 5], this.random) : s.octave
+      : s.octaveCount === 1 ? 4 : pick(questionOctaves(s), this.random);
     this.emit({ tonic, octave, input: [], revealed: [], activeDegree: null });
     this.check(signal);
     this.updateDrone();
@@ -253,14 +279,23 @@ export class TrainerSession {
     this.emit({ phase: 'listening', reviewSkipped: false, message: 'Listen…', round: this.state.results.length + 1 });
     await this.prepare(signal);
     const s = this.settings;
-    this.question = this.createQuestion();
-    await this.playQuestion(signal); this.check(signal);
+    this.prepareQuestion();
+    await this.playAnswerableQuestion(signal); this.check(signal);
     this.beginAnswer();
     this.emit({ phase: 'answering', message: s.mode === 'chord-progressions' ? 'Enter the chords in the order you heard them.' : s.mode === 'melody' ? 'Enter the degrees in the order you heard them.' : s.mode === 'quality' ? 'Which chord quality did you hear?' : 'Choose your answer on the wheel.' });
   }
   private clearDeadline() {
     this.cancelDeadline?.();
     this.cancelDeadline = null;
+  }
+  private async playAnswerableQuestion(signal: AbortSignal) {
+    this.check(signal);
+    if (this.settings.mode === 'degrees' || this.settings.mode === 'chords') {
+      this.answerStarted = this.now();
+      this.emit({ answerDuringPlayback: true });
+    }
+    await this.playQuestion(signal); this.check(signal);
+    this.emit({ answerDuringPlayback: false });
   }
   private beginAnswer() {
     this.clearDeadline();
@@ -291,17 +326,17 @@ export class TrainerSession {
     this.emit({ autoContinueDeadline: this.now() + delay });
     this.scheduleAutoContinue(delay);
   }
-  private async playDegree(degree: number, reveal: boolean, signal: AbortSignal, asChord = false, { noteSeconds, gapSeconds }: { noteSeconds?: number; gapSeconds?: number } = {}) {
+  private async playDegree(degree: number, reveal: boolean, signal: AbortSignal, asChord = false, { noteSeconds, gapSeconds, octave = this.state.octave }: { noteSeconds?: number; gapSeconds?: number; octave?: number } = {}) {
     this.check(signal);
     if (reveal) this.emit({ activeDegree: ((degree % 12) + 12) % 12 });
     const degrees = asChord ? triad(degree, this.settings.scale) : [degree];
     const timing = lessonTiming(this.settings);
-    await this.audio.notes(degrees.map(d => midiNote(this.state.tonic, this.state.octave, d)), noteSeconds ?? timing.feedbackNoteSeconds, signal);
+    await this.audio.notes(degrees.map(d => midiNote(this.state.tonic, octave, d)), noteSeconds ?? timing.feedbackNoteSeconds, signal);
     this.check(signal);
     if (reveal) this.emit({ activeDegree: null });
     await this.pause((gapSeconds ?? timing.feedbackNoteGapSeconds) * 1000, signal); this.check(signal);
   }
-  private async playQuestion(signal: AbortSignal, reveal = false, values = this.question) {
+  private async playQuestion(signal: AbortSignal, reveal = false, values = this.question, registerOffset = 0) {
     const mode = exerciseMode(this.settings);
     const timing = lessonTiming(this.settings);
     if (mode === 'quality') {
@@ -312,6 +347,7 @@ export class TrainerSession {
     } else {
       for (const [index, degree] of values.entries()) await this.playDegree(degree, reveal, signal, isChordMode(mode), {
         noteSeconds: timing.noteSeconds, gapSeconds: index === values.length - 1 ? timing.answerGapSeconds : timing.noteGapSeconds,
+        octave: this.questionRegister(index + registerOffset),
       });
     }
   }
@@ -322,7 +358,7 @@ export class TrainerSession {
     this.emit({ phase: 'listening', answerDeadline: null, message: 'Listen again…' });
     await this.run(async signal => {
       await this.pause(lessonTiming(this.settings).leadInSeconds * 1000, signal); this.check(signal);
-      await this.playQuestion(signal); this.check(signal);
+      await this.playAnswerableQuestion(signal); this.check(signal);
       this.repeatBusy = false;
       this.beginAnswer();
       this.emit({ phase: 'answering', message: 'Choose your answer.' });
@@ -338,7 +374,7 @@ export class TrainerSession {
     this.cancel({ keepAutoContinue: true, preserveDrone: true }); this.updateDrone();
     this.emit({ activeDegree: null });
     await this.run(async signal => {
-      for (const degree of notes) await this.playDegree(degree, true, signal, isChordMode(this.settings.mode));
+      for (const [index, degree] of notes.entries()) await this.playDegree(degree, true, signal, isChordMode(this.settings.mode), { octave: this.questionRegister(index) });
       this.completeFeedback(signal);
     });
   }
@@ -353,7 +389,7 @@ export class TrainerSession {
   private async advance(signal: AbortSignal) {
     this.check(signal);
     if (this.state.results.length >= this.settings.rounds) {
-      this.audio.stop();
+      this.audio.stop({ droneFadeSeconds: RESULTS_DRONE_FADE_SECONDS });
       this.emit({ phase: 'finished', reviewSkipped: false, activeDegree: null, message: 'Session complete.' });
     } else {
       const gap = lessonTiming(this.settings).nextQuestionGapSeconds;
@@ -398,7 +434,7 @@ export class TrainerSession {
       });
       return;
     }
-    if (this.state.phase !== 'answering') return;
+    if (this.state.phase !== 'answering' && !this.state.answerDuringPlayback) return;
     if (this.state.answerDeadline !== null && this.now() >= this.state.answerDeadline) { await this.finishAnswer(true); return; }
     const allowed = s.mode === 'quality' ? s.qualities : allowedDegrees(s);
     if (!allowed.includes(value)) return;
@@ -408,7 +444,9 @@ export class TrainerSession {
     await this.finishAnswer(false);
   }
   private async finishAnswer(timedOut: boolean) {
-    if (this.state.phase !== 'answering') return;
+    if (this.state.phase !== 'answering' && !this.state.answerDuringPlayback) return;
+    // Abort the question before feedback so its completion cannot reopen answering.
+    if (this.state.answerDuringPlayback) this.cancel({ preserveDrone: true });
     this.clearDeadline();
     const s = this.settings, input = this.state.input;
     const label = (values: number[]) => values.map(v => s.mode === 'quality' ? CHORD_QUALITIES[v].name : isChordMode(s.mode) ? chordLabel(v, s.scale) : degreeLabel(v, s.scale)).join(' · ');
@@ -417,7 +455,7 @@ export class TrainerSession {
     const reviewSkipped = !autoContinue && (s.reviewSkip === 'all' || (s.reviewSkip === 'correct' && correct));
     const timing = lessonTiming(s);
     const result: Result = { expected: label(this.question), received: timedOut ? 'Time out' : label(input),
-      tonic: this.state.tonic, octave: this.state.octave, correct, seconds: Math.max(0, (this.now() - this.answerStarted) / 1000) };
+      tonic: this.state.tonic, octave: this.state.octave, ...(isSequenceMode(s.mode) ? { octaves: [...this.questionRegisters] } : {}), correct, seconds: Math.max(0, (this.now() - this.answerStarted) / 1000) };
     this.emit({ phase: 'feedback', reviewSkipped, activeDegree: null, answerDeadline: null, autoContinueDeadline: null, revealed: reviewSkipped ? [] : [...this.question], results: [...this.state.results, result], message: timedOut ? `Time’s up. The answer was ${result.expected}.` : correct ? `Correct — ${result.expected}` : `You chose ${result.received}. The answer was ${result.expected}.` });
     await this.run(async signal => {
       if (reviewSkipped) {
@@ -428,7 +466,8 @@ export class TrainerSession {
       if (timing.feedbackGapSeconds) { await this.pause(timing.feedbackGapSeconds * 1000, signal); this.check(signal); }
       if (!correct) await this.playQuestion(signal, true);
       else if (s.resolve && (s.mode === 'degrees' || s.mode === 'melody')) {
-        for (const degree of resolution(this.question[this.question.length - 1])) await this.playDegree(degree, true, signal);
+        for (const degree of resolution(this.question[this.question.length - 1])) await this.playDegree(degree, true, signal, false,
+          { octave: this.questionRegister(this.question.length - 1) });
       }
       this.completeFeedback(signal);
       // Retained reviews wait for Next or the optional auto-continue countdown.

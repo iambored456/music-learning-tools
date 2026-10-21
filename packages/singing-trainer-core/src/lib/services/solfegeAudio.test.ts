@@ -2,14 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ladukhinLines } from '../constants/ladukhin.js';
 import { solfegeJustMidi } from './solfegeNotation.js';
 import { SOLFEGE_COUNT_IN_BEATS } from './solfegePractice.js';
+import { FABER_PRACTICE } from './faberPractice.js';
 
 const mocks = vi.hoisted(() => ({
   notes: vi.fn(), hits: vi.fn(), dispose: vi.fn(), load: vi.fn().mockResolvedValue(undefined),
   cues: vi.fn(), connect: vi.fn(),
+  synths: [] as { volume: { value: number } }[],
 }));
 vi.mock('tone', () => ({
   start: vi.fn().mockResolvedValue(undefined), immediate: () => 10,
   Synth: class {
+    volume = { value: -15 };
+    constructor() { mocks.synths.push(this); }
     connect(output: unknown) { mocks.connect('synth', output); return this; }
     triggerAttackRelease = mocks.notes;
     dispose = mocks.dispose;
@@ -30,7 +34,7 @@ vi.mock('@mlt/audio-samples/local-samples', () => ({ getLocalDrumSampleById: (id
 import { SolfegeAudio } from './solfegeAudio.js';
 vi.mock('./audioMixer.js', () => ({ getAudioMasterOutput: (channel: string) => channel }));
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); mocks.synths.length = 0; });
 
 describe('solfege row audio', () => {
   it('routes melody, drums and both count-in samples to their master channels', async () => {
@@ -111,5 +115,27 @@ describe('solfege row audio', () => {
     audio.schedule(ladukhinLines[0]!, 60, 80, 0, true, false);
     expect(mocks.cues).toHaveBeenCalledTimes(0);
     audio.dispose();
+  });
+
+  it('synchronizes both Faber parts and toggles their audio independently during a take', async () => {
+    const audio = new SolfegeAudio();
+    await audio.init();
+    const [first, second] = FABER_PRACTICE.voices;
+    audio.scheduleVoices(FABER_PRACTICE.voices, 55, 120, 4, [second!.id], 'equal');
+    expect(mocks.notes).toHaveBeenCalledTimes(45);
+    expect(mocks.cues).toHaveBeenCalledTimes(4);
+    expect(mocks.notes.mock.calls[0]![2]).toBeCloseTo(12.1);
+    expect(mocks.notes.mock.calls[24]![2]).toBeCloseTo(14.1);
+    expect(mocks.notes.mock.calls[0]![0]).toBeCloseTo(440 * 2 ** ((55 - 69) / 12));
+    expect(mocks.synths.map(synth => synth.volume.value)).toEqual([-Infinity, -15]);
+    audio.setVoiceEnabled(first!.id, true);
+    audio.setVoiceEnabled(second!.id, false);
+    expect(mocks.synths.map(synth => synth.volume.value)).toEqual([-15, -Infinity]);
+    audio.setVoiceEnabled(first!.id, false);
+    expect(mocks.synths.every(synth => synth.volume.value === -Infinity)).toBe(true);
+    audio.dispose();
+    expect(mocks.dispose).toHaveBeenCalledTimes(5);
+    audio.scheduleVoices(FABER_PRACTICE.voices, 55, 120, 4, [first!.id], 'equal');
+    expect(mocks.notes).toHaveBeenCalledTimes(45);
   });
 });

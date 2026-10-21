@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { CHORD_QUALITIES, POCKET_EXERCISES, POCKET_QUESTIONS_PER_KEY, SCALE_MODES, SOUND_PRESETS, chordLabel, degreeLabel, isChordMode, lessonTiming, scaleDegrees, setLessonTiming, type Settings } from '@mlt/audiationer-trainer-core';
+  import { CHORD_QUALITIES, POCKET_EXERCISES, POCKET_QUESTIONS_PER_KEY, SCALE_MODES, SOUND_PRESETS, chordLabel, degreeLabel, isChordMode, lessonTiming, scaleDegrees, selectExercise, setLessonTiming, type Settings } from '@mlt/audiationer-trainer-core';
+  import DifficultyCard from './DifficultyCard.svelte';
   import Icon from './Icon.svelte';
   import TimingTimeline from './TimingTimeline.svelte';
   let { settings = $bindable() }: { settings: Settings } = $props();
@@ -19,6 +20,7 @@
 {/snippet}
 
 <div class="at-mode-settings">
+  <DifficultyCard bind:settings />
   <section class="at-mode-setting" aria-label="Sound preset">
     <h3>Sound preset: {soundName}</h3>
     <button type="button" class="at-sound-change" aria-expanded={chooseSound} aria-controls="at-pocket-sounds" onclick={() => { chooseSound = !chooseSound; }}><Icon name="note" />Change</button>
@@ -84,15 +86,14 @@
   </details>
 
   <details class="at-settings-section">
-    <summary>Exercise and octave<Icon name="chevron" /></summary>
-    <label class="at-field">Exercise<select bind:value={p.exercise}>{#each POCKET_EXERCISES as exercise}<option value={exercise.id}>{exercise.name}</option>{/each}</select></label>
-    <label class="at-field">Octave<select bind:value={settings.octave}>{#each [2, 3, 4, 5, 6] as octave}<option value={octave}>{octave}</option>{/each}</select></label>
+    <summary>Exercise<Icon name="chevron" /></summary>
+    <label class="at-field">Exercise<select value={p.exercise} onchange={(event) => selectExercise(settings, 'pocket', event.currentTarget.value as Settings['pocket']['exercise'])}>{#each POCKET_EXERCISES as exercise}<option value={exercise.id}>{exercise.name}</option>{/each}</select></label>
     {#if p.exercise === 'quality'}
       <fieldset class="at-check-list"><legend>Chord qualities</legend>{#each CHORD_QUALITIES as quality, index}<label><input type="checkbox" checked={settings.qualities.includes(index)} onchange={() => { settings.qualities = settings.qualities.includes(index) ? settings.qualities.filter(q => q !== index) : [...settings.qualities, index]; }} />{quality.name}</label>{/each}</fieldset>
     {:else}
       <label class="at-field">Scale mode<select bind:value={settings.scale} onchange={(event) => { settings.scale = event.currentTarget.value as Settings['scale']; settings.degrees = scaleDegrees(settings.scale); }}>{#each SCALE_MODES as mode}<option value={mode.id}>{mode.name}</option>{/each}</select></label>
       <fieldset class="at-check-list"><legend>{isChordMode(p.exercise) ? 'Chords to practise' : 'Degrees to practise'}</legend><div class="at-degree-options">{#each Array.from({ length: 12 }, (_, i) => i) as degree}{@const unavailable = isChordMode(p.exercise) && !scaleDegrees(settings.scale).includes(degree)}<label class:at-unavailable={unavailable}><input type="checkbox" disabled={unavailable} checked={settings.degrees.includes(degree)} onchange={() => toggleDegree(degree)} />{isChordMode(p.exercise) ? chordLabel(degree, settings.scale) : degreeLabel(degree, settings.scale)}</label>{/each}</div></fieldset>
     {/if}
-    <div class="at-check-list"><label><input type="checkbox" bind:checked={settings.randomOctave} />Random octave (3–5)</label><label><input type="checkbox" bind:checked={settings.drone} />Tonic drone</label></div>
+    <div class="at-check-list"><label><input type="checkbox" bind:checked={settings.drone} />Tonic drone</label></div>
   </details>
 </div>

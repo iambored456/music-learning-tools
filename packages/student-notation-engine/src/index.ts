@@ -2,7 +2,7 @@
  * @mlt/student-notation-engine
  *
  * Framework-agnostic engine for Student Notation.
- * Provides composable state, audio, transport, canvas, and utility primitives
+ * Provides composable state, audio, transport, and utility primitives
  * without any DOM dependencies.
  *
  * Usage:
@@ -129,14 +129,6 @@ export {
   type TremoloParams,
   type VoiceLogger,
 } from './audio/index.js';
-
-// Canvas module
-export {
-  renderPitchGrid,
-  renderDrumGrid,
-  type PitchGridRenderOptions,
-  type DrumGridRenderOptions,
-} from './canvas/index.js';
 
 // Transport module
 export {

@@ -571,6 +571,28 @@ function isPointNearTripletStamp(
     geometry.ellipses.some(ellipse => distanceToEllipse(canvasX, canvasY, ellipse) <= threshold);
 }
 
+/** Select musical contents across the entire pitch grid, independent of the viewport. */
+export function selectAllPitchGridNotes(state: LassoState, renderOptions: RendererOptions): LassoSelection {
+  const selectedItems: SelectedItem[] = [];
+  state.placedNotes.forEach((note, index) => {
+    if (!note.isDrum) selectedItems.push({ type: 'note', id: buildNoteSelectionId(note), data: note, index });
+  });
+  state.sixteenthStampPlacements.forEach((stamp, index) => {
+    selectedItems.push({ type: 'sixteenthStamp', id: buildSixteenthStampSelectionId(stamp), data: stamp, index });
+  });
+  state.sixteenthThreeStampPlacements.forEach((stamp, index) => {
+    selectedItems.push({ type: 'sixteenthThreeStamp', id: buildSixteenthThreeStampSelectionId(stamp), data: stamp, index });
+  });
+  state.tripletStampPlacements.forEach((stamp, index) => {
+    selectedItems.push({ type: 'tripletStamp', id: buildTripletStampSelectionId(stamp, state), data: stamp, index });
+  });
+  return {
+    selectedItems,
+    convexHull: computeConvexHullForSelectedItems({ selectedItems, state, renderOptions }),
+    isActive: selectedItems.length > 0
+  };
+}
+
 export function computeLassoSelection(params: {
   lassoPath: Array<{ x: number; y: number }>;
   state: LassoState;

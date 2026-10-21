@@ -3,6 +3,7 @@
   import { overdubState } from '@mlt/singing-trainer-core/stores/overdubState.svelte.js';
   import { overdubExerciseState } from '@mlt/singing-trainer-core/stores/overdubExerciseState.svelte.js';
   import { highwayState } from '@mlt/singing-trainer-core/stores/highwayState.svelte.js';
+  import { resolveExerciseTonality } from '@mlt/singing-trainer-core/services/exerciseTonality.js';
 
   interface Props {
     compact?: boolean;
@@ -24,6 +25,9 @@
   const overdubIsActive = $derived(overdubExerciseState.state.isActive);
   const overdubExerciseName = $derived(overdubExerciseState.state.template?.name ?? '');
   const overdubExerciseId = $derived(overdubExerciseState.state.exerciseId);
+  const exerciseTonality = $derived(overdubIsActive
+    ? resolveExerciseTonality(overdubExerciseState.state.template, overdubExerciseState.state.exerciseBaseTransposeSemitones)
+    : null);
   const overdubVoices = $derived(overdubExerciseState.getVoiceList());
   const overdubActiveVoiceId = $derived(overdubExerciseState.state.activeVoiceId);
   const overdubExercisePlaying = $derived(overdubExerciseState.state.isPlaying);
@@ -129,7 +133,7 @@
       const phraseTempoBpm = Math.max(20, Math.round(project.phrase.tempoBpm));
       const denominator = Math.max(1, Math.round(project.phrase.timeSignatureDenominator));
       const beatDurationMs = (60_000 / phraseTempoBpm) * (4 / denominator);
-      const boundaryPaddingMs = overdubIsActive
+      const boundaryPaddingMs = overdubIsActive && !overdubExerciseState.state.template?.config.trimToScore
         ? Math.max(0, Math.round(beatDurationMs * 4))
         : 0;
       highwayState.fitTimelineToDuration(durationMs, {
@@ -647,6 +651,15 @@
 </script>
 
 <div class="overdub-panel" class:overdub-panel--compact={compact}>
+  <header class="overdub-header">
+    {#if overdubIsActive}
+      <button class="close-exercise-btn" onclick={handleOverdubReset}>Close</button>
+    {/if}
+    <h2 class="title">{overdubIsActive && overdubExerciseName ? overdubExerciseName : 'Overdub Builder'}</h2>
+    {#if exerciseTonality}
+      <span class="tonic-reference" aria-live="polite">Tonic (1): {exerciseTonality.tonic} · red line</span>
+    {/if}
+  </header>
   {#if warning}
     <div class="warning">{warning}</div>
   {/if}
@@ -786,19 +799,6 @@
     {/if}
 
     <section class="controls-section" aria-label="Recording controls">
-      <div class="overdub-header">
-        <span class="title">
-          Overdub Builder
-          {#if overdubIsActive && overdubExerciseName}
-            {' - '}
-            {overdubExerciseName}
-          {/if}
-        </span>
-        {#if overdubIsActive}
-          <button class="mini-btn" onclick={handleOverdubReset} aria-label="Close exercise">&#10005;</button>
-        {/if}
-      </div>
-
       <div class="controls-layout">
         <div class="controls-column controls-column--timing">
           <div class="field">
@@ -911,7 +911,7 @@
         <div class="controls-column controls-column--timeline">
           <div class="field timeline-field">
             <span>Timeline View</span>
-            <div class="timeline-zoom-row" role="group" aria-label="Timeline zoom controls">
+            <div class="timeline-zoom-row" class:timeline-zoom-row--exercise={overdubIsActive} role="group" aria-label="Timeline zoom controls">
               <button
                 type="button"
                 class="timeline-btn"
@@ -947,6 +947,13 @@
               >
                 Full
               </button>
+              {#if overdubIsActive}
+                <button type="button" class="timeline-btn" class:timeline-btn--active={highwayState.state.squareGridEnabled}
+                  aria-label="Student Notation 1:1 grid" aria-pressed={highwayState.state.squareGridEnabled}
+                  title="Match quarter-note width to note height"
+                  disabled={!timelineViewportControlsEnabled}
+                  onclick={() => highwayState.setSquareGridEnabled(true)}>1:1</button>
+              {/if}
             </div>
             <div class="timeline-scroll-row">
               <input
@@ -1028,13 +1035,32 @@
 
   .overdub-header {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: 10px;
+    grid-column: 1 / -1;
   }
 
   .title {
+    margin: 0;
     font-weight: 700;
+    color: var(--color-text);
+    font-size: 1.2rem;
+  }
+
+  .close-exercise-btn {
+    padding: 7px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-panel);
+    color: var(--color-text);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .tonic-reference {
+    padding: 4px 8px;
+    border-left: 3px solid #e64a4a;
     color: var(--color-text);
     font-size: var(--font-size-sm);
   }
@@ -1312,6 +1338,7 @@
     border-radius: 10px;
     padding: 8px;
     background: var(--color-panel);
+    container-type: inline-size;
   }
 
   .controls-layout {
@@ -1401,6 +1428,21 @@
     align-items: center;
   }
 
+  .timeline-zoom-row--exercise {
+    grid-template-columns: auto minmax(60px, 1fr) auto auto auto;
+  }
+
+  @container (max-width: 640px) {
+    .controls-layout,
+    .overdub-panel--compact .controls-layout {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .controls-column--timeline,
+    .controls-column--actions { grid-column: 1 / -1; }
+    .count-in-buttons,
+    .mode-buttons { flex-wrap: wrap; }
+  }
+
   .timeline-btn {
     border: 1px solid var(--color-border);
     border-radius: 6px;
@@ -1419,6 +1461,8 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
+
+  .timeline-btn--active { border-color: var(--color-primary); color: var(--color-text); background: var(--color-bg-light); }
 
   .timeline-btn--fit {
     min-width: 46px;
@@ -1459,8 +1503,7 @@
 
   .record-btn,
   .play-btn,
-  .keep-btn,
-  .mini-btn {
+  .keep-btn {
     border: none;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -1490,14 +1533,6 @@
 
   .keep-btn {
     background: #2a6fbc;
-  }
-
-  .mini-btn {
-    padding: 5px 8px;
-    font-size: 11px;
-    color: var(--color-text);
-    background: var(--color-control);
-    border: 1px solid var(--color-border);
   }
 
   button:disabled {

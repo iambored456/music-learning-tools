@@ -12,6 +12,7 @@ import store from '@state/initStore.ts';
 import { getPlacedTonicSigns, getMacrobeatInfo } from '@state/selectors.ts';
 import SynthEngine from './initAudio.ts';
 import domCache from './domCache.ts';
+import scrollSyncService from './scrollSyncService.ts';
 import logger from '@utils/logger.ts';
 import DrumPlayheadRenderer from '@components/canvas/drumGrid/drumPlayheadRenderer.ts';
 import { getLogicalCanvasWidth, getLogicalCanvasHeight } from '@utils/canvasDimensions.ts';
@@ -170,6 +171,10 @@ const TransportService = {
 
       // Visual callbacks - all DOM updates go here
       visualCallbacks: {
+        updatePlayheadPosition: (x) => {
+          const canvas = getPlayheadCanvas();
+          if (canvas) scrollSyncService.followPlayhead(x, canvas);
+        },
         preparePlayback: () => new Promise<void>((resolve) => {
           // Yield past a paint before building a potentially large schedule.
           // The timeout also permits startup in background tabs without rAF.

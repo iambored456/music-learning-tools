@@ -14,10 +14,14 @@ const PREFERENCES_KEY = 'singingTrainerPreferences';
 /** Preferences structure */
 export interface SingingTrainerPreferences {
   speakingPitch: SpeakingPitchCalibration | null;
+  studentNotationNotes: boolean;
+  exerciseNotationNotes: Record<string, boolean>;
 }
 
 /** Default preferences */
 const DEFAULT_PREFERENCES: SingingTrainerPreferences = {
+  studentNotationNotes: false,
+  exerciseNotationNotes: {},
   speakingPitch: {
     speakingPitchMidi: 60,
     speakingPitchLastCalibratedAt: '',
@@ -63,6 +67,12 @@ function validatePreferences(data: unknown): SingingTrainerPreferences {
 
   const prefs = data as Record<string, unknown>;
   const result: SingingTrainerPreferences = { ...DEFAULT_PREFERENCES };
+  result.studentNotationNotes = prefs.studentNotationNotes === true;
+  if (prefs.exerciseNotationNotes && typeof prefs.exerciseNotationNotes === 'object') {
+    result.exerciseNotationNotes = Object.fromEntries(
+      Object.entries(prefs.exerciseNotationNotes).filter(([, value]) => typeof value === 'boolean'),
+    );
+  }
 
   // Validate speaking pitch
   if (prefs.speakingPitch && typeof prefs.speakingPitch === 'object') {
@@ -116,6 +126,21 @@ function createPreferencesStore() {
     /** Get the full state (for debugging) */
     get state() {
       return state;
+    },
+
+    setStudentNotationNotes(enabled: boolean): boolean {
+      state = { ...state, studentNotationNotes: enabled };
+      return savePreferences(state);
+    },
+
+    getStudentNotationNotes(exerciseId: string | null, preferredDefault?: boolean): boolean {
+      const override = exerciseId ? state.exerciseNotationNotes[exerciseId] : undefined;
+      return typeof override === 'boolean' ? override : (preferredDefault ?? state.studentNotationNotes);
+    },
+
+    setExerciseNotationNotes(exerciseId: string, enabled: boolean): boolean {
+      state = { ...state, exerciseNotationNotes: { ...state.exerciseNotationNotes, [exerciseId]: enabled } };
+      return savePreferences(state);
     },
 
     /** Get the speaking pitch MIDI value (null if not calibrated) */

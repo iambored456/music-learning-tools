@@ -2,6 +2,11 @@
 import { getColumnX, getRowY, getCurrentCoordinateMapping } from './rendererUtils.ts';
 import TonalService from '@services/tonalService.ts';
 import store from '@state/initStore.ts';
+import {
+  createNotationNoteGeometry, createEllipseNoteGeometry, drawNoteGlyph,
+  getNoteTailYOffset, hasVisibleNoteTail as hasVisibleTail, getNoteLabelCategory,
+  getNoteLabelFontSize, type NoteGeometry,
+} from '@mlt/ui-components/canvas/primitives';
 import { diamondPath } from '@components/rhythm/glyphs/sixteenthGlyphs.ts';
 import { getNoteEndColumn } from '@mlt/types';
 import columnMapService from '@services/columnMapService.ts';
@@ -10,8 +15,6 @@ import { buildCanvasFont, getSemanticTextColor } from '@services/typographyServi
 import { resolvePitchLabelTextLayout } from './pitchLabelTextRendering.ts';
 import type { AppState, CanvasSpaceColumn, ModulationMarker, PlacedNote, TonicSign } from '@mlt/types';
 import {
-  OVAL_NOTE_FONT_RATIO,
-  FILLED_NOTE_FONT_RATIO,
   MIN_FONT_SIZE,
   MIN_STROKE_WIDTH_THICK,
   STROKE_WIDTH_RATIO,
@@ -20,8 +23,6 @@ import {
   SHADOW_BLUR_RADIUS
 } from '@/core/constants.ts';
 
-const SHARP_SYMBOL = '\u266F';
-const FLAT_SYMBOL = '\u266D';
 const DEGREE_SEPARATOR = '/';
 const PITCH_LABEL_MAX_WIDTH_RATIO = 0.82;
 const PITCH_LABEL_MAX_HEIGHT_RATIO = 0.78;
@@ -38,13 +39,6 @@ interface ScaleDegreeResult {
   label: string | null;
   isAccidental: boolean;
 }
-
-interface DegreeFontResult {
-  multiplier: number;
-  category: 'natural' | 'single-accidental' | 'both-accidentals';
-}
-
-type NoteLabelCategory = DegreeFontResult['category'];
 
 interface AnimationEffectsManager {
   shouldAnimateNote(note: PlacedNote): boolean;
@@ -64,60 +58,6 @@ const getAnimationEffectsManager = (): AnimationEffectsManager | undefined => {
 const getPlacedNotes = (): PlacedNote[] => store.state.placedNotes;
 
 let _invalidDimensionWarningShown = false;
-
-const getUuidTimestamp = (value?: string): number => {
-  const timestampSegment = value?.split('-')[1];
-  return Number.parseInt(timestampSegment ?? '0', 10);
-};
-
-/**
- * Determines if a note has a visible tail (duration extends beyond the base note shape).
- *
- * Note duration model:
- * - A note occupies columns from startColumnIndex to endColumnIndex (inclusive)
- * - Circle notes have a 2-column baseline: startColumnIndex and startColumnIndex + 1
- * - Oval notes have a 1-column baseline: startColumnIndex only
- * - A tail is visible when endColumnIndex extends beyond the baseline
- *
- * @returns true if the note's duration extends beyond its baseline shape
- */
-function hasVisibleTail(note: PlacedNote): boolean {
-  if (!note || typeof note.startColumnIndex !== 'number' || typeof note.endColumnIndex !== 'number') {
-    return false;
-  }
-  const baselineEnd = note.shape === 'circle'
-    ? note.startColumnIndex + 1
-    : note.startColumnIndex;
-  return note.endColumnIndex > baselineEnd;
-}
-
-function calculateColorOffset(note: PlacedNote, allNotes: PlacedNote[], options: PitchRendererOptions): number {
-  const { cellWidth } = options;
-  const offsetAmount = cellWidth * 0.25;
-
-  const noteUuid = note.uuid;
-  if (!noteUuid) {
-    return 0;
-  }
-
-  const notesAtSamePosition = allNotes.filter(otherNote =>
-    !otherNote.isDrum &&
-    otherNote.row === note.row &&
-    otherNote.startColumnIndex === note.startColumnIndex &&
-    otherNote.uuid &&
-    otherNote.uuid !== noteUuid
-  );
-
-  if (notesAtSamePosition.length === 0) {
-    return 0;
-  }
-
-  const allNotesAtPosition = [note, ...notesAtSamePosition];
-  allNotesAtPosition.sort((a, b) => getUuidTimestamp(a.uuid) - getUuidTimestamp(b.uuid));
-
-  const currentNoteIndex = allNotesAtPosition.findIndex(n => n.uuid === noteUuid);
-  return currentNoteIndex * offsetAmount;
-}
 
 function calculateVibratoYOffset(note: PlacedNote, options: PitchRendererOptions): number {
   const { cellHeight } = options;
@@ -202,256 +142,36 @@ function drawDelayGhostNotes(
 
     // Draw ghost note outline
     ctx.beginPath();
-    if (note.shape !== 'diamond') ctx.ellipse(echoX, centerY, echoRx, echoRy, 0, 0, 2 * Math.PI);
+    const geometry = createEllipseNoteGeometry(echoX, centerY, echoRx, echoRy, 0);
+    if (!geometry) { ctx.restore(); return; }
     ctx.strokeStyle = note.color;
     ctx.lineWidth = Math.max(0.5, echoRx * 0.1);
     ctx.setLineDash([2, 2]); // Dashed line for ghost effect
     if (note.shape === 'diamond') ctx.stroke(new Path2D(diamondPath(echoX, centerY, echoRx * 2, echoRy * 2)));
-    else ctx.stroke();
+    else { ctx.ellipse(echoX, centerY, echoRx, echoRy, 0, 0, 2 * Math.PI); ctx.stroke(); }
 
     ctx.restore();
   });
 }
 
-function drawEnvelopeFill(
-  ctx: CanvasRenderingContext2D,
-  note: PlacedNote,
-  centerX: number,
-  centerY: number,
-  rx: number,
-  ry: number
-): void {
-  const animationManager = getAnimationEffectsManager();
-  if (!animationManager?.shouldFillNote?.(note)) {
-    return;
-  }
-
-  const fillLevel = animationManager.getFillLevel?.(note) ?? 0;
-  if (fillLevel <= 0) {return;}
-
-  ctx.save();
-
-  const innerRatio = 1 - fillLevel;
-  const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(rx, ry));
-  gradient.addColorStop(0, 'transparent');
-  gradient.addColorStop(Math.max(0, innerRatio - 0.05), 'transparent');
-  gradient.addColorStop(innerRatio, `${note.color}1F`);
-  gradient.addColorStop(1, `${note.color}BF`);
-
-  ctx.beginPath();
-  if (note.shape === 'diamond') {
-    ctx.clip(new Path2D(diamondPath(centerX, centerY, rx * 2, ry * 2)));
-  } else {
-    ctx.ellipse(centerX, centerY, rx, ry, 0, 0, 2 * Math.PI);
-    ctx.clip();
-  }
-  ctx.fillStyle = gradient;
-  ctx.fillRect(centerX - rx - 10, centerY - ry - 10, (rx + 10) * 2, (ry + 10) * 2);
-
-  ctx.restore();
+/** Audio effects remain an adapter around the shared glyph renderer. */
+function getFillLevel(note: PlacedNote): number {
+  const manager = getAnimationEffectsManager();
+  return manager?.shouldFillNote?.(note) ? manager.getFillLevel(note) : 0;
 }
 
-function drawEnvelopeFillStadium(
-  ctx: CanvasRenderingContext2D,
-  note: PlacedNote,
-  leftCenterX: number,
-  rightCenterX: number,
-  centerY: number,
-  ry: number
-): void {
-  const animationManager = getAnimationEffectsManager();
-  if (!animationManager?.shouldFillNote?.(note)) {
-    return;
-  }
-
-  const fillLevel = animationManager.getFillLevel?.(note) ?? 0;
-  if (fillLevel <= 0) {return;}
-
-  ctx.save();
-
-  // Create the stadium clip path
-  ctx.beginPath();
-  ctx.arc(leftCenterX, centerY, ry, Math.PI / 2, -Math.PI / 2, false);
-  ctx.lineTo(rightCenterX, centerY - ry);
-  ctx.arc(rightCenterX, centerY, ry, -Math.PI / 2, Math.PI / 2, false);
-  ctx.lineTo(leftCenterX, centerY + ry);
-  ctx.closePath();
-  ctx.clip();
-
-  // Use a radial gradient centered in the middle of the stadium
-  const stadiumCenterX = (leftCenterX + rightCenterX) / 2;
-  const stadiumWidth = rightCenterX - leftCenterX;
-  const gradientRadius = Math.max(stadiumWidth / 2 + ry, ry);
-
-  const innerRatio = 1 - fillLevel;
-  const gradient = ctx.createRadialGradient(stadiumCenterX, centerY, 0, stadiumCenterX, centerY, gradientRadius);
-  gradient.addColorStop(0, 'transparent');
-  gradient.addColorStop(Math.max(0, innerRatio - 0.05), 'transparent');
-  gradient.addColorStop(innerRatio, `${note.color}1F`);
-  gradient.addColorStop(1, `${note.color}BF`);
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(leftCenterX - ry - 10, centerY - ry - 10, stadiumWidth + (ry + 10) * 2, (ry + 10) * 2);
-
-  ctx.restore();
-}
-
-/**
- * Draws a stadium/capsule shape for long notes (style 2).
- *
- * A stadium is a rounded rectangle - essentially two semicircles connected by parallel lines.
- * This creates a smooth, continuous shape that visually represents the note's full duration.
- *
- * @param leftCenterX - X position of the left semicircle center (note start position)
- * @param rightCenterX - X position of the right semicircle center (note end position)
- * @param centerY - Y position (vertical center of the stadium)
- * @param ry - Radius of the semicircles (half the note height)
- * @param strokeWidth - Width of the stadium outline
- */
-function drawStadiumShape(
-  ctx: CanvasRenderingContext2D,
-  note: PlacedNote,
-  options: PitchRendererOptions,
-  leftCenterX: number,
-  rightCenterX: number,
-  centerY: number,
-  ry: number,
-  strokeWidth: number
-): void {
-  // Draw envelope fill first (behind the stroke)
-  drawEnvelopeFillStadium(ctx, note, leftCenterX, rightCenterX, centerY, ry);
-
-  // Draw the stadium stroke path
-  // Path construction creates a closed shape:
-  // 1. Left semicircle (bottom → top)
-  // 2. Top straight edge (left → right)
-  // 3. Right semicircle (top → bottom)
-  // 4. Bottom straight edge (right → left, implicit via closePath)
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(leftCenterX, centerY, ry, Math.PI / 2, -Math.PI / 2, false);
-  ctx.lineTo(rightCenterX, centerY - ry);
-  ctx.arc(rightCenterX, centerY, ry, -Math.PI / 2, Math.PI / 2, false);
-  ctx.lineTo(leftCenterX, centerY + ry);
-  ctx.closePath();
-
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = strokeWidth;
-  ctx.shadowColor = note.color;
-  ctx.shadowBlur = SHADOW_BLUR_RADIUS;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-  ctx.restore();
-
-  if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
-    drawNoteLabelText(ctx, note, options, leftCenterX, centerY, ry, ry);
-  }
-}
-
-function calculateTailYOffset(note: PlacedNote, allNotes: PlacedNote[], options: PitchRendererOptions): number {
-  const { cellHeight } = options;
-  const tailOffsetAmount = (cellHeight / 2) * 0.12;
-
-  const noteUuid = note.uuid;
-  if (!noteUuid) {
-    return 0;
-  }
-
-  const notesWithTailsAtSamePosition = allNotes.filter(otherNote =>
-    !otherNote.isDrum &&
-    otherNote.row === note.row &&
-    otherNote.startColumnIndex === note.startColumnIndex &&
-    otherNote.uuid &&
-    otherNote.uuid !== noteUuid &&
-    hasVisibleTail(otherNote)
-  );
-
-  if (notesWithTailsAtSamePosition.length === 0) {
-    return 0;
-  }
-
-  const allNotesWithTailsAtPosition = [note, ...notesWithTailsAtSamePosition];
-  allNotesWithTailsAtPosition.sort((a, b) => getUuidTimestamp(a.uuid) - getUuidTimestamp(b.uuid));
-
-  const currentNoteIndex = allNotesWithTailsAtPosition.findIndex(n => n.uuid === noteUuid);
-  return currentNoteIndex * tailOffsetAmount;
+function drawAnimatedNote(ctx: CanvasRenderingContext2D, note: PlacedNote, options: PitchRendererOptions, geometry: NoteGeometry, path?: Path2D): void {
+  drawDelayGhostNotes(ctx, note, options, geometry.centerX, geometry.centerY, geometry.radiusX, geometry.radiusY);
+  const glow = applyReverbGlow(ctx, note, options);
+  drawNoteGlyph(ctx, geometry, {
+    color: note.color, fillLevel: getFillLevel(note), path,
+    shadowBlur: SHADOW_BLUR_RADIUS + (glow.shouldApply ? glow.blur : 0),
+    shadowOffsetX: glow.shouldApply ? glow.spread : 0,
+  });
 }
 
 function getScaleDegreeLabel(note: PlacedNote, options: PitchRendererOptions): ScaleDegreeResult {
   return TonalService.getDegreeLabelForNote(note, options as AppState);
-}
-
-function getDegreeFontMultiplier(label: string | null): DegreeFontResult {
-  if (!label) {return { multiplier: 1.0, category: 'natural' };
-  }
-
-  const hasFlat = label.includes(FLAT_SYMBOL);
-  const hasSharp = label.includes(SHARP_SYMBOL);
-  const hasBothAccidentals = label.includes(DEGREE_SEPARATOR);
-
-  if (!hasFlat && !hasSharp) {
-    return { multiplier: 1.0, category: 'natural' };
-  }
-  if (hasBothAccidentals) {
-    return { multiplier: 0.75, category: 'both-accidentals' };
-  }
-  return { multiplier: 0.88, category: 'single-accidental' };
-}
-
-function getPitchFontCategory(label: string | null): NoteLabelCategory {
-  if (!label) {
-    return 'natural';
-  }
-  if (label.includes(DEGREE_SEPARATOR)) {
-    return 'both-accidentals';
-  }
-  if (label.includes('#') || label.includes('b')) {
-    return 'single-accidental';
-  }
-  return 'natural';
-}
-
-function getPitchLabelFontSize(note: PlacedNote, noteWidth: number, category: NoteLabelCategory): number {
-  if (note.shape === 'circle') {
-    const circleBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        return circleBaseSize * 0.95;
-      case 'single-accidental':
-        return circleBaseSize * 0.72;
-      case 'both-accidentals':
-        return circleBaseSize * 0.36;
-      default:
-        return circleBaseSize;
-    }
-  }
-
-  if (note.shape === 'diamond') {
-    const diamondBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        return diamondBaseSize;
-      case 'single-accidental':
-        return diamondBaseSize * 0.78;
-      case 'both-accidentals':
-        return diamondBaseSize * 0.66;
-      default:
-        return diamondBaseSize;
-    }
-  }
-
-  const ovalBaseSize = noteWidth * 2 * OVAL_NOTE_FONT_RATIO;
-  switch (category) {
-    case 'natural':
-      return ovalBaseSize * 1.35;
-    case 'single-accidental':
-      return ovalBaseSize * 1.05;
-    case 'both-accidentals':
-      return ovalBaseSize * 0.95;
-    default:
-      return ovalBaseSize;
-  }
 }
 
 export function drawScaleDegreeText(
@@ -467,55 +187,8 @@ export function drawScaleDegreeText(
   if (!noteLabel) {return;
   }
 
-  const { multiplier: contentMultiplier, category } = getDegreeFontMultiplier(noteLabel);
-  let baseFontSize: number;
-
-  if (note.shape === 'circle') {
-    const circleBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        baseFontSize = circleBaseSize;
-        break;
-      case 'single-accidental':
-        baseFontSize = circleBaseSize * 0.8;
-        break;
-      case 'both-accidentals':
-        baseFontSize = circleBaseSize * 0.4;
-        break;
-      default:
-        baseFontSize = circleBaseSize * contentMultiplier;
-    }
-  } else if (note.shape === 'diamond') {
-    const diamondBaseSize = noteWidth * 2 * FILLED_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        baseFontSize = diamondBaseSize * 1.05;
-        break;
-      case 'single-accidental':
-        baseFontSize = diamondBaseSize * 0.84;
-        break;
-      case 'both-accidentals':
-        baseFontSize = diamondBaseSize * 0.64;
-        break;
-      default:
-        baseFontSize = diamondBaseSize * contentMultiplier;
-    }
-  } else {
-    const ovalBaseSize = noteWidth * 2 * OVAL_NOTE_FONT_RATIO;
-    switch (category) {
-      case 'natural':
-        baseFontSize = ovalBaseSize * 1.5;
-        break;
-      case 'single-accidental':
-        baseFontSize = ovalBaseSize * 1.2;
-        break;
-      case 'both-accidentals':
-        baseFontSize = ovalBaseSize;
-        break;
-      default:
-        baseFontSize = ovalBaseSize * contentMultiplier;
-    }
-  }
+  const category = getNoteLabelCategory(noteLabel);
+  const baseFontSize = getNoteLabelFontSize(note.shape, noteWidth, category);
 
   const fontSize = baseFontSize;
   if (fontSize < MIN_FONT_SIZE) {return;
@@ -557,8 +230,8 @@ export function drawPitchClassText(
     return;
   }
 
-  const category = getPitchFontCategory(noteLabel);
-  const preferredFontSize = getPitchLabelFontSize(note, noteWidth, category);
+  const category = getNoteLabelCategory(noteLabel, 'pitch');
+  const preferredFontSize = getNoteLabelFontSize(note.shape, noteWidth, category, 'pitch');
   const usesStackedEnharmonics = (note.shape === 'oval' || note.shape === 'diamond')
     && category === 'both-accidentals'
     && noteLabel.includes(DEGREE_SEPARATOR);
@@ -661,85 +334,32 @@ export function drawTwoColumnOvalNote(
     return;
   }
 
-  const xOffset = calculateColorOffset(note, getPlacedNotes(), options);
-  const centerX = xStart + actualCellWidth + xOffset;
-  const dynamicStrokeWidth = Math.max(MIN_STROKE_WIDTH_THICK, actualCellWidth * STROKE_WIDTH_RATIO);
-  const ry = (cellHeight / 2) - (dynamicStrokeWidth / 2);
-
-  // Long note rendering: Two styles available for notes with extended duration
-  const hasTail = hasVisibleTail(note);
+  const centerX = xStart + actualCellWidth;
   const longNoteStyle = store.state.longNoteStyle || 'style2';
-
-  if (hasTail && longNoteStyle === 'style2') {
-    // Style 2: Stadium/capsule shape - a continuous rounded rectangle from start to end
-    //
-    // Stadium shape construction:
-    // - Left semicircle centered at the note's starting circle position (centerX)
-    // - Right semicircle centered at the beginning of endColumnIndex column
-    // - This ensures the rightmost edge of the semicircle aligns with the note's
-    //   last duration column, making the shape end exactly at endColumnIndex
-    // - Horizontal lines connect the top and bottom of both semicircles
-    //
-    const leftCenterX = centerX;
-    const rightCenterX = getColumnX(note.endColumnIndex, options);
-
-    if (!hasRenderableDimensions(rightCenterX - leftCenterX, ry)) {
-      return;
+  const geometry = createNotationNoteGeometry(note, {
+    x: xStart, y, columnWidth: actualCellWidth, cellHeight,
+    endCapX: getColumnX(note.endColumnIndex, options), longNoteStyle,
+  });
+  if (!geometry) return;
+  if (geometry.kind === 'stadium') {
+    // Preserve the long-note label at its starting cap and its existing effects behavior.
+    drawNoteGlyph(ctx, geometry, { color: note.color, fillLevel: getFillLevel(note) });
+    if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
+      drawNoteLabelText(ctx, note, options, centerX, y, geometry.radiusY, geometry.radiusY);
     }
-
-    drawStadiumShape(ctx, note, options, leftCenterX, rightCenterX, y, ry, dynamicStrokeWidth);
     return;
   }
-
-  // Style 1: Tail line + circle
-  // - Draws a horizontal line from the circle center to endColumnIndex + 1
-  // - Then draws the circular note head on top
-  if (hasTail) {
-    const originalEndX = getColumnX(getNoteEndColumn(note), options);
-    const tailYOffset = calculateTailYOffset(note, getPlacedNotes(), options);
-    const tailY = y + tailYOffset;
-
+  if (hasVisibleTail(note)) {
+    const tailY = y + getNoteTailYOffset(note, getPlacedNotes(), cellHeight);
     ctx.beginPath();
     ctx.moveTo(centerX, tailY);
-    ctx.lineTo(originalEndX, tailY);
+    ctx.lineTo(getColumnX(getNoteEndColumn(note), options), tailY);
     ctx.strokeStyle = note.color;
     ctx.lineWidth = Math.max(MIN_TAIL_LINE_WIDTH, actualCellWidth * TAIL_LINE_WIDTH_RATIO);
     ctx.stroke();
   }
-
-  const rx = actualCellWidth - (dynamicStrokeWidth / 2);
-
-  if (!hasRenderableDimensions(rx, ry)) {
-    return;
-  }
-
-  // Draw delay ghost notes first (behind the main note)
-  drawDelayGhostNotes(ctx, note, options, centerX, y, rx, ry);
-
-  ctx.save();
-  drawEnvelopeFill(ctx, note, centerX, y, rx, ry);
-
-  // Apply reverb glow effect
-  const reverbGlow = applyReverbGlow(ctx, note, options);
-  if (reverbGlow.shouldApply) {
-    ctx.shadowColor = note.color;
-    ctx.shadowBlur = SHADOW_BLUR_RADIUS + reverbGlow.blur;
-    ctx.shadowOffsetX = reverbGlow.spread; // Rightward glow
-  }
-
-  ctx.beginPath();
-  ctx.ellipse(centerX, y, rx, ry, 0, 0, 2 * Math.PI);
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = dynamicStrokeWidth;
-  if (!reverbGlow.shouldApply) {
-    ctx.shadowColor = note.color;
-    ctx.shadowBlur = SHADOW_BLUR_RADIUS;
-  }
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-  ctx.shadowOffsetX = 0;
-  ctx.restore();
+  const { radiusX: rx, radiusY: ry } = geometry;
+  drawAnimatedNote(ctx, note, options, geometry);
 
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
     drawNoteLabelText(ctx, note, options, centerX, y, rx, ry);
@@ -777,43 +397,13 @@ export function drawSingleColumnOvalNote(
     return;
   }
 
-  const xOffset = calculateColorOffset(note, getPlacedNotes(), options);
-  const dynamicStrokeWidth = Math.max(0.5, currentCellWidth * 0.15);
-  const cx = x + currentCellWidth / 2 + xOffset;
-  const rx = (currentCellWidth / 2) - (dynamicStrokeWidth / 2);
-  const ry = (cellHeight / 2) - (dynamicStrokeWidth / 2);
-
-  if (!hasRenderableDimensions(rx, ry)) {
-    return;
-  }
-
-  // Draw delay ghost notes first (behind the main note)
-  drawDelayGhostNotes(ctx, note, options, cx, y, rx, ry);
-
-  ctx.save();
-  drawEnvelopeFill(ctx, note, cx, y, rx, ry);
-
-  // Apply reverb glow effect
-  const reverbGlow = applyReverbGlow(ctx, note, options);
-  if (reverbGlow.shouldApply) {
-    ctx.shadowColor = note.color;
-    ctx.shadowBlur = SHADOW_BLUR_RADIUS + reverbGlow.blur;
-    ctx.shadowOffsetX = reverbGlow.spread; // Rightward glow
-  }
-
-  ctx.beginPath();
-  ctx.ellipse(cx, y, rx, ry, 0, 0, 2 * Math.PI);
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = dynamicStrokeWidth;
-  if (!reverbGlow.shouldApply) {
-    ctx.shadowColor = note.color;
-    ctx.shadowBlur = SHADOW_BLUR_RADIUS;
-  }
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-  ctx.shadowOffsetX = 0;
-  ctx.restore();
+  const geometry = createNotationNoteGeometry(note, {
+    x, y, columnWidth: currentCellWidth, cellHeight,
+    endCapX: getColumnX(note.endColumnIndex, options), longNoteStyle: store.state.longNoteStyle || 'style2',
+  });
+  if (!geometry) return;
+  const { centerX: cx, radiusX: rx, radiusY: ry } = geometry;
+  drawAnimatedNote(ctx, note, options, geometry);
 
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
     drawNoteLabelText(ctx, note, options, cx, y, rx, ry);
@@ -829,19 +419,12 @@ export function drawIndividualSixteenthNote(
   const rx = (width - lineWidth) / 2;
   const ry = (options.cellHeight - lineWidth) / 2;
   if (!hasRenderableDimensions(rx, ry)) return;
-  const cx = x + width / 2 + calculateColorOffset(note, getPlacedNotes(), options);
+  const cx = x + width / 2;
   const cy = getRowY(rowIndex, options) + calculateVibratoYOffset(note, options);
-  drawDelayGhostNotes(ctx, note, options, cx, cy, rx, ry);
-  ctx.save();
-  drawEnvelopeFill(ctx, note, cx, cy, rx, ry);
-  const glow = applyReverbGlow(ctx, note, options);
-  ctx.shadowColor = note.color;
-  ctx.shadowBlur = SHADOW_BLUR_RADIUS + (glow.shouldApply ? glow.blur : 0);
-  ctx.shadowOffsetX = glow.shouldApply ? glow.spread : 0;
-  ctx.strokeStyle = note.color;
-  ctx.lineWidth = lineWidth;
-  ctx.stroke(new Path2D(diamondPath(cx, cy, rx * 2, ry * 2)));
-  ctx.restore();
+  const geometry = createEllipseNoteGeometry(cx, cy, rx, ry, lineWidth);
+  if (!geometry) return;
+  drawAnimatedNote(ctx, note, options, geometry, new Path2D(diamondPath(cx, cy, rx * 2, ry * 2)));
+
   if (options.showPitchLabels || options.degreeDisplayMode !== 'off') {
     drawNoteLabelText(ctx, note, options, cx, cy, rx, ry);
   }

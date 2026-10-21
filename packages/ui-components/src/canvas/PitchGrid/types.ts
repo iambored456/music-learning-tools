@@ -163,7 +163,7 @@ export type PitchRowHighlightConfig = PitchRowHighlightEntry | PitchRowHighlight
  * A target note to display on the note highway.
  */
 export type TargetNoteKind = 'fixedPitch' | 'windowAnyPitch' | 'windowBand' | 'slideWindow';
-export type TargetNoteStyle = 'stadium' | 'gradient';
+export type TargetNoteStyle = 'stadium' | 'gradient' | 'student-notation';
 
 export type SlideDirection = 'up' | 'down';
 
@@ -201,6 +201,8 @@ export interface TargetNote {
  * Configuration for target note label sizing.
  */
 export interface TargetNoteLabelConfig {
+  /** Text color for labels inside Student Notation target notes. */
+  textColor?: string;
   /** Sizing mode for labels */
   mode?: 'auto' | 'fixed';
   /** Scale factor applied to auto sizing (default: 1) */

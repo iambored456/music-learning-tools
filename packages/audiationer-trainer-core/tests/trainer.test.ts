@@ -15,6 +15,85 @@ class AudioMock implements TrainerAudio {
   stop() { this.stops++; }
 }
 const instant = async (_ms: number, signal: AbortSignal) => { signal.throwIfAborted(); };
+
+test('Degrees and single Chords accept early answers on initial playback and replay without stale completion', async () => {
+  for (const mode of ['degrees', 'chords'] as const) {
+    for (const replay of [false, true]) {
+      for (const correct of [false, true]) {
+        const audio = new AudioMock();
+        let now = 1000;
+        const timers: number[] = [];
+        const session = new TrainerSession(audio, () => {}, () => 0, instant, () => now,
+          (_callback, ms) => { timers.push(ms); return () => {}; });
+        const settings = normalizeSettings({ mode, degrees: [0, 4], cadence: false, resolve: false,
+          reviewSkip: 'none', autoContinueCorrect: false, answerSeconds: 2 });
+        if (replay) await session.start(settings);
+        let release!: () => void;
+        let playing!: () => void;
+        const started = new Promise<void>(resolve => { playing = resolve; });
+        let questionSignal!: AbortSignal;
+        let block = true;
+        audio.notes = async (_midis, _seconds, signal) => {
+          if (!block) return;
+          block = false;
+          questionSignal = signal;
+          playing();
+          // Deliberately finish late even after cancellation to exercise the race.
+          await new Promise<void>(resolve => { release = resolve; });
+        };
+        const playback = replay ? session.repeat() : session.start(settings);
+        await started;
+        assert.equal(session.snapshot().phase, 'listening');
+        assert.equal(session.snapshot().answerDuringPlayback, true);
+        assert.equal(session.snapshot().answerDeadline, null);
+        await session.answer(1); // Disallowed degrees must not interrupt playback.
+        assert.equal(questionSignal.aborted, false);
+        now += 250;
+        await session.answer(correct ? 0 : 4);
+        const feedback = session.snapshot();
+        assert.equal(questionSignal.aborted, true);
+        assert.equal(feedback.phase, 'feedback');
+        assert.equal(feedback.answerDuringPlayback, false);
+        assert.equal(feedback.results.length, 1);
+        assert.equal(feedback.results[0].correct, correct);
+        assert.equal(feedback.results[0].seconds, 0.25);
+        release();
+        await playback;
+        assert.deepEqual(session.snapshot(), feedback);
+        assert.equal(timers.length, replay ? 1 : 0);
+        session.destroy();
+      }
+    }
+  }
+});
+
+test('early answers remain disabled during tonicization and sequence or quality playback', async () => {
+  for (const mode of ['degrees', 'chords', 'melody', 'chord-progressions', 'quality'] as const) {
+    const audio = new AudioMock();
+    let release!: () => void;
+    let playing!: () => void;
+    const started = new Promise<void>(resolve => { playing = resolve; });
+    let block = true;
+    audio.notes = async () => {
+      if (!block) return;
+      block = false;
+      playing();
+      await new Promise<void>(resolve => { release = resolve; });
+    };
+    const session = new TrainerSession(audio, () => {}, () => 0, instant);
+    const playback = session.start(normalizeSettings({ mode, degrees: [0], qualities: [0],
+      cadence: mode === 'degrees' || mode === 'chords', answerSeconds: 0 }));
+    await started;
+    assert.equal(session.snapshot().answerDuringPlayback, false);
+    await session.answer(0);
+    assert.deepEqual(session.snapshot().input, []);
+    assert.equal(session.snapshot().results.length, 0);
+    release(); await playback;
+    assert.equal(session.snapshot().phase, 'answering');
+    session.destroy();
+  }
+});
+
 function setup(extra = {}, initialRandom = 0) {
   const audio = new AudioMock();
   let state: SessionState;
@@ -219,7 +298,7 @@ test('stop while unlocking never starts a stale session', async () => {
 test('randomized key and octave determine both playback and the answer identity', async () => {
   const audio = new AudioMock();
   const session = new TrainerSession(audio, () => {}, () => 0.99, instant);
-  await session.start(normalizeSettings({ mode: 'degrees', randomTonic: true, randomOctave: true, degrees: [2], cadence: false, resolve: false, rounds: 1 }));
+  await session.start(normalizeSettings({ mode: 'degrees', randomTonic: true, octaveCount: 3, degrees: [2], cadence: false, resolve: false, rounds: 1 }));
   assert.equal(session.snapshot().tonic, 11);
   assert.equal(session.snapshot().octave, 5);
   assert.deepEqual(audio.played, [[85]]);

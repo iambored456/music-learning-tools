@@ -113,7 +113,7 @@ test('new level progress survives storage and stays separate by level and game m
   let progress = {};
   for (const mode of ['degrees', 'melody'] as const) {
     for (const preset of [...pathPresets(mode), ...challengePresets(mode)]) {
-      const settings = applyPreset(normalizeSettings({ mode, rounds: 1, answerSeconds: mode === 'degrees' ? 5 : 2 }), preset);
+      const settings = applyPreset(normalizeSettings({ mode, octaveCount: 2, rounds: 1, answerSeconds: mode === 'degrees' ? 5 : 2 }), preset);
       progress = recordProgress(progress, settings, preset.id, [{ expected: '1', received: '1', tonic: 0, octave: 4, correct: true, seconds: 1 }]);
     }
   }
@@ -147,7 +147,7 @@ test('custom preset storage round-trips safely and rejects malformed or unusable
 });
 
 test('progress requires a complete scored session and preserves highest earned difficulty', () => {
-  const settings = normalizeSettings({ mode: 'degrees', rounds: 5, answerSeconds: 5 });
+  const settings = normalizeSettings({ mode: 'degrees', octaveCount: 2, rounds: 5, answerSeconds: 5 });
   const results: Result[] = Array.from({ length: 5 }, (_, i) => ({ expected: '1', received: '1', tonic: 0, octave: 4, correct: i < 4, seconds: 1 }));
   const earned = recordProgress({}, settings, 'sun-1', results);
   assert.equal(earned['degrees:sun-1'], 2);
@@ -175,8 +175,8 @@ test('new Degrees and Melody levels play and accept notes outside the original m
       assert.ok(allowedDegrees(settings).includes(target));
       await t.session.start({ ...settings, degrees: [target] });
       assert.equal(t.session.snapshot().phase, 'answering');
-      assert.equal(t.session.snapshot().octave, 3);
-      assert.deepEqual(t.audio.played, Array.from({ length: mode === 'melody' ? 2 : 1 }, () => [48 + target]));
+      assert.equal(t.session.snapshot().octave, 4);
+      assert.deepEqual(t.audio.played, Array.from({ length: mode === 'melody' ? 2 : 1 }, () => [60 + target]));
       for (let i = 0; i < (mode === 'melody' ? 2 : 1); i++) await t.session.answer(target);
       assert.equal(t.session.snapshot().results[0].correct, true);
       if (mode === 'melody') await t.session.next();

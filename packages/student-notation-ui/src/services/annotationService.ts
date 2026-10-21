@@ -528,7 +528,9 @@ class AnnotationService {
         state: store.state,
         renderOptions: this.getRenderOptions()
       });
-      if (selectedItem) {
+      const isAlreadySelected = selectedItem && store.state.lassoSelection?.isActive
+        && store.state.lassoSelection.selectedItems.some(item => item.id === selectedItem.id);
+      if (selectedItem && !isAlreadySelected) {
         store.setPlaybackStartMacrobeat(null);
         const selectedItems = [selectedItem];
         store.state.lassoSelection = {

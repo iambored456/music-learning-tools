@@ -5,6 +5,39 @@ import { drawHorizontalLines, drawVerticalLines } from '../src/canvas/PitchGrid/
 import { drawLegend, type LegendRenderConfig } from '../src/canvas/PitchGrid/renderers/legend';
 import type { CoordinateUtils } from '../src/canvas/PitchGrid/types';
 
+test('the red tonic line, dashed third and shaded fifth rotate together with an arrangement tonic', () => {
+  const strokes: Array<{ y: number; color: string; dash: number[] }> = [];
+  const fills: Array<{ y: number; height: number }> = [];
+  let y = 0;
+  let dash: number[] = [];
+  const context = {
+    strokeStyle: '', fillStyle: '', lineWidth: 0,
+    beginPath() {}, moveTo(_x: number, rowY: number) { y = rowY; }, lineTo() {}, save() {}, restore() {},
+    setLineDash(value: number[]) { dash = value; },
+    stroke() { strokes.push({ y, color: this.strokeStyle, dash }); },
+    fillRect(_x: number, top: number, _width: number, height: number) { fills.push({ y: top + height / 2, height }); },
+  };
+  const rows = fullRowData.filter(row => typeof row.midi === 'number' && row.midi >= 48 && row.midi <= 84);
+  const coords = { getRowY: (row: number) => (row + 1) * 20 } as CoordinateUtils;
+  const midiAtY = (rowY: number) => rows[Math.round(rowY / 20) - 1]!.midi!;
+  for (const tonic of [4, 5, 11, 0]) {
+    strokes.length = 0;
+    fills.length = 0;
+    drawHorizontalLines(context as unknown as CanvasRenderingContext2D, {
+      fullRowData: rows, cellHeight: 40, viewportHeight: 800, viewportWidth: 200, colorMode: 'color',
+      horizontalGridReferencePitchClass: tonic, horizontalGridReferenceLineColor: '#ff0000',
+    }, coords, 0, rows.length - 1);
+    const redLines = strokes.filter(stroke => stroke.color === '#ff0000');
+    assert.ok(redLines.length >= 3);
+    assert.ok(redLines.every(stroke => midiAtY(stroke.y) % 12 === tonic));
+    const dashedLines = strokes.filter(stroke => stroke.dash.length > 0);
+    assert.ok(dashedLines.length >= 3);
+    assert.ok(dashedLines.every(stroke => midiAtY(stroke.y) % 12 === (tonic + 4) % 12));
+    assert.ok(fills.length >= 3);
+    assert.ok(fills.every(fill => midiAtY(fill.y) % 12 === (tonic + 7) % 12));
+  }
+});
+
 test('Student Notation grid preset uses fixed C/E strokes and G shading without changing default C color', () => {
   const strokes: Array<{ color: unknown; width: number; dash: number[] }> = [];
   const fills: unknown[] = [];

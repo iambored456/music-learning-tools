@@ -9,7 +9,10 @@ import {
 import {
   getHighwayTimeX,
   getHighwayNoteLayout,
+  type HighwayNoteLayout,
 } from '../highwayLayout.js';
+import { drawNoteHitBurst, getNoteHitBounds, isNoteHitBurstActive } from './noteHitBurst.js';
+import { drawJudgmentColumn, getJudgmentColumnWidth, getJudgmentHitAges } from './judgmentColumn.js';
 
 const backgroundImageCache = new Map<string, Promise<HTMLImageElement>>();
 
@@ -72,30 +75,6 @@ function loadBackgroundImage(dataUrl: string): Promise<HTMLImageElement> {
   return imagePromise;
 }
 
-function drawLaneMarker(
-  context: CanvasRenderingContext2D,
-  marker: 'underline' | 'overline' | 'none',
-  x: number,
-  y: number,
-  width: number,
-  thickness = 2,
-): void {
-  if (marker === 'none') {
-    return;
-  }
-
-  const lineY = marker === 'underline' ? y + 9 : y - 21;
-  context.save();
-  context.beginPath();
-  context.moveTo(x - (width / 2), lineY);
-  context.lineTo(x + (width / 2), lineY);
-  context.lineCap = 'round';
-  context.lineWidth = thickness;
-  context.strokeStyle = '#ffffff';
-  context.stroke();
-  context.restore();
-}
-
 function drawNoteLabelMarker(
   context: CanvasRenderingContext2D,
   marker: 'underline' | 'overline' | 'none',
@@ -138,34 +117,6 @@ function drawBackgroundCard(
   context.lineWidth = 1;
   context.strokeStyle = strokeStyle;
   context.stroke();
-}
-
-function drawPlaybackHighlightCell(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  if (width <= 0 || height <= 0) {
-    return;
-  }
-
-  context.save();
-  roundRectPath(context, x, y, width, height, 6);
-  context.fillStyle = 'rgba(255, 249, 225, 0.46)';
-  context.fill();
-
-  const inset = 1;
-  const innerWidth = Math.max(0, width - inset * 2);
-  const innerHeight = Math.max(0, height - inset * 2);
-  if (innerWidth > 0 && innerHeight > 0) {
-    context.globalAlpha = 0.82;
-    roundRectPath(context, x + inset, y + inset, innerWidth, innerHeight, 6);
-    context.fillStyle = 'rgba(255, 214, 83, 0.48)';
-    context.fill();
-  }
-  context.restore();
 }
 
 async function renderBackground(
@@ -372,6 +323,38 @@ function getNoteShapeStrokeWidth(note: TimedBoomwhackerNote, width: number, heig
   return Math.max(1, height * (6 / 80));
 }
 
+function drawHighwayNoteGlyph(
+  context: CanvasRenderingContext2D,
+  note: TimedBoomwhackerNote,
+  layout: HighwayNoteLayout,
+  isSustained: boolean,
+): void {
+  const { left, top, width, height } = layout;
+  context.save();
+  drawNoteShapePath(context, note, left, top, width, height, isSustained);
+  context.fillStyle = note.color;
+  context.fill();
+  context.lineWidth = getNoteShapeStrokeWidth(note, width, height);
+  context.strokeStyle = 'rgba(8, 17, 27, 0.22)';
+  context.stroke();
+
+  if (layout.showLabel) {
+    const labelX = left + width / 2;
+    const labelY = top + height * 0.62;
+    const fontSize = Math.round(layout.labelFontPx);
+    context.textAlign = 'center';
+    context.fillStyle = '#ffffff';
+    context.font = `800 ${fontSize}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
+    context.lineJoin = 'round';
+    context.strokeStyle = '#000000';
+    context.lineWidth = 2.5;
+    context.strokeText(note.label, labelX, labelY);
+    context.fillText(note.label, labelX, labelY);
+    drawNoteLabelMarker(context, note.marker, labelX, labelY, fontSize);
+  }
+  context.restore();
+}
+
 export function getExportStartTimeSec(
   _project: BoomwhackerVideoBuilderProject,
   timing: DerivedTimingModel,
@@ -428,8 +411,7 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
   const laneCount = BOOMWHACKER_LANES.length;
   const highwayTop = Math.round(height * 0.22);
   const laneHeight = Math.max(52, Math.floor((height * 0.64) / laneCount));
-  const labelColumnWidth = Math.round(width * 0.11);
-  const viewportX = 72 + labelColumnWidth + 22;
+  const viewportX = 72;
   const viewportY = highwayTop;
   const viewportWidth = width - viewportX - 72;
   const viewportHeight = laneHeight * laneCount;
@@ -453,28 +435,6 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
   for (const lane of BOOMWHACKER_LANES) {
     const visualRow = getVisualLaneRow(lane.row, laneCount);
     const laneY = viewportY + visualRow * laneHeight;
-    drawBackgroundCard(
-      context,
-      72,
-      laneY,
-      labelColumnWidth,
-      laneHeight - 6,
-      'rgba(12, 18, 26, 0.88)',
-      'rgba(121, 187, 255, 0.16)',
-    );
-
-    const labelX = 72 + (labelColumnWidth / 2);
-    const labelY = laneY + (laneHeight * 0.58);
-    context.textAlign = 'center';
-    context.fillStyle = '#edf4ff';
-    context.font = `700 ${Math.round(laneHeight * 0.34)}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
-    context.save();
-    context.shadowColor = 'rgba(0, 0, 0, 0.24)';
-    context.shadowBlur = 10;
-    context.fillText(lane.label, labelX, labelY);
-    context.restore();
-    drawLaneMarker(context, lane.marker, labelX, labelY, 22);
-
     context.fillStyle = visualRow % 2 === 0 ? 'rgba(121, 187, 255, 0.08)' : 'rgba(255, 255, 255, 0.035)';
     context.fillRect(viewportX, laneY, viewportWidth, laneHeight);
     context.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -517,67 +477,56 @@ export async function renderExportFrame(params: ExportFrameRenderParams): Promis
     context.restore();
   }
 
+  drawJudgmentColumn(context, {
+    left: hitLineX,
+    top: viewportY,
+    width: getJudgmentColumnWidth(timing, songTimeSec, pixelsPerSecond),
+    laneHeight,
+    lanes: BOOMWHACKER_LANES,
+    hitAges: getJudgmentHitAges(timedNotes, songTimeSec),
+  });
+
   for (const note of timedNotes) {
+    const hasHit = note.startTimeSec <= songTimeSec;
+    if (hasHit && !isNoteHitBurstActive(note.startTimeSec, songTimeSec)) {
+      continue;
+    }
     const visualRow = getVisualLaneRow(note.row, laneCount);
     const noteStartX = getHighwayTimeX(note.startTimeSec, songTimeSec, hitLineX, pixelsPerSecond);
     const noteEndX = getHighwayTimeX(note.endTimeSec, songTimeSec, hitLineX, pixelsPerSecond);
-    const noteIsSustainedCircle = isSustainedCircleNote(note, timing);
-    const noteLayout = getHighwayNoteLayout({
+    const isSustained = isSustainedCircleNote(note, timing);
+    const layout = getHighwayNoteLayout({
       note,
       startX: noteStartX,
       endX: noteEndX,
       visualRow,
       laneHeightPx: laneHeight,
-      isSustained: noteIsSustainedCircle,
+      isSustained,
     });
-    const noteLeft = noteLayout.left;
-    const noteWidth = noteLayout.width;
-    const noteY = viewportY + noteLayout.top;
-    const noteHeight = noteLayout.height;
-    if (noteLeft > viewportX + viewportWidth + 10 || noteLeft + noteWidth < viewportX - 10) {
+    layout.top += viewportY;
+    if (noteStartX > viewportX + viewportWidth + 10 || noteEndX < viewportX - 10) {
+      continue;
+    }
+    if (!hasHit) {
+      drawHighwayNoteGlyph(context, note, layout, isSustained);
       continue;
     }
 
-    const noteIsCrossing = note.startTimeSec <= songTimeSec && note.endTimeSec >= songTimeSec;
-    drawNoteShapePath(context, note, noteLeft, noteY, noteWidth, noteHeight, noteIsSustainedCircle);
     context.save();
-    context.fillStyle = note.color;
-    context.fill();
-    const noteStrokeWidth = getNoteShapeStrokeWidth(note, noteWidth, noteHeight);
-    context.lineWidth = noteIsCrossing ? Math.max(3, noteStrokeWidth) : noteStrokeWidth;
-    context.strokeStyle = noteIsCrossing ? 'rgba(121, 187, 255, 0.9)' : 'rgba(8, 17, 27, 0.22)';
-    context.stroke();
+    context.beginPath();
+    context.rect(viewportX, viewportY, viewportWidth, viewportHeight);
+    context.clip();
+    drawNoteHitBurst(context, {
+      noteId: note.id,
+      ageSec: songTimeSec - note.startTimeSec,
+      bounds: getNoteHitBounds(noteStartX, noteEndX, viewportY + visualRow * laneHeight, laneHeight),
+      layout,
+      drawGlyph: () => drawHighwayNoteGlyph(context, note, layout, isSustained),
+    });
     context.restore();
-
-    if (noteLayout.showLabel) {
-      const noteLabelX = noteLeft + noteWidth / 2;
-      const noteLabelY = noteY + noteHeight * 0.62;
-      const noteLabelFontPx = Math.round(noteLayout.labelFontPx);
-      context.textAlign = 'center';
-      context.fillStyle = '#ffffff';
-      context.font = `800 ${noteLabelFontPx}px "Atkinson Hyperlegible Next", system-ui, sans-serif`;
-      context.save();
-      context.lineJoin = 'round';
-      context.strokeStyle = '#000000';
-      context.lineWidth = 2.5;
-      context.strokeText(note.label, noteLabelX, noteLabelY);
-      context.fillText(note.label, noteLabelX, noteLabelY);
-      context.restore();
-      drawNoteLabelMarker(context, note.marker, noteLabelX, noteLabelY, noteLabelFontPx);
-    }
-
-    if (noteIsCrossing) {
-      drawPlaybackHighlightCell(
-        context,
-        noteStartX,
-        viewportY + (visualRow * laneHeight),
-        Math.max(1, noteEndX - noteStartX),
-        laneHeight,
-      );
-    }
   }
 
-  // Draw above notes and highlights so the attack reference stays visible.
+  // Draw above notes and bursts so the attack reference stays visible.
   context.save();
   context.strokeStyle = '#ffd166';
   context.lineWidth = 3;

@@ -612,11 +612,9 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     drawModulationPreview
   });
 
-  // CANVAS-SPACE FIX: Check boundaries using canvas-space coordinates (0 = first musical beat)
-  const isCircleNote = (store.state.selectedTool === 'note' || store.state.selectedTool === 'chord') && store.state.selectedNote?.shape === 'circle';
+  // Drag endpoints may use every canvas-space column, including the final microbeat.
   const musicalColumnsLength = store.state.columnWidths.length;
-  const maxColumn = isCircleNote ? musicalColumnsLength - 1 : musicalColumnsLength;
-  if (colIndex < 0 || colIndex >= maxColumn || getPitchForRow(rowIndex) === null) {
+  if (colIndex < 0 || colIndex >= musicalColumnsLength || getPitchForRow(rowIndex) === null) {
     // Out of bounds - handled below
     tonicizationToolInteractor.resetHoverState();
     clearGhostNotePosition();
@@ -674,6 +672,12 @@ function handleMouseMove(e: MouseEvent, sourceCanvasOverride?: HTMLCanvasElement
     activeChordNotes = dragMoveResult.state.activeChordNotes;
     activePreviewPitches = dragMoveResult.state.activePreviewPitches;
     lastDragRow = dragMoveResult.state.lastDragRow;
+    return;
+  }
+
+  // Starting a circle still needs two columns; extending its tail only needs one.
+  if (!isPositionWithinPitchGrid(colIndex, rowIndex)) {
+    clearGhostNotePosition();
     return;
   }
 

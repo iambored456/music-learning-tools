@@ -1,5 +1,6 @@
 <script lang="ts">
   import { QUESTIONS_PER_KEY, SOUND_PRESETS, WHEEL_VIEWS, degreeLabel, lessonTiming, setLessonTiming, setWheelView, wheelView, type Settings } from '@mlt/audiationer-trainer-core';
+  import DifficultyCard from './DifficultyCard.svelte';
   import Icon from './Icon.svelte';
   import AutoContinueSettings from './AutoContinueSettings.svelte';
   import ReviewSettings from './ReviewSettings.svelte';
@@ -18,6 +19,7 @@
 {/snippet}
 
 <div class="at-mode-settings">
+  <DifficultyCard bind:settings />
   <section class="at-mode-setting" aria-label="Sound preset">
     <h3>Sound preset: {soundName}</h3>
     <button type="button" class="at-sound-change" aria-expanded={chooseSound} aria-controls="at-degrees-sounds" onclick={() => { chooseSound = !chooseSound; }}><Icon name="note" />Change</button>

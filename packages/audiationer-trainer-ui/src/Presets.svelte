@@ -1,28 +1,33 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { CHORD_QUALITIES, DIFFICULTIES, GAME_MODES, POCKET_EXERCISES, allowedDegrees, challengePresetGroups, difficultyIndex, exerciseMode, isChordMode, isScored, levelAccess, pathPresetGroups, progressKey, type CustomPreset, type GameMode, type LevelLocks, type Preset, type Progress, type Settings } from '@mlt/audiationer-trainer-core';
+  import { CHORD_QUALITIES, GAME_MODES, allowedDegrees, challengePresetGroups, difficultyFor, difficultyRank, gemAward, exerciseMode, isChordMode, isScored, levelAccess, pathPresetGroups, progressKey, type CustomPreset, type GameMode, type LevelLocks, type Preset, type Progress, type Settings } from '@mlt/audiationer-trainer-core';
   import Icon from './Icon.svelte';
   import DifficultyCard from './DifficultyCard.svelte';
   import Gems from './Gems.svelte';
   import DegreeBelt from './DegreeBelt.svelte';
   import { modeIcon, modePair } from './modePairs.ts';
-  let { settings, progress, locks, custom, homeButton, onsettings, ondifficulty, onchoose, oncustom, onedit, ondelete, onadd }: {
+  let { settings = $bindable(), progress, locks, custom, homeButton, onsettings, onchoose, oncustom, onedit, ondelete, onadd }: {
     settings: Settings; progress: Progress; locks: LevelLocks; custom: CustomPreset[];
     homeButton: Snippet;
-    onsettings: () => void; ondifficulty: (seconds: number) => void;
+    onsettings: () => void;
     onchoose: (preset: Preset, mode?: GameMode) => void; oncustom: (preset: CustomPreset, mode?: GameMode) => void;
     onedit: (preset: CustomPreset) => void; ondelete: (id: string) => void; onadd: () => void;
   } = $props();
   let tab = $state('path');
   const tabs = [{ id: 'path', name: 'Levels' }, { id: 'challenges', name: 'Challenges' }, { id: 'custom', name: 'Custom' }];
-  const difficulty = $derived(difficultyIndex(settings.answerSeconds));
-  const pair = $derived(modePair(settings.mode));
+  const difficulty = $derived(gemAward(difficultyRank(settings)));
+  const exercise = $derived(exerciseMode(settings));
+  const pocket = $derived(settings.mode === 'pocket');
+  const pair = $derived(modePair(exercise));
   const combined = $derived(!!pair);
   const exercises = $derived(GAME_MODES.filter(mode => pair?.modes.some(member => member === mode.id)));
-  const modeName = $derived(pair?.name ?? GAME_MODES.find(mode => mode.id === settings.mode)!.name);
-  const exercise = $derived(exerciseMode(settings));
+  const modeName = $derived(`${pocket ? 'Pocket Mode · ' : ''}${pair?.name ?? GAME_MODES.find(mode => mode.id === exercise)!.name}`);
   const groups = $derived(tab === 'path' ? pathPresetGroups(exercise) : challengePresetGroups(exercise));
-  const saved = $derived(custom.filter(p => pair ? pair.modes.some(mode => mode === p.settings.mode) : p.settings.mode === settings.mode && (settings.mode !== 'pocket' || p.settings.pocket.exercise === settings.pocket.exercise)));
+  const saved = $derived(custom.filter(p => {
+    if ((p.settings.mode === 'pocket') !== pocket) return false;
+    const mode = exerciseMode(p.settings);
+    return pair ? pair.modes.some(member => member === mode) : mode === exercise;
+  }));
   function tabKeys(event: KeyboardEvent) {
     const current = tabs.findIndex(t => t.id === tab);
     const index = event.key === 'ArrowRight' ? (current + 1) % 3 : event.key === 'ArrowLeft' ? (current + 2) % 3 : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : -1;
@@ -46,43 +51,42 @@
 {/snippet}
 
 {#snippet levelCard(preset: Preset, customPreset?: CustomPreset)}
-  {@const access = levelAccess(settings.mode, preset.id, progress, locks)}
-  <article class="at-level-card at-pill" class:at-level-locked={!access.unlocked} aria-label={`${preset.name}${access.unlocked ? '' : ' (locked)'}`}>
+  {@const choices = exercises.map(mode => ({ mode, access: levelAccess(pocket ? 'pocket' : mode.id, preset.id, progress, locks) }))}
+  {@const locked = choices.every(choice => !choice.access.unlocked)}
+  <article class="at-level-card at-pill" class:at-level-locked={locked} aria-label={`${preset.name}${locked ? ' (locked)' : ''}`}>
     <div class="at-level-copy">
       <h3>{preset.name}</h3>
-      <DegreeBelt degrees={allowedDegrees({ ...settings, ...preset.patch, mode: settings.mode })} scale={preset.patch.scale ?? settings.scale} chords={isChordMode(settings.mode)} />
-      {#if access.prerequisite}{@render lockMessage(access.prerequisite.name)}{/if}
+      <DegreeBelt degrees={allowedDegrees({ ...settings, ...preset.patch, mode: settings.mode })} scale={preset.patch.scale ?? settings.scale} chords={isChordMode(exercise)} />
+      {#if customPreset}
+        <div class="at-custom-tools"><button class="at-icon-button" aria-label={`Edit ${preset.name}`} onclick={() => onedit(customPreset)}><Icon name="edit" size={19} /></button><button class="at-icon-button" aria-label={`Delete ${preset.name}`} onclick={() => ondelete(preset.id)}><Icon name="trash" size={19} /></button></div>
+      {/if}
     </div>
     <div class="at-level-exercises">
-      {#each exercises as mode}
+      {#each choices as { mode, access }}
         {@const earned = progress[progressKey(mode.id, preset.id)] ?? 0}
-        <button class="at-level-mode" data-mode={mode.id} disabled={!access.unlocked} aria-label={access.prerequisite ? `${preset.name} is locked. Earn a gem in ${access.prerequisite.name} to unlock.` : `${preset.name}: practise ${mode.name} at ${DIFFICULTIES[difficulty].name} difficulty, ${earned ? `${DIFFICULTIES[earned - 1].name} completed` : 'no completed difficulty yet'}`} onclick={() => customPreset ? oncustom(customPreset, mode.id) : onchoose(preset, mode.id)}>
-          <span class="at-level-mode-name"><span class="at-level-mode-label">{mode.name}</span><Icon name={modeIcon(mode.id)} size={56} /></span>
-          <Gems value={earned} />
+        <button class="at-level-mode" class:at-level-mode-locked={!access.unlocked} data-mode={mode.id} disabled={!access.unlocked} aria-label={access.prerequisite ? `${preset.name}: ${mode.name} is locked. Earn a ${mode.name} gem in ${access.prerequisite.name} to unlock.` : pocket ? `${preset.name}: listen to ${mode.name} in Pocket Mode` : `${preset.name}: practise ${mode.name} at ${gemAward(difficultyRank(difficultyFor(settings, mode.id))).name} difficulty, ${earned ? `${gemAward(earned).name} completed` : 'no completed difficulty yet'}`} onclick={() => customPreset ? oncustom(customPreset, mode.id) : onchoose(preset, mode.id)}>
+          <span class="at-level-mode-name"><span class="at-level-mode-label">{mode.name}</span><Icon name={access.unlocked ? modeIcon(mode.id) : 'lock'} size={56} /></span>
+          {#if pocket}<span class="at-no-touch"><Icon name="no-touch" size={20} /><span>No Touch</span></span>{:else}<Gems value={earned} />{/if}
+          {#if access.prerequisite}<span class="at-level-unlock-hint">Earn a gem in {access.prerequisite.name}.</span>{/if}
         </button>
       {/each}
     </div>
-    {#if customPreset}
-      <div class="at-custom-tools"><button class="at-icon-button" aria-label={`Edit ${preset.name}`} onclick={() => onedit(customPreset)}><Icon name="edit" size={19} /></button><button class="at-icon-button" aria-label={`Delete ${preset.name}`} onclick={() => ondelete(preset.id)}><Icon name="trash" size={19} /></button></div>
-    {/if}
   </article>
 {/snippet}
 
-<section class="at-presets" class:at-scored-presets={isScored(settings.mode)} style:--at-level-colour={isScored(settings.mode) ? DIFFICULTIES[difficulty].colour : undefined} aria-label="Practice presets">
+<section class="at-presets" class:at-scored-presets={isScored(settings.mode)} style:--at-level-colour={isScored(settings.mode) ? difficulty.colour : undefined} aria-label="Practice presets">
   <div class="at-mode-card at-pill">
     {@render homeButton()}
     <span class="at-mode-name" class:at-combined-title={combined}>
       {#if pair}<span class="at-mode-icon" data-mode={pair.modes[0]}><Icon name={modeIcon(pair.modes[0])} size={24} /></span>{/if}
-      {#if !combined}<span class="at-mode-icon"><Icon name={settings.mode} size={28} /></span>{/if}
+      {#if !combined}<span class="at-mode-icon"><Icon name={exercise} size={28} /></span>{/if}
       <span>{modeName}</span>
       {#if pair}<span class="at-mode-icon" data-mode={pair.modes[1]}><Icon name={modeIcon(pair.modes[1])} size={24} /></span>{/if}
     </span>
     <button class="at-icon-button" aria-label={`${modeName} settings`} title={`${modeName} settings`} onclick={onsettings}><span class="at-gear-icon" aria-hidden="true"></span></button>
   </div>
-  {#if settings.mode === 'pocket'}<label class="at-field at-pocket-exercise">Exercise<select bind:value={settings.pocket.exercise}>{#each POCKET_EXERCISES as item}<option value={item.id}>{item.name}</option>{/each}</select></label>{/if}
-  {#if isScored(settings.mode)}
-    <DifficultyCard seconds={settings.answerSeconds} onchange={ondifficulty} />
-  {/if}
+  <DifficultyCard bind:settings />
+  <p class="at-level-explainer">Choose a level.{#if pair?.id === 'degrees-melody'} 'Degrees' practices one note at a time, 'Melody' practices multiple notes.{:else if pair?.id === 'chords-progressions'} 'Chords' practices one chord at a time, 'Chord Progressions' practices multiple chords.{/if}</p>
   <div class="at-tabs" role="tablist" aria-label="Preset collections">
     {#each tabs as item}<button role="tab" id={`at-tab-${item.id}`} aria-selected={tab === item.id} aria-controls="at-preset-panel" tabindex={tab === item.id ? 0 : -1} onclick={() => { tab = item.id; }} onkeydown={tabKeys}>{item.name}</button>{/each}
   </div>

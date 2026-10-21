@@ -52,6 +52,7 @@ export interface HighwayState {
   timelineDurationMs: number;
   timelineViewStartMs: number;
   timelineViewDurationMs: number;
+  squareGridEnabled: boolean;
   timelineContentDurationMs: number;
   timelineContentStartMs: number;
   timelinePaddingBeforeMs: number;
@@ -108,6 +109,7 @@ const DEFAULT_STATE: HighwayState = {
   timelineDurationMs: 4000,
   timelineViewStartMs: 0,
   timelineViewDurationMs: 4000,
+  squareGridEnabled: false,
   timelineContentDurationMs: 4000,
   timelineContentStartMs: 0,
   timelinePaddingBeforeMs: 0,
@@ -489,7 +491,16 @@ function createHighwayState() {
     },
 
     resetTimelineViewport() {
+      state.squareGridEnabled = false;
       setTimelineViewport(0, state.timelineDurationMs);
+    },
+
+    setSquareGridEnabled(enabled: boolean) {
+      state.squareGridEnabled = enabled;
+    },
+
+    setSquareGridViewDurationMs(viewDurationMs: number) {
+      setTimelineViewport(state.timelineViewStartMs, viewDurationMs);
     },
 
     setTimelineViewStartMs(startMs: number) {
@@ -497,6 +508,7 @@ function createHighwayState() {
     },
 
     setTimelineViewDurationMs(viewDurationMs: number, anchorRatio: number = 0.5) {
+      state.squareGridEnabled = false;
       const anchor = clamp(anchorRatio, 0, 1);
       const minViewDurationMs = getMinimumTimelineViewDurationMs(state.timelineDurationMs);
       const currentViewDurationMs = Math.max(minViewDurationMs, state.timelineViewDurationMs);
@@ -512,6 +524,7 @@ function createHighwayState() {
 
     zoomTimelineViewport(zoomFactor: number, anchorRatio: number = 0.5) {
       if (!Number.isFinite(zoomFactor) || zoomFactor <= 0) return;
+      state.squareGridEnabled = false;
       const minViewDurationMs = getMinimumTimelineViewDurationMs(state.timelineDurationMs);
       const currentViewDurationMs = Math.max(minViewDurationMs, state.timelineViewDurationMs);
       const nextViewDurationMs = currentViewDurationMs / zoomFactor;

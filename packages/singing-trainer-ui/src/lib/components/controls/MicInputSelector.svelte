@@ -43,12 +43,12 @@
       || Boolean(device.groupId && device.groupId === (other.activeGroupId || selectedDevice?.groupId));
   }
 
-  async function applySelection(input: MicrophoneInput, value: string, retry = false): Promise<void> {
+  async function applySelection(input: MicrophoneInput, value: string): Promise<void> {
     selected[input] = value;
     setPreferredInputDeviceId(value === 'default' ? null : value || null, input);
     const state = input === 1 ? pitchState : secondPitchState;
     state.setError(null);
-    if (!retry && !appState.state.isDetecting && !isDetecting()) return;
+    if (!appState.state.isDetecting && !isDetecting()) return;
 
     applying = input;
     try {
@@ -134,14 +134,11 @@
     {#if applying === input}
       <p class="hint">Starting Input {input}...</p>
     {/if}
-    {#if inputState.error}
-      <p class="error" role="status">Input {input}: {inputState.error}</p>
-      <button type="button" disabled={applying !== null} onclick={() => void applySelection(input, selected[input], true)}>Retry Input {input}</button>
+    {#if inputState.error || (!isLoading && devices.length === 0 && !loadError)}
+      {@const errorMessage = inputState.error && !/device.*not found/i.test(inputState.error) ? inputState.error : 'Device not found'}
+      <p class="error" role="status">{duetState.enabled ? `Input ${input}: ` : ''}{errorMessage}</p>
     {/if}
   {/each}
-  {#if !isLoading && devices.length === 0}
-    <p class="hint">No microphone devices available. Allow microphone access, then refresh.</p>
-  {/if}
   {#if loadError}<p class="error" role="status">{loadError}</p>{/if}
 </div>
 

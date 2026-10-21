@@ -1176,7 +1176,10 @@ const SPEC: ExerciseSpec = {
 const METADATA: ExerciseSpecMetadata = {
   id: 'overdub-feeling-this',
   name: 'Feeling This (Blink-182)',
-  description: '6-voice arrangement: melody, countermelody, harmonies. 87 BPM, E major.',
+  description: '6-voice arrangement: melody, countermelody, harmonies. 87 BPM. Aligned with speaking pitch: the lowest note (low degree 4) sits three semitones below it.',
+  speakingPitchUsage: 'aligned',
+  preferredNotationStyle: 'student-notation',
+  trimToScore: true,
   difficulty: 2,
   durationEstimate: '~11s',
   voiceColors: [

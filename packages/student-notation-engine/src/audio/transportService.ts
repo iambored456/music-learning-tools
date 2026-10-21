@@ -765,6 +765,8 @@ export function createTransportService(config: TransportConfig): TransportServic
 
       const finalXPos = Math.min(xPos, maxXPos);
 
+      visualCallbacks?.updatePlayheadPosition?.(finalXPos);
+
       // Apply dynamic tempo modulation
       applyTempoModulation(currentState, finalXPos, baseTempo, getMarkerX, TEMPO_MULTIPLIER_EPSILON, MARKER_PASS_EPSILON);
 

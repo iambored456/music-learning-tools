@@ -70,6 +70,7 @@ These are the main reasons the previous bottom white strip and width jitter impr
 ## Scrollbar Behavior
 
 - Horizontal scroll is only on `#grids-wrapper`.
+- During playback, `scrollSyncService.followPlayhead` follows the transport's continuous musical-canvas X position, keeping it one quarter of the viewport width from the left once scrolling begins. The shared wrapper moves pitch, drum, and button grids together. Scroll position clamps at both ends; pause and stop leave the view in place, and replay/loop positions are followed on the next transport animation frame. This does not resize canvases or change their coordinate maps.
 - Scrollbar visibility is decided from the total canvas width at the cell size that fits without a scrollbar.
 - Once needed, the scrollbar remains reserved even if the resulting smaller cells fit horizontally. Automatic overflow at this boundary would alternate forever between the larger and smaller sizes.
 - Column removal, viewport resizing, pitch-range changes, and grid visibility changes recompute that same decision, allowing the scrollbar to disappear and its height to be reclaimed.

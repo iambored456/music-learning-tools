@@ -37,7 +37,7 @@ export function validateTemplate(template: LessonTemplate): ValidationResult {
     errors.push('Difficulty must be 1, 2, or 3');
   }
 
-  const validUsages = ['none', 'asTonic', 'asFloorNote', 'custom'];
+  const validUsages = ['none', 'asTonic', 'asFloorNote', 'aligned', 'custom'];
   if (!validUsages.includes(template.speakingPitchUsage)) {
     errors.push(`Invalid speakingPitchUsage: ${template.speakingPitchUsage}`);
   }

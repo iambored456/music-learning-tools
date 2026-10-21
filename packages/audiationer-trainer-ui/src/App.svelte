@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
-  import { CHORD_QUALITIES, DIFFICULTIES, GAME_MODES, TrainerSession, allowedDegrees, applyPreset, defaultLessonTiming, difficultyIndex, emptyState, hasAnswerReview, isChordMode, isScored, isSequenceMode, lessonTiming, levelAccess, migrateFreeplaySettingsDefaults, migrateSettingsDefaults, nextPreset, normalizeCustomPresets, normalizeFreeplaySettings, normalizeLevelLocks, normalizeProgress, normalizeSettings, questionLength, recordProgress, settingsError, type CustomPreset, type GameMode, type Preset, type Progress, type Settings } from '@mlt/audiationer-trainer-core';
+  import { CHORD_QUALITIES, GAME_MODES, POCKET_EXERCISES, TrainerSession, allowedDegrees, applyPreset, defaultLessonTiming, difficultyFor, difficultyRank, gemAward, emptyState, exerciseMode, hasAnswerReview, isChordMode, isScored, isSequenceMode, lessonTiming, levelAccess, migrateFreeplaySettingsDefaults, migrateSettingsDefaults, nextPreset, normalizeCustomPresets, normalizeFreeplaySettings, normalizeLevelLocks, normalizeProgress, normalizeSettings, questionLength, recordProgress, selectExercise, settingsError, type CustomPreset, type GameMode, type Preset, type Progress, type Settings } from '@mlt/audiationer-trainer-core';
   import TrainerWheel from './TrainerWheel.svelte';
   import PracticeSettings from './PracticeSettings.svelte';
   import PocketSettings from './PocketSettings.svelte';
@@ -18,12 +18,13 @@
 
   type Screen = 'landing' | 'presets' | 'practice';
   const prefix = 'mlt.audiationer-trainer.';
-  const modeOrder = GAME_MODES.filter(mode => mode.id !== 'cycle' && modePair(mode.id)?.modes[1] !== mode.id).map(mode => mode.id);
+  const modeOrder = GAME_MODES.filter(mode => isScored(mode.id) && modePair(mode.id)?.modes[1] !== mode.id).map(mode => mode.id);
   const modeNames = Object.fromEntries(GAME_MODES.map(m => [m.id, m.name]));
   let settings = $state<Settings>(normalizeSettings({}));
   let freeplaySettings = $state(normalizeFreeplaySettings({}));
   let sessionState = $state(emptyState());
   let screen = $state<Screen>('landing');
+  let pocketEnabled = $state(false);
   let custom = $state<CustomPreset[]>([]);
   let progress = $state<Progress>({});
   let levelLocks = $state(normalizeLevelLocks({}));
@@ -54,8 +55,9 @@
   const correctAnswers = $derived(sessionState.results.filter(result => result.correct).length);
   const answeredQuestions = $derived(sessionState.results.length);
   const showingResults = $derived(screen === 'practice' && sessionState.phase === 'finished' && scored && sessionState.results.length > 0);
+  const acceptingAnswer = $derived(sessionState.phase === 'answering' || sessionState.answerDuringPlayback);
   const answerState = $derived(screen === 'practice' && scored && !modal
-    ? sessionState.phase === 'answering' ? 'accepting'
+    ? acceptingAnswer ? 'accepting'
       : sessionState.phase === 'feedback' ? sessionState.results.at(-1)?.correct ? 'correct' : 'incorrect'
       : null
     : null);
@@ -65,7 +67,7 @@
   const skippedFeedback = $derived(sessionState.phase === 'feedback' && sessionState.reviewSkipped);
   const autoContinuing = $derived(sessionState.phase === 'feedback' && sessionState.autoContinueDeadline !== null);
   const selectedMode = $derived(GAME_MODES.find(m => m.id === settings.mode)!);
-  const selectedPair = $derived(modePair(settings.mode));
+  const selectedPair = $derived(modePair(exerciseMode(settings)));
   const draftPair = $derived(modePair(draft.mode));
   const combinedPresets = $derived(screen === 'presets' && !!selectedPair);
   const degrees = $derived(allowedDegrees(settings));
@@ -95,6 +97,7 @@
   }
   onMount(() => {
     settings = migrateSettingsDefaults(read('settings.v1'));
+    pocketEnabled = read('pocket-enabled.v1') === true;
     if (settings.mode === 'cycle') settings.mode = 'freeplay';
     freeplaySettings = migrateFreeplaySettingsDefaults(read('freeplay.v1') ?? { tonic: settings.tonic, octave: settings.octave });
     custom = normalizeCustomPresets(read('presets.v1')).map(preset => ({
@@ -112,10 +115,16 @@
   });
   onDestroy(() => { session.destroy(); audio.dispose(); });
   $effect(() => { const value = $state.snapshot(settings); if (loaded) save('settings.v1', value); });
+  $effect(() => { if (loaded) save('pocket-enabled.v1', pocketEnabled); });
   $effect(() => { const value = $state.snapshot(freeplaySettings); if (loaded) save('freeplay.v1', value); });
   $effect(() => { const value = $state.snapshot(custom); if (loaded) save('presets.v1', value); });
   $effect(() => { const value = $state.snapshot(progress); if (loaded) save('progress.v1', value); });
   $effect(() => { const value = $state.snapshot(levelLocks); if (loaded) save('level-locks.v1', value); });
+  $effect(() => {
+    if (!loaded || screen === 'landing') return;
+    const route = routeHash(screen, settings.mode);
+    if (window.location.hash !== route) window.history.replaceState(window.history.state, '', route);
+  });
   $effect(() => {
     if (modal === 'practice' && exerciseSelection(settings) !== exerciseOnSettingsOpen) selection = { id: null, name: 'Custom' };
   });
@@ -125,47 +134,81 @@
     else if (!modal && dialog.open) dialog.close();
   });
   function readRoute() {
-    const [page, requestedMode] = window.location.hash.slice(1).split('/');
+    const [page, requestedMode, requestedExercise] = window.location.hash.slice(1).split('/');
     const requestedPair = page === 'presets' ? MODE_PAIRS.find(pair => pair.id === requestedMode) : undefined;
     const mode = requestedMode === 'cycle' ? 'freeplay' : requestedPair
       ? requestedPair.modes.some(member => member === settings.mode) ? settings.mode : requestedPair.modes[0] : requestedMode;
     const requestedTarget = (page === 'presets' || page === 'practice') && GAME_MODES.some(m => m.id === mode) ? page : 'landing';
     const target = requestedTarget === 'presets' && mode === 'freeplay' ? 'practice' : requestedTarget;
-    if (target !== 'landing') {
-      const routeMode = target === 'presets' ? modePair(mode as GameMode)?.id ?? mode : mode;
-      if (requestedMode !== routeMode || target !== requestedTarget) window.history.replaceState(window.history.state, '', `#${target}/${routeMode}`);
+    let pocketExercise = settings.pocket.exercise;
+    if (mode === 'pocket') {
+      const pair = MODE_PAIRS.find(pair => pair.id === requestedExercise);
+      pocketExercise = pair
+        ? pair.modes.some(member => member === pocketExercise) ? pocketExercise : pair.modes[0]
+        : POCKET_EXERCISES.find(exercise => exercise.id === requestedExercise)?.id ?? pocketExercise;
     }
-    if (target === screen && (target === 'landing' || mode === settings.mode)) return;
+    if (target !== 'landing') {
+      const route = routeHash(target, mode as GameMode, pocketExercise);
+      if (window.location.hash !== route) window.history.replaceState(window.history.state, '', route);
+    }
+    if (target === screen && (target === 'landing' || (mode === settings.mode && (mode !== 'pocket' || pocketExercise === settings.pocket.exercise)))) return;
     session.reset(); modal = null; selection = { id: null, name: 'Custom' };
     if (target !== 'landing') {
-      settings.mode = mode as GameMode;
+      selectExercise(settings, mode as GameMode, pocketExercise);
+      if (mode === 'pocket') pocketEnabled = true;
     }
     screen = target;
     focusHeading();
   }
+  function routeHash(target: Screen, mode: GameMode, exercise = settings.pocket.exercise) {
+    if (target === 'landing') return '';
+    const routeMode = target === 'presets' ? modePair(mode)?.id ?? mode : mode;
+    const pocketRoute = mode === 'pocket' ? `/${target === 'presets' ? modePair(exercise)?.id ?? exercise : exercise}` : '';
+    return `#${target}/${routeMode}${pocketRoute}`;
+  }
   function go(target: Screen, mode = settings.mode) {
     if (mode === 'cycle') mode = 'freeplay';
     if (mode === 'freeplay' && target !== 'landing') target = 'practice';
-    session.reset(); modal = null; settings.mode = mode; screen = target;
-    const routeMode = target === 'presets' ? modePair(mode)?.id ?? mode : mode;
-    window.location.hash = target === 'landing' ? '' : `${target}/${routeMode}`;
+    session.reset(); modal = null; selectExercise(settings, mode); screen = target;
+    window.location.hash = routeHash(target, mode);
     focusHeading();
   }
   function focusHeading() { void tick().then(() => document.getElementById('at-page-heading')?.focus({ preventScroll: true })); window.scrollTo({ top: 0 }); }
   function chooseMode(mode: GameMode) {
     selection = { id: null, name: 'Custom' };
+    if (pocketEnabled && isScored(mode)) {
+      selectExercise(settings, 'pocket', POCKET_EXERCISES.find(exercise => exercise.id === mode)!.id);
+      go('presets', 'pocket');
+      return;
+    }
     go(mode === 'freeplay' ? 'practice' : 'presets', mode);
   }
   function choosePreset(preset: Preset, mode = settings.mode) {
+    if (settings.mode === 'pocket') {
+      const exercise = POCKET_EXERCISES.find(exercise => exercise.id === mode)?.id ?? settings.pocket.exercise;
+      selectExercise(settings, 'pocket', exercise);
+      settings = applyPreset(settings, preset);
+      selection = { id: preset.id, name: preset.name };
+      go('practice');
+      return;
+    }
     if (!levelAccess(mode, preset.id, progress, levelLocks).unlocked) return;
-    settings = applyPreset({ ...settings, mode }, preset);
+    selectExercise(settings, mode);
+    settings = applyPreset(settings, preset);
     selection = { id: preset.id, name: preset.name };
     go('practice');
   }
   function chooseCustom(preset: CustomPreset, mode = preset.settings.mode) {
-    settings = normalizeSettings({ ...preset.settings, mode, answerSeconds: settings.answerSeconds,
-      timings: { ...settings.timings, ...Object.fromEntries((modePair(mode)?.modes ?? [mode]).map(member => [member, preset.settings.timings[member] ?? defaultLessonTiming(preset.settings, member)])) },
-      randomOctave: mode === 'degrees' || mode === 'melody' ? true : preset.settings.randomOctave });
+    if (settings.mode === 'pocket') {
+      const exercise = POCKET_EXERCISES.find(exercise => exercise.id === mode)?.id ?? preset.settings.pocket.exercise;
+      settings = normalizeSettings({ ...preset.settings, mode: 'pocket', pocket: { ...preset.settings.pocket, exercise },
+        ...difficultyFor(settings, 'pocket', exercise), difficulties: settings.difficulties });
+      selection = { id: preset.id, name: preset.name };
+      go('practice');
+      return;
+    }
+    settings = normalizeSettings({ ...preset.settings, mode, ...difficultyFor(settings, mode), difficulties: settings.difficulties,
+      timings: { ...settings.timings, ...Object.fromEntries((modePair(mode)?.modes ?? [mode]).map(member => [member, preset.settings.timings[member] ?? defaultLessonTiming(preset.settings, member)])) } });
     selection = { id: preset.id, name: preset.name };
     go('practice');
   }
@@ -261,7 +304,7 @@
     {#if showingResults}
       {@render appHeader()}
       <SessionResults results={sessionState.results} settings={runSettings} presetName={runName} {nextLevelName} {nextLevelLocked} {nextLevelPrerequisite}
-        nextDifficulty={settings.answerSeconds} ondifficulty={(seconds) => { settings.answerSeconds = seconds; }}
+        bind:nextSettings={settings}
         onagain={playAgain} onnext={playNextLevel} onfinish={() => go('presets')} />
     {:else}
     {#if screen === 'practice' && settings.mode === 'freeplay'}
@@ -271,18 +314,22 @@
     {#if screen === 'landing'}
       <section class="at-hero" aria-label="Welcome"><h1 id="at-page-heading" tabindex="-1"><span>Audiation Trainer</span></h1></section>
       <nav class="at-mode-list" aria-label="Choose a game mode">
+        <p class="at-mode-explainer">Choose a mode to practice.</p>
+        <div class="at-headphone-status" role="status">{#if pocketEnabled}<Icon name="pocket" size={22} /><span>Headphone Mode ON</span>{/if}</div>
         {#each modeOrder as mode}
-          {#if mode === 'degrees' || mode === 'pocket'}<hr class="at-mode-divider" />{/if}
-          <button class="at-landing-mode at-pill" class:at-mode-tile={isScored(mode)} class:at-combined-mode={!!modePair(mode)} data-mode={mode} onclick={() => chooseMode(mode)}><span class="at-mode-icon"><Icon name={modeIcon(mode)} size={28} /></span><span><span>{#if modePair(mode)}{modePair(mode)!.landingName}{:else if mode === 'quality'}Chord<br />Quality{:else}{modeNames[mode]}{/if}</span></span>{#if !isScored(mode)}<span class="at-mode-arrow"><Icon name="chevron" size={20} /></span>{/if}</button>
+          <button class="at-landing-mode at-pill at-mode-tile" class:at-combined-mode={!!modePair(mode)} data-mode={mode} onclick={() => chooseMode(mode)}><span class="at-mode-icon"><Icon name={modeIcon(mode)} size={28} /></span><span><span>{#if modePair(mode)}{modePair(mode)!.landingName}{:else if mode === 'quality'}Chord<br />Quality{:else}{modeNames[mode]}{/if}</span></span>{#if pocketEnabled}<span class="at-no-touch" title="Hands-free listening with spoken answers"><Icon name="no-touch" size={20} /><span>No Touch</span></span>{/if}</button>
         {/each}
+        <hr class="at-mode-divider" />
+        <button class="at-landing-mode at-pill" data-mode="freeplay" onclick={() => chooseMode('freeplay')}><span class="at-mode-icon"><Icon name="freeplay" size={28} /></span><span>Free Play</span><span class="at-mode-arrow"><Icon name="chevron" size={20} /></span></button>
+        <button class="at-landing-mode at-pill at-pocket-toggle" data-mode="pocket" role="switch" aria-checked={pocketEnabled} aria-label="Pocket Mode" onclick={() => { pocketEnabled = !pocketEnabled; }}><span class="at-mode-icon"><Icon name="pocket" size={28} /></span><span>Pocket Mode<span class="at-toggle-state">{pocketEnabled ? 'Enabled' : 'Disabled'}</span></span><span class="at-switch-track" aria-hidden="true"><span></span></span></button>
       </nav>
     {:else}
       {#if screen === 'presets'}<h1 id="at-page-heading" class="at-sr-only" tabindex="-1">{selectedPair?.name ?? selectedMode.name} presets</h1>{/if}
       {#if screen === 'presets'}
-        <Presets {settings} {progress} locks={levelLocks} {custom} {homeButton} onsettings={openModeSettings} ondifficulty={(seconds) => { settings.answerSeconds = seconds; }} onchoose={choosePreset} oncustom={chooseCustom} onadd={() => openCustom()} onedit={openCustom} ondelete={deletePreset} />
+        <Presets bind:settings {progress} locks={levelLocks} {custom} {homeButton} onsettings={openModeSettings} onchoose={choosePreset} oncustom={chooseCustom} onadd={() => openCustom()} onedit={openCustom} ondelete={deletePreset} />
       {:else}
         <section class="at-practice" aria-label="Practice">
-          <div class="at-session-chips"><button onclick={() => go('presets')}>{selection.name}</button>{#if scored}<Gems value={difficultyIndex(settings.answerSeconds) + 1} showBlanks={false} label={`${DIFFICULTIES[difficultyIndex(settings.answerSeconds)].name} difficulty`} /><span class="at-round-count" aria-label={`${correctAnswers} correct out of ${answeredQuestions} answered`}>{correctAnswers}/{answeredQuestions}</span>{/if}</div>
+          <div class="at-session-chips"><button onclick={() => go('presets')}>{selection.name}</button>{#if scored}<Gems value={difficultyRank(settings)} showBlanks={false} label={`${gemAward(difficultyRank(settings)).name} difficulty`} /><span class="at-round-count" aria-label={`${correctAnswers} correct out of ${answeredQuestions} answered`}>{correctAnswers}/{answeredQuestions}</span>{/if}</div>
           {#if sequenceMode}
             <div class="at-melody-stage"><MelodyAnswer input={sessionState.input} revealed={sessionState.revealed} length={questionLength(settings)} scale={settings.scale} chords={isChordMode(settings.mode)} feedback={sequenceFeedback} answering={sessionState.phase === 'answering'} onundo={() => session.undoAnswer()} onreplay={(source) => { void session.replaySequence(source); }} /></div>
           {/if}
@@ -292,7 +339,7 @@
             <div class="at-quality-stage"><Icon name="quality" size={72} /><button class="at-play-button" class:at-listening={sessionState.phase === 'listening'} disabled={!centreEnabled || !!error} onclick={centreAction} aria-label={centreLabel}>{@render centreSymbol(45)}{#if !skippedFeedback}<small>{centreLabel}</small>{/if}</button></div>
             <div class="at-quality-answers">{#each CHORD_QUALITIES as quality, i}{#if settings.qualities.includes(i)}<button class:at-revealed={sessionState.phase === 'feedback' && sessionState.revealed[0] === i} disabled={sessionState.phase !== 'answering'} onclick={() => { void session.answer(i); }}>{quality.name}</button>{/if}{/each}</div>
           {:else}
-            <div class="at-wheel-stage" class:at-minimal={settings.wheelStyle === 'minimal'}><TrainerWheel minimal={settings.wheelStyle === 'minimal'} showCentre={false} tonic={currentTonic} scale={settings.scale} order={settings.order} allowed={degrees} active={sessionState.activeDegree} enabled={sessionState.phase === 'answering' || sessionState.phase === 'exploring' || reviewFeedback} chords={isChordMode(settings.mode)} onanswer={(degree) => { void session.answer(degree); }} /><button class="at-play-button at-wheel-centre" class:at-listening={sessionState.phase === 'listening'} disabled={!centreEnabled || !!error} onclick={centreAction} aria-label={centreLabel}>{@render centreSymbol(48)}{#if !skippedFeedback && !sequenceFeedback}<small>{centreLabel}</small>{/if}</button></div>
+            <div class="at-wheel-stage" class:at-minimal={settings.wheelStyle === 'minimal'}><TrainerWheel minimal={settings.wheelStyle === 'minimal'} showCentre={false} tonic={currentTonic} scale={settings.scale} order={settings.order} allowed={degrees} active={sessionState.activeDegree} enabled={acceptingAnswer || sessionState.phase === 'exploring' || reviewFeedback} chords={isChordMode(settings.mode)} onanswer={(degree) => { void session.answer(degree); }} /><button class="at-play-button at-wheel-centre" class:at-listening={sessionState.phase === 'listening'} disabled={!centreEnabled || !!error} onclick={centreAction} aria-label={centreLabel}>{@render centreSymbol(48)}{#if !skippedFeedback && !sequenceFeedback}<small>{centreLabel}</small>{/if}</button></div>
           {/if}
           {#if secondsLeft !== null && sessionState.phase === 'answering' && (settings.mode !== 'degrees' || settings.degreeOptions.showTimeLeft)}<div class="at-timer" role="timer" aria-label="Answer time remaining"><span>{secondsLeft.toFixed(1)} s</span><progress max={settings.answerSeconds} value={secondsLeft}></progress></div>{/if}
           <div class="at-feedback" class:at-sr-only={skippedFeedback || settings.mode === 'degrees' || sequenceMode} class:at-correct={sessionState.phase === 'feedback' && sessionState.results.at(-1)?.correct} class:at-incorrect={sessionState.phase === 'feedback' && !sessionState.results.at(-1)?.correct} role="status" aria-live="polite">{sessionState.message}</div>
@@ -312,7 +359,7 @@
     {:else if modal === 'practice'}
       {#if combinedPresets}
         <div class="at-settings-segment at-combined-settings" role="group" aria-label="Exercise settings">
-          {#each selectedPair?.modes ?? [] as mode}<button type="button" aria-pressed={settings.mode === mode} onclick={() => { settings.mode = mode; }}>{modeNames[mode]}</button>{/each}
+          {#each selectedPair?.modes ?? [] as mode}<button type="button" aria-pressed={settings.mode === mode} onclick={() => { selectExercise(settings, mode); }}>{modeNames[mode]}</button>{/each}
         </div>
       {/if}
       {#if isScored(settings.mode)}<LevelLockSettings locks={levelLocks} onunlock={() => { levelLocks.unlockAll = true; }} onreset={() => { levelLocks.unlockAll = false; }} />{/if}
@@ -324,7 +371,7 @@
         <label class="at-field">Preset name<input required maxlength="50" placeholder="My practice" bind:value={presetName} /></label>
         {#if draftPair}
           <div class="at-settings-segment at-combined-settings" role="group" aria-label="Preset exercise settings">
-            {#each draftPair.modes as mode}<button type="button" aria-pressed={draft.mode === mode} onclick={() => { draft.mode = mode; }}>{modeNames[mode]}</button>{/each}
+            {#each draftPair.modes as mode}<button type="button" aria-pressed={draft.mode === mode} onclick={() => { selectExercise(draft, mode); }}>{modeNames[mode]}</button>{/each}
           </div>
         {/if}
         {#if draft.mode === 'pocket'}<PocketSettings bind:settings={draft} />{:else if draft.mode === 'degrees'}<DegreesSettings bind:settings={draft} custom />{:else}<PracticeSettings bind:settings={draft} difficultyEditable={false} />{/if}

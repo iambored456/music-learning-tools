@@ -8,6 +8,7 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
   private voices = new Set<OscillatorNode>();
   private tanpura: TanpuraDrone | null = null;
   private droneOutput: GainNode | null = null;
+  private droneFadeTimer: ReturnType<typeof setTimeout> | null = null;
   private speech: SpeechSynthesisUtterance | null = null;
   private wave: OscillatorType = 'triangle';
 
@@ -20,6 +21,7 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
       this.master.gain.value = 0.65;
       this.master.connect(this.context.destination);
       this.droneOutput = this.context.createGain();
+      this.droneOutput.gain.value = 1;
       this.droneOutput.connect(this.independentDroneVolume ? this.context.destination : this.master);
       this.tanpura = new TanpuraDrone(this.context, this.droneOutput);
     }
@@ -84,7 +86,17 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
     finally { signal.removeEventListener('abort', cancel); }
   }
   drone(midi: number | null, volume: number) {
+    this.cancelDroneFade();
     this.tanpura?.set(midi, volume);
+  }
+  private cancelDroneFade() {
+    if (this.droneFadeTimer !== null) clearTimeout(this.droneFadeTimer);
+    this.droneFadeTimer = null;
+    if (this.context && this.droneOutput) {
+      const now = this.context.currentTime;
+      this.droneOutput.gain.cancelScheduledValues(now);
+      this.droneOutput.gain.setValueAtTime(1, now);
+    }
   }
   async speak(text: string, signal: AbortSignal, volume = 0.8) {
     signal.throwIfAborted();
@@ -107,10 +119,17 @@ export class BrowserTrainerAudio implements TrainerAudio, FreeplayAudio {
       window.speechSynthesis.speak(utterance);
     });
   }
-  stop({ preserveDrone = false }: { preserveDrone?: boolean } = {}) {
+  stop({ preserveDrone = false, droneFadeSeconds = 0 }: { preserveDrone?: boolean; droneFadeSeconds?: number } = {}) {
     for (const voice of this.voices) { try { voice.stop(); } catch { /* Already ended. */ } }
     this.voices.clear();
-    if (!preserveDrone) this.drone(null, 0);
+    if (!preserveDrone) {
+      if (Number.isFinite(droneFadeSeconds) && droneFadeSeconds > 0 && this.context && this.droneOutput && this.tanpura) {
+        this.cancelDroneFade();
+        const now = this.context.currentTime;
+        this.droneOutput.gain.linearRampToValueAtTime(0, now + droneFadeSeconds);
+        this.droneFadeTimer = setTimeout(() => { this.drone(null, 0); }, droneFadeSeconds * 1000);
+      } else this.drone(null, 0);
+    }
     if (this.speech && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     this.speech = null;
   }

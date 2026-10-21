@@ -309,6 +309,12 @@ export type ColorMode = 'color' | 'bw';
 
 export interface PrintOptions {
   pageSize: PageSize;
+  /** Maximum bars on each printed line; omitted or zero keeps all bars on one line. */
+  barsPerLine?: number;
+  pagination?: 'fit' | 'paginate';
+  /** Percentage of the print renderer's standard notation size. */
+  notationSize?: number;
+  pitchRangeMode?: 'score' | 'viewport';
   includeButtonGrid: boolean;
   includeDrums: boolean;
   includeLeftLegend: boolean;

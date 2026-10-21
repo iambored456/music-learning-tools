@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { ladukhinLines } from '@mlt/singing-trainer-core/constants/ladukhin.js';
   import { pitchState } from '@mlt/singing-trainer-core/stores/pitchState.svelte.js';
   import { appState } from '@mlt/singing-trainer-core/stores/appState.svelte.js';
@@ -9,6 +9,7 @@
   import { SolfegeAudio } from '@mlt/singing-trainer-core/services/solfegeAudio.js';
   import { calculateSolfegeAccuracy, solfegeCountdown, SOLFEGE_COUNT_IN_BEATS } from '@mlt/singing-trainer-core/services/solfegePractice.js';
   import SolfegeRowGrid from './SolfegeRowGrid.svelte';
+  import type { VoicePracticeExercise } from '@mlt/singing-trainer-core/services/faberPractice.js';
   import type { SolfegeExercise } from '../solfegeExercises.js';
 
   let {
@@ -16,13 +17,17 @@
     shortcutHighlightMidis = [],
     onclose,
   }: {
-    exercise: SolfegeExercise;
+    exercise: SolfegeExercise | VoicePracticeExercise;
     shortcutHighlightMidis?: readonly number[];
     onclose: () => void;
   } = $props();
   const group = $derived(exercise.start);
   let selected = $state(1);
   let tempo = $state(80);
+  const voices = $derived('voices' in exercise ? exercise.voices : []);
+  let recordVoiceIndex = $state(0);
+  let heardVoiceIds = $state<string[]>([]);
+  let visibleVoiceIds = $state<string[]>([]);
   let running = $state(false);
   let starting = $state(false);
   let beat = $state(0);
@@ -35,9 +40,29 @@
   let frame = 0;
   let generation = 0;
   let lastSampleTime = -Infinity;
-  let lastTuningMode = appState.state.pitchTuningMode;
-  const rows = $derived(ladukhinLines.filter(row => row.number >= group && row.number < group + 12));
-  const current = $derived(ladukhinLines.find(row => row.number === selected)!);
+  let lastPitchContext = `${Math.round(preferencesStore.speakingPitchMidi ?? 60)}:${appState.state.pitchTuningMode}`;
+  const rows = $derived(voices.length ? [voices[0]!.line] : ladukhinLines.filter(row => row.number >= group && row.number < group + 12));
+  const current = $derived(voices.length ? voices[recordVoiceIndex]!.line : ladukhinLines.find(row => row.number === selected)!);
+  const targetName = $derived(voices.length ? voices[recordVoiceIndex]!.name : `exercise ${selected}`);
+
+  function resultKey(rowNumber: number) { return voices.length ? current.number : rowNumber; }
+
+  function toggleVoice(voiceId: string, enabled: boolean) {
+    heardVoiceIds = enabled ? [...heardVoiceIds, voiceId] : heardVoiceIds.filter(id => id !== voiceId);
+    audio?.setVoiceEnabled(voiceId, enabled);
+  }
+
+  function toggleVisibility(voiceId: string, visible: boolean) {
+    visibleVoiceIds = visible ? [...visibleVoiceIds, voiceId] : visibleVoiceIds.filter(id => id !== voiceId);
+  }
+
+  function selectVoice(index: number) {
+    stop();
+    recordVoiceIndex = index;
+    beat = 0;
+    playback = false;
+    error = '';
+  }
   const speakingMidi = $derived(Math.round(preferencesStore.speakingPitchMidi ?? 60));
   const tuning = $derived(appState.state.pitchTuningMode);
   const countdown = $derived(running && !playback ? solfegeCountdown(beat) : null);
@@ -60,17 +85,28 @@
   }
 
   $effect(() => {
-    selectRow(exercise.start);
+    const opened = exercise;
+    untrack(() => {
+      selectRow(opened.start);
+      tempo = 'tempo' in opened ? opened.tempo : 80;
+      heardVoiceIds = 'voices' in opened ? opened.voices.map(voice => voice.id) : [];
+      visibleVoiceIds = 'voices' in opened ? opened.voices.map(voice => voice.id) : [];
+    });
   });
 
   $effect(() => {
-    const nextTuningMode = appState.state.pitchTuningMode;
-    if (nextTuningMode === lastTuningMode) return;
-    lastTuningMode = nextTuningMode;
-    // Scheduled reference notes and the accuracy target must never disagree.
-    if (running || starting) stop();
-    beat = 0;
-    error = '';
+    const pitchContext = `${speakingMidi}:${tuning}`;
+    if (pitchContext === lastPitchContext) return;
+    lastPitchContext = pitchContext;
+    // A take must retain one pitch target from count-in through final feedback.
+    untrack(() => {
+      stop();
+      beat = 0;
+      error = '';
+      trails = {};
+      accuracy = {};
+      completed = {};
+    });
   });
 
   async function start(melody = false) {
@@ -89,23 +125,25 @@
       audio = player;
       await player.init();
       if (token !== generation) { player.dispose(); return; }
+      const takeKey = resultKey(selected);
       if (!melody) {
-        trails = { ...trails, [selected]: [] };
-        accuracy = { ...accuracy, [selected]: undefined };
-        completed = { ...completed, [selected]: false };
+        trails = { ...trails, [takeKey]: [] };
+        accuracy = { ...accuracy, [takeKey]: undefined };
+        completed = { ...completed, [takeKey]: false };
       }
       lastSampleTime = -Infinity;
       let previousVoicedTime = -Infinity;
       let lastAccuracyUpdateTime = -Infinity;
 
       const duration = current.durationBeats;
-      const rowNumber = selected;
+      const rowNumber = takeKey;
       const bpm = tempo;
       const recordedLine = current;
       const recordedTonic = speakingMidi;
       const recordedTuning = tuning;
       const countIn = melody ? 0 : SOLFEGE_COUNT_IN_BEATS;
-      player.schedule(current, recordedTonic, bpm, countIn, melody, true, recordedTuning);
+      if (voices.length) player.scheduleVoices(voices, recordedTonic, bpm, countIn, heardVoiceIds, recordedTuning);
+      else player.schedule(current, recordedTonic, bpm, countIn, melody, true, recordedTuning);
       const started = performance.now() - player.elapsedSeconds * 1000;
       running = true;
       beat = -countIn;
@@ -113,7 +151,7 @@
         if (token !== generation) return;
         if (!melody && !appState.state.isDetecting) {
           stop();
-          error = 'Microphone stopped. Start singing again to retry this row.';
+          error = 'Microphone stopped. Start singing again to retry this exercise.';
           return;
         }
         beat = Math.min(duration, player.elapsedSeconds * bpm / 60 - countIn);
@@ -174,9 +212,10 @@
       playback = false;
       error = '';
     }
-    trails = { ...trails, [number]: [] };
-    accuracy = { ...accuracy, [number]: undefined };
-    completed = { ...completed, [number]: false };
+    const key = resultKey(number);
+    trails = { ...trails, [key]: [] };
+    accuracy = { ...accuracy, [key]: undefined };
+    completed = { ...completed, [key]: false };
   }
 
   onDestroy(stop);
@@ -190,26 +229,64 @@
       <label>Tempo <input type="number" min="30" max="180" value={tempo} disabled={running || starting} onchange={(event) => { tempo = Math.max(30, Math.min(180, Number(event.currentTarget.value) || 80)); }} /> BPM</label>
     </div>
   </header>
+  {#if voices.length}
+    <div class="voice-controls" role="group" aria-label="Voice controls">
+      <div class="voice-control-row" role="group" aria-label="Hear voices">
+        <strong>Hear:</strong>
+        {#each voices as voice (voice.id)}
+          <label style:--voice-color={voice.color}>{voice.name}
+            <input type="checkbox" aria-label={`Hear ${voice.name}`} checked={heardVoiceIds.includes(voice.id)}
+              onchange={(event) => toggleVoice(voice.id, event.currentTarget.checked)} /></label>
+        {/each}
+      </div>
+      <div class="voice-control-row" role="group" aria-label="Record voice">
+        <strong>Record:</strong>
+        {#each voices as voice, index (voice.id)}
+          <label style:--voice-color={voice.color}>{voice.name}
+            <input type="radio" name="record-voice" aria-label={`Record ${voice.name}`} checked={recordVoiceIndex === index}
+              disabled={running || starting} onchange={() => selectVoice(index)} /></label>
+        {/each}
+      </div>
+      <div class="voice-control-row" role="group" aria-label="See voices">
+        <strong>See:</strong>
+        {#each voices as voice (voice.id)}
+          <label style:--voice-color={voice.color}>{voice.name}
+            <input type="checkbox" aria-label={`See ${voice.name}`} checked={visibleVoiceIds.includes(voice.id)}
+              onchange={(event) => toggleVisibility(voice.id, event.currentTarget.checked)} /></label>
+        {/each}
+      </div>
+      <div class="voice-control-row">
+        <strong>Accuracy:</strong>
+        {#each voices as voice (voice.id)}
+          <span aria-label={`${voice.name} accuracy`}>{voice.name}: {accuracy[voice.line.number] ?? 0}%</span>
+        {/each}
+      </div>
+    </div>
+    <p class="practice-hint">Choose a voice to record, then press Record. Hear either part, both, or neither. Each voice keeps its own pitch trail and accuracy.</p>
+  {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <div class="rows">
     {#each rows as row (row.number)}
-      <section class:active={selected === row.number} aria-label={`Exercise ${row.number}`}>
+      <section class:active={selected === row.number} aria-label={voices.length ? exercise.name : `Exercise ${row.number}`}>
         <div class="row-heading">
           <div class="row-identity">
+            {#if voices.length}<strong>{exercise.name} · {targetName}</strong>{:else}
             <button aria-label={`Exercise ${row.number}`} aria-pressed={selected === row.number} onclick={() => selectRow(row.number)}>#{row.number}</button>
-            <span class="accuracy" role="status" aria-label={`Exercise ${row.number} accuracy`}
+            {/if}
+            <span class="accuracy" role="status" aria-label={voices.length ? `${targetName} accuracy` : `Exercise ${row.number} accuracy`}
               aria-live={selected === row.number && running && !playback ? 'off' : 'polite'}>
-              {accuracy[row.number] ?? 0}%
+              {accuracy[resultKey(row.number)] ?? 0}%
             </span>
           </div>
-          <button class="record-button row-action-button" class:recording={selected === row.number && !playback && (running || starting)}
-            aria-label={selected === row.number && !playback && (running || starting) ? `Stop recording exercise ${row.number}` : `Record exercise ${row.number}`}
+          <button class="record-button row-action-button" class:with-label={voices.length > 0} class:recording={selected === row.number && !playback && (running || starting)}
+            aria-label={selected === row.number && !playback && (running || starting) ? `Stop recording ${voices.length ? targetName : `exercise ${row.number}`}` : `Record ${voices.length ? targetName : `exercise ${row.number}`}`}
             title={selected === row.number && !playback && (running || starting) ? 'Stop recording' : 'Record exercise'}
             onclick={() => recordRow(row.number)}>
             <span aria-hidden="true"></span>
+            {#if voices.length}<span class="action-label">{!playback && (running || starting) ? 'Stop' : 'Record'}</span>{/if}
           </button>
-          <button class="row-action-button" aria-label={selected === row.number && playback && (running || starting) ? `Stop playback exercise ${row.number}` : `Play exercise ${row.number}`}
-            title="Play exercise with triangle wave" aria-pressed={selected === row.number && playback && (running || starting)} onclick={() => playRow(row.number)}>
+          <button class="row-action-button" aria-label={selected === row.number && playback && (running || starting) ? `Stop playback ${voices.length ? exercise.name : `exercise ${row.number}`}` : `Play ${voices.length ? exercise.name : `exercise ${row.number}`}`}
+            title={voices.length ? 'Play the enabled voices' : 'Play exercise with triangle wave'} aria-pressed={selected === row.number && playback && (running || starting)} onclick={() => playRow(row.number)}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               {#if selected === row.number && playback && (running || starting)}
                 <rect x="5" y="5" width="14" height="14" rx="1" />
@@ -218,20 +295,22 @@
               {/if}
             </svg>
           </button>
-          <button class="clear-button row-action-button" aria-label={`Clear pitch trail and accuracy for exercise ${row.number}`}
+          <button class="clear-button row-action-button" aria-label={`Clear pitch trail and accuracy for ${voices.length ? targetName : `exercise ${row.number}`}`}
             title="Clear pitch trail and accuracy"
-            disabled={!trails[row.number]?.length && accuracy[row.number] === undefined && !(selected === row.number && (running || starting || beat !== 0))}
+            disabled={!trails[resultKey(row.number)]?.length && accuracy[resultKey(row.number)] === undefined && !(selected === row.number && (running || starting || beat !== 0))}
             onclick={() => clearRow(row.number)}>
             <svg width="26" height="26" viewBox="0 0 372 372" fill="none" aria-hidden="true">
               <path fill="currentColor" fill-rule="evenodd" d="M 167.00 326.50 L 156.00 324.50 L 45.50 215.00 L 42.50 210.00 L 43.50 199.00 L 49.00 192.50 L 128.00 151.50 L 147.00 132.50 L 151.00 130.50 L 163.00 129.50 L 169.00 131.50 L 189.00 149.50 L 291.00 46.50 L 298.00 43.50 L 307.00 43.50 L 312.00 45.50 L 321.50 54.00 L 326.50 63.00 L 327.50 70.00 L 323.50 81.00 L 221.50 184.00 L 238.50 202.00 L 240.50 207.00 L 239.50 219.00 L 222.50 236.00 L 179.50 316.00 L 172.00 324.50 L 167.00 326.50 Z M 210.50 172.00 L 309.50 73.00 L 310.50 68.00 L 304.00 60.50 L 300.00 60.50 L 198.50 161.00 L 209.00 172.50 L 210.50 172.00 Z M 215.50 221.00 L 224.50 212.00 L 224.50 209.00 L 160.00 145.50 L 158.00 145.50 L 148.50 155.00 L 148.50 157.00 L 212.00 219.50 L 215.50 221.00 Z M 164.50 308.00 L 204.50 235.00 L 137.00 167.50 L 134.00 165.50 L 59.50 206.00 L 88.00 234.50 L 116.00 215.50 L 120.00 213.50 L 127.00 214.50 L 129.50 218.00 L 129.50 224.00 L 100.50 247.00 L 124.00 270.50 L 145.00 248.50 L 153.00 248.50 L 157.50 254.00 L 156.50 259.00 L 136.50 281.00 L 136.50 283.00 L 162.00 308.50 L 164.50 308.00 Z M 252.00 295.50 L 245.00 295.50 L 238.50 289.00 L 239.50 280.00 L 248.00 274.50 L 253.00 275.50 L 258.50 281.00 L 259.50 285.00 L 257.50 291.00 L 252.00 295.50 Z M 218.00 326.50 L 211.00 325.50 L 205.50 318.00 L 206.50 312.00 L 212.00 306.50 L 220.00 306.50 L 225.50 312.00 L 225.50 321.00 L 218.00 326.50 Z" />
             </svg>
           </button>
         </div>
-          <SolfegeRowGrid referencePlaying={selected === row.number && playback && running} line={row} {speakingMidi} {tuning}
-            {shortcutHighlightMidis}
-            trail={trails[row.number] ?? []} cursorBeat={selected === row.number ? beat : null}
+          <SolfegeRowGrid referencePlaying={selected === row.number && playback && running} line={voices.length ? current : row} scoreVoices={voices} referenceVoiceIds={heardVoiceIds} {visibleVoiceIds} {speakingMidi} {tuning}
+            {shortcutHighlightMidis} {tempo}
+            trail={trails[resultKey(row.number)] ?? []} cursorBeat={selected === row.number ? beat : null}
             active={selected === row.number && (running || starting)}
-            recordingComplete={!!completed[row.number]}
+            auditionEnabled={!running && !starting}
+            referenceSounding={selected === row.number && running && (playback || voices.length > 0)}
+            recordingComplete={!!completed[resultKey(row.number)]}
             listening={selected === row.number && !playback && (running || beat === 0) && appState.state.isDetecting}
             livePitch={selected === row.number && !playback && (running || beat === 0) ? livePitch : null}
             countdown={selected === row.number ? countdown : null} />
@@ -252,14 +331,22 @@
   button[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-bg-light); }
   .rows { flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; }
   section { border: 2px solid var(--color-border); border-radius: 10px; padding: 8px; margin-bottom: 10px; background: var(--color-panel); }
-  section.active { border-color: var(--color-primary); }
+  section.active { border-color: #c5ceda; }
   .row-heading { font-size: .8rem; margin-bottom: 5px; }
   .row-identity { display: flex; align-items: center; gap: 8px; }
   .row-identity > button { flex-shrink: 0; }
   .accuracy { box-sizing: content-box; flex: 0 0 5ch; width: 5ch; text-align: center; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-bg-light); font-weight: 700; font-variant-numeric: tabular-nums; }
   .row-action-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 5px; }
-  .record-button span { width: 16px; height: 16px; border-radius: 50%; background: #dc3545; }
-  .record-button.recording span { border-radius: 2px; }
+  .record-button span:not(.action-label) { width: 16px; height: 16px; border-radius: 50%; background: #dc3545; }
+  .record-button.recording span:not(.action-label) { border-radius: 2px; }
+  .voice-controls { align-self: flex-start; max-width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; border: 1px solid var(--color-border); border-radius: 10px; padding: 10px; font-size: .85rem; }
+  .voice-control-row { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: 6px 12px; }
+  .voice-control-row > label, .voice-control-row > span { grid-column: 2; }
+  .voice-control-row label { justify-content: space-between; border-bottom: 2px solid var(--voice-color); padding-bottom: 2px; }
+  .voice-control-row input { width: auto; margin: 0; accent-color: var(--voice-color); }
+  .practice-hint { margin: 0; font-size: .85rem; }
+  .row-action-button.with-label { width: auto; gap: 8px; padding: 5px 10px; }
+  .action-label { background: none; }
   label { display: flex; gap: 5px; align-items: center; } input { width: 70px; }
   @media (max-width: 600px) { .header-controls { gap: 6px; } button { padding: 6px; } }
 </style>

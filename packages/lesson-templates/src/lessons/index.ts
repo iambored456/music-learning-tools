@@ -24,12 +24,16 @@ export { SIMPLE_UNISON, FEELING_THIS, ALL_WORKSHOP_EXERCISES } from './overdubEx
 // Export exercises
 export { AMAZING_GRACE, ALL_EXERCISES } from './exercises/index.js';
 
+// Export bicinia
+export { FABER_NO_1, ALL_BICINIA } from './bicinia/index.js';
+
 // All lessons for registration
 import { PITCH_MATCHING_PRESETS } from '../presets/pitchMatching.js';
 import { ANCHORED_PITCH_MATCHING } from './anchoredPitchMatching.js';
 import { FOUNDATIONS_1_MERGED } from './foundations_1_merged.js';
 import { ALL_WORKSHOP_EXERCISES } from './overdubExercises/index.js';
 import { ALL_EXERCISES } from './exercises/index.js';
+import { ALL_BICINIA } from './bicinia/index.js';
 import type { AnyLessonTemplate } from '../types.js';
 
 /** All available lessons and exercises */
@@ -37,6 +41,7 @@ export const ALL_LESSONS: AnyLessonTemplate[] = [
   ANCHORED_PITCH_MATCHING,
   FOUNDATIONS_1_MERGED,
   ...PITCH_MATCHING_PRESETS,
+  ...ALL_BICINIA,
   ...ALL_EXERCISES,
   ...ALL_WORKSHOP_EXERCISES,
 ];

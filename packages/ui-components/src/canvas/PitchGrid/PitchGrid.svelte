@@ -107,6 +107,8 @@
     legendOctaveLabelProgress?: number;
     hiddenLegendMidi?: ReadonlySet<number>;
     targetNoteStyle?: TargetNoteStyle;
+    /** Envelope fill amounts keyed by placed-note UUID or highway target ID. */
+    noteFillLevels?: ReadonlyMap<string, number>;
 
     // Notation/Playback mode props
     placedNotes?: PlacedNote[];
@@ -168,6 +170,7 @@
     legendOctaveLabelProgress = 1,
     hiddenLegendMidi,
     targetNoteStyle = 'stadium',
+    noteFillLevels,
     placedNotes = [],
     getScaleDegreeLabel,
     placedTonicSigns = [],
@@ -482,10 +485,11 @@
       config: noteConfig,
       coords,
       allNotes: placedNotes,
+      getFillLevel: (note) => noteFillLevels?.get(note.uuid) ?? 0,
       getScaleDegreeLabel,
     };
 
-    // Draw notes
+    // Match Student Notation's placement order: later notes paint over earlier ones.
     for (const note of visibleNotes) {
       if (note.shape === 'oval') {
         drawSingleColumnOvalNote(renderCtx, noteContext, note, note.globalRow!);
@@ -525,6 +529,7 @@
       trailConfig: singingConfig.trailConfig,
       labelConfig: singingConfig.labelConfig,
       targetNoteStyle,
+      noteFillLevels,
     };
 
     // Draw user pitch trace
@@ -580,6 +585,7 @@
       trailConfig: highwayConfig.trailConfig,
       labelConfig: highwayConfig.labelConfig,
       targetNoteStyle,
+      noteFillLevels,
     };
 
     // Check if we have scrolling grid data (Student Notation mode)
@@ -896,6 +902,7 @@
     void degreeDisplayMode;
     void getScaleDegreeLabel;
     void placedNotes;
+    void noteFillLevels;
     void placedTonicSigns;
     void columnWidths;
     void rowHighlight;

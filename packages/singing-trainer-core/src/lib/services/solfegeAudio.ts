@@ -3,10 +3,12 @@ import { getAudioMasterOutput } from './audioMixer.js';
 import { getLocalDrumSampleById } from '@mlt/audio-samples/local-samples';
 import type { SolfegeLine } from '../constants/ladukhin.js';
 import { solfegeMidi, type SolfegeTuningMode } from './solfegeNotation.js';
+import type { PracticeVoice } from './faberPractice.js';
 
 /** A row owns its audio nodes, so stopping cancels even future scheduled sounds. */
 export class SolfegeAudio {
   private synth: Tone.Synth | null = null;
+  private voiceSynths = new Map<string, Tone.Synth>();
   private drum: Tone.Player | null = null;
   private countInCue: Tone.Player | null = null;
   private countInAccent: Tone.Player | null = null;
@@ -59,13 +61,42 @@ export class SolfegeAudio {
 
   get elapsedSeconds(): number { return Tone.immediate() - this.started; }
 
+  /** Both parts share the count-in and clock, with independent live volume controls. */
+  scheduleVoices(voices: PracticeVoice[], tonicMidi: number, bpm: number, countIn: number, enabledVoiceIds: readonly string[], tuning: SolfegeTuningMode): void {
+    if (this.cancelled || voices.length === 0) return;
+    this.schedule(voices[0]!.line, tonicMidi, bpm, countIn, false, true, tuning);
+    const secondsPerBeat = 60 / bpm;
+    const origin = this.started + countIn * secondsPerBeat;
+    for (const [index, voice] of voices.entries()) {
+      const synth = index === 0 ? this.synth : new Tone.Synth({
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.01, decay: 0.05, sustain: 0.75, release: 0.03 },
+        volume: -15,
+      }).connect(getAudioMasterOutput('synth'));
+      if (!synth) continue;
+      this.voiceSynths.set(voice.id, synth);
+      this.setVoiceEnabled(voice.id, enabledVoiceIds.includes(voice.id));
+      for (const note of voice.line.notes) {
+        if (note.midi === null) continue;
+        const frequency = 440 * 2 ** ((solfegeMidi(note.midi, tonicMidi, tuning) - 69) / 12);
+        synth.triggerAttackRelease(frequency, Math.max(0.02, note.durationBeats * secondsPerBeat - 0.03), origin + note.beat * secondsPerBeat);
+      }
+    }
+  }
+
+  setVoiceEnabled(voiceId: string, enabled: boolean): void {
+    const synth = this.voiceSynths.get(voiceId);
+    if (synth) synth.volume.value = enabled ? -15 : -Infinity;
+  }
+
   setDrums(enabled: boolean): void {
     if (this.drum) this.drum.mute = !enabled;
   }
 
   dispose(): void {
     this.cancelled = true;
-    this.synth?.dispose();
+    for (const synth of new Set([this.synth, ...this.voiceSynths.values()])) synth?.dispose();
+    this.voiceSynths.clear();
     this.drum?.dispose();
     this.countInCue?.dispose();
     this.countInAccent?.dispose();

@@ -158,4 +158,7 @@ export {
   // Exercises
   AMAZING_GRACE,
   ALL_EXERCISES,
+  // Bicinia
+  FABER_NO_1,
+  ALL_BICINIA,
 } from './lessons/index.js';

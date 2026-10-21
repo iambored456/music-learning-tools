@@ -82,13 +82,7 @@
   // Non-workshop exercise state (overdub-format exercise templates)
   const standaloneExerciseActive = $derived(
     overdubExerciseState.state.isActive
-      && overdubExerciseState.state.template?.category === 'exercises'
-  );
-  const standaloneExercisePlaying = $derived(
-    standaloneExerciseActive && overdubExerciseState.state.isPlaying
-  );
-  const standaloneExerciseName = $derived(
-    standaloneExerciseActive ? (overdubExerciseState.state.template?.name ?? '') : ''
+      && overdubExerciseState.isStandaloneExercise
   );
   const workshopActive = $derived(
     overdubExerciseState.state.isActive
@@ -104,7 +98,6 @@
   const isPlaying = $derived(exerciseState.state.isPlaying);
   const currentPhase = $derived(exerciseState.state.currentPhase);
   const currentPhaseLabel = $derived(exerciseState.state.currentPhaseLabel);
-  const currentSegmentName = $derived(exerciseState.state.currentSegmentName);
   const progress = $derived(exerciseState.getCurrentProgress());
   const results = $derived(exerciseState.getResults());
   const hasResults = $derived(results.length > 0);
@@ -863,7 +856,8 @@
   ) {
     ensureLessonTemplatesRegistered();
     const template = getTemplate(exerciseId);
-    if (!template || template.type !== 'overdub' || template.category !== 'exercises') {
+    if (!template || template.type !== 'overdub'
+      || (template.category !== 'exercises' && template.category !== 'bicinia')) {
       console.error('[Exercise] Exercise template not found or invalid:', exerciseId);
       return;
     }
@@ -881,41 +875,10 @@
 </script>
 
 <div class="exercise-panel">
-  {#if workshopActive}
-    <div class="workshop-active-note">
-      Exercise loaded. Use the bottom toolbar for playback and recording.
-    </div>
-  {/if}
-
-  {#if standaloneExerciseActive}
-    <div class="exercise-active-note">
-      Exercise loaded. Use the bottom exercise toolbar for controls.
-    </div>
-  {/if}
-
   <!-- Speaking Pitch Anchor Label (when lesson using speaking pitch is active) -->
   {#if isActive && usesSpeakingPitch && speakingPitchNote}
     <div class="speaking-pitch-anchor">
       <span class="anchor-text">Anchored to speaking pitch ({speakingPitchNote})</span>
-    </div>
-  {/if}
-
-  <!-- Active Lesson Info -->
-  {#if isActive && activeLesson}
-    <div class="active-lesson-info">
-      <span class="lesson-name">{activeLesson.name}</span>
-      {#if currentSegmentName}
-        <span class="segment-name">{currentSegmentName}</span>
-      {/if}
-    </div>
-  {/if}
-
-  {#if standaloneExerciseActive}
-    <div class="active-lesson-info">
-      <span class="lesson-name">{standaloneExerciseName}</span>
-      <span class="segment-name">
-        {standaloneExercisePlaying ? 'Playing' : 'Ready to start'}
-      </span>
     </div>
   {/if}
 
@@ -1043,26 +1006,6 @@
     gap: var(--spacing-md);
   }
 
-  .workshop-active-note {
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(95, 149, 255, 0.45);
-    background: rgba(95, 149, 255, 0.16);
-    color: var(--color-text);
-    font-size: var(--font-size-sm);
-    line-height: 1.35;
-  }
-
-  .exercise-active-note {
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(35, 107, 77, 0.5);
-    background: rgba(35, 107, 77, 0.18);
-    color: var(--color-text);
-    font-size: var(--font-size-sm);
-    line-height: 1.35;
-  }
-
   .speaking-pitch-anchor {
     display: flex;
     align-items: center;
@@ -1077,26 +1020,6 @@
     font-size: var(--font-size-sm);
     color: var(--color-text);
     font-weight: 500;
-  }
-
-  .active-lesson-info {
-    text-align: center;
-    padding: var(--spacing-xs);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .lesson-name {
-    font-size: var(--font-size-sm);
-    font-weight: 700;
-    color: var(--color-text);
-  }
-
-  .segment-name {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    font-weight: 600;
   }
 
   .instruction-banner {

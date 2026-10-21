@@ -23,3 +23,8 @@ export function singingPitchSizes(cellHeight: number, trailScale: number) {
 export function singingJudgmentLineWidth(cellHeight: number): number {
   return Math.max(1.25, Math.min(7, cellHeight / 40 * 3));
 }
+
+/** Student Notation uses two half-height columns per quarter-note circle. */
+export function squareGridViewDurationMs(width: number, cellHeight: number, tempoBpm: number): number {
+  return width * 60_000 / (Math.max(1, cellHeight) * Math.max(20, tempoBpm));
+}

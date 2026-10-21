@@ -2,7 +2,7 @@
   "name": "@mlt/student-notation-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Framework-agnostic engine for Student Notation (canvas rendering, audio, state management)",
+  "description": "Framework-agnostic engine for Student Notation (audio, transport, state management)",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -18,10 +18,6 @@
     "./audio": {
       "types": "./src/audio/index.ts",
       "import": "./src/audio/index.ts"
-    },
-    "./canvas": {
-      "types": "./src/canvas/index.ts",
-      "import": "./src/canvas/index.ts"
     }
   },
   "files": ["src"],

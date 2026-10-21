@@ -72,6 +72,8 @@ function applyPitchMapping(
       return applyAsTonic(speakingPitch, config);
     case 'asFloorNote':
       return applyAsFloorNote(speakingPitch, config);
+    case 'aligned':
+      return applyAsFloorNote(speakingPitch - 3, config);
     case 'custom':
       return applyCustomOffset(speakingPitch, customOffset ?? 0, config);
     default:

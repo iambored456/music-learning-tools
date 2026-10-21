@@ -17,7 +17,7 @@ test('each level and challenge list starts with only its first card available', 
   }
 });
 
-test('a qualifying gem unlocks the next paired card at any difficulty without completing later cards', () => {
+test('a qualifying gem unlocks only that exercise at any difficulty, independently of its paired exercise', () => {
   for (const [single, sequence] of [['degrees', 'melody'], ['chords', 'chord-progressions']] as const) {
     for (const mode of [single, sequence]) {
       for (const answerSeconds of [0, 5, 2]) {
@@ -25,7 +25,7 @@ test('a qualifying gem unlocks the next paired card at any difficulty without co
         const results: Result[] = Array.from({ length: 5 }, (_, index) => ({ expected: '1', received: '1', tonic: 0, octave: 4, correct: index < 4, seconds: 1 }));
         const progress = recordProgress({}, settings, 'sun-1', results);
         for (const member of [single, sequence]) {
-          assert.equal(levelAccess(member, 'sun-2', progress).unlocked, true);
+          assert.equal(levelAccess(member, 'sun-2', progress).unlocked, member === mode);
           assert.equal(levelAccess(member, 'sun-3', progress).unlocked, false);
           assert.equal(progress[`${member}:sun-2`], undefined);
         }
@@ -37,11 +37,13 @@ test('a qualifying gem unlocks the next paired card at any difficulty without co
 
 test('challenge gems advance their own lists and do not open unrelated lists', () => {
   const progress: Progress = { 'melody:mode-1': 1, 'chord-progressions:mode-1': 2, 'quality:all-qualities': 3 };
-  assert.equal(levelAccess('degrees', 'mode-6', progress).unlocked, true);
+  assert.equal(levelAccess('degrees', 'mode-6', progress).unlocked, false);
+  assert.equal(levelAccess('melody', 'mode-6', progress).unlocked, true);
   assert.equal(levelAccess('melody', 'mode-2', progress).unlocked, false);
   assert.equal(levelAccess('degrees', 'minor-pentatonic', progress).unlocked, false);
   assert.equal(levelAccess('degrees', 'sun-2', progress).unlocked, false);
-  assert.equal(levelAccess('chords', 'mode-2', progress).unlocked, true);
+  assert.equal(levelAccess('chords', 'mode-2', progress).unlocked, false);
+  assert.equal(levelAccess('chord-progressions', 'mode-2', progress).unlocked, true);
   assert.equal(levelAccess('quality', 'major-family', progress).unlocked, true);
   assert.equal(levelAccess('quality', 'minor-family', progress).unlocked, false);
 });
@@ -56,7 +58,8 @@ test('Unlock all levels persists separately; Reset Level Lock restores earned pr
     }
   }
   const reset = normalizeLevelLocks({ unlockAll: false });
-  assert.equal(levelAccess('melody', 'sun-2', progress, reset).unlocked, true);
+  assert.equal(levelAccess('degrees', 'sun-2', progress, reset).unlocked, true);
+  assert.equal(levelAccess('melody', 'sun-2', progress, reset).unlocked, false);
   assert.equal(levelAccess('melody', 'sun-3', progress, reset).unlocked, false);
   assert.equal(levelAccess('quality', 'triads-2', progress, reset).unlocked, true);
   assert.equal(levelAccess('degrees', 'minor-pentatonic', progress, reset).unlocked, false);
@@ -67,8 +70,10 @@ test('Unlock all levels persists separately; Reset Level Lock restores earned pr
 test('previously completed cards and their immediate successors remain accessible in older saves', () => {
   const progress = normalizeProgress({ 'melody:sun-4': 3 });
   assert.equal(levelAccess('degrees', 'sun-3', progress).unlocked, false);
-  assert.equal(levelAccess('degrees', 'sun-4', progress).unlocked, true);
-  assert.equal(levelAccess('degrees', 'sun-5', progress).unlocked, true);
+  assert.equal(levelAccess('degrees', 'sun-4', progress).unlocked, false);
+  assert.equal(levelAccess('degrees', 'sun-5', progress).unlocked, false);
+  assert.equal(levelAccess('melody', 'sun-4', progress).unlocked, true);
+  assert.equal(levelAccess('melody', 'sun-5', progress).unlocked, true);
   assert.equal(levelAccess('degrees', 'sun-6', progress).unlocked, false);
 });
 

@@ -5,7 +5,7 @@
 
   const isExerciseActive = $derived(
     overdubExerciseState.state.isActive
-      && overdubExerciseState.state.template?.category === 'exercises'
+      && overdubExerciseState.isStandaloneExercise
   );
   const exerciseName = $derived(overdubExerciseState.state.template?.name ?? '');
   const isPlaying = $derived(overdubExerciseState.state.isPlaying);
@@ -48,10 +48,8 @@
 {#if isExerciseActive}
   <div class="exercise-controls-panel">
     <div class="exercise-header">
-      <span class="title">{exerciseName}</span>
-      <button class="close-btn" onclick={handleCloseExercise} aria-label="Close exercise">
-        &#10005;
-      </button>
+      <button class="close-btn" onclick={handleCloseExercise}>Close</button>
+      <h2 class="title">{exerciseName}</h2>
     </div>
 
     <div class="exercise-layout">
@@ -120,35 +118,32 @@
   .exercise-controls-panel {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xs);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    padding: 8px;
-    background: var(--color-panel);
+    gap: 10px;
+    padding: 2px;
   }
 
   .exercise-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .title {
-    font-size: var(--font-size-sm);
+    margin: 0;
+    font-size: 1.2rem;
     font-weight: 700;
     color: var(--color-text);
   }
 
   .close-btn {
-    border: none;
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    padding: 4px 8px;
-    background: var(--color-control);
+    padding: 7px 10px;
+    background: var(--color-panel);
     color: var(--color-text);
     cursor: pointer;
-    font-size: 12px;
-    font-weight: 700;
+    font: inherit;
   }
 
   .exercise-layout {
@@ -156,6 +151,11 @@
     flex-wrap: wrap;
     gap: var(--spacing-md);
     align-items: start;
+    align-self: flex-start;
+    max-width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 10px;
   }
 
   .field {
@@ -177,10 +177,10 @@
     border-radius: 6px;
     background: var(--color-control);
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: .85rem;
     font-weight: 700;
     line-height: 1;
-    padding: 6px 10px;
+    padding: 8px 10px;
     min-width: 44px;
     cursor: pointer;
   }

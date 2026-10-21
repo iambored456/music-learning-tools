@@ -166,7 +166,7 @@ export function drawPitchGrid(ctx: CanvasRenderingContext2D, options: PitchGridR
   }
 
 
-  // Draw each visible note
+  // Preserve placement order: new notes are appended and draw on top of older notes.
   visibleNotes.forEach(note => {
 
     // The note drawing functions use getRowY which expects a global row index.

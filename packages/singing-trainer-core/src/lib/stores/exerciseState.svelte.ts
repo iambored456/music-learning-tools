@@ -159,11 +159,12 @@ function applyPitchMapping(config: ExerciseConfig): { minMidi: number; maxMidi: 
         maxMidi: speakingPitch + Math.ceil(halfRange * 1.6), // 60% above
       };
     }
+    case 'aligned':
     case 'asFloorNote': {
-      // Speaking pitch is the lowest note
+      const floor = speakingPitch - (config.speakingPitchUsage === 'aligned' ? 3 : 0);
       return {
-        minMidi: speakingPitch,
-        maxMidi: speakingPitch + configRange,
+        minMidi: floor,
+        maxMidi: floor + configRange,
       };
     }
     case 'custom': {
